@@ -19,7 +19,7 @@ def upgrade() -> None:
     op.create_table(
         "book_account",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("identifier", sa.String(), nullable=False),
+        sa.Column("identifier", sa.Integer(), nullable=False),
         sa.Column("book_type", sa.String(), nullable=False),
         sa.Column("account_type", sa.String(), nullable=False),
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),

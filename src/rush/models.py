@@ -63,19 +63,20 @@ class AuditMixin(Base):
         for column in new_skip_columns:
             new_data.pop(column, None)
         new_obj = cls.new(**new_data)
-        session().flush()
+        session.flush()
         return new_obj
 
 def get_or_create(session, model, defaults=None, **kwargs):
     instance = session.query(model).filter_by(**kwargs).first()
     if instance:
-        return instance, False
+        return instance
     else:
         params = dict((k, v) for k, v in kwargs.items())
         params.update(defaults or {})
         instance = model(**params)
         session.add(instance)
-        return instance, True
+        session.flush()
+        return instance
 
 class User(AuditMixin):
     __tablename__ = "users"
@@ -116,14 +117,14 @@ class LedgerTriggerEventPy(AuditMixinPy):
 
 class BookAccount(AuditMixin):
     __tablename__ = "book_account"
-    identifier = Column(String(50))
+    identifier = Column(Integer)
     book_type = Column(String(50))
     account_type = Column(String(50))
 
 
 @py_dataclass
 class BookAccountPy(AuditMixinPy):
-    identifier: str
+    identifier: int
     book_type: str
     account_type: str
 
