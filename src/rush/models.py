@@ -18,10 +18,10 @@ from sqlalchemy import (
     Table,
     Text,
     create_engine,
-
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import mapper, relationship, sessionmaker, Session
+
 Base = declarative_base()
 
 
@@ -35,7 +35,7 @@ class AuditMixin(Base):
     performed_by = Column(Integer, nullable=True)
     created_at = Column(TIMESTAMP, default=get_current_ist_time(), nullable=False)
     updated_at = Column(TIMESTAMP, default=get_current_ist_time(), nullable=False)
-    performed_by = Column(Integer, default=1,nullable=True)
+    performed_by = Column(Integer, default=1, nullable=True)
 
     @classmethod
     def snapshot(
@@ -66,6 +66,7 @@ class AuditMixin(Base):
         session.flush()
         return new_obj
 
+
 def get_or_create(session, model, defaults=None, **kwargs):
     instance = session.query(model).filter_by(**kwargs).first()
     if instance:
@@ -77,6 +78,7 @@ def get_or_create(session, model, defaults=None, **kwargs):
         session.add(instance)
         session.flush()
         return instance
+
 
 class User(AuditMixin):
     __tablename__ = "users"
