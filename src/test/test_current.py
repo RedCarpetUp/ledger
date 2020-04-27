@@ -7,7 +7,7 @@ from alembic.command import current as alembic_current
 
 from rush.exceptions import *
 from rush.models import User, UserPy
-from rush.utils import insert_payments
+from rush.utils import insert_card_swipe
 
 
 def test_current(getAlembic: alembic.config.Config) -> None:
@@ -25,7 +25,7 @@ def test_current(getAlembic: alembic.config.Config) -> None:
 
 def test_user2(session: sqlalchemy.orm.session.Session) -> None:
     u = User(
-        id=101,
+        # id=101,
         performed_by=123,
         user_id=101,
         name="dfd",
@@ -38,7 +38,7 @@ def test_user2(session: sqlalchemy.orm.session.Session) -> None:
     a = session.query(User).first()
     print(a.id)
     u = UserPy(
-        id=101,
+        id=a.id,
         performed_by=123,
         email="sss",
         user_id=101,
@@ -50,7 +50,7 @@ def test_user2(session: sqlalchemy.orm.session.Session) -> None:
 
 def test_user(session: sqlalchemy.orm.session.Session) -> None:
     u = User(
-        id=100,
+        # id=100,
         performed_by=123,
         user_id=101,
         name="dfd",
@@ -63,7 +63,7 @@ def test_user(session: sqlalchemy.orm.session.Session) -> None:
     a = session.query(User).first()
     print(a.id)
     u = UserPy(
-        id=100,
+        id=a.id,
         performed_by=123,
         email="sss",
         user_id=101,
@@ -73,9 +73,24 @@ def test_user(session: sqlalchemy.orm.session.Session) -> None:
     )
 
 
-def test_insert_payments(session: sqlalchemy.orm.session.Session) -> None:
-    insert_payments(
+def test_insert_card_swipe(session: sqlalchemy.orm.session.Session) -> None:
+    u = User(
+        # id=100,
+        performed_by=123,
+        user_id=101,
+        name="dfd",
+        fullname="dfdf",
+        nickname="dfdd",
+        email="asas",
+    )
+    session.add(u)
+    session.commit()
+    a = session.query(User).first()
+
+    insert_card_swipe(
         session=session,
+        user=a,
         event_name="card_transaction",
         extra_details={"payment_request_id": "test", "amount": 100},
+        amount=100,
     )
