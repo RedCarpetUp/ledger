@@ -7,6 +7,7 @@ from alembic.command import current as alembic_current
 
 from rush.exceptions import *
 from rush.models import User, UserPy
+from rush.utils import insert_payments
 
 
 def test_current(getAlembic: alembic.config.Config) -> None:
@@ -69,4 +70,12 @@ def test_user(session: sqlalchemy.orm.session.Session) -> None:
         name="dfd",
         fullname="dfdf",
         nickname="dfdd",
+    )
+
+
+def test_insert_payments(session: sqlalchemy.orm.session.Session) -> None:
+    insert_payments(
+        session=session,
+        event_name="card_transaction",
+        extra_details={"payment_request_id": "test", "amount": 100},
     )
