@@ -3,7 +3,17 @@ from typing import Optional
 
 from pydantic import EmailStr
 from pydantic.dataclasses import dataclass as py_dataclass
-from sqlalchemy import Column, ForeignKey, Integer, MetaData, String, Table, Text, create_engine
+from sqlalchemy import (
+    JSON,
+    Column,
+    ForeignKey,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    Text,
+    create_engine,
+)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import mapper, relationship, sessionmaker
 
@@ -38,3 +48,16 @@ class UserPy(AuditMixinPy):
     email: str
     fullname: str
     nickname: str
+
+
+class LedgerTriggerEvent(AuditMixin):
+
+    __tablename__ = "ledger_trigger_event"
+    name = Column(String(50))
+    extra_details = Column(JSON)
+
+
+@py_dataclass
+class LedgerTriggerEventPy(AuditMixinPy):
+    name: str
+    extra_details: dict
