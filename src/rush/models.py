@@ -1,10 +1,15 @@
 from dataclasses import dataclass
+from decimal import Decimal as DecimalType
 from typing import Optional
+
+import pendulum
 from pendulum import DateTime
 from pydantic import EmailStr
 from pydantic.dataclasses import dataclass as py_dataclass
 from sqlalchemy import (
+    DECIMAL,
     JSON,
+    TIMESTAMP,
     Column,
     ForeignKey,
     Integer,
@@ -13,27 +18,64 @@ from sqlalchemy import (
     Table,
     Text,
     create_engine,
-    DECIMAL,
-    TIMESTAMP
-)
-from decimal import Decimal as DecimalType
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import mapper, relationship, sessionmaker
-import pendulum
 
+)
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import mapper, relationship, sessionmaker, Session
 Base = declarative_base()
 
+
 def get_current_ist_time():
-    return pendulum.now('Asia/Kolkata').replace(tzinfo=None)
+    return pendulum.now("Asia/Kolkata").replace(tzinfo=None)
+
 
 class AuditMixin(Base):
     __abstract__ = True
     id = Column(Integer, primary_key=True)
     performed_by = Column(Integer, nullable=True)
-    created_at = Column(TIMESTAMP,default=get_current_ist_time(), nullable=False)
-    updated_at = Column(TIMESTAMP,default=get_current_ist_time(), nullable=False)
-    performed_by = Column(Integer, nullable=True)
+    created_at = Column(TIMESTAMP, default=get_current_ist_time(), nullable=False)
+    updated_at = Column(TIMESTAMP, default=get_current_ist_time(), nullable=False)
+    performed_by = Column(Integer, default=1,nullable=True)
 
+    @classmethod
+    def snapshot(
+        cls,
+        primary_key: str,
+        new_data: dict,
+        session: Session,
+        skip_columns: tuple = ("id", "created_at", "updated_at"),
+    ):
+        old_row = (
+            session.query(cls)
+            .filter(
+                getattr(cls, primary_key) == new_data[primary_key],
+                getattr(cls, "row_status") == "active",
+            )
+            .with_for_update(skip_locked=True)
+            .one_or_none()
+        )
+        if old_row:
+            old_row.row_status = "inactive"
+            session().flush()
+        cls_keys = cls.__table__.columns.keys()
+        keys_to_skip = [key for key in new_data.keys() if key not in cls_keys]
+        new_skip_columns = keys_to_skip + list(skip_columns)
+        for column in new_skip_columns:
+            new_data.pop(column, None)
+        new_obj = cls.new(**new_data)
+        session().flush()
+        return new_obj
+
+def get_or_create(session, model, defaults=None, **kwargs):
+    instance = session.query(model).filter_by(**kwargs).first()
+    if instance:
+        return instance, False
+    else:
+        params = dict((k, v) for k, v in kwargs.items())
+        params.update(defaults or {})
+        instance = model(**params)
+        session.add(instance)
+        return instance, True
 
 class User(AuditMixin):
     __tablename__ = "users"
@@ -73,24 +115,27 @@ class LedgerTriggerEventPy(AuditMixinPy):
 
 
 class BookAccount(AuditMixin):
-    __tablename__ = 'book_account'
+    __tablename__ = "book_account"
     identifier = Column(String(50))
     book_type = Column(String(50))
     account_type = Column(String(50))
+
 
 @py_dataclass
 class BookAccountPy(AuditMixinPy):
     identifier: str
     book_type: str
-    account_type:str
+    account_type: str
+
 
 class LedgerEntry(AuditMixin):
-    __tablename__ = 'ledger_entry'
+    __tablename__ = "ledger_entry"
     event_id = Column(Integer, ForeignKey(LedgerTriggerEvent.id))
     from_book_account = Column(Integer, ForeignKey(BookAccount.id))
     to_book_account = Column(Integer, ForeignKey(BookAccount.id))
     amount = Column(DECIMAL)
     business_date = Column(TIMESTAMP, nullable=False)
+
 
 @py_dataclass
 class LedgerEntryPy(AuditMixinPy):

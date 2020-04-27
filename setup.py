@@ -34,7 +34,7 @@ setup(
         "pytest-isort",
         "isort",
         "pytest-cov",
-        "pendulum"
+        "pendulum",
     ],
     extras_require={"dev": DEV_REQUIRES},
     include_package_data=True,
