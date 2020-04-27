@@ -20,7 +20,7 @@ from sqlalchemy import (
     create_engine,
 )
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import mapper, relationship, sessionmaker, Session
+from sqlalchemy.orm import Session, mapper, relationship, sessionmaker
 
 Base = declarative_base()
 
@@ -67,6 +67,12 @@ class AuditMixin(Base):
         return new_obj
 
 
+@py_dataclass
+class AuditMixinPy:
+    id: int
+    performed_by: int
+
+
 def get_or_create(session, model, defaults=None, **kwargs):
     instance = session.query(model).filter_by(**kwargs).first()
     if instance:
@@ -87,12 +93,6 @@ class User(AuditMixin):
     email = Column(String(100))
     fullname = Column(String(50))
     nickname = Column(String(12))
-
-
-@py_dataclass
-class AuditMixinPy:
-    id: int
-    performed_by: int
 
 
 @py_dataclass
