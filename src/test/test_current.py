@@ -9,8 +9,11 @@ from alembic.command import current as alembic_current
 from rush.exceptions import *
 from rush.models import (
     BookAccount,
+    LoanData,
+    LoanEmis,
     User,
     UserPy,
+    get_current_ist_time,
     get_or_create,
 )
 from rush.utils import (
@@ -52,6 +55,37 @@ def test_user(session: sqlalchemy.orm.session.Session) -> None:
     u = UserPy(
         id=a.id, performed_by=123, email="sss", name="dfd", fullname="dfdf", nickname="dfdd",
     )
+
+
+def test_loan_create(session: sqlalchemy.orm.session.Session) -> None:
+
+    u = User(id=1001, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    session.add(u)
+    session.flush()
+    a = session.query(User).first()
+
+    loan_data = LoanData(
+        user_id=a.id,
+        agreement_date=get_current_ist_time(),
+        bill_generation_date=get_current_ist_time(),
+    )
+    session.add(loan_data)
+    session.flush()
+
+    print(loan_data.id)
+
+    loan_emis = LoanEmis(
+        loan_id=loan_data.id,
+        due_date=get_current_ist_time(),
+        last_payment_date=get_current_ist_time(),
+    )
+
+    session.add(loan_emis)
+    session.flush()
+
+    print(loan_emis.id)
+
+    session.commit()
 
 
 def test_insert_card_swipe(session: sqlalchemy.orm.session.Session) -> None:

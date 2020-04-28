@@ -22,6 +22,7 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.Column("user_id", sa.Integer(), nullable=False),
         sa.Column("agreement_date", sa.TIMESTAMP(), nullable=False),
         sa.Column("bill_generation_date", sa.TIMESTAMP(), nullable=False),
         sa.PrimaryKeyConstraint("id"),

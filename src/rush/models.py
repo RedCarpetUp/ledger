@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from decimal import Decimal as DecimalType
 from typing import Optional
 
+import pendulum
+from pendulum import DateTime
 from pydantic import EmailStr
 from pydantic.dataclasses import dataclass as py_dataclass
 from sqlalchemy import (
@@ -25,9 +27,6 @@ from sqlalchemy.orm import (
     relationship,
     sessionmaker,
 )
-
-import pendulum
-from pendulum import DateTime
 
 Base = declarative_base()
 
@@ -160,12 +159,14 @@ class LedgerEntryPy(AuditMixinPy):
 
 class LoanData(AuditMixin):
     __tablename__ = "loan_data"
+    user_id = Column(Integer, ForeignKey(User.id))
     agreement_date = Column(TIMESTAMP, nullable=False)
     bill_generation_date = Column(TIMESTAMP, nullable=False)
 
 
 @py_dataclass
 class LoanDataPy(AuditMixinPy):
+    user_id: int
     agreement_date: DateTime
     bill_generation_date: DateTime
 
