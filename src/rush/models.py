@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from decimal import Decimal as DecimalType
-from test.conftest import session
 from typing import Optional
 
 import pendulum
