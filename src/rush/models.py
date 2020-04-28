@@ -33,7 +33,6 @@ def get_current_ist_time():
 class AuditMixin(Base):
     __abstract__ = True
     id = Column(Integer, primary_key=True)
-    performed_by = Column(Integer, nullable=True)
     created_at = Column(TIMESTAMP, default=get_current_ist_time(), nullable=False)
     updated_at = Column(TIMESTAMP, default=get_current_ist_time(), nullable=False)
     performed_by = Column(Integer, default=1, nullable=True)
@@ -83,7 +82,6 @@ def get_or_create(session, model, defaults=None, **kwargs):
 
 class User(AuditMixin):
     __tablename__ = "users"
-    user_id = Column(Integer, primary_key=True)
     name = Column(String(50))
     email = Column(String(100))
     fullname = Column(String(50))
@@ -98,7 +96,6 @@ class AuditMixinPy:
 
 @py_dataclass
 class UserPy(AuditMixinPy):
-    user_id: str
     name: str
     email: str
     fullname: str
