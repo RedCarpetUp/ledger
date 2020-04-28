@@ -25,65 +25,29 @@ def test_current(getAlembic: alembic.config.Config) -> None:
 
 
 def test_user2(session: sqlalchemy.orm.session.Session) -> None:
-    u = User(
-        # id=101,
-        performed_by=123,
-        user_id=101,
-        name="dfd",
-        fullname="dfdf",
-        nickname="dfdd",
-        email="asas",
-    )
+    u = User(performed_by=123, id=1, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(u)
     session.commit()
     a = session.query(User).first()
     print(a.id)
     u = UserPy(
-        id=a.id,
-        performed_by=123,
-        email="sss",
-        user_id=101,
-        name="dfd",
-        fullname="dfdf",
-        nickname="dfdd",
+        id=a.id, performed_by=123, email="sss", name="dfd", fullname="dfdf", nickname="dfdd",
     )
 
 
 def test_user(session: sqlalchemy.orm.session.Session) -> None:
-    u = User(
-        # id=100,
-        performed_by=123,
-        user_id=101,
-        name="dfd",
-        fullname="dfdf",
-        nickname="dfdd",
-        email="asas",
-    )
+    u = User(id=2, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(u)
     session.commit()
     a = session.query(User).first()
     print(a.id)
     u = UserPy(
-        id=a.id,
-        performed_by=123,
-        email="sss",
-        user_id=101,
-        name="dfd",
-        fullname="dfdf",
-        nickname="dfdd",
+        id=a.id, performed_by=123, email="sss", name="dfd", fullname="dfdf", nickname="dfdd",
     )
 
 
 def test_insert_card_swipe(session: sqlalchemy.orm.session.Session) -> None:
-    u = User(
-        # id=100,
-        performed_by=123,
-        user_id=101,
-        name="dfd",
-        fullname="dfdf",
-        nickname="dfdd",
-        email="asas",
-    )
+    u = User(id=3, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(u)
     session.commit()
     a = session.query(User).first()
@@ -98,15 +62,7 @@ def test_insert_card_swipe(session: sqlalchemy.orm.session.Session) -> None:
 
 
 def test_get_account_balance(session: sqlalchemy.orm.session.Session) -> None:
-    u = User(
-        # id=100,
-        performed_by=123,
-        user_id=101,
-        name="dfd",
-        fullname="dfdf",
-        nickname="dfdd",
-        email="asas",
-    )
+    u = User(id=4, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(u)
     session.commit()
     a = session.query(User).first()
@@ -162,15 +118,7 @@ def test_slide_partial_payment(session: sqlalchemy.orm.session.Session) -> None:
 
 def test_slide_partial_payment_after_due_date(session: sqlalchemy.orm.session.Session) -> None:
 
-    u = User(
-        # id=100,
-        performed_by=123,
-        user_id=101,
-        name="dfd",
-        fullname="dfdf",
-        nickname="dfdd",
-        email="asas",
-    )
+    u = User(id=5, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(u)
     session.commit()
     a = session.query(User).first()

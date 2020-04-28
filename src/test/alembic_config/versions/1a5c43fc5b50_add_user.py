@@ -20,7 +20,6 @@ def upgrade() -> None:
         "users",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("performed_by", sa.Integer(), nullable=False),
-        sa.Column("user_id", sa.Integer(), nullable=False),
         sa.Column("name", sa.String(), nullable=False),
         sa.Column("email", sa.String(), nullable=False),
         sa.Column("fullname", sa.String(), nullable=False),
