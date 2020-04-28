@@ -17,6 +17,7 @@ from rush.models import (
     get_or_create,
 )
 from rush.utils import (
+    generate_bill,
     get_account_balance,
     insert_card_swipe,
 )
@@ -62,10 +63,9 @@ def test_loan_create(session: sqlalchemy.orm.session.Session) -> None:
     u = User(id=1001, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(u)
     session.flush()
-    a = session.query(User).first()
 
     loan_data = LoanData(
-        user_id=a.id,
+        user_id=u.id,
         agreement_date=get_current_ist_time(),
         bill_generation_date=get_current_ist_time(),
     )
@@ -92,11 +92,10 @@ def test_insert_card_swipe(session: sqlalchemy.orm.session.Session) -> None:
     u = User(id=3, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(u)
     session.commit()
-    a = session.query(User).first()
 
     insert_card_swipe(
         session=session,
-        user=a,
+        user=u,
         event_name="card_transaction",
         extra_details={"payment_request_id": "test", "amount": 100},
         amount=100,
@@ -107,11 +106,10 @@ def test_get_account_balance(session: sqlalchemy.orm.session.Session) -> None:
     u = User(id=4, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(u)
     session.commit()
-    a = session.query(User).first()
 
     insert_card_swipe(
         session=session,
-        user=a,
+        user=u,
         event_name="card_transaction",
         extra_details={"payment_request_id": "test", "amount": 100},
         amount=100,
@@ -120,7 +118,7 @@ def test_get_account_balance(session: sqlalchemy.orm.session.Session) -> None:
     book_account = get_or_create(
         session=session,
         model=BookAccount,
-        identifier=a.id,
+        identifier=u.id,
         book_type="user_card_balance",
         account_type="liability",
     )
@@ -129,7 +127,7 @@ def test_get_account_balance(session: sqlalchemy.orm.session.Session) -> None:
 
     print(current_balance)
 
-    assert current_balance == Decimal(-200)
+    assert current_balance == Decimal(100)
 
 
 def test_slide_full_payment(session: sqlalchemy.orm.session.Session) -> None:
@@ -163,14 +161,13 @@ def test_slide_partial_payment_after_due_date(session: sqlalchemy.orm.session.Se
     u = User(id=5, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(u)
     session.commit()
-    a = session.query(User).first()
 
     # Jan Month
     # Do transaction Rs 100
     # Do transaction Rs 500
     insert_card_swipe(
         session=session,
-        user=a,
+        user=u,
         event_name="card_transaction",
         extra_details={"payment_request_id": "test", "amount": 100},
         amount=100,
@@ -178,7 +175,7 @@ def test_slide_partial_payment_after_due_date(session: sqlalchemy.orm.session.Se
 
     insert_card_swipe(
         session=session,
-        user=a,
+        user=u,
         event_name="card_transaction",
         extra_details={"payment_request_id": "test", "amount": 100},
         amount=500,
@@ -192,3 +189,18 @@ def test_slide_partial_payment_after_due_date(session: sqlalchemy.orm.session.Se
 
     # Partial bill payment (Feb 16)
     print("test")
+
+
+def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
+    u = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    session.add(u)
+    session.commit()
+    current_date = get_current_ist_time()
+    generate_bill(
+        session=session,
+        bill_date=current_date,
+        interest_yearly=10,
+        bill_tenure=12,
+        user=u,
+        business_date=current_date,
+    )

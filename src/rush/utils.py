@@ -137,30 +137,49 @@ def generate_bill(
     bill_date: DateTime,
     interest_yearly: int,
     bill_tenure: int,
+    user: User,
     business_date: Optional[DateTime] = None,
 ) -> None:
 
-    # first_of_month
-    # last_of_month
+    lt = LedgerTriggerEvent(
+        performed_by=user.id, name="bill_generation", extra_details={"bill_date": str(bill_date)}
+    )
+    session.add(lt)
+    session.flush()
+    to_account = get_or_create(
+        session=session,
+        model=BookAccount,
+        identifier=user.id,
+        book_type="unbilled_transactions",
+        account_type="asset",
+    )
 
-    # to_account = get_or_create(
-    #     session=session,
-    #     model=BookAccount,
-    #     identifier=user.id,
-    #     book_type="unbilled_transactions",
-    #     account_type="asset",
-    # )
+    for i in range(0, 11):
+        date_to_bill = bill_date.add(months=i)
+        prev_date = bill_date.add(months=i - 1)
 
-    # account_balance = get_account_balance(
-    #     session=session,
-    #     book_account=to_account,
-    #     business_date=last_of_month
-    # )
+        from_account = get_or_create(
+            session=session,
+            model=BookAccount,
+            identifier=user.id,
+            book_type="user_monthly_" + str(prev_date) + "to" + str(date_to_bill),
+            account_type="liability",
+        )
 
-    # total_bill_principal = account_balance
-    # total_interest = account_balance * interest_yearly
-    # total_bill_amount = total_bill_principal + total_interest
+        account_balance = get_account_balance(
+            session=session, book_account=to_account, business_date=prev_date
+        )
 
-    # interest_per_month = total_interest / bill_tenure
-    # principal_per_month = total_bill_principal / bill_tenure
-    print("test")
+        total_bill_principal = account_balance
+        total_interest = account_balance * interest_yearly
+        total_bill_amount = total_bill_principal + total_interest
+        print(total_bill_amount)
+        le3 = LedgerEntry(
+            event_id=lt.id,
+            from_book_account=from_account.id,
+            to_book_account=to_account.id,
+            amount=total_bill_amount,
+            business_date=business_date,
+        )
+        session.add(le3)
+        session.commit()
