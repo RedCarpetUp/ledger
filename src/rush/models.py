@@ -1,10 +1,11 @@
 from dataclasses import dataclass
 from decimal import Decimal as DecimalType
+from test.conftest import session
 from typing import Optional
 
 import pendulum
 from pendulum import DateTime
-from pydantic import EmailStr
+from pydantic import EmailStr, ValidationError, condecimal, constr
 from pydantic.dataclasses import dataclass as py_dataclass
 from sqlalchemy import (
     DECIMAL,
@@ -36,6 +37,15 @@ class AuditMixin(Base):
     created_at = Column(TIMESTAMP, default=get_current_ist_time(), nullable=False)
     updated_at = Column(TIMESTAMP, default=get_current_ist_time(), nullable=False)
     performed_by = Column(Integer, default=1, nullable=True)
+
+    def validate_with_pydantic(self, pydanticobj, session):
+        columns = self.__table__.columns.keys()
+        try:
+            a = {column_name: getattr(self, column_name) for column_name in columns}
+            session.flush()
+            pydanticobj(**a)
+        except ValidationError as e:
+            raise e
 
     @classmethod
     def snapshot(
@@ -69,8 +79,10 @@ class AuditMixin(Base):
 
 @py_dataclass
 class AuditMixinPy:
-    id: int
+    id: Optional[int]
     performed_by: int
+    created_at: Optional[DateTime]
+    updated_at: Optional[DateTime]
 
 
 def get_or_create(session, model, defaults=None, **kwargs):
@@ -98,10 +110,10 @@ class User(AuditMixin):
 @py_dataclass
 class UserPy(AuditMixinPy):
     user_id: str
-    name: str
-    email: str
-    fullname: str
-    nickname: str
+    name: constr(min_length=1, max_length=50)
+    email: EmailStr
+    fullname: constr(min_length=1, max_length=50)
+    nickname: constr(min_length=1, max_length=12)
 
 
 class LedgerTriggerEvent(AuditMixin):
@@ -113,7 +125,7 @@ class LedgerTriggerEvent(AuditMixin):
 
 @py_dataclass
 class LedgerTriggerEventPy(AuditMixinPy):
-    name: str
+    name: constr(min_length=1, max_length=50)
     extra_details: dict
 
 
@@ -127,8 +139,8 @@ class BookAccount(AuditMixin):
 @py_dataclass
 class BookAccountPy(AuditMixinPy):
     identifier: int
-    book_type: str
-    account_type: str
+    book_type: constr(min_length=1, max_length=50)
+    account_type: constr(min_length=1, max_length=50)
 
 
 class LedgerEntry(AuditMixin):
@@ -145,5 +157,5 @@ class LedgerEntryPy(AuditMixinPy):
     event_id: int
     from_book_account: int
     to_book_account: int
-    amount: DecimalType
+    amount: condecimal(gt=0, lt=10000)
     business_date: DateTime

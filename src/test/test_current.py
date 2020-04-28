@@ -6,7 +6,7 @@ import sqlalchemy
 from alembic.command import current as alembic_current
 
 from rush.exceptions import *
-from rush.models import User, UserPy
+from rush.models import User, UserPy, get_current_ist_time
 from rush.utils import insert_card_swipe
 
 
@@ -31,21 +31,12 @@ def test_user2(session: sqlalchemy.orm.session.Session) -> None:
         name="dfd",
         fullname="dfdf",
         nickname="dfdd",
-        email="asas",
+        email="asas@dskdsjd.com",
     )
     session.add(u)
+    u.validate_with_pydantic(UserPy, session)
     session.commit()
     a = session.query(User).first()
-    print(a.id)
-    u = UserPy(
-        id=a.id,
-        performed_by=123,
-        email="sss",
-        user_id=101,
-        name="dfd",
-        fullname="dfdf",
-        nickname="dfdd",
-    )
 
 
 def test_user(session: sqlalchemy.orm.session.Session) -> None:
@@ -56,21 +47,12 @@ def test_user(session: sqlalchemy.orm.session.Session) -> None:
         name="dfd",
         fullname="dfdf",
         nickname="dfdd",
-        email="asas",
+        email="asas@lskdl.com",
     )
     session.add(u)
+    u.validate_with_pydantic(UserPy, session)
     session.commit()
     a = session.query(User).first()
-    print(a.id)
-    u = UserPy(
-        id=a.id,
-        performed_by=123,
-        email="sss",
-        user_id=101,
-        name="dfd",
-        fullname="dfdf",
-        nickname="dfdd",
-    )
 
 
 def test_insert_card_swipe(session: sqlalchemy.orm.session.Session) -> None:
@@ -81,12 +63,12 @@ def test_insert_card_swipe(session: sqlalchemy.orm.session.Session) -> None:
         name="dfd",
         fullname="dfdf",
         nickname="dfdd",
-        email="asas",
+        email="asas@klskdls.com",
     )
     session.add(u)
+    u.validate_with_pydantic(UserPy, session)
     session.commit()
     a = session.query(User).first()
-
     insert_card_swipe(
         session=session,
         user=a,
