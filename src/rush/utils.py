@@ -21,9 +21,8 @@ def insert_card_swipe(
     event_name: str,
     extra_details: dict,
     amount: int,
-    # business_date: Optional[DateTime] = get_current_ist_time(),
+    business_date: Optional[DateTime] = get_current_ist_time(),
 ) -> None:
-    business_date = get_current_ist_time()
     lt = LedgerTriggerEvent(performed_by=user.id, name=event_name, extra_details=extra_details)
     session.add(lt)
     session.flush()
@@ -133,11 +132,12 @@ def get_account_balance(
     return final_balance
 
 
-def generate_bill(session: sqlalchemy.orm.session.Session,
+def generate_bill(
+    session: sqlalchemy.orm.session.Session,
     bill_date: DateTime,
-    business_date: Optional[DateTime] = None,
     interest_yearly: int,
-    bill_tenure: int
+    bill_tenure: int,
+    business_date: Optional[DateTime] = None,
 ) -> None:
 
     # first_of_month

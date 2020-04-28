@@ -5,9 +5,8 @@ Revises: 568935283001
 Create Date: 2020-04-28 15:32:45.585137
 
 """
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "d5e975fd205c"
@@ -16,7 +15,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     op.create_table(
         "loan_data",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -40,5 +39,5 @@ def upgrade():
     )
 
 
-def downgrade():
+def downgrade() -> None:
     pass
