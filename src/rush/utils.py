@@ -110,7 +110,7 @@ def get_account_balance(
     debit_balance = (
         session.query(func.sum(LedgerEntry.amount))
         .filter(
-            LedgerEntry.from_book_account == book_account.identifier,
+            LedgerEntry.from_book_account == book_account.id,
             LedgerEntry.business_date <= business_date,
         )
         .scalar()
@@ -120,13 +120,12 @@ def get_account_balance(
     credit_balance = (
         session.query(func.sum(LedgerEntry.amount))
         .filter(
-            LedgerEntry.to_book_account == book_account.identifier,
+            LedgerEntry.to_book_account == book_account.id,
             LedgerEntry.business_date <= business_date,
         )
         .scalar()
         or 0
     )
-
     final_balance = credit_balance - debit_balance
 
     return Decimal(final_balance)

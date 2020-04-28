@@ -124,10 +124,7 @@ def test_get_account_balance(session: sqlalchemy.orm.session.Session) -> None:
     )
 
     current_balance = get_account_balance(session=session, book_account=book_account)
-
-    print(current_balance)
-
-    assert current_balance == Decimal(100)
+    assert current_balance == Decimal(-100)
 
 
 def test_slide_full_payment(session: sqlalchemy.orm.session.Session) -> None:
