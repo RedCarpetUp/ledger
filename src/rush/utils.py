@@ -1,12 +1,17 @@
+from decimal import Decimal
+from typing import Optional
+
 import sqlalchemy
+from pendulum import DateTime
+from sqlalchemy import func
 
 from rush.models import (
-    LedgerTriggerEvent,
-    LedgerEntry,
-    get_current_ist_time,
     BookAccount,
-    get_or_create,
+    LedgerEntry,
+    LedgerTriggerEvent,
     User,
+    get_current_ist_time,
+    get_or_create,
 )
 
 
@@ -90,3 +95,37 @@ def insert_card_swipe(
     )
     session.add(le3)
     session.commit()
+
+
+def get_account_balance(
+    session: sqlalchemy.orm.session.Session,
+    book_account: BookAccount,
+    business_date: Optional[DateTime] = None,
+) -> Decimal:
+
+    if not business_date:
+        business_date = get_current_ist_time()
+
+    debit_balance = (
+        session.query(func.sum(LedgerEntry.amount))
+        .filter(
+            LedgerEntry.from_book_account == book_account.identifier,
+            LedgerEntry.business_date <= business_date,
+        )
+        .scalar()
+        or 0
+    )
+
+    credit_balance = (
+        session.query(func.sum(LedgerEntry.amount))
+        .filter(
+            LedgerEntry.to_book_account == book_account.identifier,
+            LedgerEntry.business_date <= business_date,
+        )
+        .scalar()
+        or 0
+    )
+
+    final_balance = credit_balance - debit_balance
+
+    return final_balance

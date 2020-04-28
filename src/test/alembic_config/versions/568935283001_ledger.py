@@ -41,6 +41,16 @@ def upgrade() -> None:
         sa.Column("performed_by", sa.Integer(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
+    op.create_index(
+        "index_ledger_entry_from_book_account",
+        "ledger_entry",
+        ["from_book_account", "business_date", "amount"],
+    )
+    op.create_index(
+        "index_ledger_entry_to_book_account",
+        "ledger_entry",
+        ["to_book_account", "business_date", "amount"],
+    )
 
 
 def downgrade() -> None:

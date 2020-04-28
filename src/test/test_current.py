@@ -1,4 +1,5 @@
 import contextlib
+from decimal import Decimal
 from io import StringIO
 
 import alembic
@@ -6,8 +7,8 @@ import sqlalchemy
 from alembic.command import current as alembic_current
 
 from rush.exceptions import *
-from rush.models import User, UserPy
-from rush.utils import insert_card_swipe
+from rush.models import BookAccount, User, UserPy, get_or_create
+from rush.utils import get_account_balance, insert_card_swipe
 
 
 def test_current(getAlembic: alembic.config.Config) -> None:
@@ -94,3 +95,40 @@ def test_insert_card_swipe(session: sqlalchemy.orm.session.Session) -> None:
         extra_details={"payment_request_id": "test", "amount": 100},
         amount=100,
     )
+
+
+def test_get_account_balance(session: sqlalchemy.orm.session.Session) -> None:
+    u = User(
+        # id=100,
+        performed_by=123,
+        user_id=101,
+        name="dfd",
+        fullname="dfdf",
+        nickname="dfdd",
+        email="asas",
+    )
+    session.add(u)
+    session.commit()
+    a = session.query(User).first()
+
+    insert_card_swipe(
+        session=session,
+        user=a,
+        event_name="card_transaction",
+        extra_details={"payment_request_id": "test", "amount": 100},
+        amount=100,
+    )
+
+    book_account = get_or_create(
+        session=session,
+        model=BookAccount,
+        identifier=a.id,
+        book_type="user_card_balance",
+        account_type="liability",
+    )
+
+    current_balance = get_account_balance(session=session, book_account=book_account)
+
+    print(current_balance)
+
+    assert current_balance == Decimal(-200)

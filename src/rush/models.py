@@ -12,6 +12,7 @@ from sqlalchemy import (
     TIMESTAMP,
     Column,
     ForeignKey,
+    Index,
     Integer,
     MetaData,
     String,
@@ -20,7 +21,7 @@ from sqlalchemy import (
     create_engine,
 )
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import mapper, relationship, sessionmaker, Session
+from sqlalchemy.orm import Session, mapper, relationship, sessionmaker
 
 Base = declarative_base()
 
@@ -138,6 +139,11 @@ class LedgerEntry(AuditMixin):
     to_book_account = Column(Integer, ForeignKey(BookAccount.id))
     amount = Column(DECIMAL)
     business_date = Column(TIMESTAMP, nullable=False)
+
+    __table_args__ = (
+        Index("index_ledger_entry_from_book_account", from_book_account, business_date, amount,),
+        Index("index_ledger_entry_to_book_account", to_book_account, business_date, amount,),
+    )
 
 
 @py_dataclass
