@@ -132,3 +132,73 @@ def test_get_account_balance(session: sqlalchemy.orm.session.Session) -> None:
     print(current_balance)
 
     assert current_balance == Decimal(-200)
+
+
+def test_slide_full_payment(session: sqlalchemy.orm.session.Session) -> None:
+
+    # Jan Month
+    # Do transaction Rs 100
+    # Do transaction Rs 500
+
+    # Generate Bill (Feb 1)
+
+    # Full bill payment (Feb 2)
+    pass
+
+
+def test_slide_partial_payment(session: sqlalchemy.orm.session.Session) -> None:
+
+    # Jan Month
+    # Do transaction Rs 100
+    # Do transaction Rs 500
+
+    # Generate Bill (Feb 1)
+
+    # Partial bill payment (Feb 2)
+
+    # Accrue Interest (Feb 15)
+    pass
+
+
+def test_slide_partial_payment_after_due_date(session: sqlalchemy.orm.session.Session) -> None:
+
+    u = User(
+        # id=100,
+        performed_by=123,
+        user_id=101,
+        name="dfd",
+        fullname="dfdf",
+        nickname="dfdd",
+        email="asas",
+    )
+    session.add(u)
+    session.commit()
+    a = session.query(User).first()
+
+    # Jan Month
+    # Do transaction Rs 100
+    # Do transaction Rs 500
+    insert_card_swipe(
+        session=session,
+        user=a,
+        event_name="card_transaction",
+        extra_details={"payment_request_id": "test", "amount": 100},
+        amount=100,
+    )
+
+    insert_card_swipe(
+        session=session,
+        user=a,
+        event_name="card_transaction",
+        extra_details={"payment_request_id": "test", "amount": 100},
+        amount=500,
+    )
+
+    # Generate Bill (Feb 1)
+
+    # Accrue Interest (Feb 15)
+
+    # Add Late fee (Feb 15)
+
+    # Partial bill payment (Feb 16)
+    print("test")

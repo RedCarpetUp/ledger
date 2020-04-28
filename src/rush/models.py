@@ -153,3 +153,29 @@ class LedgerEntryPy(AuditMixinPy):
     to_book_account: int
     amount: DecimalType
     business_date: DateTime
+
+
+class LoanData(AuditMixin):
+    __tablename__ = "loan_data"
+    agreement_date = Column(TIMESTAMP, nullable=False)
+    bill_generation_date = Column(TIMESTAMP, nullable=False)
+
+
+@py_dataclass
+class LoanDataPy(AuditMixinPy):
+    agreement_date: DateTime
+    bill_generation_date: DateTime
+
+
+class LoanEmis(AuditMixin):
+    __tablename__ = "loan_emis"
+    loan_id = Column(Integer, ForeignKey(LoanData.id))
+    due_date = Column(TIMESTAMP, nullable=False)
+    last_payment_date = Column(TIMESTAMP, nullable=False)
+
+
+@py_dataclass
+class LoanEmisPy(AuditMixinPy):
+    loan_id: int
+    due_date: DateTime
+    last_payment_date: DateTime
