@@ -2,9 +2,9 @@ from decimal import Decimal
 from typing import Optional
 
 import sqlalchemy
-from pendulum import DateTime
 from sqlalchemy import func
 
+from pendulum import DateTime
 from rush.models import (
     BookAccount,
     LedgerEntry,

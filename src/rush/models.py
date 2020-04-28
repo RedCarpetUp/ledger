@@ -2,8 +2,6 @@ from dataclasses import dataclass
 from decimal import Decimal as DecimalType
 from typing import Optional
 
-import pendulum
-from pendulum import DateTime
 from pydantic import EmailStr
 from pydantic.dataclasses import dataclass as py_dataclass
 from sqlalchemy import (
@@ -21,7 +19,15 @@ from sqlalchemy import (
     create_engine,
 )
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import Session, mapper, relationship, sessionmaker
+from sqlalchemy.orm import (
+    Session,
+    mapper,
+    relationship,
+    sessionmaker,
+)
+
+import pendulum
+from pendulum import DateTime
 
 Base = declarative_base()
 

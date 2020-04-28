@@ -7,8 +7,16 @@ import sqlalchemy
 from alembic.command import current as alembic_current
 
 from rush.exceptions import *
-from rush.models import BookAccount, User, UserPy, get_or_create
-from rush.utils import get_account_balance, insert_card_swipe
+from rush.models import (
+    BookAccount,
+    User,
+    UserPy,
+    get_or_create,
+)
+from rush.utils import (
+    get_account_balance,
+    insert_card_swipe,
+)
 
 
 def test_current(getAlembic: alembic.config.Config) -> None:
