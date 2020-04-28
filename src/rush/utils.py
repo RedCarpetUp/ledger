@@ -129,7 +129,7 @@ def get_account_balance(
 
     final_balance = credit_balance - debit_balance
 
-    return final_balance
+    return Decimal(final_balance)
 
 
 def generate_bill(
