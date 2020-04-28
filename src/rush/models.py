@@ -12,6 +12,7 @@ from sqlalchemy import (
     TIMESTAMP,
     Column,
     ForeignKey,
+    Index,
     Integer,
     MetaData,
     String,
@@ -20,7 +21,7 @@ from sqlalchemy import (
     create_engine,
 )
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import mapper, relationship, sessionmaker, Session
+from sqlalchemy.orm import Session, mapper, relationship, sessionmaker
 
 Base = declarative_base()
 
@@ -139,6 +140,11 @@ class LedgerEntry(AuditMixin):
     amount = Column(DECIMAL)
     business_date = Column(TIMESTAMP, nullable=False)
 
+    __table_args__ = (
+        Index("index_ledger_entry_from_book_account", from_book_account, business_date, amount,),
+        Index("index_ledger_entry_to_book_account", to_book_account, business_date, amount,),
+    )
+
 
 @py_dataclass
 class LedgerEntryPy(AuditMixinPy):
@@ -147,3 +153,29 @@ class LedgerEntryPy(AuditMixinPy):
     to_book_account: int
     amount: DecimalType
     business_date: DateTime
+
+
+class LoanData(AuditMixin):
+    __tablename__ = "loan_data"
+    agreement_date = Column(TIMESTAMP, nullable=False)
+    bill_generation_date = Column(TIMESTAMP, nullable=False)
+
+
+@py_dataclass
+class LoanDataPy(AuditMixinPy):
+    agreement_date: DateTime
+    bill_generation_date: DateTime
+
+
+class LoanEmis(AuditMixin):
+    __tablename__ = "loan_emis"
+    loan_id = Column(Integer, ForeignKey(LoanData.id))
+    due_date = Column(TIMESTAMP, nullable=False)
+    last_payment_date = Column(TIMESTAMP, nullable=False)
+
+
+@py_dataclass
+class LoanEmisPy(AuditMixinPy):
+    loan_id: int
+    due_date: DateTime
+    last_payment_date: DateTime

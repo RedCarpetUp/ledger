@@ -1,4 +1,5 @@
 import contextlib
+from decimal import Decimal
 from io import StringIO
 
 import alembic
@@ -6,8 +7,8 @@ import sqlalchemy
 from alembic.command import current as alembic_current
 
 from rush.exceptions import *
-from rush.models import User, UserPy
-from rush.utils import insert_payments
+from rush.models import BookAccount, User, UserPy, get_or_create
+from rush.utils import get_account_balance, insert_card_swipe
 
 
 def test_current(getAlembic: alembic.config.Config) -> None:
@@ -25,7 +26,7 @@ def test_current(getAlembic: alembic.config.Config) -> None:
 
 def test_user2(session: sqlalchemy.orm.session.Session) -> None:
     u = User(
-        id=101,
+        # id=101,
         performed_by=123,
         user_id=101,
         name="dfd",
@@ -38,7 +39,7 @@ def test_user2(session: sqlalchemy.orm.session.Session) -> None:
     a = session.query(User).first()
     print(a.id)
     u = UserPy(
-        id=101,
+        id=a.id,
         performed_by=123,
         email="sss",
         user_id=101,
@@ -50,7 +51,7 @@ def test_user2(session: sqlalchemy.orm.session.Session) -> None:
 
 def test_user(session: sqlalchemy.orm.session.Session) -> None:
     u = User(
-        id=100,
+        # id=100,
         performed_by=123,
         user_id=101,
         name="dfd",
@@ -63,7 +64,7 @@ def test_user(session: sqlalchemy.orm.session.Session) -> None:
     a = session.query(User).first()
     print(a.id)
     u = UserPy(
-        id=100,
+        id=a.id,
         performed_by=123,
         email="sss",
         user_id=101,
@@ -73,9 +74,131 @@ def test_user(session: sqlalchemy.orm.session.Session) -> None:
     )
 
 
-def test_insert_payments(session: sqlalchemy.orm.session.Session) -> None:
-    insert_payments(
+def test_insert_card_swipe(session: sqlalchemy.orm.session.Session) -> None:
+    u = User(
+        # id=100,
+        performed_by=123,
+        user_id=101,
+        name="dfd",
+        fullname="dfdf",
+        nickname="dfdd",
+        email="asas",
+    )
+    session.add(u)
+    session.commit()
+    a = session.query(User).first()
+
+    insert_card_swipe(
         session=session,
+        user=a,
         event_name="card_transaction",
         extra_details={"payment_request_id": "test", "amount": 100},
+        amount=100,
     )
+
+
+def test_get_account_balance(session: sqlalchemy.orm.session.Session) -> None:
+    u = User(
+        # id=100,
+        performed_by=123,
+        user_id=101,
+        name="dfd",
+        fullname="dfdf",
+        nickname="dfdd",
+        email="asas",
+    )
+    session.add(u)
+    session.commit()
+    a = session.query(User).first()
+
+    insert_card_swipe(
+        session=session,
+        user=a,
+        event_name="card_transaction",
+        extra_details={"payment_request_id": "test", "amount": 100},
+        amount=100,
+    )
+
+    book_account = get_or_create(
+        session=session,
+        model=BookAccount,
+        identifier=a.id,
+        book_type="user_card_balance",
+        account_type="liability",
+    )
+
+    current_balance = get_account_balance(session=session, book_account=book_account)
+
+    print(current_balance)
+
+    assert current_balance == Decimal(-200)
+
+
+def test_slide_full_payment(session: sqlalchemy.orm.session.Session) -> None:
+
+    # Jan Month
+    # Do transaction Rs 100
+    # Do transaction Rs 500
+
+    # Generate Bill (Feb 1)
+
+    # Full bill payment (Feb 2)
+    pass
+
+
+def test_slide_partial_payment(session: sqlalchemy.orm.session.Session) -> None:
+
+    # Jan Month
+    # Do transaction Rs 100
+    # Do transaction Rs 500
+
+    # Generate Bill (Feb 1)
+
+    # Partial bill payment (Feb 2)
+
+    # Accrue Interest (Feb 15)
+    pass
+
+
+def test_slide_partial_payment_after_due_date(session: sqlalchemy.orm.session.Session) -> None:
+
+    u = User(
+        # id=100,
+        performed_by=123,
+        user_id=101,
+        name="dfd",
+        fullname="dfdf",
+        nickname="dfdd",
+        email="asas",
+    )
+    session.add(u)
+    session.commit()
+    a = session.query(User).first()
+
+    # Jan Month
+    # Do transaction Rs 100
+    # Do transaction Rs 500
+    insert_card_swipe(
+        session=session,
+        user=a,
+        event_name="card_transaction",
+        extra_details={"payment_request_id": "test", "amount": 100},
+        amount=100,
+    )
+
+    insert_card_swipe(
+        session=session,
+        user=a,
+        event_name="card_transaction",
+        extra_details={"payment_request_id": "test", "amount": 100},
+        amount=500,
+    )
+
+    # Generate Bill (Feb 1)
+
+    # Accrue Interest (Feb 15)
+
+    # Add Late fee (Feb 15)
+
+    # Partial bill payment (Feb 16)
+    print("test")
