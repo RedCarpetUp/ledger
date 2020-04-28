@@ -1,3 +1,21 @@
+<p>
+    <a href="https://github.com/RedCarpetUp/ledger/actions">
+        <img src="https://github.com/RedCarpetUp/ledger/workflows/Tests/badge.svg" alt="Test Status" height="18">
+    </a>
+    <a href="https://github.com/RedCarpetUp/ledger/actions">
+        <img src="https://github.com/RedCarpetUp/ledger/workflows/pre-commit%20hooks/badge.svg" alt="Pre-commit Status" height="18">
+    </a>
+
+</p>
+<p>
+    <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.8+-blue.svg" alt="Python version" height="18"></a>
+    <a href="https://github.com/RedCarpetUp/ledger/blob/master/LICENSE"><img src="https://img.shields.io/pypi/l/markdown-subtemplate.svg" alt="License" height="18"></a>
+    <a href="https://github.com/psf/black">
+        <img src="https://img.shields.io/badge/code%20style-black-000000.svg" alt="Codestyle Black" height="18">
+    </a>
+</p>
+
+
 
 ### Setup
 - make sure you are using python > 3.8+
