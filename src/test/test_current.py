@@ -1,7 +1,7 @@
 import contextlib
 from decimal import Decimal
 from io import StringIO
-
+import pendulum
 import alembic
 import sqlalchemy
 from alembic.command import current as alembic_current
@@ -215,7 +215,7 @@ def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
     current_balance = get_account_balance(session=session, book_account=book_account)
     assert current_balance == Decimal(-100)
 
-    current_date = get_current_ist_time()
+    current_date = pendulum.parse('2020-04-29')
     bill_date = current_date
 
     generate_bill(
@@ -259,5 +259,5 @@ def test_payment(session: sqlalchemy.orm.session.Session) -> None:
     lt = LedgerTriggerEvent(
         performed_by=user.id,
         name="payment_received",
-        extra_details={"payment_date": str(current_date.subtract(months=1))},
+        extra_details={"payment_request_id":"lsdad","payment_date": str(current_date.subtract(months=1))},
     )

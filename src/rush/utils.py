@@ -221,3 +221,44 @@ def get_bill_amount(
     )
     interest_amount = get_account_balance(session=session, book_account=book_account_interest)
     return interest_amount + monthly_amount
+
+def reslide_payments(session: sqlalchemy.orm.session.Session,prev_date:DateTime,bill_date:DateTime, user: User, payment_amount: Decimal) -> None:
+    payment_for_loan_book= get_or_create(
+        session=session,
+        model=BookAccount,
+        identifier=user.id,
+        book_type="payment_for_loan",
+        account_type="asset",
+    )
+    payment_gateway = get_or_create(
+        session=session,
+        model=BookAccount,
+        identifier=user.id,
+        book_type="payment_gateway",
+        account_type="asset",
+    )
+    #This will be at user level
+    extra_payment = get_or_create(
+        session=session,
+        model=BookAccount,
+        identifier=user.id,
+        book_type="extra_payment",
+        account_type="asset",
+    )
+    total_bill= get_bill_amount(session=session, bill_date=bill_date, prev_date=prev_date, user=user)
+    amount_to_reslide=min(total_bill,payment_amount)
+    extra_payment = amount_to_reslide - payment_amount
+    lt = LedgerTriggerEvent(
+        performed_by=user.id,
+        name="payment_received",
+        extra_details={"payment_request_id":"lsdad","payment_date": bill_date},
+    )
+    session.add(lt)
+    session.flush()
+    le4 = LedgerEntry(
+        event_id=lt.id,
+        from_book_account=payment_gateway.id,
+        to_book_account=payment_for_loan_book.id,
+        amount=payment_amount,
+        business_date=bill_date,
+    )
