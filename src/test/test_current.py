@@ -222,4 +222,4 @@ def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
         user=a,
         business_date=current_date,
     )
-    assert val == 300
+    assert val == 110

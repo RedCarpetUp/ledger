@@ -163,14 +163,11 @@ def generate_bill(
         account_type="liability",
     )
 
-    unbilled_balance = get_account_balance(
-        session=session, book_account=to_account, business_date=prev_date
-    )
+    unbilled_balance = get_account_balance(session=session, book_account=to_account)
 
     total_bill_principal = unbilled_balance
     total_interest = unbilled_balance * interest_yearly / 100
     total_bill_amount = total_bill_principal + total_interest
-    print(total_bill_amount, total_interest, unbilled_balance)
     le3 = LedgerEntry(
         event_id=lt.id,
         from_book_account=from_account.id,
@@ -180,4 +177,4 @@ def generate_bill(
     )
     session.add(le3)
     session.commit()
-    return unbilled_balance
+    return total_bill_amount
