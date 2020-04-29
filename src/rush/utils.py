@@ -170,8 +170,8 @@ def generate_bill(
     total_bill_amount = total_bill_principal + total_interest
     le3 = LedgerEntry(
         event_id=lt.id,
-        from_book_account=user_monthly.id,
-        to_book_account=unbilled_transactions.id,
+        from_book_account=unbilled_transactions.id,
+        to_book_account=user_monthly.id,
         amount=total_bill_amount,
         business_date=business_date,
     )

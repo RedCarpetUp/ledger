@@ -216,7 +216,7 @@ def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
     current_date = get_current_ist_time()
     bill_date = current_date
 
-    val = generate_bill(
+    generate_bill(
         session=session,
         bill_date=bill_date,
         interest_yearly=10,
@@ -235,14 +235,14 @@ def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
         account_type="asset",
     )
     current_balance = get_account_balance(session=session, book_account=book_account)
-    assert current_balance == Decimal(-120)
+    assert current_balance == Decimal(100)
 
     book_account = get_or_create(
         session=session,
         model=BookAccount,
         identifier=a.id,
         book_type="monthly_interest" + str(prev_date) + "to" + str(bill_date),
-        account_type="liability",
+        account_type="asset",
     )
     current_balance = get_account_balance(session=session, book_account=book_account)
-    assert current_balance == Decimal(-100)
+    assert current_balance == Decimal(10)
