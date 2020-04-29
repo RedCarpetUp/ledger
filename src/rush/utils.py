@@ -138,14 +138,14 @@ def generate_bill(
     bill_tenure: int,
     user: User,
     business_date: Optional[DateTime] = None,
-) -> Decimal:
+) -> None:
 
     lt = LedgerTriggerEvent(
         performed_by=user.id, name="bill_generation", extra_details={"bill_date": str(bill_date)}
     )
     session.add(lt)
     session.flush()
-    to_account = get_or_create(
+    unbilled_transactions = get_or_create(
         session=session,
         model=BookAccount,
         identifier=user.id,
@@ -155,26 +155,43 @@ def generate_bill(
 
     prev_date = bill_date.subtract(months=1)
 
-    from_account = get_or_create(
+    user_monthly = get_or_create(
         session=session,
         model=BookAccount,
         identifier=user.id,
         book_type="user_monthly_" + str(prev_date) + "to" + str(bill_date),
-        account_type="liability",
+        account_type="asset",
     )
 
-    unbilled_balance = get_account_balance(session=session, book_account=to_account)
+    unbilled_balance = get_account_balance(session=session, book_account=unbilled_transactions)
 
     total_bill_principal = unbilled_balance
     total_interest = unbilled_balance * interest_yearly / 100
     total_bill_amount = total_bill_principal + total_interest
     le3 = LedgerEntry(
         event_id=lt.id,
-        from_book_account=from_account.id,
-        to_book_account=to_account.id,
+        from_book_account=user_monthly.id,
+        to_book_account=unbilled_transactions.id,
         amount=total_bill_amount,
         business_date=business_date,
     )
     session.add(le3)
+
+    account_monthy_interest = get_or_create(
+        session=session,
+        model=BookAccount,
+        identifier=user.id,
+        book_type="monthly_interest" + str(prev_date) + "to" + str(bill_date),
+        account_type="asset",
+    )
+
+    le4 = LedgerEntry(
+        event_id=lt.id,
+        from_book_account=user_monthly.id,
+        to_book_account=account_monthy_interest.id,
+        amount=total_interest,
+        business_date=business_date,
+    )
+
+    session.add(le4)
     session.commit()
-    return total_bill_amount

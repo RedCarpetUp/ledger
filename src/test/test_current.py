@@ -214,12 +214,35 @@ def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
     assert current_balance == Decimal(-100)
 
     current_date = get_current_ist_time()
+    bill_date = current_date
+
     val = generate_bill(
         session=session,
-        bill_date=current_date,
+        bill_date=bill_date,
         interest_yearly=10,
         bill_tenure=12,
         user=a,
         business_date=current_date,
     )
-    assert val == 110
+
+    prev_date = bill_date.subtract(months=1)
+
+    book_account = get_or_create(
+        session=session,
+        model=BookAccount,
+        identifier=a.id,
+        book_type="user_monthly_" + str(prev_date) + "to" + str(bill_date),
+        account_type="asset",
+    )
+    current_balance = get_account_balance(session=session, book_account=book_account)
+    assert current_balance == Decimal(-120)
+
+    book_account = get_or_create(
+        session=session,
+        model=BookAccount,
+        identifier=a.id,
+        book_type="monthly_interest" + str(prev_date) + "to" + str(bill_date),
+        account_type="liability",
+    )
+    current_balance = get_account_balance(session=session, book_account=book_account)
+    assert current_balance == Decimal(-100)
