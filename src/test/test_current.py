@@ -189,15 +189,37 @@ def test_slide_partial_payment_after_due_date(session: sqlalchemy.orm.session.Se
 
 
 def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
-    u = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    session.add(u)
+    a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+
+    session.add(a)
+
     session.commit()
+
+    insert_card_swipe(
+        session=session,
+        user=a,
+        event_name="card_transaction",
+        extra_details={"payment_request_id": "test", "amount": 100},
+        amount=100,
+    )
+
+    book_account = get_or_create(
+        session=session,
+        model=BookAccount,
+        identifier=a.id,
+        book_type="user_card_balance",
+        account_type="liability",
+    )
+    current_balance = get_account_balance(session=session, book_account=book_account)
+    assert current_balance == Decimal(-100)
+
     current_date = get_current_ist_time()
-    generate_bill(
+    val = generate_bill(
         session=session,
         bill_date=current_date,
         interest_yearly=10,
         bill_tenure=12,
-        user=u,
+        user=a,
         business_date=current_date,
     )
+    assert val == 300

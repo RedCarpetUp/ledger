@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import Optional
+from typing import Dict, Optional
 
 import sqlalchemy
 from pendulum import DateTime
@@ -19,7 +19,7 @@ def insert_card_swipe(
     session: sqlalchemy.orm.session.Session,
     user: User,
     event_name: str,
-    extra_details: dict,
+    extra_details: Dict,
     amount: int,
     business_date: Optional[DateTime] = get_current_ist_time(),
 ) -> None:
@@ -138,7 +138,7 @@ def generate_bill(
     bill_tenure: int,
     user: User,
     business_date: Optional[DateTime] = None,
-) -> None:
+) -> Decimal:
 
     lt = LedgerTriggerEvent(
         performed_by=user.id, name="bill_generation", extra_details={"bill_date": str(bill_date)}
@@ -153,32 +153,31 @@ def generate_bill(
         account_type="asset",
     )
 
-    for i in range(0, 11):
-        date_to_bill = bill_date.add(months=i)
-        prev_date = bill_date.add(months=i - 1)
+    prev_date = bill_date.subtract(months=1)
 
-        from_account = get_or_create(
-            session=session,
-            model=BookAccount,
-            identifier=user.id,
-            book_type="user_monthly_" + str(prev_date) + "to" + str(date_to_bill),
-            account_type="liability",
-        )
+    from_account = get_or_create(
+        session=session,
+        model=BookAccount,
+        identifier=user.id,
+        book_type="user_monthly_" + str(prev_date) + "to" + str(bill_date),
+        account_type="liability",
+    )
 
-        account_balance = get_account_balance(
-            session=session, book_account=to_account, business_date=prev_date
-        )
+    unbilled_balance = get_account_balance(
+        session=session, book_account=to_account, business_date=prev_date
+    )
 
-        total_bill_principal = account_balance
-        total_interest = account_balance * interest_yearly
-        total_bill_amount = total_bill_principal + total_interest
-        print(total_bill_amount)
-        le3 = LedgerEntry(
-            event_id=lt.id,
-            from_book_account=from_account.id,
-            to_book_account=to_account.id,
-            amount=total_bill_amount,
-            business_date=business_date,
-        )
-        session.add(le3)
-        session.commit()
+    total_bill_principal = unbilled_balance
+    total_interest = unbilled_balance * interest_yearly / 100
+    total_bill_amount = total_bill_principal + total_interest
+    print(total_bill_amount, total_interest, unbilled_balance)
+    le3 = LedgerEntry(
+        event_id=lt.id,
+        from_book_account=from_account.id,
+        to_book_account=to_account.id,
+        amount=total_bill_amount,
+        business_date=business_date,
+    )
+    session.add(le3)
+    session.commit()
+    return unbilled_balance
