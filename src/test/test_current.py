@@ -263,3 +263,21 @@ def test_payment(session: sqlalchemy.orm.session.Session) -> None:
     a = settle_payment(
         session=session, prev_date=prev_date, bill_date=bill_date, user=user, payment_amount=amount
     )
+    payment_for_loan_book = get_or_create(
+        session=session,
+        model=BookAccount,
+        identifier=user.id,
+        book_type="payment_for_loan",
+        account_type="asset",
+    )
+    extra_payment_book = get_or_create(
+        session=session,
+        model=BookAccount,
+        identifier=user.id,
+        book_type="extra_payment",
+        account_type="asset",
+    )
+    payment_for_loan_balance = get_account_balance(session, book_account=payment_for_loan_book,)
+    assert payment_for_loan_balance == 110
+    extra_payment_balence = get_account_balance(session, book_account=extra_payment_book,)
+    assert extra_payment_balence == 10

@@ -256,7 +256,8 @@ def settle_payment(
         session=session, bill_date=bill_date, prev_date=prev_date, user=user
     )
     amount_to_reslide = min(total_bill, payment_amount)
-    extra_payment = amount_to_reslide - payment_amount
+    extra_payment = max(0, payment_amount - amount_to_reslide)
+
     lt = LedgerTriggerEvent(
         performed_by=user.id,
         name="payment_received",
