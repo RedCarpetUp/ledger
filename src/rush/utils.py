@@ -1,5 +1,8 @@
 from decimal import Decimal
-from typing import Dict, Optional
+from typing import (
+    Dict,
+    Optional,
+)
 
 import sqlalchemy
 from pendulum import DateTime
@@ -195,3 +198,26 @@ def generate_bill(
 
     session.add(le4)
     session.commit()
+
+
+def get_bill_amount(
+    session: sqlalchemy.orm.session.Session, bill_date: DateTime, prev_date: DateTime, user: User,
+) -> Decimal:
+    book_account_monthly = get_or_create(
+        session=session,
+        model=BookAccount,
+        identifier=user.id,
+        book_type="user_monthly_" + str(prev_date) + "to" + str(bill_date),
+        account_type="asset",
+    )
+    monthly_amount = get_account_balance(session=session, book_account=book_account_monthly)
+
+    book_account_interest = get_or_create(
+        session=session,
+        model=BookAccount,
+        identifier=user.id,
+        book_type="monthly_interest" + str(prev_date) + "to" + str(bill_date),
+        account_type="asset",
+    )
+    interest_amount = get_account_balance(session=session, book_account=book_account_interest)
+    return interest_amount + monthly_amount

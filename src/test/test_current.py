@@ -9,6 +9,7 @@ from alembic.command import current as alembic_current
 from rush.exceptions import *
 from rush.models import (
     BookAccount,
+    LedgerTriggerEvent,
     LoanData,
     LoanEmis,
     User,
@@ -19,6 +20,7 @@ from rush.models import (
 from rush.utils import (
     generate_bill,
     get_account_balance,
+    get_bill_amount,
     insert_card_swipe,
 )
 
@@ -246,3 +248,16 @@ def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
     )
     current_balance = get_account_balance(session=session, book_account=book_account)
     assert current_balance == Decimal(10)
+    val = get_bill_amount(session, bill_date, prev_date, a)
+    assert val == 110
+
+
+def test_payment(session: sqlalchemy.orm.session.Session) -> None:
+    user = session.query(User).filter(User.id == 99).one()
+    current_date = get_current_ist_time()
+
+    lt = LedgerTriggerEvent(
+        performed_by=user.id,
+        name="payment_received",
+        extra_details={"payment_date": str(current_date.subtract(months=1))},
+    )
