@@ -1,10 +1,11 @@
 import contextlib
 from decimal import Decimal
 from io import StringIO
-import pendulum
+
 import alembic
 import sqlalchemy
 from alembic.command import current as alembic_current
+from pendulum import parse as parse_date
 
 from rush.exceptions import *
 from rush.models import (
@@ -22,6 +23,7 @@ from rush.utils import (
     get_account_balance,
     get_bill_amount,
     insert_card_swipe,
+    settle_payment,
 )
 
 
@@ -215,7 +217,7 @@ def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
     current_balance = get_account_balance(session=session, book_account=book_account)
     assert current_balance == Decimal(-100)
 
-    current_date = pendulum.parse('2020-04-29')
+    current_date = parse_date("2020-04-29")
     bill_date = current_date
 
     generate_bill(
@@ -254,10 +256,10 @@ def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
 
 def test_payment(session: sqlalchemy.orm.session.Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
-    current_date = get_current_ist_time()
-
-    lt = LedgerTriggerEvent(
-        performed_by=user.id,
-        name="payment_received",
-        extra_details={"payment_request_id":"lsdad","payment_date": str(current_date.subtract(months=1))},
+    current_date = parse_date("2020-04-29")
+    bill_date = current_date
+    prev_date = bill_date.subtract(months=1)
+    amount = 120
+    a = settle_payment(
+        session=session, prev_date=prev_date, bill_date=bill_date, user=user, payment_amount=amount
     )
