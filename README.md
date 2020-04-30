@@ -27,3 +27,4 @@
   - if isort formatting tests fail, just run `isort  -rc . ` from your top level directory.
 - all source code is under `src/rush/` . That is where you should make your code
 - docker kill rush_pg
+- psql postgresql://alem_user:password@localhost:5680/alem_db
