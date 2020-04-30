@@ -252,30 +252,39 @@ def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
     # assert val == 110
 
 
-# def test_payment(session: sqlalchemy.orm.session.Session) -> None:
-#     user = session.query(User).filter(User.id == 99).one()
-#     current_date = parse_date("2020-04-29")
-#     bill_date = current_date
-#     prev_date = bill_date.subtract(months=1)
-#     amount = 120
-#     a = settle_payment(
-#         session=session, prev_date=prev_date, bill_date=bill_date, user=user, payment_amount=amount
-#     )
-#     payment_for_loan_book = get_or_create(
-#         session=session,
-#         model=BookAccount,
-#         identifier=user.id,
-#         book_type="payment_for_loan",
-#         account_type="asset",
-#     )
-#     extra_payment_book = get_or_create(
-#         session=session,
-#         model=BookAccount,
-#         identifier=user.id,
-#         book_type="extra_payment",
-#         account_type="asset",
-#     )
-#     payment_for_loan_balance = get_account_balance(session, book_account=payment_for_loan_book,)
-#     assert payment_for_loan_balance == 110
-#     extra_payment_balence = get_account_balance(session, book_account=extra_payment_book,)
-#     assert extra_payment_balence == 10
+def test_payment(session: sqlalchemy.orm.session.Session) -> None:
+    user = session.query(User).filter(User.id == 99).one()
+    first_bill_date = parse_date("2020-05-01")
+    payment_date = parse_date("2020-05-03")
+    amount = Decimal(120)
+    a = settle_payment(
+        session=session,
+        user=user,
+        payment_amount=amount,
+        payment_date=payment_date,
+        first_bill_date=first_bill_date,
+    )
+    principal_paid = get_or_create(
+        session=session,
+        model=BookAccount,
+        identifier=user.id,
+        book_type="user_monthly_principal_paid_" + str(first_bill_date.date()),
+        account_type="asset",
+    )
+    current_balance = get_account_balance(
+        session=session, book_account=principal_paid, business_date=payment_date
+    )
+    assert current_balance == Decimal("8.33")
+
+    interest_paid = get_or_create(
+        session=session,
+        model=BookAccount,
+        identifier=user.id,
+        book_type="user_monthly_interest_paid_" + str(first_bill_date.date()),
+        account_type="asset",
+    )
+    payment_date = parse_date("2020-05-04")
+    current_balance = get_account_balance(
+        session=session, book_account=interest_paid, business_date=payment_date
+    )
+    assert current_balance == Decimal(3)

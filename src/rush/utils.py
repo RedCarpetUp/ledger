@@ -188,7 +188,7 @@ def generate_bill(
             session=session,
             model=BookAccount,
             identifier=user.id,
-            book_type="user_monthly_interest" + str(account_date.date()),
+            book_type="user_monthly_interest_" + str(account_date.date()),
             account_type="liability",
         )
 
@@ -196,7 +196,7 @@ def generate_bill(
             session=session,
             model=BookAccount,
             identifier=user.id,
-            book_type="user_monthly_interest" + str(account_date.date()),
+            book_type="user_monthly_interest_" + str(account_date.date()),
             account_type="asset",
         )
 
@@ -238,18 +238,67 @@ def get_bill_amount(
 
 def settle_payment(
     session: sqlalchemy.orm.session.Session,
-    prev_date: DateTime,
-    bill_date: DateTime,
     user: User,
     payment_amount: Decimal,
+    payment_date: DateTime,
+    first_bill_date: DateTime,
 ) -> None:
-    payment_for_loan_book = get_or_create(
-        session=session,
-        model=BookAccount,
-        identifier=user.id,
-        book_type="payment_for_loan",
-        account_type="asset",
-    )
+
+    amount_to_slide = []
+    for loop in range(12):
+        account_date = first_bill_date.add(months=loop)
+
+        user_monthly_principal = get_or_create(
+            session=session,
+            model=BookAccount,
+            identifier=user.id,
+            book_type="user_monthly_principal_" + str(account_date.date()),
+            account_type="asset",
+        )
+        principal_balance = get_account_balance(
+            session=session, book_account=user_monthly_principal
+        )
+
+        user_monthly_principal_paid = get_or_create(
+            session=session,
+            model=BookAccount,
+            identifier=user.id,
+            book_type="user_monthly_principal_paid_" + str(account_date.date()),
+            account_type="asset",
+        )
+        principal_paid_balance = get_account_balance(
+            session=session, book_account=user_monthly_principal_paid
+        )
+
+        user_monthly_interest = get_or_create(
+            session=session,
+            model=BookAccount,
+            identifier=user.id,
+            book_type="user_monthly_interest_" + str(account_date.date()),
+            account_type="asset",
+        )
+        interest_balance = get_account_balance(session=session, book_account=user_monthly_interest)
+
+        user_monthly_interest_paid = get_or_create(
+            session=session,
+            model=BookAccount,
+            identifier=user.id,
+            book_type="user_monthly_interest_paid_" + str(account_date.date()),
+            account_type="asset",
+        )
+        interest_paid_balance = get_account_balance(
+            session=session, book_account=user_monthly_interest_paid
+        )
+
+        principal_left = principal_balance - principal_paid_balance
+        interest_left = interest_balance - interest_paid_balance
+
+        if interest_left > 0:
+            amount_to_slide.append((user_monthly_interest_paid, interest_left))
+
+        if principal_left > 0:
+            amount_to_slide.append((user_monthly_principal_paid, principal_left))
+
     payment_gateway = get_or_create(
         session=session,
         model=BookAccount,
@@ -257,42 +306,30 @@ def settle_payment(
         book_type="payment_gateway",
         account_type="asset",
     )
-    # This will be at user level
-    extra_payment_book = get_or_create(
-        session=session,
-        model=BookAccount,
-        identifier=user.id,
-        book_type="extra_payment",
-        account_type="asset",
-    )
-    total_bill = get_bill_amount(
-        session=session, bill_date=bill_date, prev_date=prev_date, user=user
-    )
-    amount_to_reslide = min(total_bill, payment_amount)
-    extra_payment = max(0, payment_amount - amount_to_reslide)
 
+    # Create event
     lt = LedgerTriggerEvent(
         performed_by=user.id,
         name="payment_received",
-        extra_details={"payment_request_id": "lsdad", "payment_date": bill_date.isoformat()},
+        extra_details={"payment_request_id": "lsdad", "payment_date": payment_date.isoformat()},
     )
     session.add(lt)
     session.flush()
-    le4 = LedgerEntry(
-        event_id=lt.id,
-        from_book_account=payment_gateway.id,
-        to_book_account=payment_for_loan_book.id,
-        amount=payment_amount,
-        business_date=bill_date,
-    )
-    session.add(le4)
-    session.flush()
-    le5 = LedgerEntry(
-        event_id=lt.id,
-        from_book_account=payment_for_loan_book.id,
-        to_book_account=extra_payment_book.id,
-        amount=extra_payment,
-        business_date=bill_date,
-    )
-    session.add(le5)
+
+    # Create entries
+    amount_left = payment_amount
+    for book, amount in amount_to_slide:
+        if amount_left <= 0:
+            break
+
+        le = LedgerEntry(
+            event_id=lt.id,
+            from_book_account=payment_gateway.id,
+            to_book_account=book.id,
+            amount=min(amount_left, amount),
+            business_date=payment_date,
+        )
+        session.add(le)
+        amount_left -= amount
+
     session.commit()
