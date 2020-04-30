@@ -27,8 +27,6 @@ from rush.utils import (
 )
 
 
-
-
 def test_current(getAlembic: alembic.config.Config) -> None:
     """Test that the alembic current command does not erorr"""
     # Runs with no error
