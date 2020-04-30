@@ -243,7 +243,7 @@ def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
         session=session,
         model=BookAccount,
         identifier=a.id,
-        book_type="user_monthly_interest" + str(bill_date.date()),
+        book_type="user_monthly_interest_" + str(bill_date.date()),
         account_type="asset",
     )
     current_balance = get_account_balance(session=session, book_account=book_account)
