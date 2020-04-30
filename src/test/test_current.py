@@ -26,7 +26,7 @@ from rush.utils import (
     settle_payment,
 )
 
-# mypy: end ignore
+
 
 
 def test_current(getAlembic: alembic.config.Config) -> None:
