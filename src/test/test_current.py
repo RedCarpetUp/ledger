@@ -5,9 +5,7 @@ from io import StringIO
 import alembic
 import sqlalchemy
 from alembic.command import current as alembic_current
-
-# mypy: begin ignore
-from pendulum import parse as parse_date
+from pendulum import parse as parse_date  # type: ignore
 
 from rush.exceptions import *
 from rush.models import (
@@ -241,7 +239,7 @@ def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
         account_type="asset",
     )
     current_balance = get_account_balance(session=session, book_account=book_account)
-    assert current_balance == Decimal(8.33)
+    assert current_balance == Decimal("8.33")
 
     book_account = get_or_create(
         session=session,
