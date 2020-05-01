@@ -333,3 +333,20 @@ def settle_payment(
         amount_left -= amount
 
     session.commit()
+
+
+def create_late_fine(
+    session: sqlalchemy.orm.session.Session, user: User, bill_date: DateTime, amount: Decimal
+) -> None:
+    lt = LedgerTriggerEvent(
+        performed_by=user.id, name="late_fine", extra_details={"amount": amount}
+    )
+    session.add(lt)
+    session.flush()
+    user_monthly_interest = get_or_create(
+        session=session,
+        model=BookAccount,
+        identifier=user.id,
+        book_type="user_late_fine_" + str(account_date.date()),
+        account_type="asset",
+    )

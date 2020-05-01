@@ -288,3 +288,7 @@ def test_payment(session: sqlalchemy.orm.session.Session) -> None:
         session=session, book_account=interest_paid, business_date=payment_date
     )
     assert current_balance == Decimal(3)
+
+
+def test_late_fine(session: sqlalchemy.orm.session.Session) -> None:
+    pass
