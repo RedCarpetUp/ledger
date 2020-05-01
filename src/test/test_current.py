@@ -19,6 +19,7 @@ from rush.models import (
     get_or_create,
 )
 from rush.utils import (
+    create_late_fine,
     generate_bill,
     get_account_balance,
     get_bill_amount,
@@ -291,4 +292,27 @@ def test_payment(session: sqlalchemy.orm.session.Session) -> None:
 
 
 def test_late_fine(session: sqlalchemy.orm.session.Session) -> None:
-    pass
+    user = session.query(User).filter(User.id == 99).one()
+    first_bill_date = parse_date("2020-05-01")
+    create_late_fine(session=session, user=user, bill_date=first_bill_date, amount=100)
+    payment_date = parse_date("2020-05-05")
+    a = settle_payment(
+        session=session,
+        user=user,
+        payment_amount=Decimal(100),
+        payment_date=payment_date,
+        first_bill_date=first_bill_date,
+    )
+
+    late_fine_paid = get_or_create(
+        session=session,
+        model=BookAccount,
+        identifier=user.id,
+        book_type="user_late_fine_paid" + str(first_bill_date.date()),
+        account_type="asset",
+    )
+
+    current_balance = get_account_balance(
+        session=session, book_account=late_fine_paid, business_date=payment_date
+    )
+    assert current_balance == Decimal(100)

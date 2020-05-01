@@ -248,6 +248,29 @@ def settle_payment(
     for loop in range(12):
         account_date = first_bill_date.add(months=loop)
 
+        user_late_fine_due = get_or_create(
+            session=session,
+            model=BookAccount,
+            identifier=user.id,
+            book_type="user_late_fine" + str(account_date.date()),
+            account_type="asset",
+        )
+        user_late_fine_amount_due = get_account_balance(
+            session=session, book_account=user_late_fine_due
+        )
+
+        user_late_fine_paid = get_or_create(
+            session=session,
+            model=BookAccount,
+            identifier=user.id,
+            book_type="user_late_fine_paid" + str(account_date.date()),
+            account_type="asset",
+        )
+        user_late_fine_amount_paid = get_account_balance(
+            session=session, book_account=user_late_fine_paid
+        )
+        late_fee_remaining = user_late_fine_amount_due - user_late_fine_amount_paid
+
         user_monthly_principal = get_or_create(
             session=session,
             model=BookAccount,
@@ -289,13 +312,13 @@ def settle_payment(
         interest_paid_balance = get_account_balance(
             session=session, book_account=user_monthly_interest_paid
         )
-
         principal_left = principal_balance - principal_paid_balance
         interest_left = interest_balance - interest_paid_balance
 
+        if late_fee_remaining > 0:
+            amount_to_slide.append((user_late_fine_paid, late_fee_remaining))
         if interest_left > 0:
             amount_to_slide.append((user_monthly_interest_paid, interest_left))
-
         if principal_left > 0:
             amount_to_slide.append((user_monthly_principal_paid, principal_left))
 
@@ -343,10 +366,26 @@ def create_late_fine(
     )
     session.add(lt)
     session.flush()
-    user_monthly_interest = get_or_create(
+    user_late_fine_from = get_or_create(
         session=session,
         model=BookAccount,
         identifier=user.id,
-        book_type="user_late_fine_" + str(account_date.date()),
+        book_type="user_late_fine" + str(bill_date.date()),
+        account_type="liability",
+    )
+    user_late_fine_to = get_or_create(
+        session=session,
+        model=BookAccount,
+        identifier=user.id,
+        book_type="user_late_fine" + str(bill_date.date()),
         account_type="asset",
     )
+    le = LedgerEntry(
+        event_id=lt.id,
+        from_book_account=user_late_fine_from.id,
+        to_book_account=user_late_fine_to.id,
+        amount=amount,
+        business_date=bill_date,
+    )
+    session.add(le)
+    session.commit()
