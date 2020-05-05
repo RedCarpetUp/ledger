@@ -20,6 +20,7 @@ from sqlalchemy import (
     Text,
     create_engine,
     Date,
+    Numeric,
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import (
@@ -187,3 +188,11 @@ class LoanEmisPy(AuditMixinPy):
     loan_id: int
     due_date: DateTime
     last_payment_date: DateTime
+
+
+class CardTransactions(AuditMixin):
+    __tablename__ = "card_transaction"
+    loan_id = Column(Integer, ForeignKey(LoanData.id))
+    txn_time = Column(TIMESTAMP, nullable=False)
+    amount = Column(Numeric, nullable=False)
+    description = Column(String(100), nullable=False)
