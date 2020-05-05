@@ -234,7 +234,8 @@ def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
         session=session,
         model=BookAccount,
         identifier=a.id,
-        book_type="user_monthly_principal_" + str(bill_date.date()),
+        book_type="user_monthly_principal",
+        book_date=bill_date.date(),
         account_type="asset",
     )
     current_balance = get_account_balance(session=session, book_account=book_account)
@@ -244,7 +245,8 @@ def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
         session=session,
         model=BookAccount,
         identifier=a.id,
-        book_type="user_monthly_interest_" + str(bill_date.date()),
+        book_type="user_monthly_interest",
+        book_date=bill_date.date(),
         account_type="asset",
     )
     current_balance = get_account_balance(session=session, book_account=book_account)
@@ -269,7 +271,8 @@ def test_payment(session: sqlalchemy.orm.session.Session) -> None:
         session=session,
         model=BookAccount,
         identifier=user.id,
-        book_type="user_monthly_principal_paid_" + str(first_bill_date.date()),
+        book_type="user_monthly_principal_paid",
+        book_date=first_bill_date.date(),
         account_type="asset",
     )
     current_balance = get_account_balance(
@@ -281,7 +284,8 @@ def test_payment(session: sqlalchemy.orm.session.Session) -> None:
         session=session,
         model=BookAccount,
         identifier=user.id,
-        book_type="user_monthly_interest_paid_" + str(first_bill_date.date()),
+        book_type="user_monthly_interest_paid",
+        book_date=first_bill_date.date(),
         account_type="asset",
     )
     payment_date = parse_date("2020-05-04")
@@ -308,7 +312,8 @@ def test_late_fine(session: sqlalchemy.orm.session.Session) -> None:
         session=session,
         model=BookAccount,
         identifier=user.id,
-        book_type="user_late_fine_paid_" + str(first_bill_date.date()),
+        book_type="user_late_fine_paid",
+        book_date=first_bill_date.date(),
         account_type="asset",
     )
 

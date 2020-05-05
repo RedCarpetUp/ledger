@@ -171,7 +171,8 @@ def generate_bill(
             session=session,
             model=BookAccount,
             identifier=user.id,
-            book_type="user_monthly_principal_" + str(account_date.date()),
+            book_type="user_monthly_principal",
+            book_date=account_date.date(),
             account_type="asset",
         )
 
@@ -188,7 +189,8 @@ def generate_bill(
             session=session,
             model=BookAccount,
             identifier=user.id,
-            book_type="user_monthly_interest_" + str(account_date.date()),
+            book_type="user_monthly_interest",
+            book_date=account_date.date(),
             account_type="liability",
         )
 
@@ -196,7 +198,8 @@ def generate_bill(
             session=session,
             model=BookAccount,
             identifier=user.id,
-            book_type="user_monthly_interest_" + str(account_date.date()),
+            book_type="user_monthly_interest",
+            book_date=account_date.date(),
             account_type="asset",
         )
 
@@ -221,6 +224,7 @@ def get_bill_amount(
         model=BookAccount,
         identifier=user.id,
         book_type="user_monthly_" + str(prev_date) + "to" + str(bill_date),
+        book_date=bill_date.date(),
         account_type="asset",
     )
     monthly_amount = get_account_balance(session=session, book_account=book_account_monthly)
@@ -230,6 +234,7 @@ def get_bill_amount(
         model=BookAccount,
         identifier=user.id,
         book_type="monthly_interest" + str(prev_date) + "to" + str(bill_date),
+        book_date=bill_date.date(),
         account_type="asset",
     )
     interest_amount = get_account_balance(session=session, book_account=book_account_interest)
@@ -252,7 +257,8 @@ def settle_payment(
             session=session,
             model=BookAccount,
             identifier=user.id,
-            book_type="user_late_fine_" + str(account_date.date()),
+            book_type="user_late_fine",
+            book_date=account_date.date(),
             account_type="asset",
         )
         user_late_fine_amount_due = get_account_balance(
@@ -263,7 +269,8 @@ def settle_payment(
             session=session,
             model=BookAccount,
             identifier=user.id,
-            book_type="user_late_fine_paid_" + str(account_date.date()),
+            book_type="user_late_fine_paid",
+            book_date=account_date.date(),
             account_type="asset",
         )
         user_late_fine_amount_paid = get_account_balance(
@@ -275,7 +282,8 @@ def settle_payment(
             session=session,
             model=BookAccount,
             identifier=user.id,
-            book_type="user_monthly_principal_" + str(account_date.date()),
+            book_type="user_monthly_principal",
+            book_date=account_date.date(),
             account_type="asset",
         )
         principal_balance = get_account_balance(
@@ -286,7 +294,8 @@ def settle_payment(
             session=session,
             model=BookAccount,
             identifier=user.id,
-            book_type="user_monthly_principal_paid_" + str(account_date.date()),
+            book_type="user_monthly_principal_paid",
+            book_date=account_date.date(),
             account_type="asset",
         )
         principal_paid_balance = get_account_balance(
@@ -297,7 +306,8 @@ def settle_payment(
             session=session,
             model=BookAccount,
             identifier=user.id,
-            book_type="user_monthly_interest_" + str(account_date.date()),
+            book_type="user_monthly_interest",
+            book_date=account_date.date(),
             account_type="asset",
         )
         interest_balance = get_account_balance(session=session, book_account=user_monthly_interest)
@@ -306,7 +316,8 @@ def settle_payment(
             session=session,
             model=BookAccount,
             identifier=user.id,
-            book_type="user_monthly_interest_paid_" + str(account_date.date()),
+            book_type="user_monthly_interest_paid",
+            book_date=account_date.date(),
             account_type="asset",
         )
         interest_paid_balance = get_account_balance(
@@ -370,14 +381,16 @@ def create_late_fine(
         session=session,
         model=BookAccount,
         identifier=user.id,
-        book_type="user_late_fine_" + str(bill_date.date()),
+        book_type="user_late_fine",
+        book_date=bill_date.date(),
         account_type="liability",
     )
     user_late_fine_to = get_or_create(
         session=session,
         model=BookAccount,
         identifier=user.id,
-        book_type="user_late_fine_" + str(bill_date.date()),
+        book_type="user_late_fine",
+        book_date=bill_date.date(),
         account_type="asset",
     )
     le = LedgerEntry(

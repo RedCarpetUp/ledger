@@ -22,6 +22,7 @@ def upgrade() -> None:
         sa.Column("identifier", sa.Integer(), nullable=False),
         sa.Column("book_type", sa.String(), nullable=False),
         sa.Column("account_type", sa.String(), nullable=False),
+        sa.Column("book_date", sa.Date(), nullable=True),
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("performed_by", sa.Integer(), nullable=False),

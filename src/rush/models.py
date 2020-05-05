@@ -19,6 +19,7 @@ from sqlalchemy import (
     Table,
     Text,
     create_engine,
+    Date,
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import (
@@ -127,6 +128,7 @@ class BookAccount(AuditMixin):
     identifier = Column(Integer)
     book_type = Column(String(50))
     account_type = Column(String(50))
+    book_date = Column(Date())
 
 
 @py_dataclass
