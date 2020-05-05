@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from decimal import Decimal as DecimalType
-from typing import Optional
+from typing import Dict, Optional, Any, Tuple
 
 import pendulum
 from pendulum import DateTime
@@ -31,7 +31,7 @@ from sqlalchemy.orm import (
 Base = declarative_base()
 
 
-def get_current_ist_time():
+def get_current_ist_time() -> DateTime:
     return pendulum.now("Asia/Kolkata").replace(tzinfo=None)
 
 
@@ -46,10 +46,10 @@ class AuditMixin(Base):
     def snapshot(
         cls,
         primary_key: str,
-        new_data: dict,
+        new_data: Dict[str, Any],
         session: Session,
-        skip_columns: tuple = ("id", "created_at", "updated_at"),
-    ):
+        skip_columns: Tuple[str, ...] = ("id", "created_at", "updated_at"),
+    ) -> Any:
         old_row = (
             session.query(cls)
             .filter(
@@ -72,7 +72,9 @@ class AuditMixin(Base):
         return new_obj
 
 
-def get_or_create(session, model, defaults=None, **kwargs):
+def get_or_create(
+    session: Session, model: Any, defaults: Dict[Any, Any] = None, **kwargs: Dict[str, Any]
+) -> Any:
     instance = session.query(model).filter_by(**kwargs).first()
     if instance:
         return instance
@@ -117,7 +119,7 @@ class LedgerTriggerEvent(AuditMixin):
 @py_dataclass
 class LedgerTriggerEventPy(AuditMixinPy):
     name: str
-    extra_details: dict
+    extra_details: Dict[str, Any]
 
 
 class BookAccount(AuditMixin):
