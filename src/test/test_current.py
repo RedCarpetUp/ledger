@@ -25,6 +25,7 @@ from rush.utils import (
     generate_bill,
     get_account_balance,
     get_bill_amount,
+    get_book_account_by_string,
     insert_card_swipe,
     settle_payment,
 )
@@ -89,35 +90,6 @@ def test_card_swipe(session: sqlalchemy.orm.session.Session) -> None:
     assert card_bill.agreement_date.date() == parse_date("2020-05-01").date()
 
 
-# def test_loan_create(session: sqlalchemy.orm.session.Session) -> None:
-#     u = User(id=1001, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas", )
-#     session.add(u)
-#     session.flush()
-#
-#     loan_data = LoanData(
-#         user_id=u.id,
-#         agreement_date=get_current_ist_time(),
-#         bill_generation_date=get_current_ist_time(),
-#     )
-#     session.add(loan_data)
-#     session.flush()
-#
-#     print(loan_data.id)
-#
-#     loan_emis = LoanEmis(
-#         loan_id=loan_data.id,
-#         due_date=get_current_ist_time(),
-#         last_payment_date=get_current_ist_time(),
-#     )
-#
-#     session.add(loan_emis)
-#     session.flush()
-#
-#     print(loan_emis.id)
-#
-#     session.commit()
-
-
 def test_insert_card_swipe(session: sqlalchemy.orm.session.Session) -> None:
     u = User(id=3, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(u)
@@ -145,14 +117,9 @@ def test_get_account_balance(session: sqlalchemy.orm.session.Session) -> None:
         amount=100,
     )
 
-    book_account = get_or_create(
-        session=session,
-        model=BookAccount,
-        identifier=u.id,
-        book_type="user_card_balance",
-        account_type="liability",
+    book_account = get_book_account_by_string(
+        session=session, book_string=f"{u.id}/user/user_card_balance/l"
     )
-
     current_balance = get_account_balance(session=session, book_account=book_account)
     assert current_balance == Decimal(-100)
 
@@ -230,13 +197,10 @@ def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
         amount=100,
     )
 
-    book_account = get_or_create(
-        session=session,
-        model=BookAccount,
-        identifier=a.id,
-        book_type="user_card_balance",
-        account_type="liability",
+    book_account = get_book_account_by_string(
+        session=session, book_string=f"{a.id}/user/user_card_balance/l"
     )
+
     current_balance = get_account_balance(session=session, book_account=book_account)
     assert current_balance == Decimal(-100)
 
@@ -252,24 +216,15 @@ def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
         business_date=get_current_ist_time(),
     )
 
-    book_account = get_or_create(
-        session=session,
-        model=BookAccount,
-        identifier=a.id,
-        book_type="user_monthly_principal",
-        book_date=bill_date.date(),
-        account_type="asset",
+    book_account = get_book_account_by_string(
+        session=session, book_string=f"{a.id}/user/user_monthly_principal/a"  # TODO change to bill.
     )
+
     current_balance = get_account_balance(session=session, book_account=book_account)
     assert current_balance == Decimal("8.33")
 
-    book_account = get_or_create(
-        session=session,
-        model=BookAccount,
-        identifier=a.id,
-        book_type="user_monthly_interest",
-        book_date=bill_date.date(),
-        account_type="asset",
+    book_account = get_book_account_by_string(
+        session=session, book_string=f"{a.id}/user/user_monthly_interest/a"  # TODO change to bill.
     )
     current_balance = get_account_balance(session=session, book_account=book_account)
     assert current_balance == Decimal(3)
@@ -293,7 +248,7 @@ def test_payment(session: sqlalchemy.orm.session.Session) -> None:
         session=session,
         model=BookAccount,
         identifier=user.id,
-        book_type="user_monthly_principal_paid",
+        book_name="user_monthly_principal_paid",
         book_date=first_bill_date.date(),
         account_type="asset",
     )
@@ -306,7 +261,7 @@ def test_payment(session: sqlalchemy.orm.session.Session) -> None:
         session=session,
         model=BookAccount,
         identifier=user.id,
-        book_type="user_monthly_interest_paid",
+        book_name="user_monthly_interest_paid",
         book_date=first_bill_date.date(),
         account_type="asset",
     )
@@ -334,7 +289,7 @@ def test_late_fine(session: sqlalchemy.orm.session.Session) -> None:
         session=session,
         model=BookAccount,
         identifier=user.id,
-        book_type="user_late_fine_paid",
+        book_name="user_late_fine_paid",
         book_date=first_bill_date.date(),
         account_type="asset",
     )

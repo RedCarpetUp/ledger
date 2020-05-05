@@ -7,6 +7,7 @@ from typing import (
 import sqlalchemy
 from pendulum import DateTime
 from sqlalchemy import func
+from sqlalchemy.orm.session import Session
 
 from rush.models import (
     BookAccount,
@@ -16,6 +17,22 @@ from rush.models import (
     get_current_ist_time,
     get_or_create,
 )
+
+
+def get_book_account_by_string(session: Session, book_string) -> BookAccount:
+    identifier, identifier_type, name, account_type = book_string.split("/")
+    assert account_type in ("a", "l")
+    assert identifier_type in ("user", "lender", "bill", "emi")
+
+    book_account = get_or_create(
+        session=session,
+        model=BookAccount,
+        identifier=identifier,
+        identifier_type=identifier_type,
+        book_name=name,
+        account_type=account_type,
+    )
+    return book_account
 
 
 def insert_card_swipe(
@@ -30,20 +47,13 @@ def insert_card_swipe(
     session.add(lt)
     session.flush()
 
-    from_account = get_or_create(
-        session=session,
-        model=BookAccount,
-        identifier="100",
-        book_type="dmi_pool_account",
-        account_type="liability",
+    from_account = get_book_account_by_string(
+        session=session, book_string="100/lender/dmi_pool_account/l"
     )
-    to_account = get_or_create(
-        session=session,
-        model=BookAccount,
-        identifier="100",
-        book_type="dmi_limit_used",
-        account_type="asset",
+    to_account = get_book_account_by_string(
+        session=session, book_string="100/lender/dmi_limit_used/a"
     )
+
     le1 = LedgerEntry(
         event_id=lt.id,
         from_book_account=from_account.id,
@@ -53,20 +63,13 @@ def insert_card_swipe(
     )
     session.add(le1)
 
-    from_account = get_or_create(
-        session=session,
-        model=BookAccount,
-        identifier=user.id,
-        book_type="user_card_balance",
-        account_type="liability",
+    from_account = get_book_account_by_string(
+        session, book_string=f"{user.id}/user/user_card_balance/l"
     )
-    to_account = get_or_create(
-        session=session,
-        model=BookAccount,
-        identifier=user.id,
-        book_type="unbilled_transactions",
-        account_type="asset",
+    to_account = get_book_account_by_string(
+        session, book_string=f"{user.id}/user/unbilled_transactions/a"
     )
+
     le2 = LedgerEntry(
         event_id=lt.id,
         from_book_account=from_account.id,
@@ -76,20 +79,13 @@ def insert_card_swipe(
     )
     session.add(le2)
 
-    from_account = get_or_create(
-        session=session,
-        model=BookAccount,
-        identifier=user.id,
-        book_type="user_marvin_limit",
-        account_type="liability",
+    from_account = get_book_account_by_string(
+        session, book_string=f"{user.id}/user/user_marvin_limit/l"
     )
-    to_account = get_or_create(
-        session=session,
-        model=BookAccount,
-        identifier=user.id,
-        book_type="user_marvin_limit_used",
-        account_type="asset",
+    to_account = get_book_account_by_string(
+        session, book_string=f"{user.id}/user/user_marvin_limit_used/a"
     )
+
     le3 = LedgerEntry(
         event_id=lt.id,
         from_book_account=from_account.id,
@@ -152,7 +148,7 @@ def generate_bill(
         session=session,
         model=BookAccount,
         identifier=user.id,
-        book_type="unbilled_transactions",
+        book_name="unbilled_transactions",
         account_type="asset",
     )
 
@@ -171,7 +167,7 @@ def generate_bill(
             session=session,
             model=BookAccount,
             identifier=user.id,
-            book_type="user_monthly_principal",
+            book_name="user_monthly_principal",
             book_date=account_date.date(),
             account_type="asset",
         )
@@ -189,7 +185,7 @@ def generate_bill(
             session=session,
             model=BookAccount,
             identifier=user.id,
-            book_type="user_monthly_interest",
+            book_name="user_monthly_interest",
             book_date=account_date.date(),
             account_type="liability",
         )
@@ -198,7 +194,7 @@ def generate_bill(
             session=session,
             model=BookAccount,
             identifier=user.id,
-            book_type="user_monthly_interest",
+            book_name="user_monthly_interest",
             book_date=account_date.date(),
             account_type="asset",
         )
@@ -223,7 +219,7 @@ def get_bill_amount(
         session=session,
         model=BookAccount,
         identifier=user.id,
-        book_type="user_monthly_" + str(prev_date) + "to" + str(bill_date),
+        book_name="user_monthly_" + str(prev_date) + "to" + str(bill_date),
         book_date=bill_date.date(),
         account_type="asset",
     )
@@ -233,7 +229,7 @@ def get_bill_amount(
         session=session,
         model=BookAccount,
         identifier=user.id,
-        book_type="monthly_interest" + str(prev_date) + "to" + str(bill_date),
+        book_name="monthly_interest" + str(prev_date) + "to" + str(bill_date),
         book_date=bill_date.date(),
         account_type="asset",
     )
@@ -257,7 +253,7 @@ def settle_payment(
             session=session,
             model=BookAccount,
             identifier=user.id,
-            book_type="user_late_fine",
+            book_name="user_late_fine",
             book_date=account_date.date(),
             account_type="asset",
         )
@@ -269,7 +265,7 @@ def settle_payment(
             session=session,
             model=BookAccount,
             identifier=user.id,
-            book_type="user_late_fine_paid",
+            book_name="user_late_fine_paid",
             book_date=account_date.date(),
             account_type="asset",
         )
@@ -282,7 +278,7 @@ def settle_payment(
             session=session,
             model=BookAccount,
             identifier=user.id,
-            book_type="user_monthly_principal",
+            book_name="user_monthly_principal",
             book_date=account_date.date(),
             account_type="asset",
         )
@@ -294,7 +290,7 @@ def settle_payment(
             session=session,
             model=BookAccount,
             identifier=user.id,
-            book_type="user_monthly_principal_paid",
+            book_name="user_monthly_principal_paid",
             book_date=account_date.date(),
             account_type="asset",
         )
@@ -306,7 +302,7 @@ def settle_payment(
             session=session,
             model=BookAccount,
             identifier=user.id,
-            book_type="user_monthly_interest",
+            book_name="user_monthly_interest",
             book_date=account_date.date(),
             account_type="asset",
         )
@@ -316,7 +312,7 @@ def settle_payment(
             session=session,
             model=BookAccount,
             identifier=user.id,
-            book_type="user_monthly_interest_paid",
+            book_name="user_monthly_interest_paid",
             book_date=account_date.date(),
             account_type="asset",
         )
@@ -337,7 +333,7 @@ def settle_payment(
         session=session,
         model=BookAccount,
         identifier=user.id,
-        book_type="payment_gateway",
+        book_name="payment_gateway",
         account_type="asset",
     )
 
@@ -381,7 +377,7 @@ def create_late_fine(
         session=session,
         model=BookAccount,
         identifier=user.id,
-        book_type="user_late_fine",
+        book_name="user_late_fine",
         book_date=bill_date.date(),
         account_type="liability",
     )
@@ -389,7 +385,7 @@ def create_late_fine(
         session=session,
         model=BookAccount,
         identifier=user.id,
-        book_type="user_late_fine",
+        book_name="user_late_fine",
         book_date=bill_date.date(),
         account_type="asset",
     )
