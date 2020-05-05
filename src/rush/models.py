@@ -108,6 +108,8 @@ class LedgerTriggerEvent(AuditMixin):
 
     __tablename__ = "ledger_trigger_event"
     name = Column(String(50))
+    post_date = Column(TIMESTAMP)
+    amount = Column(Numeric)
     extra_details = Column(JSON)
 
 
@@ -139,12 +141,6 @@ class LedgerEntry(AuditMixin):
     from_book_account = Column(Integer, ForeignKey(BookAccount.id))
     to_book_account = Column(Integer, ForeignKey(BookAccount.id))
     amount = Column(DECIMAL)
-    business_date = Column(TIMESTAMP, nullable=False)
-
-    __table_args__ = (
-        Index("index_ledger_entry_from_book_account", from_book_account, business_date, amount,),
-        Index("index_ledger_entry_to_book_account", to_book_account, business_date, amount,),
-    )
 
 
 @py_dataclass

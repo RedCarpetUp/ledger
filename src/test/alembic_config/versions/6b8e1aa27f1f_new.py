@@ -20,6 +20,8 @@ def upgrade() -> None:
         "ledger_trigger_event",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.Column("post_date", sa.TIMESTAMP(), nullable=False),
+        sa.Column("amount", sa.DECIMAL(), nullable=False),
         sa.Column("extra_details", sa.JSON(), nullable=False),
         sa.Column("name", sa.String(), nullable=False),
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
