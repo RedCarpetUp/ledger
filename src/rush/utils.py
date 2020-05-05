@@ -33,14 +33,14 @@ def insert_card_swipe(
     from_account = get_or_create(
         session=session,
         model=BookAccount,
-        identifier=100,
+        identifier="100",
         book_type="dmi_pool_account",
         account_type="liability",
     )
     to_account = get_or_create(
         session=session,
         model=BookAccount,
-        identifier=100,
+        identifier="100",
         book_type="dmi_limit_used",
         account_type="asset",
     )
