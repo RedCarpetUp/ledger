@@ -9,6 +9,10 @@ from pendulum import parse as parse_date  # type: ignore
 
 from rush.create_card_swipe import create_card_swipe
 from rush.exceptions import *
+from rush.ledger_utils import (
+    get_account_balance,
+    get_book_account_by_string,
+)
 from rush.models import (
     BookAccount,
     LedgerTriggerEvent,
@@ -23,10 +27,7 @@ from rush.models import (
 from rush.utils import (
     create_late_fine,
     generate_bill,
-    get_account_balance,
     get_bill_amount,
-    get_book_account_by_string,
-    insert_card_swipe,
     settle_payment,
 )
 
@@ -117,27 +118,27 @@ def test_get_account_balance(session: sqlalchemy.orm.session.Session) -> None:
 
 
 # def test_slide_full_payment(session: sqlalchemy.orm.session.Session) -> None:
-    # Jan Month
-    # Do transaction Rs 100
-    # Do transaction Rs 500
+# Jan Month
+# Do transaction Rs 100
+# Do transaction Rs 500
 
-    # Generate Bill (Feb 1)
+# Generate Bill (Feb 1)
 
-    # Full bill payment (Feb 2)
-    # pass
+# Full bill payment (Feb 2)
+# pass
 
 
 # def test_slide_partial_payment(session: sqlalchemy.orm.session.Session) -> None:
-    # Jan Month
-    # Do transaction Rs 100
-    # Do transaction Rs 500
+# Jan Month
+# Do transaction Rs 100
+# Do transaction Rs 500
 
-    # Generate Bill (Feb 1)
+# Generate Bill (Feb 1)
 
-    # Partial bill payment (Feb 2)
+# Partial bill payment (Feb 2)
 
-    # Accrue Interest (Feb 15)
-    # pass
+# Accrue Interest (Feb 15)
+# pass
 
 
 def test_slide_partial_payment_after_due_date(session: sqlalchemy.orm.session.Session) -> None:
@@ -184,12 +185,17 @@ def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
     session.add(a)
     session.commit()
 
-    insert_card_swipe(
+    # assign card
+    uc = UserCard(user_id=a.id, card_activation_date=parse_date("2020-04-02"))
+    session.add(uc)
+    session.flush()
+
+    swipe1 = create_card_swipe(
         session=session,
-        user=a,
-        event_name="card_transaction",
-        extra_details={"payment_request_id": "test", "amount": 100},
-        amount=100,
+        user_card=uc,
+        txn_time=parse_date("2020-04-08 19:23:11"),
+        amount=Decimal(100),
+        description="BigBasket.com",
     )
 
     book_account = get_book_account_by_string(

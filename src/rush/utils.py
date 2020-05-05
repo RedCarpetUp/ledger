@@ -1,14 +1,11 @@
 from decimal import Decimal
-from typing import (
-    Dict,
-    Optional,
-)
+from typing import Optional
 
 import sqlalchemy
 from pendulum import DateTime
-from sqlalchemy import func
 from sqlalchemy.orm.session import Session
 
+from rush.ledger_utils import get_account_balance
 from rush.models import (
     BookAccount,
     LedgerEntry,
@@ -19,119 +16,8 @@ from rush.models import (
 )
 
 
-def get_book_account_by_string(session: Session, book_string) -> BookAccount:
-    identifier, identifier_type, name, account_type = book_string.split("/")
-    assert account_type in ("a", "l")
-    assert identifier_type in ("user", "lender", "bill", "emi")
-
-    book_account = get_or_create(
-        session=session,
-        model=BookAccount,
-        identifier=identifier,
-        identifier_type=identifier_type,
-        book_name=name,
-        account_type=account_type,
-    )
-    return book_account
-
-
-def insert_card_swipe(
-    session: sqlalchemy.orm.session.Session,
-    user: User,
-    event_name: str,
-    extra_details: Dict,
-    amount: int,
-    business_date: Optional[DateTime] = get_current_ist_time(),
-) -> None:
-    lt = LedgerTriggerEvent(performed_by=user.id, name=event_name, extra_details=extra_details)
-    session.add(lt)
-    session.flush()
-
-    from_account = get_book_account_by_string(
-        session=session, book_string="100/lender/dmi_pool_account/l"
-    )
-    to_account = get_book_account_by_string(
-        session=session, book_string="100/lender/dmi_limit_used/a"
-    )
-
-    le1 = LedgerEntry(
-        event_id=lt.id,
-        from_book_account=from_account.id,
-        to_book_account=to_account.id,
-        amount=amount,
-        business_date=business_date,
-    )
-    session.add(le1)
-
-    from_account = get_book_account_by_string(
-        session, book_string=f"{user.id}/user/user_card_balance/l"
-    )
-    to_account = get_book_account_by_string(
-        session, book_string=f"{user.id}/user/unbilled_transactions/a"
-    )
-
-    le2 = LedgerEntry(
-        event_id=lt.id,
-        from_book_account=from_account.id,
-        to_book_account=to_account.id,
-        amount=amount,
-        business_date=business_date,
-    )
-    session.add(le2)
-
-    from_account = get_book_account_by_string(
-        session, book_string=f"{user.id}/user/user_marvin_limit/l"
-    )
-    to_account = get_book_account_by_string(
-        session, book_string=f"{user.id}/user/user_marvin_limit_used/a"
-    )
-
-    le3 = LedgerEntry(
-        event_id=lt.id,
-        from_book_account=from_account.id,
-        to_book_account=to_account.id,
-        amount=amount,
-        business_date=business_date,
-    )
-    session.add(le3)
-    session.commit()
-
-
-def get_account_balance(
-    session: sqlalchemy.orm.session.Session,
-    book_account: BookAccount,
-    business_date: Optional[DateTime] = None,
-) -> Decimal:
-
-    if not business_date:
-        business_date = get_current_ist_time()
-
-    debit_balance = (
-        session.query(func.sum(LedgerEntry.amount))
-        .filter(
-            LedgerEntry.from_book_account == book_account.id,
-            LedgerEntry.business_date <= business_date,
-        )
-        .scalar()
-        or 0
-    )
-
-    credit_balance = (
-        session.query(func.sum(LedgerEntry.amount))
-        .filter(
-            LedgerEntry.to_book_account == book_account.id,
-            LedgerEntry.business_date <= business_date,
-        )
-        .scalar()
-        or 0
-    )
-    final_balance = round(credit_balance - debit_balance, 2)
-
-    return round(Decimal(final_balance), 2)
-
-
 def generate_bill(
-    session: sqlalchemy.orm.session.Session,
+    session: Session,
     bill_date: DateTime,
     interest_monthly: int,
     bill_tenure: int,

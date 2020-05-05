@@ -2,9 +2,11 @@ from typing import Dict
 
 from sqlalchemy.orm import Session
 
-from rush.ledger_utils import create_ledger_entry
+from rush.ledger_utils import (
+    create_ledger_entry,
+    get_book_account_by_string,
+)
 from rush.models import LedgerTriggerEvent
-from rush.utils import get_book_account_by_string
 
 
 def card_transaction_event(session: Session, user_id: int, event: LedgerTriggerEvent) -> None:

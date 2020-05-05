@@ -44,3 +44,7 @@ def get_or_create_bill_for_card_swipe(
         new_bill_date = user_card.card_activation_date
     new_bill = create_bill(session, user_card, new_bill_date)
     return new_bill
+
+
+def close_bill(session: Session, user_card: UserCard) -> None:
+    pass
