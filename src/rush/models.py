@@ -120,7 +120,8 @@ class LedgerTriggerEventPy(AuditMixinPy):
 class BookAccount(AuditMixin):
     __tablename__ = "book_account"
     identifier = Column(Integer)
-    book_type = Column(String(50))
+    identifier_type = Column(String(50))  # bill, emi, user etc.
+    book_name = Column(String(50))
     account_type = Column(String(50))
     book_date = Column(Date())
 
