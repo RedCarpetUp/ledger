@@ -258,7 +258,7 @@ def test_payment(session: sqlalchemy.orm.session.Session) -> None:
     first_bill_date = parse_date("2020-05-01")
     payment_date = parse_date("2020-05-03")
     amount = Decimal(120)
-    a = settle_payment(
+    settle_payment(
         session=session,
         user=user,
         payment_amount=amount,
@@ -296,7 +296,7 @@ def test_late_fine(session: sqlalchemy.orm.session.Session) -> None:
     first_bill_date = parse_date("2020-05-01")
     create_late_fine(session=session, user=user, bill_date=first_bill_date, amount=100)
     payment_date = parse_date("2020-05-05")
-    a = settle_payment(
+    settle_payment(
         session=session,
         user=user,
         payment_amount=Decimal(100),
@@ -308,7 +308,7 @@ def test_late_fine(session: sqlalchemy.orm.session.Session) -> None:
         session=session,
         model=BookAccount,
         identifier=user.id,
-        book_type="user_late_fine_paid" + str(first_bill_date.date()),
+        book_type="user_late_fine_paid_" + str(first_bill_date.date()),
         account_type="asset",
     )
 

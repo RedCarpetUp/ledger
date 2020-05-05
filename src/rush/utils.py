@@ -252,7 +252,7 @@ def settle_payment(
             session=session,
             model=BookAccount,
             identifier=user.id,
-            book_type="user_late_fine" + str(account_date.date()),
+            book_type="user_late_fine_" + str(account_date.date()),
             account_type="asset",
         )
         user_late_fine_amount_due = get_account_balance(
@@ -263,7 +263,7 @@ def settle_payment(
             session=session,
             model=BookAccount,
             identifier=user.id,
-            book_type="user_late_fine_paid" + str(account_date.date()),
+            book_type="user_late_fine_paid_" + str(account_date.date()),
             account_type="asset",
         )
         user_late_fine_amount_paid = get_account_balance(
@@ -370,14 +370,14 @@ def create_late_fine(
         session=session,
         model=BookAccount,
         identifier=user.id,
-        book_type="user_late_fine" + str(bill_date.date()),
+        book_type="user_late_fine_" + str(bill_date.date()),
         account_type="liability",
     )
     user_late_fine_to = get_or_create(
         session=session,
         model=BookAccount,
         identifier=user.id,
-        book_type="user_late_fine" + str(bill_date.date()),
+        book_type="user_late_fine_" + str(bill_date.date()),
         account_type="asset",
     )
     le = LedgerEntry(
