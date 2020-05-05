@@ -73,7 +73,7 @@ class AuditMixin(Base):
 
 
 def get_or_create(
-    session: Session, model: Any, defaults: Dict[Any, Any] = None, **kwargs: Dict[str, Any]
+    session: Session, model: Any, defaults: Dict[Any, Any] = None, **kwargs: str
 ) -> Any:
     instance = session.query(model).filter_by(**kwargs).first()
     if instance:
