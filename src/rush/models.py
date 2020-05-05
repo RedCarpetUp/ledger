@@ -1,34 +1,27 @@
-from dataclasses import dataclass
 from decimal import Decimal as DecimalType
-from typing import Dict, Optional, Any, Tuple
+from typing import (
+    Any,
+    Dict,
+    Tuple,
+)
 
 import pendulum
 from pendulum import DateTime
-from pydantic import EmailStr
 from pydantic.dataclasses import dataclass as py_dataclass
 from sqlalchemy import (
     DECIMAL,
     JSON,
     TIMESTAMP,
     Column,
+    Date,
     ForeignKey,
     Index,
     Integer,
-    MetaData,
-    String,
-    Table,
-    Text,
-    create_engine,
-    Date,
     Numeric,
+    String,
 )
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import (
-    Session,
-    mapper,
-    relationship,
-    sessionmaker,
-)
+from sqlalchemy.orm import Session
 
 Base = declarative_base()  # type: Any
 
@@ -162,11 +155,19 @@ class LedgerEntryPy(AuditMixinPy):
     business_date: DateTime
 
 
+class UserCard(AuditMixin):
+    __tablename__ = "user_card"
+    user_id = Column(Integer, ForeignKey(User.id), nullable=False)
+    card_activation_date = Column(Date, nullable=True)
+    statement_period_in_days = Column(Integer, default=30, nullable=False)  # 30 days
+    interest_free_period_in_days = Column(Integer, default=45, nullable=False)
+
+
 class LoanData(AuditMixin):
     __tablename__ = "loan_data"
     user_id = Column(Integer, ForeignKey(User.id))
     agreement_date = Column(TIMESTAMP, nullable=False)
-    bill_generation_date = Column(TIMESTAMP, nullable=False)
+    card_id = Column(Integer, ForeignKey(UserCard.id))
 
 
 @py_dataclass
@@ -190,7 +191,7 @@ class LoanEmisPy(AuditMixinPy):
     last_payment_date: DateTime
 
 
-class CardTransactions(AuditMixin):
+class CardTransaction(AuditMixin):
     __tablename__ = "card_transaction"
     loan_id = Column(Integer, ForeignKey(LoanData.id))
     txn_time = Column(TIMESTAMP, nullable=False)
