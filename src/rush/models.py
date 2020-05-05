@@ -28,7 +28,7 @@ from sqlalchemy.orm import (
     sessionmaker,
 )
 
-Base = declarative_base()
+Base = declarative_base()  # type: Any
 
 
 def get_current_ist_time() -> DateTime:
