@@ -7,6 +7,7 @@ import sqlalchemy
 from alembic.command import current as alembic_current
 from pendulum import parse as parse_date  # type: ignore
 
+from rush.create_card_swipe import create_card_swipe
 from rush.exceptions import *
 from rush.models import (
     BookAccount,
@@ -14,6 +15,7 @@ from rush.models import (
     LoanData,
     LoanEmis,
     User,
+    UserCard,
     UserPy,
     get_current_ist_time,
     get_or_create,
@@ -63,34 +65,57 @@ def test_user(session: sqlalchemy.orm.session.Session) -> None:
     )
 
 
-def test_loan_create(session: sqlalchemy.orm.session.Session) -> None:
-
-    u = User(id=1001, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    session.add(u)
+def test_card_swipe(session: sqlalchemy.orm.session.Session) -> None:
+    uc = UserCard(user_id=2, card_activation_date=parse_date("2020-05-01"))
+    session.add(uc)
     session.flush()
 
-    loan_data = LoanData(
-        user_id=u.id,
-        agreement_date=get_current_ist_time(),
-        bill_generation_date=get_current_ist_time(),
+    swipe1 = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-01 14:23:11"),
+        amount=Decimal(700),
+        description="Amazon.com",
     )
-    session.add(loan_data)
-    session.flush()
-
-    print(loan_data.id)
-
-    loan_emis = LoanEmis(
-        loan_id=loan_data.id,
-        due_date=get_current_ist_time(),
-        last_payment_date=get_current_ist_time(),
+    swipe2 = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-02 11:22:11"),
+        amount=Decimal(200),
+        description="Flipkart.com",
     )
+    assert swipe1.loan_id == swipe2.loan_id  # Both swipes belong to same bill.
+    card_bill = session.query(LoanData).filter_by(id=swipe1.loan_id).one()
+    assert card_bill.agreement_date.date() == parse_date("2020-05-01").date()
 
-    session.add(loan_emis)
-    session.flush()
 
-    print(loan_emis.id)
-
-    session.commit()
+# def test_loan_create(session: sqlalchemy.orm.session.Session) -> None:
+#     u = User(id=1001, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas", )
+#     session.add(u)
+#     session.flush()
+#
+#     loan_data = LoanData(
+#         user_id=u.id,
+#         agreement_date=get_current_ist_time(),
+#         bill_generation_date=get_current_ist_time(),
+#     )
+#     session.add(loan_data)
+#     session.flush()
+#
+#     print(loan_data.id)
+#
+#     loan_emis = LoanEmis(
+#         loan_id=loan_data.id,
+#         due_date=get_current_ist_time(),
+#         last_payment_date=get_current_ist_time(),
+#     )
+#
+#     session.add(loan_emis)
+#     session.flush()
+#
+#     print(loan_emis.id)
+#
+#     session.commit()
 
 
 def test_insert_card_swipe(session: sqlalchemy.orm.session.Session) -> None:
@@ -133,7 +158,6 @@ def test_get_account_balance(session: sqlalchemy.orm.session.Session) -> None:
 
 
 def test_slide_full_payment(session: sqlalchemy.orm.session.Session) -> None:
-
     # Jan Month
     # Do transaction Rs 100
     # Do transaction Rs 500
@@ -145,7 +169,6 @@ def test_slide_full_payment(session: sqlalchemy.orm.session.Session) -> None:
 
 
 def test_slide_partial_payment(session: sqlalchemy.orm.session.Session) -> None:
-
     # Jan Month
     # Do transaction Rs 100
     # Do transaction Rs 500
@@ -159,7 +182,6 @@ def test_slide_partial_payment(session: sqlalchemy.orm.session.Session) -> None:
 
 
 def test_slide_partial_payment_after_due_date(session: sqlalchemy.orm.session.Session) -> None:
-
     u = User(id=5, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(u)
     session.commit()
