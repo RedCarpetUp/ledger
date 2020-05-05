@@ -4,8 +4,10 @@ from pendulum import DateTime
 from sqlalchemy.orm.session import Session
 
 from rush.create_bill import get_or_create_bill_for_card_swipe
+from rush.ledger_events import card_transaction_event
 from rush.models import (
     CardTransaction,
+    LedgerTriggerEvent,
     UserCard,
 )
 
@@ -19,4 +21,15 @@ def create_card_swipe(
     )
     session.add(swipe)
     session.flush()
+
+    lt = LedgerTriggerEvent(
+        performed_by=user_card.user_id,
+        name="card_transaction",
+        post_date=txn_time,
+        amount=amount,
+        extra_details={"swipe_id": swipe.id},
+    )
+    session.add(lt)
+    session.flush()  # need id. TODO Gotta use table relationships
+    card_transaction_event(session, user_card.user_id, lt)
     return swipe

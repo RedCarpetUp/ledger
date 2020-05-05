@@ -85,23 +85,10 @@ def test_card_swipe(session: sqlalchemy.orm.session.Session) -> None:
         amount=Decimal(200),
         description="Flipkart.com",
     )
+    session.commit()
     assert swipe1.loan_id == swipe2.loan_id  # Both swipes belong to same bill.
     card_bill = session.query(LoanData).filter_by(id=swipe1.loan_id).one()
     assert card_bill.agreement_date.date() == parse_date("2020-05-01").date()
-
-
-def test_insert_card_swipe(session: sqlalchemy.orm.session.Session) -> None:
-    u = User(id=3, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    session.add(u)
-    session.commit()
-
-    insert_card_swipe(
-        session=session,
-        user=u,
-        event_name="card_transaction",
-        extra_details={"payment_request_id": "test", "amount": 100},
-        amount=100,
-    )
 
 
 def test_get_account_balance(session: sqlalchemy.orm.session.Session) -> None:
@@ -109,22 +96,27 @@ def test_get_account_balance(session: sqlalchemy.orm.session.Session) -> None:
     session.add(u)
     session.commit()
 
-    insert_card_swipe(
+    # assign card
+    uc = UserCard(user_id=u.id, card_activation_date=parse_date("2020-04-01"))
+    session.add(uc)
+    session.flush()
+
+    create_card_swipe(
         session=session,
-        user=u,
-        event_name="card_transaction",
-        extra_details={"payment_request_id": "test", "amount": 100},
-        amount=100,
+        user_card=uc,
+        txn_time=parse_date("2020-04-01 14:23:11"),
+        amount=Decimal(200),
+        description="Jabong.com",
     )
 
     book_account = get_book_account_by_string(
         session=session, book_string=f"{u.id}/user/user_card_balance/l"
     )
     current_balance = get_account_balance(session=session, book_account=book_account)
-    assert current_balance == Decimal(-100)
+    assert current_balance == Decimal(-200)
 
 
-def test_slide_full_payment(session: sqlalchemy.orm.session.Session) -> None:
+# def test_slide_full_payment(session: sqlalchemy.orm.session.Session) -> None:
     # Jan Month
     # Do transaction Rs 100
     # Do transaction Rs 500
@@ -132,10 +124,10 @@ def test_slide_full_payment(session: sqlalchemy.orm.session.Session) -> None:
     # Generate Bill (Feb 1)
 
     # Full bill payment (Feb 2)
-    pass
+    # pass
 
 
-def test_slide_partial_payment(session: sqlalchemy.orm.session.Session) -> None:
+# def test_slide_partial_payment(session: sqlalchemy.orm.session.Session) -> None:
     # Jan Month
     # Do transaction Rs 100
     # Do transaction Rs 500
@@ -145,7 +137,7 @@ def test_slide_partial_payment(session: sqlalchemy.orm.session.Session) -> None:
     # Partial bill payment (Feb 2)
 
     # Accrue Interest (Feb 15)
-    pass
+    # pass
 
 
 def test_slide_partial_payment_after_due_date(session: sqlalchemy.orm.session.Session) -> None:
@@ -153,23 +145,28 @@ def test_slide_partial_payment_after_due_date(session: sqlalchemy.orm.session.Se
     session.add(u)
     session.commit()
 
-    # Jan Month
+    # assign card
+    uc = UserCard(user_id=u.id, card_activation_date=parse_date("2020-04-05"))
+    session.add(uc)
+    session.flush()
+
+    # First Month
     # Do transaction Rs 100
     # Do transaction Rs 500
-    insert_card_swipe(
+    swipe1 = create_card_swipe(
         session=session,
-        user=u,
-        event_name="card_transaction",
-        extra_details={"payment_request_id": "test", "amount": 100},
-        amount=100,
+        user_card=uc,
+        txn_time=parse_date("2020-04-06 14:23:11"),
+        amount=Decimal(100),
+        description="Myntra.com",
     )
 
-    insert_card_swipe(
+    swipe2 = create_card_swipe(
         session=session,
-        user=u,
-        event_name="card_transaction",
-        extra_details={"payment_request_id": "test", "amount": 100},
-        amount=500,
+        user_card=uc,
+        txn_time=parse_date("2020-04-15 14:23:11"),
+        amount=Decimal(500),
+        description="Google Play",
     )
 
     # Generate Bill (Feb 1)
@@ -184,9 +181,7 @@ def test_slide_partial_payment_after_due_date(session: sqlalchemy.orm.session.Se
 
 def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
     a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-
     session.add(a)
-
     session.commit()
 
     insert_card_swipe(
