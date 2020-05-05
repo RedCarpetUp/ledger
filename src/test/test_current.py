@@ -294,7 +294,7 @@ def test_payment(session: sqlalchemy.orm.session.Session) -> None:
 def test_late_fine(session: sqlalchemy.orm.session.Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
     first_bill_date = parse_date("2020-05-01")
-    create_late_fine(session=session, user=user, bill_date=first_bill_date, amount=100)
+    create_late_fine(session=session, user=user, bill_date=first_bill_date, amount=Decimal(100))
     payment_date = parse_date("2020-05-05")
     settle_payment(
         session=session,
