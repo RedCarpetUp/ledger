@@ -20,8 +20,9 @@ def upgrade() -> None:
         "book_account",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("identifier", sa.Integer(), nullable=False),
-        sa.Column("book_type", sa.String(), nullable=False),
-        sa.Column("account_type", sa.String(), nullable=False),
+        sa.Column("identifier_type", sa.String(50), nullable=False),
+        sa.Column("book_name", sa.String(50), nullable=False),
+        sa.Column("account_type", sa.String(50), nullable=False),
         sa.Column("book_date", sa.Date(), nullable=True),
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
@@ -36,21 +37,10 @@ def upgrade() -> None:
         sa.Column("from_book_account", sa.Integer(), nullable=False),
         sa.Column("to_book_account", sa.Integer(), nullable=False),
         sa.Column("amount", sa.DECIMAL(), nullable=False),
-        sa.Column("business_date", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("performed_by", sa.Integer(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(
-        "index_ledger_entry_from_book_account",
-        "ledger_entry",
-        ["from_book_account", "business_date", "amount"],
-    )
-    op.create_index(
-        "index_ledger_entry_to_book_account",
-        "ledger_entry",
-        ["to_book_account", "business_date", "amount"],
     )
 
 

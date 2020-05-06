@@ -17,6 +17,19 @@ depends_on = None
 
 def upgrade() -> None:
     op.create_table(
+        "user_card",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("user_id", sa.Integer(), nullable=False),
+        sa.Column("card_activation_date", sa.Date(), nullable=True),
+        sa.Column("statement_period_in_days", sa.Integer(), nullable=False),
+        sa.Column("interest_free_period_in_days", sa.Integer, nullable=True),
+        sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
+        sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
+        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.PrimaryKeyConstraint("id"),
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"], name="fk_user_card_user_id"),
+    )
+    op.create_table(
         "loan_data",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
@@ -24,8 +37,9 @@ def upgrade() -> None:
         sa.Column("performed_by", sa.Integer(), nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=False),
         sa.Column("agreement_date", sa.TIMESTAMP(), nullable=False),
-        sa.Column("bill_generation_date", sa.TIMESTAMP(), nullable=False),
+        sa.Column("card_id", sa.Integer(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
+        sa.ForeignKeyConstraint(["card_id"], ["user_card.id"], name="fk_loan_data_card_id"),
     )
     op.create_table(
         "loan_emis",
@@ -35,8 +49,23 @@ def upgrade() -> None:
         sa.Column("performed_by", sa.Integer(), nullable=False),
         sa.Column("loan_id", sa.Integer(), nullable=False),
         sa.Column("due_date", sa.TIMESTAMP(), nullable=False),
-        sa.Column("last_payment_date", sa.TIMESTAMP(), nullable=False),
+        sa.Column("last_payment_date", sa.TIMESTAMP(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
+        sa.ForeignKeyConstraint(["loan_id"], ["loan_data.id"], name="fk_loan_emis_loan_id"),
+    )
+
+    op.create_table(
+        "card_transaction",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("loan_id", sa.Integer(), nullable=False),
+        sa.Column("txn_time", sa.TIMESTAMP(), nullable=False),
+        sa.Column("amount", sa.DECIMAL(), nullable=False),
+        sa.Column("description", sa.String(100), nullable=True),
+        sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
+        sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
+        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.PrimaryKeyConstraint("id"),
+        sa.ForeignKeyConstraint(["loan_id"], ["loan_data.id"], name="fk_card_transaction_loan_id"),
     )
 
 

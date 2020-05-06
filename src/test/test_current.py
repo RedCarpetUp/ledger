@@ -7,13 +7,20 @@ import sqlalchemy
 from alembic.command import current as alembic_current
 from pendulum import parse as parse_date  # type: ignore
 
+from rush.create_bill import close_bill
+from rush.create_card_swipe import create_card_swipe
 from rush.exceptions import *
+from rush.ledger_utils import (
+    get_account_balance,
+    get_book_account_by_string,
+)
 from rush.models import (
     BookAccount,
     LedgerTriggerEvent,
     LoanData,
     LoanEmis,
     User,
+    UserCard,
     UserPy,
     get_current_ist_time,
     get_or_create,
@@ -21,9 +28,7 @@ from rush.models import (
 from rush.utils import (
     create_late_fine,
     generate_bill,
-    get_account_balance,
     get_bill_amount,
-    insert_card_swipe,
     settle_payment,
 )
 
@@ -63,48 +68,29 @@ def test_user(session: sqlalchemy.orm.session.Session) -> None:
     )
 
 
-def test_loan_create(session: sqlalchemy.orm.session.Session) -> None:
-
-    u = User(id=1001, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    session.add(u)
+def test_card_swipe(session: sqlalchemy.orm.session.Session) -> None:
+    uc = UserCard(user_id=2, card_activation_date=parse_date("2020-05-01"))
+    session.add(uc)
     session.flush()
 
-    loan_data = LoanData(
-        user_id=u.id,
-        agreement_date=get_current_ist_time(),
-        bill_generation_date=get_current_ist_time(),
-    )
-    session.add(loan_data)
-    session.flush()
-
-    print(loan_data.id)
-
-    loan_emis = LoanEmis(
-        loan_id=loan_data.id,
-        due_date=get_current_ist_time(),
-        last_payment_date=get_current_ist_time(),
-    )
-
-    session.add(loan_emis)
-    session.flush()
-
-    print(loan_emis.id)
-
-    session.commit()
-
-
-def test_insert_card_swipe(session: sqlalchemy.orm.session.Session) -> None:
-    u = User(id=3, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    session.add(u)
-    session.commit()
-
-    insert_card_swipe(
+    swipe1 = create_card_swipe(
         session=session,
-        user=u,
-        event_name="card_transaction",
-        extra_details={"payment_request_id": "test", "amount": 100},
-        amount=100,
+        user_card=uc,
+        txn_time=parse_date("2020-05-01 14:23:11"),
+        amount=Decimal(700),
+        description="Amazon.com",
     )
+    swipe2 = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-02 11:22:11"),
+        amount=Decimal(200),
+        description="Flipkart.com",
+    )
+    session.commit()
+    assert swipe1.loan_id == swipe2.loan_id  # Both swipes belong to same bill.
+    card_bill = session.query(LoanData).filter_by(id=swipe1.loan_id).one()
+    assert card_bill.agreement_date.date() == parse_date("2020-05-01").date()
 
 
 def test_get_account_balance(session: sqlalchemy.orm.session.Session) -> None:
@@ -112,75 +98,77 @@ def test_get_account_balance(session: sqlalchemy.orm.session.Session) -> None:
     session.add(u)
     session.commit()
 
-    insert_card_swipe(
+    # assign card
+    uc = UserCard(user_id=u.id, card_activation_date=parse_date("2020-04-01"))
+    session.add(uc)
+    session.flush()
+
+    create_card_swipe(
         session=session,
-        user=u,
-        event_name="card_transaction",
-        extra_details={"payment_request_id": "test", "amount": 100},
-        amount=100,
+        user_card=uc,
+        txn_time=parse_date("2020-04-01 14:23:11"),
+        amount=Decimal(200),
+        description="Jabong.com",
     )
 
-    book_account = get_or_create(
-        session=session,
-        model=BookAccount,
-        identifier=u.id,
-        book_type="user_card_balance",
-        account_type="liability",
+    book_account = get_book_account_by_string(
+        session=session, book_string=f"{u.id}/user/user_card_balance/l"
     )
-
     current_balance = get_account_balance(session=session, book_account=book_account)
-    assert current_balance == Decimal(-100)
+    assert current_balance == Decimal(-200)
 
 
-def test_slide_full_payment(session: sqlalchemy.orm.session.Session) -> None:
+# def test_slide_full_payment(session: sqlalchemy.orm.session.Session) -> None:
+# Jan Month
+# Do transaction Rs 100
+# Do transaction Rs 500
 
-    # Jan Month
-    # Do transaction Rs 100
-    # Do transaction Rs 500
+# Generate Bill (Feb 1)
 
-    # Generate Bill (Feb 1)
-
-    # Full bill payment (Feb 2)
-    pass
+# Full bill payment (Feb 2)
+# pass
 
 
-def test_slide_partial_payment(session: sqlalchemy.orm.session.Session) -> None:
+# def test_slide_partial_payment(session: sqlalchemy.orm.session.Session) -> None:
+# Jan Month
+# Do transaction Rs 100
+# Do transaction Rs 500
 
-    # Jan Month
-    # Do transaction Rs 100
-    # Do transaction Rs 500
+# Generate Bill (Feb 1)
 
-    # Generate Bill (Feb 1)
+# Partial bill payment (Feb 2)
 
-    # Partial bill payment (Feb 2)
-
-    # Accrue Interest (Feb 15)
-    pass
+# Accrue Interest (Feb 15)
+# pass
 
 
 def test_slide_partial_payment_after_due_date(session: sqlalchemy.orm.session.Session) -> None:
-
     u = User(id=5, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(u)
     session.commit()
 
-    # Jan Month
+    # assign card
+    uc = UserCard(user_id=u.id, card_activation_date=parse_date("2020-04-05"))
+    session.add(uc)
+    session.flush()
+
+    # First Month
     # Do transaction Rs 100
     # Do transaction Rs 500
-    insert_card_swipe(
+    swipe1 = create_card_swipe(
         session=session,
-        user=u,
-        event_name="card_transaction",
-        extra_details={"payment_request_id": "test", "amount": 100},
-        amount=100,
+        user_card=uc,
+        txn_time=parse_date("2020-04-06 14:23:11"),
+        amount=Decimal(100),
+        description="Myntra.com",
     )
 
-    insert_card_swipe(
+    swipe2 = create_card_swipe(
         session=session,
-        user=u,
-        event_name="card_transaction",
-        extra_details={"payment_request_id": "test", "amount": 100},
-        amount=500,
+        user_card=uc,
+        txn_time=parse_date("2020-04-15 14:23:11"),
+        amount=Decimal(500),
+        description="Google Play",
     )
 
     # Generate Bill (Feb 1)
@@ -195,62 +183,50 @@ def test_slide_partial_payment_after_due_date(session: sqlalchemy.orm.session.Se
 
 def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
     a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-
     session.add(a)
-
     session.commit()
 
-    insert_card_swipe(
+    # assign card
+    uc = UserCard(user_id=a.id, card_activation_date=parse_date("2020-04-02"))
+    session.add(uc)
+    session.flush()
+
+    swipe1 = create_card_swipe(
         session=session,
-        user=a,
-        event_name="card_transaction",
-        extra_details={"payment_request_id": "test", "amount": 100},
-        amount=100,
+        user_card=uc,
+        txn_time=parse_date("2020-04-08 19:23:11"),
+        amount=Decimal(100),
+        description="BigBasket.com",
     )
 
-    book_account = get_or_create(
-        session=session,
-        model=BookAccount,
-        identifier=a.id,
-        book_type="user_card_balance",
-        account_type="liability",
-    )
-    current_balance = get_account_balance(session=session, book_account=book_account)
-    assert current_balance == Decimal(-100)
-
-    current_date = parse_date("2020-05-01")
-    bill_date = current_date
-
-    generate_bill(
-        session=session,
-        bill_date=bill_date,
-        interest_monthly=3,
-        bill_tenure=12,
-        user=a,
-        business_date=get_current_ist_time(),
+    user_card_balance_book = get_book_account_by_string(
+        session=session, book_string=f"{a.id}/user/user_card_balance/l"
     )
 
-    book_account = get_or_create(
-        session=session,
-        model=BookAccount,
-        identifier=a.id,
-        book_type="user_monthly_principal",
-        book_date=bill_date.date(),
-        account_type="asset",
-    )
-    current_balance = get_account_balance(session=session, book_account=book_account)
-    assert current_balance == Decimal("8.33")
+    user_card_balance = get_account_balance(session=session, book_account=user_card_balance_book)
+    assert user_card_balance == Decimal(-100)
 
-    book_account = get_or_create(
-        session=session,
-        model=BookAccount,
-        identifier=a.id,
-        book_type="user_monthly_interest",
-        book_date=bill_date.date(),
-        account_type="asset",
+    bill = close_bill(session=session, user_id=a.id)
+
+    unbilled_book = get_book_account_by_string(
+        session, book_string=f"{bill.id}/bill/unbilled_transactions/a"
     )
-    current_balance = get_account_balance(session=session, book_account=book_account)
-    assert current_balance == Decimal(3)
+    unbilled_balance = get_account_balance(session=session, book_account=unbilled_book)
+    assert unbilled_balance == 0
+
+    bill_schedules = session.query(LoanEmis).filter_by(loan_id=bill.id).all()
+    for schedule in bill_schedules:
+        principal_due_book = get_book_account_by_string(
+            session=session, book_string=f"{schedule.id}/emi/principal_due/a"
+        )
+        principal_due = get_account_balance(session=session, book_account=principal_due_book)
+        assert principal_due == Decimal("8.33")
+
+        interest_due_book = get_book_account_by_string(
+            session, book_string=f"{schedule.id}/emi/interest_due/a"
+        )
+        interest_due = get_account_balance(session=session, book_account=interest_due_book)
+        assert interest_due == Decimal(3)
     # val = get_bill_amount(session, bill_date, prev_date, a)
     # assert val == 110
 
@@ -271,7 +247,7 @@ def test_payment(session: sqlalchemy.orm.session.Session) -> None:
         session=session,
         model=BookAccount,
         identifier=user.id,
-        book_type="user_monthly_principal_paid",
+        book_name="user_monthly_principal_paid",
         book_date=first_bill_date.date(),
         account_type="asset",
     )
@@ -284,7 +260,7 @@ def test_payment(session: sqlalchemy.orm.session.Session) -> None:
         session=session,
         model=BookAccount,
         identifier=user.id,
-        book_type="user_monthly_interest_paid",
+        book_name="user_monthly_interest_paid",
         book_date=first_bill_date.date(),
         account_type="asset",
     )
@@ -312,7 +288,7 @@ def test_late_fine(session: sqlalchemy.orm.session.Session) -> None:
         session=session,
         model=BookAccount,
         identifier=user.id,
-        book_type="user_late_fine_paid",
+        book_name="user_late_fine_paid",
         book_date=first_bill_date.date(),
         account_type="asset",
     )

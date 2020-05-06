@@ -1,33 +1,27 @@
-from dataclasses import dataclass
 from decimal import Decimal as DecimalType
-from typing import Dict, Optional, Any, Tuple
+from typing import (
+    Any,
+    Dict,
+    Tuple,
+)
 
 import pendulum
 from pendulum import DateTime
-from pydantic import EmailStr
 from pydantic.dataclasses import dataclass as py_dataclass
 from sqlalchemy import (
     DECIMAL,
     JSON,
     TIMESTAMP,
     Column,
+    Date,
     ForeignKey,
     Index,
     Integer,
-    MetaData,
+    Numeric,
     String,
-    Table,
-    Text,
-    create_engine,
-    Date,
 )
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import (
-    Session,
-    mapper,
-    relationship,
-    sessionmaker,
-)
+from sqlalchemy.orm import Session
 
 Base = declarative_base()  # type: Any
 
@@ -72,6 +66,13 @@ class AuditMixin(Base):
         session.flush()
         return new_obj
 
+    @classmethod
+    def new(cls, session: Session, **kwargs) -> Any:
+        obj = cls(**kwargs)
+        session.add(obj)
+        session.flush()  # TODO remove this. this is only temporary.
+        return obj
+
 
 def get_or_create(
     session: Session, model: Any, defaults: Dict[Any, Any] = None, **kwargs: str
@@ -114,7 +115,9 @@ class LedgerTriggerEvent(AuditMixin):
 
     __tablename__ = "ledger_trigger_event"
     name = Column(String(50))
-    extra_details = Column(JSON)
+    post_date = Column(TIMESTAMP)
+    amount = Column(Numeric)
+    extra_details = Column(JSON, default="{}")
 
 
 @py_dataclass
@@ -126,7 +129,8 @@ class LedgerTriggerEventPy(AuditMixinPy):
 class BookAccount(AuditMixin):
     __tablename__ = "book_account"
     identifier = Column(Integer)
-    book_type = Column(String(50))
+    identifier_type = Column(String(50))  # bill, emi, user etc.
+    book_name = Column(String(50))
     account_type = Column(String(50))
     book_date = Column(Date())
 
@@ -144,12 +148,6 @@ class LedgerEntry(AuditMixin):
     from_book_account = Column(Integer, ForeignKey(BookAccount.id))
     to_book_account = Column(Integer, ForeignKey(BookAccount.id))
     amount = Column(DECIMAL)
-    business_date = Column(TIMESTAMP, nullable=False)
-
-    __table_args__ = (
-        Index("index_ledger_entry_from_book_account", from_book_account, business_date, amount,),
-        Index("index_ledger_entry_to_book_account", to_book_account, business_date, amount,),
-    )
 
 
 @py_dataclass
@@ -161,11 +159,19 @@ class LedgerEntryPy(AuditMixinPy):
     business_date: DateTime
 
 
+class UserCard(AuditMixin):
+    __tablename__ = "user_card"
+    user_id = Column(Integer, ForeignKey(User.id), nullable=False)
+    card_activation_date = Column(Date, nullable=True)
+    statement_period_in_days = Column(Integer, default=30, nullable=False)  # 30 days
+    interest_free_period_in_days = Column(Integer, default=45, nullable=False)
+
+
 class LoanData(AuditMixin):
     __tablename__ = "loan_data"
     user_id = Column(Integer, ForeignKey(User.id))
     agreement_date = Column(TIMESTAMP, nullable=False)
-    bill_generation_date = Column(TIMESTAMP, nullable=False)
+    card_id = Column(Integer, ForeignKey(UserCard.id))
 
 
 @py_dataclass
@@ -187,3 +193,11 @@ class LoanEmisPy(AuditMixinPy):
     loan_id: int
     due_date: DateTime
     last_payment_date: DateTime
+
+
+class CardTransaction(AuditMixin):
+    __tablename__ = "card_transaction"
+    loan_id = Column(Integer, ForeignKey(LoanData.id))
+    txn_time = Column(TIMESTAMP, nullable=False)
+    amount = Column(Numeric, nullable=False)
+    description = Column(String(100), nullable=False)
