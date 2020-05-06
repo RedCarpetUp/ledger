@@ -51,11 +51,10 @@ def bill_close_event(session: Session, bill: LoanData, event: LedgerTriggerEvent
         session, book_string=f"{bill.id}/bill/unbilled_transactions/a"
     )
     unbilled_balance = get_account_balance(session=session, book_account=unbilled_book)
-    total_bill_principal = round(unbilled_balance, 2)
-    principal_per_month = round(unbilled_balance / bill_tenure, 2)
-    interest_amount_per_month = round(unbilled_balance * interest_monthly / 100, 2)
-    total_interest = round(interest_amount_per_month * bill_tenure, 2)
-    total_bill_amount = round(total_bill_principal + total_interest, 2)
+    principal_per_month = unbilled_balance / bill_tenure
+    interest_amount_per_month = unbilled_balance * interest_monthly / 100
+    total_interest = interest_amount_per_month * bill_tenure
+    total_bill_amount = unbilled_balance + total_interest
 
     # Create schedule.
     for schedule_count in range(bill_tenure):

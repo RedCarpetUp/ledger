@@ -212,7 +212,7 @@ def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
         session, book_string=f"{bill.id}/bill/unbilled_transactions/a"
     )
     unbilled_balance = get_account_balance(session=session, book_account=unbilled_book)
-    # assert unbilled_balance == 0
+    assert unbilled_balance == 0
 
     bill_schedules = session.query(LoanEmis).filter_by(loan_id=bill.id).all()
     for schedule in bill_schedules:
