@@ -7,6 +7,7 @@ import sqlalchemy
 from alembic.command import current as alembic_current
 from pendulum import parse as parse_date  # type: ignore
 
+from rush.create_bill import close_bill
 from rush.create_card_swipe import create_card_swipe
 from rush.exceptions import *
 from rush.ledger_utils import (
@@ -198,37 +199,34 @@ def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
         description="BigBasket.com",
     )
 
-    book_account = get_book_account_by_string(
+    user_card_balance_book = get_book_account_by_string(
         session=session, book_string=f"{a.id}/user/user_card_balance/l"
     )
 
-    current_balance = get_account_balance(session=session, book_account=book_account)
-    assert current_balance == Decimal(-100)
+    user_card_balance = get_account_balance(session=session, book_account=user_card_balance_book)
+    assert user_card_balance == Decimal(-100)
 
-    current_date = parse_date("2020-05-01")
-    bill_date = current_date
+    bill = close_bill(session=session, user_id=a.id)
 
-    generate_bill(
-        session=session,
-        bill_date=bill_date,
-        interest_monthly=3,
-        bill_tenure=12,
-        user=a,
-        business_date=get_current_ist_time(),
+    unbilled_book = get_book_account_by_string(
+        session, book_string=f"{bill.id}/bill/unbilled_transactions/a"
     )
+    unbilled_balance = get_account_balance(session=session, book_account=unbilled_book)
+    # assert unbilled_balance == 0
 
-    book_account = get_book_account_by_string(
-        session=session, book_string=f"{a.id}/user/user_monthly_principal/a"  # TODO change to bill.
-    )
+    bill_schedules = session.query(LoanEmis).filter_by(loan_id=bill.id).all()
+    for schedule in bill_schedules:
+        principal_due_book = get_book_account_by_string(
+            session=session, book_string=f"{schedule.id}/emi/principal_due/a"
+        )
+        principal_due = get_account_balance(session=session, book_account=principal_due_book)
+        assert principal_due == Decimal("8.33")
 
-    current_balance = get_account_balance(session=session, book_account=book_account)
-    assert current_balance == Decimal("8.33")
-
-    book_account = get_book_account_by_string(
-        session=session, book_string=f"{a.id}/user/user_monthly_interest/a"  # TODO change to bill.
-    )
-    current_balance = get_account_balance(session=session, book_account=book_account)
-    assert current_balance == Decimal(3)
+        interest_due_book = get_book_account_by_string(
+            session, book_string=f"{schedule.id}/emi/interest_due/a"
+        )
+        interest_due = get_account_balance(session=session, book_account=interest_due_book)
+        assert interest_due == Decimal(3)
     # val = get_bill_amount(session, bill_date, prev_date, a)
     # assert val == 110
 

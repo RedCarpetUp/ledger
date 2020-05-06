@@ -66,6 +66,13 @@ class AuditMixin(Base):
         session.flush()
         return new_obj
 
+    @classmethod
+    def new(cls, session: Session, **kwargs) -> Any:
+        obj = cls(**kwargs)
+        session.add(obj)
+        session.flush()  # TODO remove this. this is only temporary.
+        return obj
+
 
 def get_or_create(
     session: Session, model: Any, defaults: Dict[Any, Any] = None, **kwargs: str
@@ -110,7 +117,7 @@ class LedgerTriggerEvent(AuditMixin):
     name = Column(String(50))
     post_date = Column(TIMESTAMP)
     amount = Column(Numeric)
-    extra_details = Column(JSON)
+    extra_details = Column(JSON, default="{}")
 
 
 @py_dataclass
