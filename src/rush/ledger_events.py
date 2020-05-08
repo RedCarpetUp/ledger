@@ -44,44 +44,25 @@ def card_transaction_event(session: Session, user_id: int, event: LedgerTriggerE
     )
 
 
-def bill_close_event(session: Session, bill: LoanData, event: LedgerTriggerEvent) -> None:
-    bill_tenure = 12
-    interest_monthly = 3
+def bill_close_event(session: Session, user_id: int, event: LedgerTriggerEvent) -> None:
+    # interest_monthly = 3
+    # Move all unbilled book amount to principal due
     unbilled_book = get_book_account_by_string(
-        session, book_string=f"{bill.id}/bill/unbilled_transactions/a"
+        session, book_string=f"{user_id}/user/unbilled_transactions/a"
     )
     unbilled_balance = get_account_balance(session=session, book_account=unbilled_book)
-    principal_per_month = unbilled_balance / bill_tenure
-    interest_amount_per_month = unbilled_balance * interest_monthly / 100
-    total_interest = interest_amount_per_month * bill_tenure
-    total_bill_amount = unbilled_balance + total_interest
 
-    # Create schedule.
-    for schedule_count in range(bill_tenure):
-        schedule_due_date = bill.agreement_date + relativedelta(months=schedule_count)
-        schedule = LoanEmis.new(session, loan_id=bill.id, due_date=schedule_due_date)
-
-        principal_due_book = get_book_account_by_string(
-            session, book_string=f"{schedule.id}/emi/principal_due/a"
-        )
-        create_ledger_entry(
-            session,
-            event_id=event.id,
-            from_book_id=unbilled_book.id,
-            to_book_id=principal_due_book.id,
-            amount=principal_per_month,
-        )
-
-        dummy_interest = get_book_account_by_string(
-            session, book_string=f"{schedule.id}/emi/interest_due/l"
-        )
-        interest_due = get_book_account_by_string(
-            session, book_string=f"{schedule.id}/emi/interest_due/a"
-        )
-        create_ledger_entry(
-            session,
-            event_id=event.id,
-            from_book_id=dummy_interest.id,
-            to_book_id=interest_due.id,
-            amount=interest_amount_per_month,
-        )
+    principal_due_book = get_book_account_by_string(
+        session, book_string=f"{user_id}/user/principal_due/a"
+    )
+    create_ledger_entry(
+        session,
+        event_id=event.id,
+        from_book_id=unbilled_book.id,
+        to_book_id=principal_due_book.id,
+        amount=unbilled_balance,
+    )
+    # principal_per_month = unbilled_balance / bill_tenure
+    # interest_amount_per_month = unbilled_balance * interest_monthly / 100
+    # total_interest = interest_amount_per_month * bill_tenure
+    # total_bill_amount = unbilled_balance + total_interest

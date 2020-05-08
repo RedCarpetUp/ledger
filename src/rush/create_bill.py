@@ -48,17 +48,16 @@ def get_or_create_bill_for_card_swipe(
     return new_bill
 
 
-def close_bill(session: Session, user_id: int) -> LoanData:
-    bill = (
-        session.query(LoanData)
-        .filter(LoanData.user_id == user_id)
-        .order_by(LoanData.agreement_date.desc())
-        .first()
-    )  # Get the latest bill of that user.
+def close_bill(session: Session, closing_date: Date, user_id: int) -> None:
+    # bill = (
+    #     session.query(LoanData)
+    #     .filter(LoanData.user_id == user_id)
+    #     .order_by(LoanData.agreement_date.desc())
+    #     .first()
+    # )  # Get the latest bill of that user.
 
-    lt = LedgerTriggerEvent(name="bill_close", post_date=bill.agreement_date)
+    lt = LedgerTriggerEvent(name="bill_close", post_date=closing_date)
     session.add(lt)
     session.flush()
 
-    bill_close_event(session, bill, lt)
-    return bill
+    bill_close_event(session, user_id, lt)
