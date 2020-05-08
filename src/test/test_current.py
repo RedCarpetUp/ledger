@@ -97,31 +97,6 @@ def test_card_swipe(session: sqlalchemy.orm.session.Session) -> None:
     assert card_balance == -900
 
 
-def test_get_account_balance(session: sqlalchemy.orm.session.Session) -> None:
-    u = User(id=4, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    session.add(u)
-    session.commit()
-
-    # assign card
-    uc = UserCard(user_id=u.id, card_activation_date=parse_date("2020-04-01"))
-    session.add(uc)
-    session.flush()
-
-    create_card_swipe(
-        session=session,
-        user_card=uc,
-        txn_time=parse_date("2020-04-01 14:23:11"),
-        amount=Decimal(200),
-        description="Jabong.com",
-    )
-
-    book_account = get_book_account_by_string(
-        session=session, book_string=f"{u.id}/user/user_card_balance/l"
-    )
-    current_balance = get_account_balance(session=session, book_account=book_account)
-    assert current_balance == Decimal(-200)
-
-
 # def test_slide_full_payment(session: sqlalchemy.orm.session.Session) -> None:
 # Jan Month
 # Do transaction Rs 100
