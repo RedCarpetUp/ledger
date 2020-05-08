@@ -15,9 +15,7 @@ from rush.models import (
 
 
 def create_bill(session: Session, user_card: UserCard, new_bill_date: Date) -> LoanData:
-    new_bill = LoanData(
-        user_id=user_card.user_id, card_id=user_card.id, agreement_date=new_bill_date
-    )
+    new_bill = LoanData(user_id=user_card.user_id, card_id=user_card.id, agreement_date=new_bill_date)
     session.add(new_bill)
     session.flush()
     return new_bill
@@ -35,9 +33,7 @@ def get_or_create_bill_for_card_swipe(
     )
     if last_bill:
         last_bill_date = last_bill.agreement_date.date()
-        last_valid_statement_date = last_bill_date + timedelta(
-            days=user_card.statement_period_in_days
-        )
+        last_valid_statement_date = last_bill_date + timedelta(days=user_card.statement_period_in_days)
         does_swipe_belong_to_current_bill = txn_time.date() <= last_valid_statement_date
         if does_swipe_belong_to_current_bill:
             return last_bill

@@ -66,9 +66,7 @@ def bill_generate_event(session: Session, user_id: int, event: LedgerTriggerEven
 
     # Also store min amount. Assuming it to be 3% interest + 10% principal.
     min = unbilled_balance * Decimal("0.03") + unbilled_balance * Decimal("0.10")
-    min_due_cp_book = get_book_account_by_string(
-        session, book_string=f"{user_id}/user/min_due_cp/l"
-    )
+    min_due_cp_book = get_book_account_by_string(session, book_string=f"{user_id}/user/min_due_cp/l")
     min_due_book = get_book_account_by_string(session, book_string=f"{user_id}/user/min_due/a")
     create_ledger_entry(
         session,

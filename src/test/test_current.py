@@ -37,9 +37,7 @@ def test_user2(session: Session) -> None:
     session.commit()
     a = session.query(User).first()
     print(a.id)
-    u = UserPy(
-        id=a.id, performed_by=123, email="sss", name="dfd", fullname="dfdf", nickname="dfdd",
-    )
+    u = UserPy(id=a.id, performed_by=123, email="sss", name="dfd", fullname="dfdf", nickname="dfdd",)
 
 
 def test_user(session: Session) -> None:
@@ -47,9 +45,7 @@ def test_user(session: Session) -> None:
     session.add(u)
     session.commit()
     a = session.query(User).first()
-    u = UserPy(
-        id=a.id, performed_by=123, email="sss", name="dfd", fullname="dfdf", nickname="dfdd",
-    )
+    u = UserPy(id=a.id, performed_by=123, email="sss", name="dfd", fullname="dfdf", nickname="dfdd",)
 
 
 def test_card_swipe(session: Session) -> None:
@@ -77,9 +73,7 @@ def test_card_swipe(session: Session) -> None:
     )
     assert unbilled_balance == 900
     # remaining card balance should be -900 because we've loaded it yet and it's going in negative.
-    _, card_balance = get_account_balance_from_str(
-        session, f"{uc.user_id}/user/user_card_balance/l"
-    )
+    _, card_balance = get_account_balance_from_str(session, f"{uc.user_id}/user/user_card_balance/l")
     assert card_balance == -900
 
 
@@ -178,9 +172,7 @@ def test_generate_bill(session: Session) -> None:
     )
     assert unbilled_balance == 0
 
-    _, principal_due = get_account_balance_from_str(
-        session, book_string=f"{a.id}/user/principal_due/a"
-    )
+    _, principal_due = get_account_balance_from_str(session, book_string=f"{a.id}/user/principal_due/a")
     assert principal_due == 1000
 
     _, min_due = get_account_balance_from_str(session, book_string=f"{a.id}/user/min_due/a")

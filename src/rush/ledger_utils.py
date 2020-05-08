@@ -16,19 +16,14 @@ def create_ledger_entry(
     session: Session, event_id: int, from_book_id: int, to_book_id: int, amount: Decimal,
 ) -> LedgerEntry:
     entry = LedgerEntry(
-        event_id=event_id,
-        from_book_account=from_book_id,
-        to_book_account=to_book_id,
-        amount=amount,
+        event_id=event_id, from_book_account=from_book_id, to_book_account=to_book_id, amount=amount,
     )
     session.add(entry)
     session.flush()
     return entry
 
 
-def get_account_balance(
-    session: sqlalchemy.orm.session.Session, book_account: BookAccount,
-) -> Decimal:
+def get_account_balance(session: sqlalchemy.orm.session.Session, book_account: BookAccount,) -> Decimal:
 
     debit_balance = (
         session.query(func.sum(LedgerEntry.amount))
