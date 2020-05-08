@@ -49,10 +49,16 @@ def get_account_balance(
     return round(Decimal(final_balance), 2)
 
 
+def get_account_balance_from_str(session: Session, book_string: str) -> Decimal:
+    book_account = get_book_account_by_string(session, book_string)
+    account_balance = get_account_balance(session, book_account)
+    return account_balance
+
+
 def get_book_account_by_string(session: Session, book_string) -> BookAccount:
     identifier, identifier_type, name, account_type = book_string.split("/")
     assert account_type in ("a", "l")
-    assert identifier_type in ("user", "lender", "bill", "emi")
+    assert identifier_type in ("user", "lender")
 
     book_account = get_or_create(
         session=session,
