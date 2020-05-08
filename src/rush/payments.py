@@ -4,7 +4,10 @@ from pendulum import DateTime
 from sqlalchemy.orm import Session
 
 from rush.ledger_events import payment_received_event
-from rush.models import LedgerTriggerEvent, LoanData
+from rush.models import (
+    LedgerTriggerEvent,
+    LoanData,
+)
 
 
 def payment_received(

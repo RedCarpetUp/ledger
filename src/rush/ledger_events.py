@@ -8,7 +8,11 @@ from rush.ledger_utils import (
     get_account_balance_from_str,
     get_book_account_by_string,
 )
-from rush.models import LedgerTriggerEvent, LoanData, CardTransaction
+from rush.models import (
+    CardTransaction,
+    LedgerTriggerEvent,
+    LoanData,
+)
 
 
 def card_transaction_event(session: Session, user_id: int, event: LedgerTriggerEvent) -> None:

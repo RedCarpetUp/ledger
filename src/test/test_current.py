@@ -9,8 +9,12 @@ from sqlalchemy.orm import Session
 
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
-from rush.ledger_utils import get_account_balance_from_str
+from rush.ledger_utils import (
+    get_account_balance_from_str,
+    is_min_paid,
+)
 from rush.models import (
+    LoanData,
     User,
     UserCard,
     UserPy,
@@ -194,8 +198,19 @@ def test_payment(session: Session) -> None:
     _, principal_due = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/principal_due/a"
     )
+    session.commit()
     assert principal_due == 1000 - amount
 
 
-def test_interest_accrued(session: Session) -> None:
+def test_is_min_paid(session: Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
+
+    bill = (
+        session.query(LoanData)
+        .filter(LoanData.user_id == user.id)
+        .order_by(LoanData.agreement_date.desc())
+        .first()
+    )
+    # Should be false because min is 130 and payment made is 120
+    is_it_paid = is_min_paid(session, bill)
+    assert is_it_paid is False

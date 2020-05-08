@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from rush.models import (
     BookAccount,
     LedgerEntry,
+    LoanData,
     get_or_create,
 )
 
@@ -63,3 +64,15 @@ def get_book_account_by_string(session: Session, book_string) -> BookAccount:
         account_type=account_type,
     )
     return book_account
+
+
+def is_min_paid(session: Session, bill: LoanData) -> bool:
+    _, min_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/min_due/a")
+    _, interest_received = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/interest_received/a"
+    )
+    _, principal_received = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/principal_received/a"
+    )
+
+    return interest_received + principal_received >= min_due
