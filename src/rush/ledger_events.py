@@ -1,12 +1,14 @@
-from dateutil.relativedelta import relativedelta
+from decimal import Decimal
+
 from sqlalchemy.orm import Session
 
 from rush.ledger_utils import (
     create_ledger_entry,
-    get_book_account_by_string,
     get_account_balance,
+    get_account_balance_from_str,
+    get_book_account_by_string,
 )
-from rush.models import LedgerTriggerEvent, LoanData, LoanEmis, CardTransaction
+from rush.models import LedgerTriggerEvent
 
 
 def card_transaction_event(session: Session, user_id: int, event: LedgerTriggerEvent) -> None:
@@ -66,3 +68,43 @@ def bill_close_event(session: Session, user_id: int, event: LedgerTriggerEvent) 
     # interest_amount_per_month = unbilled_balance * interest_monthly / 100
     # total_interest = interest_amount_per_month * bill_tenure
     # total_bill_amount = unbilled_balance + total_interest
+
+
+def payment_received_event(session: Session, user_id: int, event: LedgerTriggerEvent) -> None:
+    payment_received = event.amount
+
+    def adjust_dues(payment_to_adjust_from: Decimal, from_str: str, to_str: str) -> Decimal:
+        if payment_to_adjust_from <= 0:
+            return payment_to_adjust_from
+        from_book, book_balance = get_account_balance_from_str(session, book_string=from_str)
+        if book_balance > 0:
+            balance_to_adjust = min(payment_to_adjust_from, book_balance)
+            to_book = get_book_account_by_string(session, book_string=to_str)
+            create_ledger_entry(
+                session,
+                event_id=event.id,
+                from_book_id=from_book.id,
+                to_book_id=to_book.id,
+                amount=balance_to_adjust,
+            )
+            payment_to_adjust_from -= balance_to_adjust
+        return payment_to_adjust_from
+
+    remaining_amount = adjust_dues(
+        payment_received,
+        from_str=f"{user_id}/user/late_fee_due/a",
+        to_str=f"62311/lender/late_fee_received/a",
+    )
+    remaining_amount = adjust_dues(
+        remaining_amount,
+        from_str=f"{user_id}/user/interest_due/a",
+        to_str=f"62311/lender/late_fee_received/a",
+    )
+    remaining_amount = adjust_dues(
+        remaining_amount,
+        from_str=f"{user_id}/user/principal_due/a",
+        to_str=f"62311/lender/principal_received/a",
+    )
+    # Add the rest to prepayment
+    if remaining_amount > 0:
+        pass

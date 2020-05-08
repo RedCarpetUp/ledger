@@ -1,14 +1,13 @@
 from decimal import Decimal
+from typing import Tuple
 
 import sqlalchemy
-from pendulum import DateTime
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from rush.models import (
     BookAccount,
     LedgerEntry,
-    LedgerTriggerEvent,
     get_or_create,
 )
 
@@ -49,10 +48,10 @@ def get_account_balance(
     return round(Decimal(final_balance), 2)
 
 
-def get_account_balance_from_str(session: Session, book_string: str) -> Decimal:
+def get_account_balance_from_str(session: Session, book_string: str) -> Tuple[BookAccount, Decimal]:
     book_account = get_book_account_by_string(session, book_string)
     account_balance = get_account_balance(session, book_account)
-    return account_balance
+    return book_account, account_balance
 
 
 def get_book_account_by_string(session: Session, book_string) -> BookAccount:

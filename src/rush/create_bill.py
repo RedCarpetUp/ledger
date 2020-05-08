@@ -8,9 +8,9 @@ from sqlalchemy.orm import Session
 
 from rush.ledger_events import bill_close_event
 from rush.models import (
+    LedgerTriggerEvent,
     LoanData,
     UserCard,
-    LedgerTriggerEvent,
 )
 
 
