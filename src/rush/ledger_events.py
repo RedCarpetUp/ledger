@@ -11,8 +11,8 @@ from rush.models import LedgerTriggerEvent, LoanData, LoanEmis, CardTransaction
 
 def card_transaction_event(session: Session, user_id: int, event: LedgerTriggerEvent) -> None:
     amount = event.amount
-    swipe_id = event.extra_details["swipe_id"]
-    bill_id = session.query(CardTransaction.loan_id).filter_by(id=swipe_id).scalar()
+    # swipe_id = event.extra_details["swipe_id"]
+    # bill_id = session.query(CardTransaction.loan_id).filter_by(id=swipe_id).scalar()
     # Get money from lender pool account to lender limit used.
     lender_pool_account = get_book_account_by_string(
         session=session, book_string="62311/lender/pool_account/l"
@@ -28,12 +28,12 @@ def card_transaction_event(session: Session, user_id: int, event: LedgerTriggerE
         amount=amount,
     )
 
-    # Reduce user's card balance
+    # Reduce user's card balance TODO This goes in negative right now. Need to add load money event.
     user_card_balance = get_book_account_by_string(
         session, book_string=f"{user_id}/user/user_card_balance/l"
     )
     unbilled_transactions = get_book_account_by_string(
-        session, book_string=f"{bill_id}/bill/unbilled_transactions/a"
+        session, book_string=f"{user_id}/user/unbilled_transactions/a"
     )
     create_ledger_entry(
         session,

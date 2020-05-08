@@ -13,6 +13,7 @@ from rush.exceptions import *
 from rush.ledger_utils import (
     get_account_balance,
     get_book_account_by_string,
+    get_account_balance_from_str,
 )
 from rush.models import (
     BookAccount,
@@ -62,7 +63,6 @@ def test_user(session: sqlalchemy.orm.session.Session) -> None:
     session.add(u)
     session.commit()
     a = session.query(User).first()
-    print(a.id)
     u = UserPy(
         id=a.id, performed_by=123, email="sss", name="dfd", fullname="dfdf", nickname="dfdd",
     )
@@ -73,14 +73,14 @@ def test_card_swipe(session: sqlalchemy.orm.session.Session) -> None:
     session.add(uc)
     session.flush()
 
-    swipe1 = create_card_swipe(
+    create_card_swipe(
         session=session,
         user_card=uc,
         txn_time=parse_date("2020-05-01 14:23:11"),
         amount=Decimal(700),
         description="Amazon.com",
     )
-    swipe2 = create_card_swipe(
+    create_card_swipe(
         session=session,
         user_card=uc,
         txn_time=parse_date("2020-05-02 11:22:11"),
@@ -88,9 +88,13 @@ def test_card_swipe(session: sqlalchemy.orm.session.Session) -> None:
         description="Flipkart.com",
     )
     session.commit()
-    assert swipe1.loan_id == swipe2.loan_id  # Both swipes belong to same bill.
-    card_bill = session.query(LoanData).filter_by(id=swipe1.loan_id).one()
-    assert card_bill.agreement_date.date() == parse_date("2020-05-01").date()
+    unbilled_balance = get_account_balance_from_str(
+        session, f"{uc.user_id}/user/unbilled_transactions/a"
+    )
+    assert unbilled_balance == 900
+    # remaining card balance should be -900 because we've loaded it yet and it's going in negative.
+    card_balance = get_account_balance_from_str(session, f"{uc.user_id}/user/user_card_balance/l")
+    assert card_balance == -900
 
 
 def test_get_account_balance(session: sqlalchemy.orm.session.Session) -> None:
@@ -155,7 +159,7 @@ def test_slide_partial_payment_after_due_date(session: sqlalchemy.orm.session.Se
     # First Month
     # Do transaction Rs 100
     # Do transaction Rs 500
-    swipe1 = create_card_swipe(
+    create_card_swipe(
         session=session,
         user_card=uc,
         txn_time=parse_date("2020-04-06 14:23:11"),
@@ -163,7 +167,7 @@ def test_slide_partial_payment_after_due_date(session: sqlalchemy.orm.session.Se
         description="Myntra.com",
     )
 
-    swipe2 = create_card_swipe(
+    create_card_swipe(
         session=session,
         user_card=uc,
         txn_time=parse_date("2020-04-15 14:23:11"),
