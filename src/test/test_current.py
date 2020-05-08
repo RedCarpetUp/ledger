@@ -7,7 +7,7 @@ import sqlalchemy
 from alembic.command import current as alembic_current
 from pendulum import parse as parse_date  # type: ignore
 
-from rush.create_bill import close_bill
+from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import get_account_balance_from_str
 from rush.models import (
@@ -169,8 +169,8 @@ def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
     )
     assert user_card_balance == Decimal(-1000)
 
-    closing_date = parse_date("2020-05-01").date()
-    close_bill(session=session, closing_date=closing_date, user_id=a.id)
+    generate_date = parse_date("2020-05-01").date()
+    bill_generate(session=session, generate_date=generate_date, user_id=a.id)
     session.commit()
 
     _, unbilled_balance = get_account_balance_from_str(
@@ -182,6 +182,9 @@ def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
         session, book_string=f"{a.id}/user/principal_due/a"
     )
     assert principal_due == 1000
+
+    _, min_due = get_account_balance_from_str(session, book_string=f"{a.id}/user/min_due/a")
+    assert min_due == 130
 
 
 def test_payment(session: sqlalchemy.orm.session.Session) -> None:

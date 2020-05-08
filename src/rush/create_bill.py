@@ -6,7 +6,7 @@ from pendulum import (
 )
 from sqlalchemy.orm import Session
 
-from rush.ledger_events import bill_close_event
+from rush.ledger_events import bill_generate_event
 from rush.models import (
     LedgerTriggerEvent,
     LoanData,
@@ -48,7 +48,7 @@ def get_or_create_bill_for_card_swipe(
     return new_bill
 
 
-def close_bill(session: Session, closing_date: Date, user_id: int) -> None:
+def bill_generate(session: Session, generate_date: Date, user_id: int) -> None:
     # bill = (
     #     session.query(LoanData)
     #     .filter(LoanData.user_id == user_id)
@@ -56,8 +56,8 @@ def close_bill(session: Session, closing_date: Date, user_id: int) -> None:
     #     .first()
     # )  # Get the latest bill of that user.
 
-    lt = LedgerTriggerEvent(name="bill_close", post_date=closing_date)
+    lt = LedgerTriggerEvent(name="bill_generate", post_date=generate_date)
     session.add(lt)
     session.flush()
 
-    bill_close_event(session, user_id, lt)
+    bill_generate_event(session, user_id, lt)

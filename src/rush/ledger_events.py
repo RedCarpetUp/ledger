@@ -46,13 +46,12 @@ def card_transaction_event(session: Session, user_id: int, event: LedgerTriggerE
     )
 
 
-def bill_close_event(session: Session, user_id: int, event: LedgerTriggerEvent) -> None:
+def bill_generate_event(session: Session, user_id: int, event: LedgerTriggerEvent) -> None:
     # interest_monthly = 3
     # Move all unbilled book amount to principal due
-    unbilled_book = get_book_account_by_string(
+    unbilled_book, unbilled_balance = get_account_balance_from_str(
         session, book_string=f"{user_id}/user/unbilled_transactions/a"
     )
-    unbilled_balance = get_account_balance(session=session, book_account=unbilled_book)
 
     principal_due_book = get_book_account_by_string(
         session, book_string=f"{user_id}/user/principal_due/a"
@@ -63,6 +62,20 @@ def bill_close_event(session: Session, user_id: int, event: LedgerTriggerEvent) 
         from_book_id=unbilled_book.id,
         to_book_id=principal_due_book.id,
         amount=unbilled_balance,
+    )
+
+    # Also store min amount. Assuming it to be 3% interest + 10% principal.
+    min = unbilled_balance * Decimal("0.03") + unbilled_balance * Decimal("0.10")
+    min_due_cp_book = get_book_account_by_string(
+        session, book_string=f"{user_id}/user/min_due_cp/l"
+    )
+    min_due_book = get_book_account_by_string(session, book_string=f"{user_id}/user/min_due/a")
+    create_ledger_entry(
+        session,
+        event_id=event.id,
+        from_book_id=min_due_cp_book.id,
+        to_book_id=min_due_book.id,
+        amount=min,
     )
     # principal_per_month = unbilled_balance / bill_tenure
     # interest_amount_per_month = unbilled_balance * interest_monthly / 100
