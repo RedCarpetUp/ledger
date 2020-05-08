@@ -53,23 +53,25 @@ def test_card_swipe(session: Session) -> None:
     session.add(uc)
     session.flush()
 
-    create_card_swipe(
+    swipe1 = create_card_swipe(
         session=session,
         user_card=uc,
         txn_time=parse_date("2020-05-01 14:23:11"),
         amount=Decimal(700),
         description="Amazon.com",
     )
-    create_card_swipe(
+    swipe2 = create_card_swipe(
         session=session,
         user_card=uc,
         txn_time=parse_date("2020-05-02 11:22:11"),
         amount=Decimal(200),
         description="Flipkart.com",
     )
+    assert swipe1.loan_id == swipe2.loan_id
+
     session.commit()
     _, unbilled_balance = get_account_balance_from_str(
-        session, f"{uc.user_id}/user/unbilled_transactions/a"
+        session, f"{swipe1.loan_id}/bill/unbilled_transactions/a"
     )
     assert unbilled_balance == 900
     # remaining card balance should be -900 because we've loaded it yet and it's going in negative.
@@ -164,18 +166,20 @@ def test_generate_bill(session: Session) -> None:
     assert user_card_balance == Decimal(-1000)
 
     generate_date = parse_date("2020-05-01").date()
-    bill_generate(session=session, generate_date=generate_date, user_id=a.id)
+    bill = bill_generate(session=session, generate_date=generate_date, user_id=a.id)
     session.commit()
 
     _, unbilled_balance = get_account_balance_from_str(
-        session, book_string=f"{a.id}/user/unbilled_transactions/a"
+        session, book_string=f"{bill.id}/bill/unbilled_transactions/a"
     )
     assert unbilled_balance == 0
 
-    _, principal_due = get_account_balance_from_str(session, book_string=f"{a.id}/user/principal_due/a")
+    _, principal_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/principal_due/a"
+    )
     assert principal_due == 1000
 
-    _, min_due = get_account_balance_from_str(session, book_string=f"{a.id}/user/min_due/a")
+    _, min_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/min_due/a")
     assert min_due == 130
 
 
@@ -183,11 +187,15 @@ def test_payment(session: Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
     payment_date = parse_date("2020-05-03")
     amount = Decimal(120)
-    payment_received(
+    bill = payment_received(
         session=session, user_id=user.id, payment_amount=amount, payment_date=payment_date,
     )
 
     _, principal_due = get_account_balance_from_str(
-        session, book_string=f"{user.id}/user/principal_due/a"
+        session, book_string=f"{bill.id}/bill/principal_due/a"
     )
     assert principal_due == 1000 - amount
+
+
+def test_interest_accrued(session: Session) -> None:
+    user = session.query(User).filter(User.id == 99).one()

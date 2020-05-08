@@ -8,13 +8,13 @@ from rush.ledger_utils import (
     get_account_balance_from_str,
     get_book_account_by_string,
 )
-from rush.models import LedgerTriggerEvent
+from rush.models import LedgerTriggerEvent, LoanData, CardTransaction
 
 
 def card_transaction_event(session: Session, user_id: int, event: LedgerTriggerEvent) -> None:
     amount = event.amount
-    # swipe_id = event.extra_details["swipe_id"]
-    # bill_id = session.query(CardTransaction.loan_id).filter_by(id=swipe_id).scalar()
+    swipe_id = event.extra_details["swipe_id"]
+    bill_id = session.query(CardTransaction.loan_id).filter_by(id=swipe_id).scalar()
     # Get money from lender pool account to lender limit used.
     lender_pool_account = get_book_account_by_string(
         session=session, book_string="62311/lender/pool_account/l"
@@ -35,7 +35,7 @@ def card_transaction_event(session: Session, user_id: int, event: LedgerTriggerE
         session, book_string=f"{user_id}/user/user_card_balance/l"
     )
     unbilled_transactions = get_book_account_by_string(
-        session, book_string=f"{user_id}/user/unbilled_transactions/a"
+        session, book_string=f"{bill_id}/bill/unbilled_transactions/a"
     )
     create_ledger_entry(
         session,
@@ -46,15 +46,15 @@ def card_transaction_event(session: Session, user_id: int, event: LedgerTriggerE
     )
 
 
-def bill_generate_event(session: Session, user_id: int, event: LedgerTriggerEvent) -> None:
+def bill_generate_event(session: Session, bill: LoanData, event: LedgerTriggerEvent) -> None:
     # interest_monthly = 3
     # Move all unbilled book amount to principal due
     unbilled_book, unbilled_balance = get_account_balance_from_str(
-        session, book_string=f"{user_id}/user/unbilled_transactions/a"
+        session, book_string=f"{bill.id}/bill/unbilled_transactions/a"
     )
 
     principal_due_book = get_book_account_by_string(
-        session, book_string=f"{user_id}/user/principal_due/a"
+        session, book_string=f"{bill.id}/bill/principal_due/a"
     )
     create_ledger_entry(
         session,
@@ -66,8 +66,8 @@ def bill_generate_event(session: Session, user_id: int, event: LedgerTriggerEven
 
     # Also store min amount. Assuming it to be 3% interest + 10% principal.
     min = unbilled_balance * Decimal("0.03") + unbilled_balance * Decimal("0.10")
-    min_due_cp_book = get_book_account_by_string(session, book_string=f"{user_id}/user/min_due_cp/l")
-    min_due_book = get_book_account_by_string(session, book_string=f"{user_id}/user/min_due/a")
+    min_due_cp_book = get_book_account_by_string(session, book_string=f"{bill.id}/bill/min_due_cp/l")
+    min_due_book = get_book_account_by_string(session, book_string=f"{bill.id}/bill/min_due/a")
     create_ledger_entry(
         session,
         event_id=event.id,
@@ -81,7 +81,7 @@ def bill_generate_event(session: Session, user_id: int, event: LedgerTriggerEven
     # total_bill_amount = unbilled_balance + total_interest
 
 
-def payment_received_event(session: Session, user_id: int, event: LedgerTriggerEvent) -> None:
+def payment_received_event(session: Session, bill: LoanData, event: LedgerTriggerEvent) -> None:
     payment_received = event.amount
 
     def adjust_dues(payment_to_adjust_from: Decimal, from_str: str, to_str: str) -> Decimal:
@@ -103,18 +103,18 @@ def payment_received_event(session: Session, user_id: int, event: LedgerTriggerE
 
     remaining_amount = adjust_dues(
         payment_received,
-        from_str=f"{user_id}/user/late_fee_due/a",
-        to_str=f"62311/lender/late_fee_received/a",
+        from_str=f"{bill.id}/bill/late_fee_due/a",
+        to_str=f"{bill.id}/bill/late_fee_received/a",
     )
     remaining_amount = adjust_dues(
         remaining_amount,
-        from_str=f"{user_id}/user/interest_due/a",
-        to_str=f"62311/lender/late_fee_received/a",
+        from_str=f"{bill.id}/bill/interest_due/a",
+        to_str=f"{bill.id}/bill/interest_received/a",
     )
     remaining_amount = adjust_dues(
         remaining_amount,
-        from_str=f"{user_id}/user/principal_due/a",
-        to_str=f"62311/lender/principal_received/a",
+        from_str=f"{bill.id}/bill/principal_due/a",
+        to_str=f"{bill.id}/bill/principal_received/a",
     )
     # Add the rest to prepayment
     if remaining_amount > 0:

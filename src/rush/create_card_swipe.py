@@ -14,21 +14,22 @@ from rush.models import (
 
 def create_card_swipe(
     session: Session, user_card: UserCard, txn_time: DateTime, amount: Decimal, description: str
-) -> None:
-    # card_bill = get_or_create_bill_for_card_swipe(session, user_card, txn_time)
-    # swipe = CardTransaction(
-    #     loan_id=card_bill.id, txn_time=txn_time, amount=amount, description=description
-    # )
-    # session.add(swipe)
-    # session.flush()
+) -> CardTransaction:
+    card_bill = get_or_create_bill_for_card_swipe(session, user_card, txn_time)
+    swipe = CardTransaction(
+        loan_id=card_bill.id, txn_time=txn_time, amount=amount, description=description
+    )
+    session.add(swipe)
+    session.flush()
 
     lt = LedgerTriggerEvent(
         performed_by=user_card.user_id,
         name="card_transaction",
         post_date=txn_time,
         amount=amount,
-        extra_details={"description": description},
+        extra_details={"swipe_id": swipe.id},
     )
     session.add(lt)
     session.flush()  # need id. TODO Gotta use table relationships
     card_transaction_event(session, user_card.user_id, lt)
+    return swipe
