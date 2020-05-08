@@ -3,9 +3,9 @@ from decimal import Decimal
 from io import StringIO
 
 import alembic
-import sqlalchemy
 from alembic.command import current as alembic_current
 from pendulum import parse as parse_date  # type: ignore
+from sqlalchemy.orm import Session
 
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
@@ -18,7 +18,7 @@ from rush.models import (
 from rush.payments import payment_received
 
 
-def test_current(getAlembic: alembic.config.Config) -> None:
+def test_current(get_alembic: alembic.config.Config) -> None:
     """Test that the alembic current command does not erorr"""
     # Runs with no error
     # output = run_alembic_command(pg["engine"], "current", {})
@@ -26,12 +26,12 @@ def test_current(getAlembic: alembic.config.Config) -> None:
     stdout = StringIO()
     with contextlib.redirect_stdout(stdout):
         # command_func(alembic_cfg, **command_kwargs)
-        alembic_current(getAlembic, {})
+        alembic_current(get_alembic, {})
     assert stdout.getvalue() == ""
     # assert output == ""
 
 
-def test_user2(session: sqlalchemy.orm.session.Session) -> None:
+def test_user2(session: Session) -> None:
     u = User(performed_by=123, id=1, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(u)
     session.commit()
@@ -42,7 +42,7 @@ def test_user2(session: sqlalchemy.orm.session.Session) -> None:
     )
 
 
-def test_user(session: sqlalchemy.orm.session.Session) -> None:
+def test_user(session: Session) -> None:
     u = User(id=2, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(u)
     session.commit()
@@ -52,7 +52,7 @@ def test_user(session: sqlalchemy.orm.session.Session) -> None:
     )
 
 
-def test_card_swipe(session: sqlalchemy.orm.session.Session) -> None:
+def test_card_swipe(session: Session) -> None:
     uc = UserCard(user_id=2, card_activation_date=parse_date("2020-05-01"))
     session.add(uc)
     session.flush()
@@ -146,7 +146,7 @@ def test_card_swipe(session: sqlalchemy.orm.session.Session) -> None:
 #     print("test")
 
 
-def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
+def test_generate_bill(session: Session) -> None:
     a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(a)
     session.commit()
@@ -187,7 +187,7 @@ def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
     assert min_due == 130
 
 
-def test_payment(session: sqlalchemy.orm.session.Session) -> None:
+def test_payment(session: Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
     payment_date = parse_date("2020-05-03")
     amount = Decimal(120)
