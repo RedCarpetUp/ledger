@@ -161,7 +161,7 @@ def downgrade_db(postgres_server: Dict[str, str], revision: str) -> None:
 
 
 @pytest.fixture(scope="function")
-def getAlembic(pg: Dict[str, AlembicConfig]) -> Iterator[AlembicConfig]:
+def get_alembic(pg: Dict[str, AlembicConfig]) -> Iterator[AlembicConfig]:
     alembic_cfg = pg["alembic_cfg"]
     yield alembic_cfg
     print("\n----- CREATE alembic_cfg\n")

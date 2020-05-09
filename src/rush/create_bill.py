@@ -6,18 +6,16 @@ from pendulum import (
 )
 from sqlalchemy.orm import Session
 
-from rush.ledger_events import bill_close_event
+from rush.ledger_events import bill_generate_event
 from rush.models import (
+    LedgerTriggerEvent,
     LoanData,
     UserCard,
-    LedgerTriggerEvent,
 )
 
 
 def create_bill(session: Session, user_card: UserCard, new_bill_date: Date) -> LoanData:
-    new_bill = LoanData(
-        user_id=user_card.user_id, card_id=user_card.id, agreement_date=new_bill_date
-    )
+    new_bill = LoanData(user_id=user_card.user_id, card_id=user_card.id, agreement_date=new_bill_date)
     session.add(new_bill)
     session.flush()
     return new_bill
@@ -35,9 +33,7 @@ def get_or_create_bill_for_card_swipe(
     )
     if last_bill:
         last_bill_date = last_bill.agreement_date.date()
-        last_valid_statement_date = last_bill_date + timedelta(
-            days=user_card.statement_period_in_days
-        )
+        last_valid_statement_date = last_bill_date + timedelta(days=user_card.statement_period_in_days)
         does_swipe_belong_to_current_bill = txn_time.date() <= last_valid_statement_date
         if does_swipe_belong_to_current_bill:
             return last_bill
@@ -48,7 +44,7 @@ def get_or_create_bill_for_card_swipe(
     return new_bill
 
 
-def close_bill(session: Session, user_id: int) -> LoanData:
+def bill_generate(session: Session, generate_date: Date, user_id: int) -> LoanData:
     bill = (
         session.query(LoanData)
         .filter(LoanData.user_id == user_id)
@@ -56,9 +52,9 @@ def close_bill(session: Session, user_id: int) -> LoanData:
         .first()
     )  # Get the latest bill of that user.
 
-    lt = LedgerTriggerEvent(name="bill_close", post_date=bill.agreement_date)
+    lt = LedgerTriggerEvent(name="bill_generate", post_date=generate_date)
     session.add(lt)
     session.flush()
 
-    bill_close_event(session, bill, lt)
+    bill_generate_event(session, bill, lt)
     return bill

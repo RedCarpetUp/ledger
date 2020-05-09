@@ -1,12 +1,18 @@
-from dateutil.relativedelta import relativedelta
+from decimal import Decimal
+
 from sqlalchemy.orm import Session
 
 from rush.ledger_utils import (
     create_ledger_entry,
-    get_book_account_by_string,
     get_account_balance,
+    get_account_balance_from_str,
+    get_book_account_by_string,
 )
-from rush.models import LedgerTriggerEvent, LoanData, LoanEmis, CardTransaction
+from rush.models import (
+    CardTransaction,
+    LedgerTriggerEvent,
+    LoanData,
+)
 
 
 def card_transaction_event(session: Session, user_id: int, event: LedgerTriggerEvent) -> None:
@@ -28,7 +34,7 @@ def card_transaction_event(session: Session, user_id: int, event: LedgerTriggerE
         amount=amount,
     )
 
-    # Reduce user's card balance
+    # Reduce user's card balance TODO This goes in negative right now. Need to add load money event.
     user_card_balance = get_book_account_by_string(
         session, book_string=f"{user_id}/user/user_card_balance/l"
     )
@@ -44,44 +50,114 @@ def card_transaction_event(session: Session, user_id: int, event: LedgerTriggerE
     )
 
 
-def bill_close_event(session: Session, bill: LoanData, event: LedgerTriggerEvent) -> None:
-    bill_tenure = 12
-    interest_monthly = 3
-    unbilled_book = get_book_account_by_string(
+def bill_generate_event(session: Session, bill: LoanData, event: LedgerTriggerEvent) -> None:
+    # interest_monthly = 3
+    # Move all unbilled book amount to principal due
+    unbilled_book, unbilled_balance = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/unbilled_transactions/a"
     )
-    unbilled_balance = get_account_balance(session=session, book_account=unbilled_book)
-    principal_per_month = unbilled_balance / bill_tenure
-    interest_amount_per_month = unbilled_balance * interest_monthly / 100
-    total_interest = interest_amount_per_month * bill_tenure
-    total_bill_amount = unbilled_balance + total_interest
 
-    # Create schedule.
-    for schedule_count in range(bill_tenure):
-        schedule_due_date = bill.agreement_date + relativedelta(months=schedule_count)
-        schedule = LoanEmis.new(session, loan_id=bill.id, due_date=schedule_due_date)
+    principal_due_book = get_book_account_by_string(
+        session, book_string=f"{bill.id}/bill/principal_due/a"
+    )
+    create_ledger_entry(
+        session,
+        event_id=event.id,
+        from_book_id=unbilled_book.id,
+        to_book_id=principal_due_book.id,
+        amount=unbilled_balance,
+    )
 
-        principal_due_book = get_book_account_by_string(
-            session, book_string=f"{schedule.id}/emi/principal_due/a"
-        )
-        create_ledger_entry(
-            session,
-            event_id=event.id,
-            from_book_id=unbilled_book.id,
-            to_book_id=principal_due_book.id,
-            amount=principal_per_month,
-        )
+    # Also store min amount. Assuming it to be 3% interest + 10% principal.
+    min_balance = unbilled_balance * Decimal("0.03") + unbilled_balance * Decimal("0.10")
+    min_due_cp_book = get_book_account_by_string(session, book_string=f"{bill.id}/bill/min_due_cp/l")
+    min_due_book = get_book_account_by_string(session, book_string=f"{bill.id}/bill/min_due/a")
+    create_ledger_entry(
+        session,
+        event_id=event.id,
+        from_book_id=min_due_cp_book.id,
+        to_book_id=min_due_book.id,
+        amount=min_balance,
+    )
+    # principal_per_month = unbilled_balance / bill_tenure
+    # interest_amount_per_month = unbilled_balance * interest_monthly / 100
+    # total_interest = interest_amount_per_month * bill_tenure
+    # total_bill_amount = unbilled_balance + total_interest
 
-        dummy_interest = get_book_account_by_string(
-            session, book_string=f"{schedule.id}/emi/interest_due/l"
-        )
-        interest_due = get_book_account_by_string(
-            session, book_string=f"{schedule.id}/emi/interest_due/a"
-        )
-        create_ledger_entry(
-            session,
-            event_id=event.id,
-            from_book_id=dummy_interest.id,
-            to_book_id=interest_due.id,
-            amount=interest_amount_per_month,
-        )
+
+def payment_received_event(session: Session, bill: LoanData, event: LedgerTriggerEvent) -> None:
+    payment_received = event.amount
+
+    def adjust_dues(payment_to_adjust_from: Decimal, from_str: str, to_str: str) -> Decimal:
+        if payment_to_adjust_from <= 0:
+            return payment_to_adjust_from
+        from_book, book_balance = get_account_balance_from_str(session, book_string=from_str)
+        if book_balance > 0:
+            balance_to_adjust = min(payment_to_adjust_from, book_balance)
+            to_book = get_book_account_by_string(session, book_string=to_str)
+            create_ledger_entry(
+                session,
+                event_id=event.id,
+                from_book_id=from_book.id,
+                to_book_id=to_book.id,
+                amount=balance_to_adjust,
+            )
+            payment_to_adjust_from -= balance_to_adjust
+        return payment_to_adjust_from
+
+    remaining_amount = adjust_dues(
+        payment_received,
+        from_str=f"{bill.id}/bill/late_fine_due/a",
+        to_str=f"{bill.id}/bill/late_fee_received/a",
+    )
+    remaining_amount = adjust_dues(
+        remaining_amount,
+        from_str=f"{bill.id}/bill/interest_due/a",
+        to_str=f"{bill.id}/bill/interest_received/a",
+    )
+    remaining_amount = adjust_dues(
+        remaining_amount,
+        from_str=f"{bill.id}/bill/principal_due/a",
+        to_str=f"{bill.id}/bill/principal_received/a",
+    )
+    # Add the rest to prepayment
+    if remaining_amount > 0:
+        pass
+
+
+def accrue_interest_event(session: Session, bill: LoanData, event: LedgerTriggerEvent) -> None:
+    _, principal_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/principal_due/a"
+    )
+    _, principal_received = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/principal_received/a"
+    )
+    # Accrue interest on entire principal. # TODO check if flat interest or reducing here.
+    total_principal_amount = principal_due + principal_received
+    interest_to_charge = total_principal_amount * Decimal("0.03")  # TODO Get interest percentage from db
+
+    interest_due_cp_book = get_book_account_by_string(
+        session, book_string=f"{bill.id}/bill/interest_due_cp/l"
+    )
+    interest_due_book = get_book_account_by_string(session, book_string=f"{bill.id}/bill/interest_due/a")
+    create_ledger_entry(
+        session,
+        event_id=event.id,
+        from_book_id=interest_due_cp_book.id,
+        to_book_id=interest_due_book.id,
+        amount=interest_to_charge,
+    )
+
+
+def accrue_late_fine_event(session: Session, bill: LoanData, event: LedgerTriggerEvent) -> None:
+    late_fine_cp_book = get_book_account_by_string(session, book_string=f"{bill.id}/bill/late_fine_cp/l")
+    late_fine_due_book = get_book_account_by_string(
+        session, book_string=f"{bill.id}/bill/late_fine_due/a"
+    )
+    create_ledger_entry(
+        session,
+        event_id=event.id,
+        from_book_id=late_fine_cp_book.id,
+        to_book_id=late_fine_due_book.id,
+        amount=Decimal(100),
+    )

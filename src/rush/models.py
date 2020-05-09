@@ -5,7 +5,6 @@ from typing import (
     Tuple,
 )
 
-import pendulum
 from pendulum import DateTime
 from pydantic.dataclasses import dataclass as py_dataclass
 from sqlalchemy import (
@@ -15,7 +14,6 @@ from sqlalchemy import (
     Column,
     Date,
     ForeignKey,
-    Index,
     Integer,
     Numeric,
     String,
@@ -23,11 +21,9 @@ from sqlalchemy import (
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session
 
+from rush.utils import get_current_ist_time
+
 Base = declarative_base()  # type: Any
-
-
-def get_current_ist_time() -> DateTime:
-    return pendulum.now("Asia/Kolkata").replace(tzinfo=None)
 
 
 class AuditMixin(Base):
@@ -74,9 +70,7 @@ class AuditMixin(Base):
         return obj
 
 
-def get_or_create(
-    session: Session, model: Any, defaults: Dict[Any, Any] = None, **kwargs: str
-) -> Any:
+def get_or_create(session: Session, model: Any, defaults: Dict[Any, Any] = None, **kwargs: str) -> Any:
     instance = session.query(model).filter_by(**kwargs).first()
     if instance:
         return instance

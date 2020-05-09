@@ -3,37 +3,31 @@ from decimal import Decimal
 from io import StringIO
 
 import alembic
-import sqlalchemy
 from alembic.command import current as alembic_current
 from pendulum import parse as parse_date  # type: ignore
+from sqlalchemy.orm import Session
 
-from rush.create_bill import close_bill
+from rush.accrue_financial_charges import (
+    accrue_interest,
+    accrue_late_charges,
+)
+from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
-from rush.exceptions import *
 from rush.ledger_utils import (
-    get_account_balance,
-    get_book_account_by_string,
+    get_account_balance_from_str,
+    is_bill_closed,
+    is_min_paid,
 )
 from rush.models import (
-    BookAccount,
-    LedgerTriggerEvent,
     LoanData,
-    LoanEmis,
     User,
     UserCard,
     UserPy,
-    get_current_ist_time,
-    get_or_create,
 )
-from rush.utils import (
-    create_late_fine,
-    generate_bill,
-    get_bill_amount,
-    settle_payment,
-)
+from rush.payments import payment_received
 
 
-def test_current(getAlembic: alembic.config.Config) -> None:
+def test_current(get_alembic: alembic.config.Config) -> None:
     """Test that the alembic current command does not erorr"""
     # Runs with no error
     # output = run_alembic_command(pg["engine"], "current", {})
@@ -41,34 +35,29 @@ def test_current(getAlembic: alembic.config.Config) -> None:
     stdout = StringIO()
     with contextlib.redirect_stdout(stdout):
         # command_func(alembic_cfg, **command_kwargs)
-        alembic_current(getAlembic, {})
+        alembic_current(get_alembic, {})
     assert stdout.getvalue() == ""
     # assert output == ""
 
 
-def test_user2(session: sqlalchemy.orm.session.Session) -> None:
+def test_user2(session: Session) -> None:
     u = User(performed_by=123, id=1, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(u)
     session.commit()
     a = session.query(User).first()
     print(a.id)
-    u = UserPy(
-        id=a.id, performed_by=123, email="sss", name="dfd", fullname="dfdf", nickname="dfdd",
-    )
+    u = UserPy(id=a.id, performed_by=123, email="sss", name="dfd", fullname="dfdf", nickname="dfdd",)
 
 
-def test_user(session: sqlalchemy.orm.session.Session) -> None:
+def test_user(session: Session) -> None:
     u = User(id=2, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(u)
     session.commit()
     a = session.query(User).first()
-    print(a.id)
-    u = UserPy(
-        id=a.id, performed_by=123, email="sss", name="dfd", fullname="dfdf", nickname="dfdd",
-    )
+    u = UserPy(id=a.id, performed_by=123, email="sss", name="dfd", fullname="dfdf", nickname="dfdd",)
 
 
-def test_card_swipe(session: sqlalchemy.orm.session.Session) -> None:
+def test_card_swipe(session: Session) -> None:
     uc = UserCard(user_id=2, card_activation_date=parse_date("2020-05-01"))
     session.add(uc)
     session.flush()
@@ -87,35 +76,16 @@ def test_card_swipe(session: sqlalchemy.orm.session.Session) -> None:
         amount=Decimal(200),
         description="Flipkart.com",
     )
+    assert swipe1.loan_id == swipe2.loan_id
+
     session.commit()
-    assert swipe1.loan_id == swipe2.loan_id  # Both swipes belong to same bill.
-    card_bill = session.query(LoanData).filter_by(id=swipe1.loan_id).one()
-    assert card_bill.agreement_date.date() == parse_date("2020-05-01").date()
-
-
-def test_get_account_balance(session: sqlalchemy.orm.session.Session) -> None:
-    u = User(id=4, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    session.add(u)
-    session.commit()
-
-    # assign card
-    uc = UserCard(user_id=u.id, card_activation_date=parse_date("2020-04-01"))
-    session.add(uc)
-    session.flush()
-
-    create_card_swipe(
-        session=session,
-        user_card=uc,
-        txn_time=parse_date("2020-04-01 14:23:11"),
-        amount=Decimal(200),
-        description="Jabong.com",
+    _, unbilled_balance = get_account_balance_from_str(
+        session, f"{swipe1.loan_id}/bill/unbilled_transactions/a"
     )
-
-    book_account = get_book_account_by_string(
-        session=session, book_string=f"{u.id}/user/user_card_balance/l"
-    )
-    current_balance = get_account_balance(session=session, book_account=book_account)
-    assert current_balance == Decimal(-200)
+    assert unbilled_balance == 900
+    # remaining card balance should be -900 because we've loaded it yet and it's going in negative.
+    _, card_balance = get_account_balance_from_str(session, f"{uc.user_id}/user/user_card_balance/l")
+    assert card_balance == -900
 
 
 # def test_slide_full_payment(session: sqlalchemy.orm.session.Session) -> None:
@@ -142,46 +112,46 @@ def test_get_account_balance(session: sqlalchemy.orm.session.Session) -> None:
 # pass
 
 
-def test_slide_partial_payment_after_due_date(session: sqlalchemy.orm.session.Session) -> None:
-    u = User(id=5, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    session.add(u)
-    session.commit()
+# def test_slide_partial_payment_after_due_date(session: sqlalchemy.orm.session.Session) -> None:
+#     u = User(id=5, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+#     session.add(u)
+#     session.commit()
+#
+#     # assign card
+#     uc = UserCard(user_id=u.id, card_activation_date=parse_date("2020-04-05"))
+#     session.add(uc)
+#     session.flush()
+#
+#     # First Month
+#     # Do transaction Rs 100
+#     # Do transaction Rs 500
+#     create_card_swipe(
+#         session=session,
+#         user_card=uc,
+#         txn_time=parse_date("2020-04-06 14:23:11"),
+#         amount=Decimal(100),
+#         description="Myntra.com",
+#     )
+#
+#     create_card_swipe(
+#         session=session,
+#         user_card=uc,
+#         txn_time=parse_date("2020-04-15 14:23:11"),
+#         amount=Decimal(500),
+#         description="Google Play",
+#     )
+#
+#     # Generate Bill (Feb 1)
+#
+#     # Accrue Interest (Feb 15)
+#
+#     # Add Late fee (Feb 15)
+#
+#     # Partial bill payment (Feb 16)
+#     print("test")
 
-    # assign card
-    uc = UserCard(user_id=u.id, card_activation_date=parse_date("2020-04-05"))
-    session.add(uc)
-    session.flush()
 
-    # First Month
-    # Do transaction Rs 100
-    # Do transaction Rs 500
-    swipe1 = create_card_swipe(
-        session=session,
-        user_card=uc,
-        txn_time=parse_date("2020-04-06 14:23:11"),
-        amount=Decimal(100),
-        description="Myntra.com",
-    )
-
-    swipe2 = create_card_swipe(
-        session=session,
-        user_card=uc,
-        txn_time=parse_date("2020-04-15 14:23:11"),
-        amount=Decimal(500),
-        description="Google Play",
-    )
-
-    # Generate Bill (Feb 1)
-
-    # Accrue Interest (Feb 15)
-
-    # Add Late fee (Feb 15)
-
-    # Partial bill payment (Feb 16)
-    print("test")
-
-
-def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
+def test_generate_bill(session: Session) -> None:
     a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(a)
     session.commit()
@@ -191,109 +161,115 @@ def test_generate_bill(session: sqlalchemy.orm.session.Session) -> None:
     session.add(uc)
     session.flush()
 
-    swipe1 = create_card_swipe(
+    create_card_swipe(
         session=session,
         user_card=uc,
         txn_time=parse_date("2020-04-08 19:23:11"),
-        amount=Decimal(100),
+        amount=Decimal(1000),
         description="BigBasket.com",
     )
 
-    user_card_balance_book = get_book_account_by_string(
+    _, user_card_balance = get_account_balance_from_str(
         session=session, book_string=f"{a.id}/user/user_card_balance/l"
     )
+    assert user_card_balance == Decimal(-1000)
 
-    user_card_balance = get_account_balance(session=session, book_account=user_card_balance_book)
-    assert user_card_balance == Decimal(-100)
+    generate_date = parse_date("2020-05-01").date()
+    bill = bill_generate(session=session, generate_date=generate_date, user_id=a.id)
+    session.commit()
 
-    bill = close_bill(session=session, user_id=a.id)
-
-    unbilled_book = get_book_account_by_string(
+    _, unbilled_balance = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/unbilled_transactions/a"
     )
-    unbilled_balance = get_account_balance(session=session, book_account=unbilled_book)
     assert unbilled_balance == 0
 
-    bill_schedules = session.query(LoanEmis).filter_by(loan_id=bill.id).all()
-    for schedule in bill_schedules:
-        principal_due_book = get_book_account_by_string(
-            session=session, book_string=f"{schedule.id}/emi/principal_due/a"
-        )
-        principal_due = get_account_balance(session=session, book_account=principal_due_book)
-        assert principal_due == Decimal("8.33")
+    _, principal_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/principal_due/a"
+    )
+    assert principal_due == 1000
 
-        interest_due_book = get_book_account_by_string(
-            session, book_string=f"{schedule.id}/emi/interest_due/a"
-        )
-        interest_due = get_account_balance(session=session, book_account=interest_due_book)
-        assert interest_due == Decimal(3)
-    # val = get_bill_amount(session, bill_date, prev_date, a)
-    # assert val == 110
+    _, min_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/min_due/a")
+    assert min_due == 130
 
 
-def test_payment(session: sqlalchemy.orm.session.Session) -> None:
+def test_payment(session: Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
-    first_bill_date = parse_date("2020-05-01")
     payment_date = parse_date("2020-05-03")
     amount = Decimal(120)
-    settle_payment(
-        session=session,
-        user=user,
-        payment_amount=amount,
-        payment_date=payment_date,
-        first_bill_date=first_bill_date,
+    bill = payment_received(
+        session=session, user_id=user.id, payment_amount=amount, payment_date=payment_date,
     )
-    principal_paid = get_or_create(
-        session=session,
-        model=BookAccount,
-        identifier=user.id,
-        book_name="user_monthly_principal_paid",
-        book_date=first_bill_date.date(),
-        account_type="asset",
-    )
-    current_balance = get_account_balance(
-        session=session, book_account=principal_paid, business_date=payment_date
-    )
-    assert current_balance == Decimal("8.33")
 
-    interest_paid = get_or_create(
-        session=session,
-        model=BookAccount,
-        identifier=user.id,
-        book_name="user_monthly_interest_paid",
-        book_date=first_bill_date.date(),
-        account_type="asset",
+    _, principal_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/principal_due/a"
     )
-    payment_date = parse_date("2020-05-04")
-    current_balance = get_account_balance(
-        session=session, book_account=interest_paid, business_date=payment_date
-    )
-    assert current_balance == Decimal(3)
+    session.commit()
+    assert principal_due == 1000 - amount
 
 
-def test_late_fine(session: sqlalchemy.orm.session.Session) -> None:
+def test_accure_late_fine(session: Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
-    first_bill_date = parse_date("2020-05-01")
-    create_late_fine(session=session, user=user, bill_date=first_bill_date, amount=Decimal(100))
-    payment_date = parse_date("2020-05-05")
-    settle_payment(
-        session=session,
-        user=user,
-        payment_amount=Decimal(100),
-        payment_date=payment_date,
-        first_bill_date=first_bill_date,
-    )
+    bill = accrue_late_charges(session, user.id)
 
-    late_fine_paid = get_or_create(
-        session=session,
-        model=BookAccount,
-        identifier=user.id,
-        book_name="user_late_fine_paid",
-        book_date=first_bill_date.date(),
-        account_type="asset",
-    )
+    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_due/a")
+    assert late_fine_due == Decimal(100)
+    session.commit()
 
-    current_balance = get_account_balance(
-        session=session, book_account=late_fine_paid, business_date=payment_date
+
+def test_is_min_paid(session: Session) -> None:
+    user = session.query(User).filter(User.id == 99).one()
+
+    bill = (
+        session.query(LoanData)
+        .filter(LoanData.user_id == user.id)
+        .order_by(LoanData.agreement_date.desc())
+        .first()
     )
-    assert current_balance == Decimal(100)
+    # Should be false because min is 130 and payment made is 120
+    is_it_paid = is_min_paid(session, bill)
+    assert is_it_paid is False
+
+    # Pay 10 more. and 100 for late fee.
+    bill = payment_received(
+        session=session,
+        user_id=user.id,
+        payment_amount=Decimal(110),
+        payment_date=parse_date("2020-05-20"),
+    )
+    is_it_paid_now = is_min_paid(session, bill)
+    assert is_it_paid_now is True
+    session.commit()
+
+
+def test_accrue_interest(session: Session) -> None:
+    user = session.query(User).filter(User.id == 99).one()
+
+    bill = accrue_interest(session, user.id)
+    _, interest_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/interest_due/a")
+    assert interest_due == 30
+    session.commit()
+
+
+def test_is_bill_paid(session: Session) -> None:
+    user = session.query(User).filter(User.id == 99).one()
+
+    bill = (
+        session.query(LoanData)
+        .filter(LoanData.user_id == user.id)
+        .order_by(LoanData.agreement_date.desc())
+        .first()
+    )
+    # Should be false because min is 130 and payment made is 120
+    is_it_paid = is_bill_closed(session, bill)
+    assert is_it_paid is False
+
+    # Need to pay 870 more to close the bill. 30 more interest.
+    remaining_principal = Decimal(900)
+    bill = payment_received(
+        session=session,
+        user_id=user.id,
+        payment_amount=remaining_principal,
+        payment_date=parse_date("2020-05-05"),
+    )
+    is_it_paid_now = is_bill_closed(session, bill)
+    assert is_it_paid_now is True
