@@ -107,7 +107,7 @@ def payment_received_event(session: Session, bill: LoanData, event: LedgerTrigge
 
     remaining_amount = adjust_dues(
         payment_received,
-        from_str=f"{bill.id}/bill/late_fee_due/a",
+        from_str=f"{bill.id}/bill/late_fine_due/a",
         to_str=f"{bill.id}/bill/late_fee_received/a",
     )
     remaining_amount = adjust_dues(
@@ -150,4 +150,14 @@ def accrue_interest_event(session: Session, bill: LoanData, event: LedgerTrigger
 
 
 def accrue_late_fine_event(session: Session, bill: LoanData, event: LedgerTriggerEvent) -> None:
-    pass
+    late_fine_cp_book = get_book_account_by_string(session, book_string=f"{bill.id}/bill/late_fine_cp/l")
+    late_fine_due_book = get_book_account_by_string(
+        session, book_string=f"{bill.id}/bill/late_fine_due/a"
+    )
+    create_ledger_entry(
+        session,
+        event_id=event.id,
+        from_book_id=late_fine_cp_book.id,
+        to_book_id=late_fine_due_book.id,
+        amount=Decimal(100),
+    )

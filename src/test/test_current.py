@@ -7,7 +7,10 @@ from alembic.command import current as alembic_current
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
-from rush.accrue_financial_charges import accrue_interest
+from rush.accrue_financial_charges import (
+    accrue_interest,
+    accrue_late_charges,
+)
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import (
@@ -204,6 +207,15 @@ def test_payment(session: Session) -> None:
     assert principal_due == 1000 - amount
 
 
+def test_accure_late_fine(session: Session) -> None:
+    user = session.query(User).filter(User.id == 99).one()
+    bill = accrue_late_charges(session, user.id)
+
+    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_due/a")
+    assert late_fine_due == Decimal(100)
+    session.commit()
+
+
 def test_is_min_paid(session: Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
 
@@ -217,12 +229,12 @@ def test_is_min_paid(session: Session) -> None:
     is_it_paid = is_min_paid(session, bill)
     assert is_it_paid is False
 
-    # Pay 10 more.
+    # Pay 10 more. and 100 for late fee.
     bill = payment_received(
         session=session,
         user_id=user.id,
-        payment_amount=Decimal(10),
-        payment_date=parse_date("2020-05-05"),
+        payment_amount=Decimal(110),
+        payment_date=parse_date("2020-05-20"),
     )
     is_it_paid_now = is_min_paid(session, bill)
     assert is_it_paid_now is True
