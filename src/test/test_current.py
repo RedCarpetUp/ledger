@@ -11,6 +11,7 @@ from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import (
     get_account_balance_from_str,
+    is_bill_closed,
     is_min_paid,
 )
 from rush.models import (
@@ -217,7 +218,36 @@ def test_is_min_paid(session: Session) -> None:
 
     # Pay 10 more.
     bill = payment_received(
-        session=session, user_id=user.id, payment_amount=10, payment_date=parse_date("2020-05-05"),
+        session=session,
+        user_id=user.id,
+        payment_amount=Decimal(10),
+        payment_date=parse_date("2020-05-05"),
     )
     is_it_paid_now = is_min_paid(session, bill)
+    assert is_it_paid_now is True
+    session.commit()
+
+
+def test_is_bill_paid(session: Session) -> None:
+    user = session.query(User).filter(User.id == 99).one()
+
+    bill = (
+        session.query(LoanData)
+        .filter(LoanData.user_id == user.id)
+        .order_by(LoanData.agreement_date.desc())
+        .first()
+    )
+    # Should be false because min is 130 and payment made is 120
+    is_it_paid = is_bill_closed(session, bill)
+    assert is_it_paid is False
+
+    # Need to pay 870 more to close the bill.
+    remaining_principal = Decimal(870)
+    bill = payment_received(
+        session=session,
+        user_id=user.id,
+        payment_amount=remaining_principal,
+        payment_date=parse_date("2020-05-05"),
+    )
+    is_it_paid_now = is_bill_closed(session, bill)
     assert is_it_paid_now is True

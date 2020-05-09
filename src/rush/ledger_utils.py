@@ -76,3 +76,25 @@ def is_min_paid(session: Session, bill: LoanData) -> bool:
     )
 
     return interest_received + principal_received >= min_due
+
+
+def is_bill_closed(session: Session, bill: LoanData) -> bool:
+    # Check if principal is paid. If not, return false.
+    _, principal_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/principal_due/a"
+    )
+    if principal_due != 0:
+        return False
+
+    # Check if interest is paid. If not, return false.
+    _, interest_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/interest_due/a")
+    if interest_due != 0:
+        return False
+
+    # Check if late fine is paid. If not, return false.
+    _, late_fine_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/late_fine_due/a"
+    )
+    if late_fine_due != 0:
+        return False
+    return True
