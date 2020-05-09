@@ -69,7 +69,7 @@ def bill_generate_event(session: Session, bill: LoanData, event: LedgerTriggerEv
     )
 
     # Also store min amount. Assuming it to be 3% interest + 10% principal.
-    min = unbilled_balance * Decimal("0.03") + unbilled_balance * Decimal("0.10")
+    min_balance = unbilled_balance * Decimal("0.03") + unbilled_balance * Decimal("0.10")
     min_due_cp_book = get_book_account_by_string(session, book_string=f"{bill.id}/bill/min_due_cp/l")
     min_due_book = get_book_account_by_string(session, book_string=f"{bill.id}/bill/min_due/a")
     create_ledger_entry(
@@ -77,7 +77,7 @@ def bill_generate_event(session: Session, bill: LoanData, event: LedgerTriggerEv
         event_id=event.id,
         from_book_id=min_due_cp_book.id,
         to_book_id=min_due_book.id,
-        amount=min,
+        amount=min_balance,
     )
     # principal_per_month = unbilled_balance / bill_tenure
     # interest_amount_per_month = unbilled_balance * interest_monthly / 100
@@ -123,3 +123,31 @@ def payment_received_event(session: Session, bill: LoanData, event: LedgerTrigge
     # Add the rest to prepayment
     if remaining_amount > 0:
         pass
+
+
+def accrue_interest_event(session: Session, bill: LoanData, event: LedgerTriggerEvent) -> None:
+    _, principal_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/principal_due/a"
+    )
+    _, principal_received = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/principal_received/a"
+    )
+    # Accrue interest on entire principal. # TODO check if flat interest or reducing here.
+    total_principal_amount = principal_due + principal_received
+    interest_to_charge = total_principal_amount * Decimal("0.03")  # TODO Get interest percentage from db
+
+    interest_due_cp_book = get_book_account_by_string(
+        session, book_string=f"{bill.id}/bill/interest_due_cp/l"
+    )
+    interest_due_book = get_book_account_by_string(session, book_string=f"{bill.id}/bill/interest_due/a")
+    create_ledger_entry(
+        session,
+        event_id=event.id,
+        from_book_id=interest_due_cp_book.id,
+        to_book_id=interest_due_book.id,
+        amount=interest_to_charge,
+    )
+
+
+def accrue_late_fine_event(session: Session, bill: LoanData, event: LedgerTriggerEvent) -> None:
+    pass

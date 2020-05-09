@@ -7,6 +7,7 @@ from alembic.command import current as alembic_current
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
+from rush.accrue_financial_charges import accrue_interest
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import (
@@ -228,6 +229,15 @@ def test_is_min_paid(session: Session) -> None:
     session.commit()
 
 
+def test_accrue_interest(session: Session) -> None:
+    user = session.query(User).filter(User.id == 99).one()
+
+    bill = accrue_interest(session, user.id)
+    _, interest_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/interest_due/a")
+    assert interest_due == 30
+    session.commit()
+
+
 def test_is_bill_paid(session: Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
 
@@ -241,8 +251,8 @@ def test_is_bill_paid(session: Session) -> None:
     is_it_paid = is_bill_closed(session, bill)
     assert is_it_paid is False
 
-    # Need to pay 870 more to close the bill.
-    remaining_principal = Decimal(870)
+    # Need to pay 870 more to close the bill. 30 more interest.
+    remaining_principal = Decimal(900)
     bill = payment_received(
         session=session,
         user_id=user.id,
