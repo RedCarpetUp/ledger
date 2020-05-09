@@ -214,3 +214,10 @@ def test_is_min_paid(session: Session) -> None:
     # Should be false because min is 130 and payment made is 120
     is_it_paid = is_min_paid(session, bill)
     assert is_it_paid is False
+
+    # Pay 10 more.
+    bill = payment_received(
+        session=session, user_id=user.id, payment_amount=10, payment_date=parse_date("2020-05-05"),
+    )
+    is_it_paid_now = is_min_paid(session, bill)
+    assert is_it_paid_now is True
