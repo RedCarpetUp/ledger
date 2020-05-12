@@ -232,3 +232,54 @@ def test_is_bill_paid_bill_1(session: Session) -> None:
     )
     is_it_paid_now = is_bill_closed(session, bill)
     assert is_it_paid_now is True
+
+
+def _generate_bill_2(session: Session) -> None:
+    user = session.query(User).filter(User.id == 99).one()
+    uc = session.query(UserCard).filter_by(user_id=user.id).one()
+
+    previous_bill = (  # new bill isn't generated yet so get latest.
+        session.query(LoanData)
+        .filter(LoanData.user_id == user.id)
+        .order_by(LoanData.agreement_date.desc())
+        .first()
+    )
+    assert is_bill_closed(session, previous_bill) is False  # Bill shouldn't be closed.
+
+    # Do transaction to create new bill.
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-08 19:23:11"),
+        amount=Decimal(2000),
+        description="BigBasket.com",
+    )
+
+    _, user_card_balance = get_account_balance_from_str(
+        session=session, book_string=f"{user.id}/user/user_card_balance/l"
+    )
+    assert user_card_balance == Decimal(-3000)
+
+    generate_date = parse_date("2020-06-01").date()
+    bill = bill_generate(session=session, generate_date=generate_date, user_id=user.id)
+    _, opening_balance = get_account_balance_from_str(
+        session=session, book_string=f"{bill.id}/bill/opening_balance/a"
+    )
+    assert opening_balance == Decimal(900)
+
+    _, principal_due = get_account_balance_from_str(
+        session=session, book_string=f"{bill.id}/bill/principal_due/a"
+    )
+    assert principal_due == Decimal(2900)
+
+    _, min_due = get_account_balance_from_str(session=session, book_string=f"{bill.id}/bill/min_due/a")
+    assert min_due == Decimal(377)
+
+
+def test_generate_bill_2(session: Session) -> None:
+    test_generate_bill_1(session)
+    _partial_payment_bill_1(session)
+    _accrue_late_fine_bill_1(session)
+    _pay_minimum_amount_bill_1(session)
+    _accrue_interest_bill_1(session)
+    _generate_bill_2(session)

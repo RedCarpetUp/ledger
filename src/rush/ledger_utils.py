@@ -25,7 +25,6 @@ def create_ledger_entry(
 
 
 def get_account_balance(session: sqlalchemy.orm.session.Session, book_account: BookAccount,) -> Decimal:
-
     debit_balance = (
         session.query(func.sum(LedgerEntry.amount))
         .filter(LedgerEntry.from_book_account == book_account.id,)
@@ -98,3 +97,22 @@ def is_bill_closed(session: Session, bill: LoanData) -> bool:
     if late_fine_due != 0:
         return False
     return True
+
+
+def get_remaining_bill_balance(session: Session, bill: LoanData) -> dict:
+    _, opening_balance = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/principal_due/a"
+    )
+    _, principal_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/principal_due/a"
+    )
+    _, interest_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/interest_due/a")
+    _, late_fine_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/late_fine_due/a"
+    )
+    return {
+        "total_due": principal_due + interest_due + late_fine_due,
+        "principal_due": principal_due,
+        "interest_due": interest_due,
+        "late_fine": late_fine_due,
+    }
