@@ -1,7 +1,8 @@
 from decimal import Decimal
-from typing import Tuple
+from typing import Tuple, Optional
 
 import sqlalchemy
+from pendulum import DateTime
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -10,6 +11,7 @@ from rush.models import (
     LedgerEntry,
     LoanData,
     get_or_create,
+    LedgerTriggerEvent,
 )
 
 
@@ -24,28 +26,36 @@ def create_ledger_entry(
     return entry
 
 
-def get_account_balance(session: sqlalchemy.orm.session.Session, book_account: BookAccount,) -> Decimal:
-    debit_balance = (
-        session.query(func.sum(LedgerEntry.amount))
-        .filter(LedgerEntry.from_book_account == book_account.id,)
-        .scalar()
-        or 0
+def get_account_balance(
+    session: sqlalchemy.orm.session.Session, book_account: BookAccount, to_date: Optional[DateTime]
+) -> Decimal:
+    debit_balance = session.query(func.sum(LedgerEntry.amount)).filter(
+        LedgerEntry.from_book_account == book_account.id,
     )
+    if to_date:
+        debit_balance = debit_balance.filter(
+            LedgerEntry.event_id == LedgerTriggerEvent.id, LedgerTriggerEvent.post_date < to_date,
+        )
+    debit_balance = debit_balance.scalar() or 0
 
-    credit_balance = (
-        session.query(func.sum(LedgerEntry.amount))
-        .filter(LedgerEntry.to_book_account == book_account.id,)
-        .scalar()
-        or 0
+    credit_balance = session.query(func.sum(LedgerEntry.amount)).filter(
+        LedgerEntry.to_book_account == book_account.id,
     )
-    final_balance = round(credit_balance - debit_balance, 2)
+    if to_date:
+        credit_balance = credit_balance.filter(
+            LedgerEntry.event_id == LedgerTriggerEvent.id, LedgerTriggerEvent.post_date < to_date,
+        )
+    credit_balance = credit_balance.scalar() or 0
+    final_balance = credit_balance - debit_balance
 
-    return round(Decimal(final_balance), 2)
+    return final_balance
 
 
-def get_account_balance_from_str(session: Session, book_string: str) -> Tuple[BookAccount, Decimal]:
+def get_account_balance_from_str(
+    session: Session, book_string: str, to_date: Optional[DateTime] = None
+) -> Tuple[BookAccount, Decimal]:
     book_account = get_book_account_by_string(session, book_string)
-    account_balance = get_account_balance(session, book_account)
+    account_balance = get_account_balance(session, book_account, to_date=to_date)
     return book_account, account_balance
 
 
@@ -65,34 +75,38 @@ def get_book_account_by_string(session: Session, book_string) -> BookAccount:
     return book_account
 
 
-def is_min_paid(session: Session, bill: LoanData) -> bool:
-    _, min_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/min_due/a")
+def is_min_paid(session: Session, bill: LoanData, to_date: Optional[DateTime] = None) -> bool:
+    _, min_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/min_due/a", to_date=to_date
+    )
     _, interest_received = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/interest_received/a"
+        session, book_string=f"{bill.id}/bill/interest_received/a", to_date=to_date
     )
     _, principal_received = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/principal_received/a"
+        session, book_string=f"{bill.id}/bill/principal_received/a", to_date=to_date
     )
 
     return interest_received + principal_received >= min_due
 
 
-def is_bill_closed(session: Session, bill: LoanData) -> bool:
+def is_bill_closed(session: Session, bill: LoanData, to_date: Optional[DateTime] = None) -> bool:
     # Check if principal is paid. If not, return false.
     _, principal_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/principal_due/a"
+        session, book_string=f"{bill.id}/bill/principal_due/a", to_date=to_date
     )
     if principal_due != 0:
         return False
 
     # Check if interest is paid. If not, return false.
-    _, interest_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/interest_due/a")
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/interest_due/a", to_date=to_date
+    )
     if interest_due != 0:
         return False
 
     # Check if late fine is paid. If not, return false.
     _, late_fine_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/late_fine_due/a"
+        session, book_string=f"{bill.id}/bill/late_fine_due/a", to_date=to_date
     )
     if late_fine_due != 0:
         return False
