@@ -85,8 +85,16 @@ def is_min_paid(session: Session, bill: LoanData, to_date: Optional[DateTime] = 
     _, principal_received = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/principal_received/a", to_date=to_date
     )
+    amount_received = interest_received + principal_received
 
-    return interest_received + principal_received >= min_due
+    # Consider all receivables if to_date is not null. Assuming it's being checked for anomlay.
+    # In that case the payment can be settled in any of the receivables.
+    if to_date:
+        _, late_fee_received = get_account_balance_from_str(
+            session, book_string=f"{bill.id}/bill/late_fee_received/a", to_date=to_date
+        )
+        amount_received += late_fee_received
+    return amount_received >= min_due
 
 
 def is_bill_closed(session: Session, bill: LoanData, to_date: Optional[DateTime] = None) -> bool:

@@ -213,5 +213,5 @@ def accrue_late_fine_event(session: Session, bill: LoanData, event: LedgerTrigge
         event_id=event.id,
         from_book_id=late_fine_cp_book.id,
         to_book_id=late_fine_due_book.id,
-        amount=Decimal(100),
+        amount=event.amount,
     )
