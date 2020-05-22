@@ -103,8 +103,8 @@ def reverse_late_charges_event(
         create_ledger_entry(
             session,
             event_id=lt.id,
-            from_book_id=late_fee_received_book.id,
-            to_book_id=late_fine_due_book.id,
+            debit_book_id=late_fine_due_book.id,
+            credit_book_id=late_fee_received_book.id,
             amount=lt.amount,
         )
 
@@ -116,8 +116,8 @@ def reverse_late_charges_event(
         create_ledger_entry(
             session,
             event_id=lt.id,
-            from_book_id=entry.credit_account,
-            to_book_id=entry.debit_account,
+            debit_book_id=entry.credit_account,
+            credit_book_id=entry.debit_account,
             amount=entry.amount,
         )
 

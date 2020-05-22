@@ -21,33 +21,36 @@ def card_transaction_event(session: Session, user_id: int, event: LedgerTriggerE
     amount = event.amount
     swipe_id = event.extra_details["swipe_id"]
     bill_id = session.query(CardTransaction.loan_id).filter_by(id=swipe_id).scalar()
-    # Get money from lender pool account to lender limit used.
-    lender_pool_account = get_book_account_by_string(
-        session=session, book_string="62311/lender/pool_account/l"
+    # Reduce user's card balance
+    user_card_balance_account = get_book_account_by_string(
+        session, book_string=f"{user_id}/user/card_balance/l"
     )
-    lender_limit_utilized = get_book_account_by_string(
-        session=session, book_string="62311/lender/limit_utilized/a"
+    # Add money to lender's payable account.
+    lender_payable_account = get_book_account_by_string(
+        session=session, book_string="62311/lender/payable/l"
     )
+
     create_ledger_entry(
         session,
         event_id=event.id,
-        from_book_id=lender_pool_account.id,
-        to_book_id=lender_limit_utilized.id,
+        debit_book_id=user_card_balance_account.id,
+        credit_book_id=lender_payable_account.id,
         amount=amount,
     )
 
-    # Reduce user's card balance TODO This goes in negative right now. Need to add load money event.
-    user_card_balance = get_book_account_by_string(
-        session, book_string=f"{user_id}/user/user_card_balance/l"
+    # Reduce money from lender's pool account
+    lender_pool_account = get_book_account_by_string(
+        session=session, book_string="62311/lender/pool_balance/a"
     )
+    # Add to user's unbilled account
     unbilled_transactions = get_book_account_by_string(
         session, book_string=f"{bill_id}/bill/unbilled_transactions/a"
     )
     create_ledger_entry(
         session,
         event_id=event.id,
-        from_book_id=user_card_balance.id,
-        to_book_id=unbilled_transactions.id,
+        debit_book_id=unbilled_transactions.id,
+        credit_book_id=lender_pool_account.id,
         amount=amount,
     )
 
@@ -67,8 +70,8 @@ def bill_generate_event(
     create_ledger_entry(
         session,
         event_id=event.id,
-        from_book_id=unbilled_book.id,
-        to_book_id=principal_due_book.id,
+        debit_book_id=principal_due_book.id,
+        credit_book_id=unbilled_book.id,
         amount=unbilled_balance,
     )
 
@@ -91,8 +94,8 @@ def bill_generate_event(
         create_ledger_entry(
             session,
             event_id=event.id,
-            from_book_id=opening_balance_cp_book.id,
-            to_book_id=opening_balance_book.id,
+            debit_book_id=opening_balance_book.id,
+            credit_book_id=opening_balance_cp_book.id,
             amount=opening_balance,
         )
 
@@ -100,8 +103,8 @@ def bill_generate_event(
         create_ledger_entry(
             session,
             event_id=event.id,
-            from_book_id=opening_balance_cp_book.id,
-            to_book_id=principal_due_book.id,
+            debit_book_id=principal_due_book.id,
+            credit_book_id=opening_balance_cp_book.id,
             amount=opening_balance,
         )
 
@@ -121,8 +124,8 @@ def bill_generate_event(
             create_ledger_entry(
                 session,
                 event_id=event.id,
-                from_book_id=min_due_cp_book.id,
-                to_book_id=min_due_book.id,
+                debit_book_id=min_due_book.id,
+                credit_book_id=min_due_cp_book.id,
                 amount=remaining_min,
             )
 
@@ -133,8 +136,8 @@ def bill_generate_event(
     create_ledger_entry(
         session,
         event_id=event.id,
-        from_book_id=min_due_cp_book.id,
-        to_book_id=min_due_book.id,
+        debit_book_id=min_due_book.id,
+        credit_book_id=min_due_cp_book.id,
         amount=min_balance,
     )
 
@@ -142,18 +145,18 @@ def bill_generate_event(
 def payment_received_event(session: Session, bill: LoanData, event: LedgerTriggerEvent) -> None:
     payment_received = event.amount
 
-    def adjust_dues(payment_to_adjust_from: Decimal, from_str: str, to_str: str) -> Decimal:
+    def adjust_dues(payment_to_adjust_from: Decimal, debit_str: str, credit_str: str) -> Decimal:
         if payment_to_adjust_from <= 0:
             return payment_to_adjust_from
-        from_book, book_balance = get_account_balance_from_str(session, book_string=from_str)
+        credit_book, book_balance = get_account_balance_from_str(session, book_string=credit_str)
         if book_balance > 0:
             balance_to_adjust = min(payment_to_adjust_from, book_balance)
-            to_book = get_book_account_by_string(session, book_string=to_str)
+            debit_book = get_book_account_by_string(session, book_string=debit_str)
             create_ledger_entry(
                 session,
                 event_id=event.id,
-                from_book_id=from_book.id,
-                to_book_id=to_book.id,
+                debit_book_id=debit_book.id,
+                credit_book_id=credit_book.id,
                 amount=balance_to_adjust,
             )
             payment_to_adjust_from -= balance_to_adjust
@@ -161,18 +164,18 @@ def payment_received_event(session: Session, bill: LoanData, event: LedgerTrigge
 
     remaining_amount = adjust_dues(
         payment_received,
-        from_str=f"{bill.id}/bill/late_fine_due/a",
-        to_str=f"{bill.id}/bill/late_fee_received/a",
+        debit_str=f"{bill.id}/bill/late_fee_received/a",
+        credit_str=f"{bill.id}/bill/late_fine_due/a",
     )
     remaining_amount = adjust_dues(
         remaining_amount,
-        from_str=f"{bill.id}/bill/interest_due/a",
-        to_str=f"{bill.id}/bill/interest_received/a",
+        debit_str=f"{bill.id}/bill/interest_received/a",
+        credit_str=f"{bill.id}/bill/interest_due/a",
     )
     remaining_amount = adjust_dues(
         remaining_amount,
-        from_str=f"{bill.id}/bill/principal_due/a",
-        to_str=f"{bill.id}/bill/principal_received/a",
+        debit_str=f"{bill.id}/bill/principal_received/a",
+        credit_str=f"{bill.id}/bill/principal_due/a",
     )
     # Add the rest to prepayment
     if remaining_amount > 0:
@@ -197,8 +200,8 @@ def accrue_interest_event(session: Session, bill: LoanData, event: LedgerTrigger
     create_ledger_entry(
         session,
         event_id=event.id,
-        from_book_id=interest_due_cp_book.id,
-        to_book_id=interest_due_book.id,
+        debit_book_id=interest_due_book.id,
+        credit_book_id=interest_due_cp_book.id,
         amount=interest_to_charge,
     )
 
@@ -211,7 +214,7 @@ def accrue_late_fine_event(session: Session, bill: LoanData, event: LedgerTrigge
     create_ledger_entry(
         session,
         event_id=event.id,
-        from_book_id=late_fine_cp_book.id,
-        to_book_id=late_fine_due_book.id,
+        debit_book_id=late_fine_due_book.id,
+        credit_book_id=late_fine_cp_book.id,
         amount=event.amount,
     )

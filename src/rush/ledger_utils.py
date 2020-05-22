@@ -16,10 +16,10 @@ from rush.models import (
 
 
 def create_ledger_entry(
-    session: Session, event_id: int, from_book_id: int, to_book_id: int, amount: Decimal,
+    session: Session, event_id: int, debit_book_id: int, credit_book_id: int, amount: Decimal,
 ) -> LedgerEntry:
     entry = LedgerEntry(
-        event_id=event_id, debit_account=from_book_id, credit_account=to_book_id, amount=amount,
+        event_id=event_id, debit_account=debit_book_id, credit_account=credit_book_id, amount=amount,
     )
     session.add(entry)
     session.flush()

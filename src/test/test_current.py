@@ -83,8 +83,8 @@ def test_card_swipe(session: Session) -> None:
         session, f"{swipe1.loan_id}/bill/unbilled_transactions/a"
     )
     assert unbilled_balance == 900
-    # remaining card balance should be -900 because we've loaded it yet and it's going in negative.
-    _, card_balance = get_account_balance_from_str(session, f"{uc.user_id}/user/user_card_balance/l")
+    # remaining card balance should be -900 because we've not loaded it yet and it's going in negative.
+    _, card_balance = get_account_balance_from_str(session, f"{uc.user_id}/user/card_balance/l")
     assert card_balance == -900
 
 
@@ -104,11 +104,6 @@ def test_generate_bill_1(session: Session) -> None:
         amount=Decimal(1000),
         description="BigBasket.com",
     )
-
-    _, user_card_balance = get_account_balance_from_str(
-        session=session, book_string=f"{a.id}/user/user_card_balance/l"
-    )
-    assert user_card_balance == Decimal(-1000)
 
     generate_date = parse_date("2020-05-01").date()
     bill = bill_generate(session=session, generate_date=generate_date, user_id=a.id)
@@ -272,7 +267,7 @@ def _generate_bill_2(session: Session) -> None:
     )
 
     _, user_card_balance = get_account_balance_from_str(
-        session=session, book_string=f"{user.id}/user/user_card_balance/l"
+        session=session, book_string=f"{user.id}/user/card_balance/l"
     )
     assert user_card_balance == Decimal(-3000)
 
