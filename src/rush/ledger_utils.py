@@ -19,7 +19,7 @@ def create_ledger_entry(
     session: Session, event_id: int, from_book_id: int, to_book_id: int, amount: Decimal,
 ) -> LedgerEntry:
     entry = LedgerEntry(
-        event_id=event_id, from_book_account=from_book_id, to_book_account=to_book_id, amount=amount,
+        event_id=event_id, debit_account=from_book_id, credit_account=to_book_id, amount=amount,
     )
     session.add(entry)
     session.flush()
@@ -30,7 +30,7 @@ def get_account_balance(
     session: sqlalchemy.orm.session.Session, book_account: BookAccount, to_date: Optional[DateTime]
 ) -> Decimal:
     debit_balance = session.query(func.sum(LedgerEntry.amount)).filter(
-        LedgerEntry.from_book_account == book_account.id,
+        LedgerEntry.debit_account == book_account.id,
     )
     if to_date:
         debit_balance = debit_balance.filter(
@@ -39,7 +39,7 @@ def get_account_balance(
     debit_balance = debit_balance.scalar() or 0
 
     credit_balance = session.query(func.sum(LedgerEntry.amount)).filter(
-        LedgerEntry.to_book_account == book_account.id,
+        LedgerEntry.credit_account == book_account.id,
     )
     if to_date:
         credit_balance = credit_balance.filter(

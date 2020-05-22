@@ -19,8 +19,8 @@ def get_affected_events(session: Session, book_identifier: int) -> List[LedgerTr
     event_ids = (
         session.query(LedgerEntry.event_id)
         .filter(
-            LedgerEntry.from_book_account.in_(all_book_accounts)
-            | LedgerEntry.to_book_account.in_(all_book_accounts),
+            LedgerEntry.debit_account.in_(all_book_accounts)
+            | LedgerEntry.credit_account.in_(all_book_accounts),
         )
         .subquery()
     )
