@@ -46,7 +46,11 @@ def get_account_balance(
             LedgerEntry.event_id == LedgerTriggerEvent.id, LedgerTriggerEvent.post_date < to_date,
         )
     credit_balance = credit_balance.scalar() or 0
-    final_balance = credit_balance - debit_balance
+
+    if book_account.account_type == 'a':
+        final_balance = debit_balance - credit_balance
+    elif book_account.account_type == 'l':
+        final_balance = credit_balance - debit_balance
 
     return final_balance
 
