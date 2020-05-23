@@ -12,9 +12,9 @@ from rush.ledger_events import (
 from rush.ledger_utils import (
     is_bill_closed,
     is_min_paid,
-    create_ledger_entry,
+    create_ledger_entry_from_str,
     get_account_balance_from_str,
-    get_book_account_by_string,
+    get_book_account_by_string, create_ledger_entry,
 )
 from rush.models import (
     LedgerTriggerEvent,
@@ -90,21 +90,18 @@ def reverse_late_charges_event(
     session: Session, bill: LoanData, lt: LedgerTriggerEvent, event_to_reverse: LedgerTriggerEvent
 ) -> None:
     # Move from late_receivable to desired accounts.
-    late_fee_received_book, late_fee_received = get_account_balance_from_str(
+    _, late_fee_received = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/late_fee_received/a"
     )
     late_fee_to_reverse = min(late_fee_received, event_to_reverse.amount)
-    late_fine_due_book = get_book_account_by_string(
-        session, book_string=f"{bill.id}/bill/late_fine_due/a"
-    )
     # Remove any received late fine back to due.
     lt.amount = late_fee_to_reverse  # Store the amount in event.
     if late_fee_to_reverse > 0:
-        create_ledger_entry(
+        create_ledger_entry_from_str(
             session,
             event_id=lt.id,
-            debit_book_id=late_fine_due_book.id,
-            credit_book_id=late_fee_received_book.id,
+            debit_book_str=f"{bill.id}/bill/late_fine_due/a",
+            credit_book_str=f"{bill.id}/bill/late_fee_received/a",
             amount=lt.amount,
         )
 

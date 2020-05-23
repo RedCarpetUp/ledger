@@ -14,7 +14,6 @@ from rush.models import (
     LedgerTriggerEvent,
 )
 
-
 def create_ledger_entry(
     session: Session, event_id: int, debit_book_id: int, credit_book_id: int, amount: Decimal,
 ) -> LedgerEntry:
@@ -24,6 +23,14 @@ def create_ledger_entry(
     session.add(entry)
     session.flush()
     return entry
+
+
+def create_ledger_entry_from_str(
+    session: Session, event_id: int, debit_book_str: str, credit_book_str: str, amount: Decimal,
+) -> LedgerEntry:
+    debit_account = get_book_account_by_string(session, book_string=debit_book_str)
+    credit_account = get_book_account_by_string(session, book_string=credit_book_str)
+    return create_ledger_entry(session, event_id, debit_account.id, credit_account.id, amount)
 
 
 def get_account_balance(
