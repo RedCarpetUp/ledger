@@ -1,5 +1,8 @@
 from decimal import Decimal
-from typing import Tuple, Optional
+from typing import (
+    Optional,
+    Tuple,
+)
 
 import sqlalchemy
 from pendulum import DateTime
@@ -9,10 +12,11 @@ from sqlalchemy.orm import Session
 from rush.models import (
     BookAccount,
     LedgerEntry,
+    LedgerTriggerEvent,
     LoanData,
     get_or_create,
-    LedgerTriggerEvent,
 )
+
 
 def create_ledger_entry(
     session: Session, event_id: int, debit_book_id: int, credit_book_id: int, amount: Decimal,
