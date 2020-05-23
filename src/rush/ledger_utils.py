@@ -58,9 +58,9 @@ def get_account_balance(
         )
     credit_balance = credit_balance.scalar() or 0
 
-    if book_account.account_type == 'a':
+    if book_account.account_type == "a":
         final_balance = debit_balance - credit_balance
-    elif book_account.account_type == 'l':
+    elif book_account.account_type == "l":
         final_balance = credit_balance - debit_balance
 
     return final_balance

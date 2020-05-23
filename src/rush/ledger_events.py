@@ -26,7 +26,7 @@ def card_transaction_event(session: Session, user_id: int, event: LedgerTriggerE
         session,
         event_id=event.id,
         debit_book_str=f"{user_id}/user/card_balance/l",
-        credit_book_str=f"{user_id}/user/card_balance/a", #"62311/lender/payable/l",
+        credit_book_str=f"{user_id}/user/card_balance/a",
         amount=amount,
     )
 
