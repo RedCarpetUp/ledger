@@ -87,6 +87,9 @@ def test_card_swipe(session: Session) -> None:
     _, card_balance = get_account_balance_from_str(session, f"{uc.user_id}/user/card_balance/l")
     assert card_balance == -900
 
+    _, lender_payable = get_account_balance_from_str(session, "62311/lender/lender_payable/l")
+    assert lender_payable == 900
+
 
 def test_generate_bill_1(session: Session) -> None:
     a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
