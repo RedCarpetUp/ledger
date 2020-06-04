@@ -1,5 +1,8 @@
 from decimal import Decimal
-from typing import Tuple, Optional
+from typing import (
+    Optional,
+    Tuple,
+)
 
 import sqlalchemy
 from pendulum import DateTime
@@ -9,28 +12,36 @@ from sqlalchemy.orm import Session
 from rush.models import (
     BookAccount,
     LedgerEntry,
+    LedgerTriggerEvent,
     LoanData,
     get_or_create,
-    LedgerTriggerEvent,
 )
 
 
 def create_ledger_entry(
-    session: Session, event_id: int, from_book_id: int, to_book_id: int, amount: Decimal,
+    session: Session, event_id: int, debit_book_id: int, credit_book_id: int, amount: Decimal,
 ) -> LedgerEntry:
     entry = LedgerEntry(
-        event_id=event_id, from_book_account=from_book_id, to_book_account=to_book_id, amount=amount,
+        event_id=event_id, debit_account=debit_book_id, credit_account=credit_book_id, amount=amount,
     )
     session.add(entry)
     session.flush()
     return entry
 
 
+def create_ledger_entry_from_str(
+    session: Session, event_id: int, debit_book_str: str, credit_book_str: str, amount: Decimal,
+) -> LedgerEntry:
+    debit_account = get_book_account_by_string(session, book_string=debit_book_str)
+    credit_account = get_book_account_by_string(session, book_string=credit_book_str)
+    return create_ledger_entry(session, event_id, debit_account.id, credit_account.id, amount)
+
+
 def get_account_balance(
     session: sqlalchemy.orm.session.Session, book_account: BookAccount, to_date: Optional[DateTime]
 ) -> Decimal:
     debit_balance = session.query(func.sum(LedgerEntry.amount)).filter(
-        LedgerEntry.from_book_account == book_account.id,
+        LedgerEntry.debit_account == book_account.id,
     )
     if to_date:
         debit_balance = debit_balance.filter(
@@ -39,14 +50,18 @@ def get_account_balance(
     debit_balance = debit_balance.scalar() or 0
 
     credit_balance = session.query(func.sum(LedgerEntry.amount)).filter(
-        LedgerEntry.to_book_account == book_account.id,
+        LedgerEntry.credit_account == book_account.id,
     )
     if to_date:
         credit_balance = credit_balance.filter(
             LedgerEntry.event_id == LedgerTriggerEvent.id, LedgerTriggerEvent.post_date < to_date,
         )
     credit_balance = credit_balance.scalar() or 0
-    final_balance = credit_balance - debit_balance
+
+    if book_account.account_type == "a":
+        final_balance = debit_balance - credit_balance
+    elif book_account.account_type == "l":
+        final_balance = credit_balance - debit_balance
 
     return final_balance
 

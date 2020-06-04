@@ -7,7 +7,12 @@ from rush.accrue_financial_charges import (
     accrue_late_charges_prerequisites,
     reverse_late_charges,
 )
-from rush.models import BookAccount, LedgerTriggerEvent, LedgerEntry, LoanData
+from rush.models import (
+    BookAccount,
+    LedgerEntry,
+    LedgerTriggerEvent,
+    LoanData,
+)
 
 
 def get_affected_events(session: Session, book_identifier: int) -> List[LedgerTriggerEvent]:
@@ -19,8 +24,8 @@ def get_affected_events(session: Session, book_identifier: int) -> List[LedgerTr
     event_ids = (
         session.query(LedgerEntry.event_id)
         .filter(
-            LedgerEntry.from_book_account.in_(all_book_accounts)
-            | LedgerEntry.to_book_account.in_(all_book_accounts),
+            LedgerEntry.debit_account.in_(all_book_accounts)
+            | LedgerEntry.credit_account.in_(all_book_accounts),
         )
         .subquery()
     )
