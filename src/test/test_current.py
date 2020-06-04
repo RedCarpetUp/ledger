@@ -78,7 +78,6 @@ def test_card_swipe(session: Session) -> None:
     )
     assert swipe1.loan_id == swipe2.loan_id
 
-    session.commit()
     _, unbilled_balance = get_account_balance_from_str(
         session, f"{swipe1.loan_id}/bill/unbilled_transactions/a"
     )
@@ -88,78 +87,14 @@ def test_card_swipe(session: Session) -> None:
     assert card_balance == -900
 
 
-# def test_slide_full_payment(session: sqlalchemy.orm.session.Session) -> None:
-# Jan Month
-# Do transaction Rs 100
-# Do transaction Rs 500
-
-# Generate Bill (Feb 1)
-
-# Full bill payment (Feb 2)
-# pass
-
-
-# def test_slide_partial_payment(session: sqlalchemy.orm.session.Session) -> None:
-# Jan Month
-# Do transaction Rs 100
-# Do transaction Rs 500
-
-# Generate Bill (Feb 1)
-
-# Partial bill payment (Feb 2)
-
-# Accrue Interest (Feb 15)
-# pass
-
-
-# def test_slide_partial_payment_after_due_date(session: sqlalchemy.orm.session.Session) -> None:
-#     u = User(id=5, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-#     session.add(u)
-#     session.commit()
-#
-#     # assign card
-#     uc = UserCard(user_id=u.id, card_activation_date=parse_date("2020-04-05"))
-#     session.add(uc)
-#     session.flush()
-#
-#     # First Month
-#     # Do transaction Rs 100
-#     # Do transaction Rs 500
-#     create_card_swipe(
-#         session=session,
-#         user_card=uc,
-#         txn_time=parse_date("2020-04-06 14:23:11"),
-#         amount=Decimal(100),
-#         description="Myntra.com",
-#     )
-#
-#     create_card_swipe(
-#         session=session,
-#         user_card=uc,
-#         txn_time=parse_date("2020-04-15 14:23:11"),
-#         amount=Decimal(500),
-#         description="Google Play",
-#     )
-#
-#     # Generate Bill (Feb 1)
-#
-#     # Accrue Interest (Feb 15)
-#
-#     # Add Late fee (Feb 15)
-#
-#     # Partial bill payment (Feb 16)
-#     print("test")
-
-
-def test_generate_bill(session: Session) -> None:
+def test_generate_bill_1(session: Session) -> None:
     a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(a)
-    session.commit()
 
     # assign card
     uc = UserCard(user_id=a.id, card_activation_date=parse_date("2020-04-02"))
-    session.add(uc)
     session.flush()
+    session.add(uc)
 
     create_card_swipe(
         session=session,
@@ -176,7 +111,6 @@ def test_generate_bill(session: Session) -> None:
 
     generate_date = parse_date("2020-05-01").date()
     bill = bill_generate(session=session, generate_date=generate_date, user_id=a.id)
-    session.commit()
 
     _, unbilled_balance = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/unbilled_transactions/a"
@@ -192,7 +126,7 @@ def test_generate_bill(session: Session) -> None:
     assert min_due == 130
 
 
-def test_payment(session: Session) -> None:
+def _partial_payment_bill_1(session: Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
     payment_date = parse_date("2020-05-03")
     amount = Decimal(120)
@@ -203,20 +137,29 @@ def test_payment(session: Session) -> None:
     _, principal_due = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/principal_due/a"
     )
-    session.commit()
     assert principal_due == 1000 - amount
 
 
-def test_accure_late_fine(session: Session) -> None:
+def test_partial_payment_bill_1(session: Session) -> None:
+    test_generate_bill_1(session)
+    _partial_payment_bill_1(session)
+
+
+def _accrue_late_fine_bill_1(session: Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
     bill = accrue_late_charges(session, user.id)
 
     _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_due/a")
     assert late_fine_due == Decimal(100)
-    session.commit()
 
 
-def test_is_min_paid(session: Session) -> None:
+def test_accrue_late_fine_bill_1(session: Session) -> None:
+    test_generate_bill_1(session)
+    _partial_payment_bill_1(session)  # did only partial payment so accrue late fee.
+    _accrue_late_fine_bill_1(session)
+
+
+def _pay_minimum_amount_bill_1(session: Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
 
     bill = (
@@ -226,8 +169,7 @@ def test_is_min_paid(session: Session) -> None:
         .first()
     )
     # Should be false because min is 130 and payment made is 120
-    is_it_paid = is_min_paid(session, bill)
-    assert is_it_paid is False
+    assert is_min_paid(session, bill) is False
 
     # Pay 10 more. and 100 for late fee.
     bill = payment_received(
@@ -236,21 +178,38 @@ def test_is_min_paid(session: Session) -> None:
         payment_amount=Decimal(110),
         payment_date=parse_date("2020-05-20"),
     )
-    is_it_paid_now = is_min_paid(session, bill)
-    assert is_it_paid_now is True
-    session.commit()
+    assert is_min_paid(session, bill) is True
 
 
-def test_accrue_interest(session: Session) -> None:
+def test_is_min_paid_bill_1(session: Session) -> None:
+    test_generate_bill_1(session)
+    _partial_payment_bill_1(session)
+    _accrue_late_fine_bill_1(session)  # did only partial payment so accrue late fee.
+    _pay_minimum_amount_bill_1(session)
+
+
+def _accrue_interest_bill_1(session: Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
 
     bill = accrue_interest(session, user.id)
     _, interest_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/interest_due/a")
     assert interest_due == 30
-    session.commit()
 
 
-def test_is_bill_paid(session: Session) -> None:
+def test_accrue_interest_bill_1(session: Session) -> None:
+    test_generate_bill_1(session)
+    _partial_payment_bill_1(session)
+    _pay_minimum_amount_bill_1(session)
+    _accrue_interest_bill_1(session)
+
+
+def test_is_bill_paid_bill_1(session: Session) -> None:
+    test_generate_bill_1(session)
+    _partial_payment_bill_1(session)
+    _accrue_late_fine_bill_1(session)
+    _pay_minimum_amount_bill_1(session)
+    _accrue_interest_bill_1(session)
+
     user = session.query(User).filter(User.id == 99).one()
 
     bill = (
@@ -273,3 +232,54 @@ def test_is_bill_paid(session: Session) -> None:
     )
     is_it_paid_now = is_bill_closed(session, bill)
     assert is_it_paid_now is True
+
+
+def _generate_bill_2(session: Session) -> None:
+    user = session.query(User).filter(User.id == 99).one()
+    uc = session.query(UserCard).filter_by(user_id=user.id).one()
+
+    previous_bill = (  # new bill isn't generated yet so get latest.
+        session.query(LoanData)
+        .filter(LoanData.user_id == user.id)
+        .order_by(LoanData.agreement_date.desc())
+        .first()
+    )
+    assert is_bill_closed(session, previous_bill) is False  # Bill shouldn't be closed.
+
+    # Do transaction to create new bill.
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-08 19:23:11"),
+        amount=Decimal(2000),
+        description="BigBasket.com",
+    )
+
+    _, user_card_balance = get_account_balance_from_str(
+        session=session, book_string=f"{user.id}/user/user_card_balance/l"
+    )
+    assert user_card_balance == Decimal(-3000)
+
+    generate_date = parse_date("2020-06-01").date()
+    bill = bill_generate(session=session, generate_date=generate_date, user_id=user.id)
+    _, opening_balance = get_account_balance_from_str(
+        session=session, book_string=f"{bill.id}/bill/opening_balance/a"
+    )
+    assert opening_balance == Decimal(900)
+
+    _, principal_due = get_account_balance_from_str(
+        session=session, book_string=f"{bill.id}/bill/principal_due/a"
+    )
+    assert principal_due == Decimal(2900)
+
+    _, min_due = get_account_balance_from_str(session=session, book_string=f"{bill.id}/bill/min_due/a")
+    assert min_due == Decimal(377)
+
+
+def test_generate_bill_2(session: Session) -> None:
+    test_generate_bill_1(session)
+    _partial_payment_bill_1(session)
+    _accrue_late_fine_bill_1(session)
+    _pay_minimum_amount_bill_1(session)
+    _accrue_interest_bill_1(session)
+    _generate_bill_2(session)

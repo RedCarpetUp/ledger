@@ -7,6 +7,8 @@ from rush.ledger_utils import (
     get_account_balance,
     get_account_balance_from_str,
     get_book_account_by_string,
+    get_remaining_bill_balance,
+    is_min_paid,
 )
 from rush.models import (
     CardTransaction,
@@ -50,15 +52,17 @@ def card_transaction_event(session: Session, user_id: int, event: LedgerTriggerE
     )
 
 
-def bill_generate_event(session: Session, bill: LoanData, event: LedgerTriggerEvent) -> None:
+def bill_generate_event(
+    session: Session, previous_bill: LoanData, new_bill: LoanData, event: LedgerTriggerEvent
+) -> None:
     # interest_monthly = 3
     # Move all unbilled book amount to principal due
     unbilled_book, unbilled_balance = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/unbilled_transactions/a"
+        session, book_string=f"{new_bill.id}/bill/unbilled_transactions/a"
     )
 
     principal_due_book = get_book_account_by_string(
-        session, book_string=f"{bill.id}/bill/principal_due/a"
+        session, book_string=f"{new_bill.id}/bill/principal_due/a"
     )
     create_ledger_entry(
         session,
@@ -69,9 +73,63 @@ def bill_generate_event(session: Session, bill: LoanData, event: LedgerTriggerEv
     )
 
     # Also store min amount. Assuming it to be 3% interest + 10% principal.
-    min_balance = unbilled_balance * Decimal("0.03") + unbilled_balance * Decimal("0.10")
-    min_due_cp_book = get_book_account_by_string(session, book_string=f"{bill.id}/bill/min_due_cp/l")
-    min_due_book = get_book_account_by_string(session, book_string=f"{bill.id}/bill/min_due/a")
+    min_due_cp_book = get_book_account_by_string(session, book_string=f"{new_bill.id}/bill/min_due_cp/l")
+    min_due_book = get_book_account_by_string(session, book_string=f"{new_bill.id}/bill/min_due/a")
+
+    # check if there is any previous balance remaining.
+    if previous_bill:
+        # TODO should late fee from previous bill come under this month's opening balance or in late fee?
+        opening_balance = get_remaining_bill_balance(session, previous_bill)["total_due"]
+
+        opening_balance_cp_book = get_book_account_by_string(
+            session, book_string=f"{new_bill.id}/bill/opening_balance_cp/l"
+        )
+        opening_balance_book = get_book_account_by_string(
+            session, book_string=f"{new_bill.id}/bill/opening_balance/a"
+        )
+
+        create_ledger_entry(
+            session,
+            event_id=event.id,
+            from_book_id=opening_balance_cp_book.id,
+            to_book_id=opening_balance_book.id,
+            amount=opening_balance,
+        )
+
+        # Add opening balance to principal book as well.
+        create_ledger_entry(
+            session,
+            event_id=event.id,
+            from_book_id=opening_balance_cp_book.id,
+            to_book_id=principal_due_book.id,
+            amount=opening_balance,
+        )
+
+        # Check if previous bill's min was paid or not. If not, add remaining to this month's min.
+        _, min_due = get_account_balance_from_str(
+            session, book_string=f"{previous_bill.id}/bill/min_due/a"
+        )
+        _, interest_received = get_account_balance_from_str(
+            session, book_string=f"{previous_bill.id}/bill/interest_received/a"
+        )
+        _, principal_received = get_account_balance_from_str(
+            session, book_string=f"{previous_bill.id}/bill/principal_received/a"
+        )
+        remaining_min = min_due - (interest_received + principal_received)
+
+        if remaining_min > 0:
+            create_ledger_entry(
+                session,
+                event_id=event.id,
+                from_book_id=min_due_cp_book.id,
+                to_book_id=min_due_book.id,
+                amount=remaining_min,
+            )
+
+    _, principal_due = get_account_balance_from_str(
+        session=session, book_string=f"{new_bill.id}/bill/principal_due/a"
+    )
+    min_balance = principal_due * Decimal("0.03") + principal_due * Decimal("0.10")
     create_ledger_entry(
         session,
         event_id=event.id,
@@ -79,10 +137,6 @@ def bill_generate_event(session: Session, bill: LoanData, event: LedgerTriggerEv
         to_book_id=min_due_book.id,
         amount=min_balance,
     )
-    # principal_per_month = unbilled_balance / bill_tenure
-    # interest_amount_per_month = unbilled_balance * interest_monthly / 100
-    # total_interest = interest_amount_per_month * bill_tenure
-    # total_bill_amount = unbilled_balance + total_interest
 
 
 def payment_received_event(session: Session, bill: LoanData, event: LedgerTriggerEvent) -> None:
