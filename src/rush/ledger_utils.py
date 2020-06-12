@@ -1,11 +1,20 @@
 from decimal import Decimal
-from typing import Tuple, List
+from typing import (
+    List,
+    Tuple,
+)
 
 import sqlalchemy
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from rush.models import BookAccount, LedgerEntry, LoanData, get_or_create, User
+from rush.models import (
+    BookAccount,
+    LedgerEntry,
+    LoanData,
+    User,
+    get_or_create,
+)
 
 
 def create_ledger_entry(
