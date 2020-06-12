@@ -15,6 +15,7 @@ from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import (
     get_account_balance_from_str,
+    get_all_unpaid_bills,
     is_bill_closed,
     is_min_paid,
 )
@@ -155,7 +156,8 @@ def _accrue_late_fine_bill_1(session: Session) -> None:
 
 def test_accrue_late_fine_bill_1(session: Session) -> None:
     test_generate_bill_1(session)
-    _partial_payment_bill_1(session)  # did only partial payment so accrue late fee.
+    # did only partial payment so accrue late fee.
+    _partial_payment_bill_1(session)
     _accrue_late_fine_bill_1(session)
 
 
@@ -184,7 +186,8 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
 def test_is_min_paid_bill_1(session: Session) -> None:
     test_generate_bill_1(session)
     _partial_payment_bill_1(session)
-    _accrue_late_fine_bill_1(session)  # did only partial payment so accrue late fee.
+    # did only partial payment so accrue late fee.
+    _accrue_late_fine_bill_1(session)
     _pay_minimum_amount_bill_1(session)
 
 
@@ -244,7 +247,8 @@ def _generate_bill_2(session: Session) -> None:
         .order_by(LoanData.agreement_date.desc())
         .first()
     )
-    assert is_bill_closed(session, previous_bill) is False  # Bill shouldn't be closed.
+    # Bill shouldn't be closed.
+    assert is_bill_closed(session, previous_bill) is False
 
     # Do transaction to create new bill.
     create_card_swipe(
@@ -283,3 +287,6 @@ def test_generate_bill_2(session: Session) -> None:
     _pay_minimum_amount_bill_1(session)
     _accrue_interest_bill_1(session)
     _generate_bill_2(session)
+    user = session.query(User).filter(User.id == 99).one()
+    unpaid_bills = get_all_unpaid_bills(session, user)
+    assert len(unpaid_bills) == 2

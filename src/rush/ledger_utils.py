@@ -1,16 +1,11 @@
 from decimal import Decimal
-from typing import Tuple
+from typing import Tuple, List
 
 import sqlalchemy
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from rush.models import (
-    BookAccount,
-    LedgerEntry,
-    LoanData,
-    get_or_create,
-)
+from rush.models import BookAccount, LedgerEntry, LoanData, get_or_create, User
 
 
 def create_ledger_entry(
@@ -66,7 +61,8 @@ def get_book_account_by_string(session: Session, book_string) -> BookAccount:
 
 
 def is_min_paid(session: Session, bill: LoanData) -> bool:
-    _, min_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/min_due/a")
+    _, min_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/min_due/a")
     _, interest_received = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/interest_received/a"
     )
@@ -86,7 +82,8 @@ def is_bill_closed(session: Session, bill: LoanData) -> bool:
         return False
 
     # Check if interest is paid. If not, return false.
-    _, interest_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/interest_due/a")
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/interest_due/a")
     if interest_due != 0:
         return False
 
@@ -106,7 +103,8 @@ def get_remaining_bill_balance(session: Session, bill: LoanData) -> dict:
     _, principal_due = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/principal_due/a"
     )
-    _, interest_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/interest_due/a")
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/interest_due/a")
     _, late_fine_due = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/late_fine_due/a"
     )
@@ -116,3 +114,21 @@ def get_remaining_bill_balance(session: Session, bill: LoanData) -> dict:
         "interest_due": interest_due,
         "late_fine": late_fine_due,
     }
+
+
+def get_all_unpaid_bills(session: Session, user: User) -> List[LoanData]:
+    # unpaid_bills = []
+    unpaid_bills = list(
+        session.query(LoanData)
+        .join(BookAccount, LoanData.id == BookAccount.identifier)
+        .filter(LoanData.user_id == user.id)
+        .all()
+    )
+    # for bill in all_bills:
+    #     _, principal_due = get_account_balance_from_str(
+    #         session, book_string=f"{bill.id}/bill/principal_due/a"
+    #     )
+    #     if principal_due > 0:
+    #         unpaid_bills.append(principal_due)
+
+    return unpaid_bills
