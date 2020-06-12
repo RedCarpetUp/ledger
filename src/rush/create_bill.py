@@ -1,4 +1,5 @@
 from datetime import timedelta
+from decimal import Decimal
 
 from pendulum import (
     Date,
@@ -14,8 +15,20 @@ from rush.models import (
 )
 
 
-def create_bill(session: Session, user_card: UserCard, new_bill_date: Date) -> LoanData:
-    new_bill = LoanData(user_id=user_card.user_id, card_id=user_card.id, agreement_date=new_bill_date)
+def create_bill(
+    session: Session,
+    user_card: UserCard,
+    new_bill_date: Date,
+    rc_rate_of_interest_annual: Decimal,
+    lender_rate_of_interest_annual: Decimal,
+) -> LoanData:
+    new_bill = LoanData(
+        user_id=user_card.user_id,
+        card_id=user_card.id,
+        agreement_date=new_bill_date,
+        rc_rate_of_interest_annual=rc_rate_of_interest_annual,
+        lender_rate_of_interest_annual=lender_rate_of_interest_annual,
+    )
     session.add(new_bill)
     session.flush()
     return new_bill
@@ -40,7 +53,7 @@ def get_or_create_bill_for_card_swipe(
         new_bill_date = last_valid_statement_date + timedelta(days=1)
     else:
         new_bill_date = user_card.card_activation_date
-    new_bill = create_bill(session, user_card, new_bill_date)
+    new_bill = create_bill(session, user_card, new_bill_date, 36, 18)
     return new_bill
 
 

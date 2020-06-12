@@ -166,6 +166,8 @@ class LoanData(AuditMixin):
     user_id = Column(Integer, ForeignKey(User.id))
     agreement_date = Column(TIMESTAMP, nullable=False)
     card_id = Column(Integer, ForeignKey(UserCard.id))
+    rc_rate_of_interest_annual = Column(Numeric, nullable=False)
+    lender_rate_of_interest_annual = Column(Numeric, nullable=False)
 
 
 @py_dataclass
