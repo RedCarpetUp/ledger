@@ -140,19 +140,19 @@ def get_all_unpaid_bills(session: Session, user: User) -> List[LoanData]:
     return unpaid_bills
 
 
-def get_interest_for_each_bill(session: Session, unpaid_bills: LoanData) -> Decimal:
-    interest_to_charge = []
-    for bill in unpaid_bills:
-        _, principal_due = get_account_balance_from_str(
-            session, book_string=f"{bill.id}/bill/principal_due/a"
-        )
-        if principal_due > 0:
-            _, principal_received = get_account_balance_from_str(
-                session, book_string=f"{bill.id}/bill/principal_received/a"
-            )
-            total_principal_amount = principal_due + principal_received
-            interest_to_charge.append(
-                total_principal_amount * Decimal(bill.rc_rate_of_interest_annual) / 1200
-            )
+# def get_interest_for_each_bill(session: Session, unpaid_bills: LoanData) -> Decimal:
+#     interest_to_charge = []
+#     for bill in unpaid_bills:
+#         _, principal_due = get_account_balance_from_str(
+#             session, book_string=f"{bill.id}/bill/principal_due/a"
+#         )
+#         if principal_due > 0:
+#             _, principal_received = get_account_balance_from_str(
+#                 session, book_string=f"{bill.id}/bill/principal_received/a"
+#             )
+#             total_principal_amount = principal_due + principal_received
+#             interest_to_charge.append(
+#                 total_principal_amount * Decimal(bill.rc_rate_of_interest_annual) / 1200
+#             )
 
-    return sum(interest_to_charge)
+#     return sum(interest_to_charge)
