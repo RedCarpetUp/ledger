@@ -11,6 +11,7 @@ from rush.accrue_financial_charges import (
     accrue_interest,
     accrue_late_charges,
 )
+from rush.anomaly_detection import run_anomaly
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import (
@@ -83,9 +84,12 @@ def test_card_swipe(session: Session) -> None:
         session, f"{swipe1.loan_id}/bill/unbilled_transactions/a"
     )
     assert unbilled_balance == 900
-    # remaining card balance should be -900 because we've loaded it yet and it's going in negative.
-    _, card_balance = get_account_balance_from_str(session, f"{uc.user_id}/user/user_card_balance/l")
+    # remaining card balance should be -900 because we've not loaded it yet and it's going in negative.
+    _, card_balance = get_account_balance_from_str(session, f"{uc.user_id}/user/card_balance/l")
     assert card_balance == -900
+
+    _, lender_payable = get_account_balance_from_str(session, "62311/lender/lender_payable/l")
+    assert lender_payable == 900
 
 
 def test_generate_bill_1(session: Session) -> None:
@@ -104,11 +108,6 @@ def test_generate_bill_1(session: Session) -> None:
         amount=Decimal(1000),
         description="BigBasket.com",
     )
-
-    _, user_card_balance = get_account_balance_from_str(
-        session=session, book_string=f"{a.id}/user/user_card_balance/l"
-    )
-    assert user_card_balance == Decimal(-1000)
 
     generate_date = parse_date("2020-05-01").date()
     bill = bill_generate(session=session, generate_date=generate_date, user_id=a.id)
@@ -139,6 +138,21 @@ def _partial_payment_bill_1(session: Session) -> None:
         session, book_string=f"{bill.id}/bill/principal_due/a"
     )
     assert principal_due == 1000 - amount
+
+
+def _min_payment_delayed_bill_1(session: Session) -> None:
+    user = session.query(User).filter(User.id == 99).one()
+    payment_date = parse_date("2020-05-03")
+    amount = Decimal(130)
+    bill = payment_received(
+        session=session, user_id=user.id, payment_amount=amount, payment_date=payment_date,
+    )
+
+    _, principal_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/principal_due/a"
+    )
+    # payment got late and 100 rupees got settled in late fine.
+    assert principal_due == 970
 
 
 def test_partial_payment_bill_1(session: Session) -> None:
@@ -257,7 +271,7 @@ def _generate_bill_2(session: Session) -> None:
     )
 
     _, user_card_balance = get_account_balance_from_str(
-        session=session, book_string=f"{user.id}/user/user_card_balance/l"
+        session=session, book_string=f"{user.id}/user/card_balance/l"
     )
     assert user_card_balance == Decimal(-3000)
 
@@ -275,6 +289,40 @@ def _generate_bill_2(session: Session) -> None:
 
     _, min_due = get_account_balance_from_str(session=session, book_string=f"{bill.id}/bill/min_due/a")
     assert min_due == Decimal(377)
+
+
+def _run_anomaly_bill_1(session: Session) -> None:
+    user = session.query(User).filter(User.id == 99).one()
+
+    bill = (
+        session.query(LoanData)
+        .filter(LoanData.user_id == user.id)
+        .order_by(LoanData.agreement_date.desc())
+        .first()
+    )
+    run_anomaly(session, bill)
+
+    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_due/a")
+    assert late_fine_due == Decimal(0)
+
+    _, late_fee_received = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/late_fee_received/a"
+    )
+    assert late_fee_received == Decimal(0)
+
+    _, principal_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/principal_due/a"
+    )
+    # payment got moved from late received to principal received.
+    assert principal_due == 970 - 100
+
+
+def test_anomaly_late_payment_received(session: Session) -> None:
+    test_generate_bill_1(session)
+    _accrue_late_fine_bill_1(session)  # Accrue late fine first.
+    _min_payment_delayed_bill_1(session)  # Payment comes in our system late.
+    _run_anomaly_bill_1(session)
+    _accrue_interest_bill_1(session)
 
 
 def test_generate_bill_2(session: Session) -> None:

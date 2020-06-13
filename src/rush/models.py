@@ -139,16 +139,16 @@ class BookAccountPy(AuditMixinPy):
 class LedgerEntry(AuditMixin):
     __tablename__ = "ledger_entry"
     event_id = Column(Integer, ForeignKey(LedgerTriggerEvent.id))
-    from_book_account = Column(Integer, ForeignKey(BookAccount.id))
-    to_book_account = Column(Integer, ForeignKey(BookAccount.id))
+    debit_account = Column(Integer, ForeignKey(BookAccount.id))
+    credit_account = Column(Integer, ForeignKey(BookAccount.id))
     amount = Column(DECIMAL)
 
 
 @py_dataclass
 class LedgerEntryPy(AuditMixinPy):
     event_id: int
-    from_book_account: int
-    to_book_account: int
+    debit_account: int
+    credit_account: int
     amount: DecimalType
     business_date: DateTime
 
