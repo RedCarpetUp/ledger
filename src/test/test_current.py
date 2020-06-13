@@ -16,6 +16,7 @@ from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import (
     get_account_balance_from_str,
     get_all_unpaid_bills,
+    get_interest_for_each_bill,
     is_bill_closed,
     is_min_paid,
 )
@@ -290,3 +291,7 @@ def test_generate_bill_2(session: Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
     unpaid_bills = get_all_unpaid_bills(session, user)
     assert len(unpaid_bills) == 2
+
+    unpaid_bills = all_bills = session.query(LoanData).filter(LoanData.user_id == 99).all()
+    interest = get_interest_for_each_bill(session, unpaid_bills)
+    assert interest == Decimal(140400.00)

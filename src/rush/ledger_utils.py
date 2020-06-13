@@ -70,8 +70,7 @@ def get_book_account_by_string(session: Session, book_string) -> BookAccount:
 
 
 def is_min_paid(session: Session, bill: LoanData) -> bool:
-    _, min_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/min_due/a")
+    _, min_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/min_due/a")
     _, interest_received = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/interest_received/a"
     )
@@ -91,8 +90,7 @@ def is_bill_closed(session: Session, bill: LoanData) -> bool:
         return False
 
     # Check if interest is paid. If not, return false.
-    _, interest_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/interest_due/a")
+    _, interest_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/interest_due/a")
     if interest_due != 0:
         return False
 
@@ -112,8 +110,7 @@ def get_remaining_bill_balance(session: Session, bill: LoanData) -> dict:
     _, principal_due = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/principal_due/a"
     )
-    _, interest_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/interest_due/a")
+    _, interest_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/interest_due/a")
     _, late_fine_due = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/late_fine_due/a"
     )
@@ -126,10 +123,35 @@ def get_remaining_bill_balance(session: Session, bill: LoanData) -> dict:
 
 
 def get_all_unpaid_bills(session: Session, user: User) -> List[LoanData]:
-    unpaid_bills = list(
-        session.query(LoanData)
-        .join(BookAccount, LoanData.id == BookAccount.identifier)
-        .filter(LoanData.user_id == user.id)
-        .all()
-    )
+    unpaid_bills = []
+    #     session.query(LoanData)
+    #     .join(BookAccount, LoanData.id == BookAccount.identifier)
+    #     .filter(LoanData.user_id == user.id)
+    #     .all()
+    # )
+    all_bills = session.query(LoanData).filter(LoanData.user_id == user.id).all()
+    # total_interest = get_interest_for_each_bill(session, all_bills)
+    for bill in all_bills:
+        _, principal_due = get_account_balance_from_str(
+            session, book_string=f"{bill.id}/bill/principal_due/a"
+        )
+        if principal_due > 0:
+            unpaid_bills.append(principal_due)
+
     return unpaid_bills
+
+
+def get_interest_for_each_bill(session: Session, unpaid_bills: LoanData) -> Decimal:
+    interest_to_charge = []
+    for bill in unpaid_bills:
+        _, principal_due = get_account_balance_from_str(
+            session, book_string=f"{bill.id}/bill/principal_due/a"
+        )
+        if principal_due > 0:
+            _, principal_received = get_account_balance_from_str(
+                session, book_string=f"{bill.id}/bill/principal_received/a"
+            )
+            total_principal_amount = principal_due + principal_received
+            interest_to_charge.append(total_principal_amount * bill.rc_rate_of_interest_annual)
+
+    return sum(interest_to_charge)
