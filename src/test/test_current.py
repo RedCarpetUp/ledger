@@ -294,4 +294,4 @@ def test_generate_bill_2(session: Session) -> None:
 
     unpaid_bills = all_bills = session.query(LoanData).filter(LoanData.user_id == 99).all()
     interest = get_interest_for_each_bill(session, unpaid_bills)
-    assert interest == Decimal(140400.00)
+    assert interest == Decimal(1404.00)
