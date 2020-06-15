@@ -1,5 +1,6 @@
 from decimal import Decimal
 from typing import (
+    List,
     Optional,
     Tuple,
 )
@@ -14,6 +15,7 @@ from rush.models import (
     LedgerEntry,
     LedgerTriggerEvent,
     LoanData,
+    User,
     get_or_create,
 )
 
@@ -32,10 +34,8 @@ def create_ledger_entry(
 def create_ledger_entry_from_str(
     session: Session, event_id: int, debit_book_str: str, credit_book_str: str, amount: Decimal,
 ) -> LedgerEntry:
-    debit_account = get_book_account_by_string(
-        session, book_string=debit_book_str)
-    credit_account = get_book_account_by_string(
-        session, book_string=credit_book_str)
+    debit_account = get_book_account_by_string(session, book_string=debit_book_str)
+    credit_account = get_book_account_by_string(session, book_string=credit_book_str)
     return create_ledger_entry(session, event_id, debit_account.id, credit_account.id, amount)
 
 
@@ -72,15 +72,14 @@ def get_account_balance_from_str(
     session: Session, book_string: str, to_date: Optional[DateTime] = None
 ) -> Tuple[BookAccount, Decimal]:
     book_account = get_book_account_by_string(session, book_string)
-    account_balance = get_account_balance(
-        session, book_account, to_date=to_date)
+    account_balance = get_account_balance(session, book_account, to_date=to_date)
     return book_account, account_balance
 
 
 def get_book_account_by_string(session: Session, book_string) -> BookAccount:
     identifier, identifier_type, name, account_type = book_string.split("/")
     assert account_type in ("a", "l")
-    assert identifier_type in ("user", "lender", "bill")
+    assert identifier_type in ("`user`", "lender", "bill")
 
     book_account = get_or_create(
         session=session,
@@ -146,8 +145,7 @@ def get_remaining_bill_balance(session: Session, bill: LoanData) -> dict:
     _, principal_due = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/principal_due/a"
     )
-    _, interest_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/interest_due/a")
+    _, interest_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/interest_due/a")
     _, late_fine_due = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/late_fine_due/a"
     )
@@ -166,8 +164,7 @@ def get_all_unpaid_bills(session: Session, user: User) -> List[LoanData]:
     #     .filter(LoanData.user_id == user.id)
     #     .all()
     # )
-    all_bills = session.query(LoanData).filter(
-        LoanData.user_id == user.id).all()
+    all_bills = session.query(LoanData).filter(LoanData.user_id == user.id).all()
     for bill in all_bills:
         _, principal_due = get_account_balance_from_str(
             session, book_string=f"{bill.id}/bill/principal_due/a"
@@ -176,21 +173,3 @@ def get_all_unpaid_bills(session: Session, user: User) -> List[LoanData]:
             unpaid_bills.append(principal_due)
 
     return unpaid_bills
-
-
-# def get_interest_for_each_bill(session: Session, unpaid_bills: LoanData) -> Decimal:
-#     interest_to_charge = []
-#     for bill in unpaid_bills:
-#         _, principal_due = get_account_balance_from_str(
-#             session, book_string=f"{bill.id}/bill/principal_due/a"
-#         )
-#         if principal_due > 0:
-#             _, principal_received = get_account_balance_from_str(
-#                 session, book_string=f"{bill.id}/bill/principal_received/a"
-#             )
-#             total_principal_amount = principal_due + principal_received
-#             interest_to_charge.append(
-#                 total_principal_amount * Decimal(bill.rc_rate_of_interest_annual) / 1200
-#             )
-
-#     return sum(interest_to_charge)

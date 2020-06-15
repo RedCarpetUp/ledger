@@ -14,6 +14,10 @@ from rush.accrue_financial_charges import (
 from rush.anomaly_detection import run_anomaly
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
+from rush.ledger_events import (
+    lender_disbursal_event,
+    m2p_transaction_event,
+)
 from rush.ledger_utils import (  # get_interest_for_each_bill,
     get_account_balance_from_str,
     get_all_unpaid_bills,
@@ -21,6 +25,7 @@ from rush.ledger_utils import (  # get_interest_for_each_bill,
     is_min_paid,
 )
 from rush.models import (
+    LedgerTriggerEvent,
     LoanData,
     User,
     UserCard,
@@ -57,6 +62,22 @@ def test_user(session: Session) -> None:
     session.commit()
     a = session.query(User).first()
     u = UserPy(id=a.id, performed_by=123, email="sss", name="dfd", fullname="dfdf", nickname="dfdd",)
+
+
+def lender_disbursal_test(session: Session) -> None:
+    event = LedgerTriggerEvent(name="ledger_disbursal")
+    amount = Decimal(100000)
+    lender_disbursal_event(session, amount, event)
+    _, lender_capital = get_account_balance_from_str(session, "62311/lender/lender_capital/l")
+    assert lender_capital == 100000
+
+
+def m2p_transaction_test(session: Session) -> None:
+    event = LedgerTriggerEvent(name="m2p_transaction")
+    amount = Decimal(50000)
+    m2p_transaction_event(session, amount, event)
+    _, lender_pool = get_account_balance_from_str(session, "62311/lender/pool_balance/a")
+    assert lender_capital == 50000
 
 
 def test_card_swipe(session: Session) -> None:
