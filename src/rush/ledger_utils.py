@@ -79,7 +79,7 @@ def get_account_balance_from_str(
 def get_book_account_by_string(session: Session, book_string) -> BookAccount:
     identifier, identifier_type, name, account_type = book_string.split("/")
     assert account_type in ("a", "l", "r")
-    assert identifier_type in ("`user`", "lender", "bill", "redcarpet")
+    assert identifier_type in ("user", "lender", "bill", "redcarpet")
 
     book_account = get_or_create(
         session=session,

@@ -28,7 +28,8 @@ from rush.utils import get_current_ist_time
 def accrue_interest_prerequisites(
     session: Session, bill: LoanData, to_date: Optional[DateTime] = None
 ) -> bool:
-    if not is_bill_closed(session, bill, to_date):  # If not closed, we can accrue interest.
+    # If not closed, we can accrue interest.
+    if not is_bill_closed(session, bill, to_date):
         return True
     return False  # prerequisites failed.
 
@@ -40,6 +41,12 @@ def accrue_interest(session: Session, user_id: int) -> LoanData:
         .order_by(LoanData.agreement_date.desc())
         .first()
     )  # Get the latest bill of that user.
+    bills = (
+        session.query(LoanData)
+        .filter(LoanData.user_id == user_id)
+        .order_by(LoanData.agreement_date.desc())
+        .all()
+    )
     can_charge_interest = accrue_interest_prerequisites(session, bill)
     if can_charge_interest:  # if bill isn't paid fully accrue interest.
         # TODO get correct date here.
@@ -47,14 +54,15 @@ def accrue_interest(session: Session, user_id: int) -> LoanData:
         session.add(lt)
         session.flush()
 
-        accrue_interest_event(session, bill, lt)
-    return bill
+        accrue_interest_event(session, bills, lt)
+    return bill[0]
 
 
 def accrue_late_charges_prerequisites(
     session: Session, bill: LoanData, to_date: Optional[DateTime] = None
 ) -> bool:
-    if not is_min_paid(session, bill, to_date):  # if not paid, we can charge late fee.
+    # if not paid, we can charge late fee.
+    if not is_min_paid(session, bill, to_date):
         return True
     return False
 
