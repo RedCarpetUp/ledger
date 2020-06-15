@@ -21,18 +21,18 @@ def lender_disbursal_event(session: Session, event: LedgerTriggerEvent) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
-        debit_book_str=f"62311/lender/rc_cash/a",
+        debit_book_str=f"12345/redcarpet/rc_cash/a",
         credit_book_str=f"62311/lender/lender_capital/l",
         amount=event.amount,
     )
 
 
-def m2p_transaction_event(session: Session, event: LedgerTriggerEvent) -> None:
+def m2p_transfer_event(session: Session, event: LedgerTriggerEvent) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
         debit_book_str=f"62311/lender/pool_balance/a",
-        credit_book_str=f"62311/lender/rc_cash/a",
+        credit_book_str=f"12345/redcarpet/rc_cash/a",
         amount=event.amount,
     )
 

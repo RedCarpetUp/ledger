@@ -14,10 +14,6 @@ from rush.accrue_financial_charges import (
 from rush.anomaly_detection import run_anomaly
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
-from rush.ledger_events import (
-    lender_disbursal_event,
-    m2p_transaction_event,
-)
 from rush.ledger_utils import (  # get_interest_for_each_bill,
     get_account_balance_from_str,
     get_all_unpaid_bills,
@@ -26,7 +22,7 @@ from rush.ledger_utils import (  # get_interest_for_each_bill,
 )
 from rush.lender_funds import (
     lender_disbursal,
-    m2p_transaction,
+    m2p_transfer,
 )
 from rush.models import (
     LoanData,
@@ -67,16 +63,16 @@ def test_user(session: Session) -> None:
     u = UserPy(id=a.id, performed_by=123, email="sss", name="dfd", fullname="dfdf", nickname="dfdd",)
 
 
-def lender_disbursal_test(session: Session) -> None:
+def test_lender_disbursal(session: Session) -> None:
     amount = 100000
     val = lender_disbursal(session, amount)
-    assert val == bool
+    assert val == Decimal(100000)
 
 
-def m2p_transaction_test(session: Session) -> None:
+def test_m2p_transfer(session: Session) -> None:
     amount = 50000
-    val = m2p_transaction(session, amount)
-    assert val == Decimal(100)
+    val = m2p_transfer(session, amount)
+    assert val == Decimal(50000)
 
 
 def test_card_swipe(session: Session) -> None:
@@ -99,6 +95,17 @@ def test_card_swipe(session: Session) -> None:
         description="Flipkart.com",
     )
     assert swipe1.loan_id == swipe2.loan_id
+
+    _, unbilled_balance = get_account_balance_from_str(
+        session, f"{swipe1.loan_id}/bill/unbilled_transactions/a"
+    )
+    assert unbilled_balance == 900
+    # remaining card balance should be -900 because we've not loaded it yet and it's going in negative.
+    _, card_balance = get_account_balance_from_str(session, f"{uc.user_id}/user/card_balance/l")
+    assert card_balance == -900
+
+    _, lender_payable = get_account_balance_from_str(session, "62311/lender/lender_payable/l")
+    assert lender_payable == 900
 
 
 def test_generate_bill_1(session: Session) -> None:
