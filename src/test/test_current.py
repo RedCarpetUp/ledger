@@ -48,35 +48,42 @@ def test_current(get_alembic: alembic.config.Config) -> None:
 
 
 def test_user2(session: Session) -> None:
-    u = User(performed_by=123, id=1, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    u = User(performed_by=123, id=1, name="dfd",
+             fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(u)
     session.commit()
     a = session.query(User).first()
     print(a.id)
-    u = UserPy(id=a.id, performed_by=123, email="sss", name="dfd", fullname="dfdf", nickname="dfdd",)
+    u = UserPy(id=a.id, performed_by=123, email="sss",
+               name="dfd", fullname="dfdf", nickname="dfdd",)
 
 
 def test_user(session: Session) -> None:
-    u = User(id=2, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    u = User(id=2, performed_by=123, name="dfd",
+             fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(u)
     session.commit()
     a = session.query(User).first()
-    u = UserPy(id=a.id, performed_by=123, email="sss", name="dfd", fullname="dfdf", nickname="dfdd",)
+    u = UserPy(id=a.id, performed_by=123, email="sss",
+               name="dfd", fullname="dfdf", nickname="dfdd",)
 
 
 def lender_disbursal_test(session: Session) -> None:
-    event = LedgerTriggerEvent(name="ledger_disbursal")
-    amount = Decimal(100000)
-    lender_disbursal_event(session, amount, event)
-    _, lender_capital = get_account_balance_from_str(session, "62311/lender/lender_capital/l")
+    generate_date = parse_date("2019-05-01").date()
+    event = LedgerTriggerEvent(post_date=generate_date, amount=amount)
+    lender_disbursal_event(session, event)
+    _, lender_capital = get_account_balance_from_str(
+        session, "62311/lender/lender_capital/l")
     assert lender_capital == 100000
 
 
 def m2p_transaction_test(session: Session) -> None:
-    event = LedgerTriggerEvent(name="m2p_transaction")
+    generate_date = parse_date("2019-05-01").date()
     amount = Decimal(50000)
-    m2p_transaction_event(session, amount, event)
-    _, lender_pool = get_account_balance_from_str(session, "62311/lender/pool_balance/a")
+    event = LedgerTriggerEvent(post_date=generate_date, amount=amount)
+    m2p_transaction_event(session, event)
+    _, lender_pool = get_account_balance_from_str(
+        session, "62311/lender/pool_balance/a")
     assert lender_capital == 50000
 
 
@@ -106,15 +113,18 @@ def test_card_swipe(session: Session) -> None:
     )
     assert unbilled_balance == 900
     # remaining card balance should be -900 because we've not loaded it yet and it's going in negative.
-    _, card_balance = get_account_balance_from_str(session, f"{uc.user_id}/user/card_balance/l")
+    _, card_balance = get_account_balance_from_str(
+        session, f"{uc.user_id}/user/card_balance/l")
     assert card_balance == -900
 
-    _, lender_payable = get_account_balance_from_str(session, "62311/lender/lender_payable/l")
+    _, lender_payable = get_account_balance_from_str(
+        session, "62311/lender/lender_payable/l")
     assert lender_payable == 900
 
 
 def test_generate_bill_1(session: Session) -> None:
-    a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    a = User(id=99, performed_by=123, name="dfd",
+             fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(a)
 
     # assign card
@@ -131,7 +141,8 @@ def test_generate_bill_1(session: Session) -> None:
     )
 
     generate_date = parse_date("2020-05-01").date()
-    bill = bill_generate(session=session, generate_date=generate_date, user_id=a.id)
+    bill = bill_generate(
+        session=session, generate_date=generate_date, user_id=a.id)
 
     _, unbilled_balance = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/unbilled_transactions/a"
@@ -143,7 +154,8 @@ def test_generate_bill_1(session: Session) -> None:
     )
     assert principal_due == 1000
 
-    _, min_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/min_due/a")
+    _, min_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/min_due/a")
     assert min_due == 130
 
 
@@ -185,7 +197,8 @@ def _accrue_late_fine_bill_1(session: Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
     bill = accrue_late_charges(session, user.id)
 
-    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_due/a")
+    _, late_fine_due = get_account_balance_from_str(
+        session, f"{bill.id}/bill/late_fine_due/a")
     assert late_fine_due == Decimal(100)
 
 
@@ -230,7 +243,8 @@ def _accrue_interest_bill_1(session: Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
 
     bill = accrue_interest(session, user.id)
-    _, interest_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/interest_due/a")
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/interest_due/a")
     assert interest_due == 30
 
 
@@ -300,7 +314,8 @@ def _generate_bill_2(session: Session) -> None:
     assert user_card_balance == Decimal(-3000)
 
     generate_date = parse_date("2020-06-01").date()
-    bill = bill_generate(session=session, generate_date=generate_date, user_id=user.id)
+    bill = bill_generate(
+        session=session, generate_date=generate_date, user_id=user.id)
     _, opening_balance = get_account_balance_from_str(
         session=session, book_string=f"{bill.id}/bill/opening_balance/a"
     )
@@ -311,7 +326,8 @@ def _generate_bill_2(session: Session) -> None:
     )
     assert principal_due == Decimal(2900)
 
-    _, min_due = get_account_balance_from_str(session=session, book_string=f"{bill.id}/bill/min_due/a")
+    _, min_due = get_account_balance_from_str(
+        session=session, book_string=f"{bill.id}/bill/min_due/a")
     assert min_due == Decimal(377)
 
 
@@ -326,7 +342,8 @@ def _run_anomaly_bill_1(session: Session) -> None:
     )
     run_anomaly(session, bill)
 
-    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_due/a")
+    _, late_fine_due = get_account_balance_from_str(
+        session, f"{bill.id}/bill/late_fine_due/a")
     assert late_fine_due == Decimal(0)
 
     _, late_fee_received = get_account_balance_from_str(
@@ -360,6 +377,7 @@ def test_generate_bill_2(session: Session) -> None:
     unpaid_bills = get_all_unpaid_bills(session, user)
     assert len(unpaid_bills) == 2
 
-    unpaid_bills = all_bills = session.query(LoanData).filter(LoanData.user_id == 99).all()
+    unpaid_bills = all_bills = session.query(
+        LoanData).filter(LoanData.user_id == 99).all()
     # interest = get_interest_for_each_bill(session, unpaid_bills)
     # assert interest == Decimal(1404.00)

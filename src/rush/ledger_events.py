@@ -17,30 +17,31 @@ from rush.models import (
 )
 
 
-def lender_disbursal_event(session: Session, amount: Decimal, event: LedgerTriggerEvent) -> None:
+def lender_disbursal_event(session: Session, event: LedgerTriggerEvent) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
         debit_book_str=f"62311/lender/rc_cash/a",
         credit_book_str=f"62311/lender/lender_capital/l",
-        amount=amount,
+        amount=event.amount,
     )
 
 
-def m2p_transaction_event(session: Session, amount: Decimal, event: LedgerTriggerEvent) -> None:
+def m2p_transaction_event(session: Session, event: LedgerTriggerEvent) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
         debit_book_str=f"62311/lender/pool_balance/a",
         credit_book_str=f"62311/lender/rc_cash/a",
-        amount=amount,
+        amount=event.amount,
     )
 
 
 def card_transaction_event(session: Session, user_id: int, event: LedgerTriggerEvent) -> None:
     amount = event.amount
     swipe_id = event.extra_details["swipe_id"]
-    bill_id = session.query(CardTransaction.loan_id).filter_by(id=swipe_id).scalar()
+    bill_id = session.query(CardTransaction.loan_id).filter_by(
+        id=swipe_id).scalar()
     # Reduce user's card balance
     create_ledger_entry_from_str(
         session,
@@ -89,7 +90,8 @@ def bill_generate_event(
     # check if there is any previous balance remaining.
     if previous_bill:
         # TODO should late fee from previous bill come under this month's opening balance or in late fee?
-        opening_balance = get_remaining_bill_balance(session, previous_bill)["total_due"]
+        opening_balance = get_remaining_bill_balance(
+            session, previous_bill)["total_due"]
 
         create_ledger_entry_from_str(
             session,
@@ -134,7 +136,8 @@ def bill_generate_event(
     )
 
     # Also store min amount. Assuming it to be 3% interest + 10% principal.
-    min_balance = principal_due * Decimal("0.03") + principal_due * Decimal("0.10")
+    min_balance = principal_due * \
+        Decimal("0.03") + principal_due * Decimal("0.10")
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
@@ -150,7 +153,8 @@ def payment_received_event(session: Session, bill: LoanData, event: LedgerTrigge
     def adjust_dues(payment_to_adjust_from: Decimal, debit_str: str, credit_str: str) -> Decimal:
         if payment_to_adjust_from <= 0:
             return payment_to_adjust_from
-        _, book_balance = get_account_balance_from_str(session, book_string=credit_str)
+        _, book_balance = get_account_balance_from_str(
+            session, book_string=credit_str)
         if book_balance > 0:
             balance_to_adjust = min(payment_to_adjust_from, book_balance)
             create_ledger_entry_from_str(
@@ -195,7 +199,8 @@ def accrue_interest_event(session: Session, bills: LoanData, event: LedgerTrigge
             )
             # Accrue interest on entire principal. # TODO check if flat interest or reducing here.
             total_principal_amount = principal_due + principal_received
-            interest_to_charge = total_principal_amount * Decimal(bill.rc_rate_of_interest_annual) / 1200
+            interest_to_charge = total_principal_amount * \
+                Decimal(bill.rc_rate_of_interest_annual) / 1200
 
             revenue_earned = get_book_account_by_string(
                 session, book_string=f"{bill.id}/bill/revenue_earned/r"
