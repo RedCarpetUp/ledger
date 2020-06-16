@@ -297,18 +297,16 @@ def _generate_bill_2(session: Session) -> None:
 
     generate_date = parse_date("2020-06-01").date()
     bill = bill_generate(session=session, generate_date=generate_date, user_id=user.id)
-    _, opening_balance = get_account_balance_from_str(
-        session=session, book_string=f"{bill.id}/bill/opening_balance/a"
-    )
-    assert opening_balance == Decimal(900)
 
     _, principal_due = get_account_balance_from_str(
         session=session, book_string=f"{bill.id}/bill/principal_due/a"
     )
-    assert principal_due == Decimal(2900)
+    # changed from 2900 to 2000
+    assert principal_due == Decimal(2000)
 
     _, min_due = get_account_balance_from_str(session=session, book_string=f"{bill.id}/bill/min_due/a")
-    assert min_due == Decimal(377)
+    # changed from 377 to 260
+    assert min_due == Decimal(260)
 
 
 def _run_anomaly_bill_1(session: Session) -> None:

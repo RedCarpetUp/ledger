@@ -8,9 +8,11 @@ from pendulum import (
 from sqlalchemy.orm import Session
 
 from rush.ledger_events import bill_generate_event
+from rush.ledger_utils import get_all_unpaid_bills
 from rush.models import (
     LedgerTriggerEvent,
     LoanData,
+    User,
     UserCard,
 )
 
@@ -65,17 +67,14 @@ def bill_generate(session: Session, generate_date: Date, user_id: int) -> LoanDa
         .first()
     )  # Get the latest bill of that user.
 
-    previous_bill = (  # Get 2nd last bill.
-        session.query(LoanData)
-        .filter(LoanData.user_id == user_id)
-        .order_by(LoanData.agreement_date.desc())
-        .offset(1)
-        .first()
-    )
+    user = session.query(User).filter(User.id == user_id).one()
+    previous_bills = get_all_unpaid_bills(session, user)
+    if previous_bills:
+        previous_bills.pop(0)
 
     lt = LedgerTriggerEvent(name="bill_generate", post_date=generate_date)
     session.add(lt)
     session.flush()
 
-    bill_generate_event(session, previous_bill, bill, lt)
+    bill_generate_event(session, previous_bills, bill, lt)
     return bill
