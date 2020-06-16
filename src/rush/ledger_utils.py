@@ -2,6 +2,7 @@ from decimal import Decimal
 from typing import (
     Optional,
     Tuple,
+    List,
 )
 
 import sqlalchemy
@@ -15,6 +16,7 @@ from rush.models import (
     LedgerTriggerEvent,
     LoanData,
     get_or_create,
+    User,
 )
 
 
@@ -153,3 +155,16 @@ def get_remaining_bill_balance(session: Session, bill: LoanData) -> dict:
         "interest_due": interest_due,
         "late_fine": late_fine_due,
     }
+
+
+def get_all_unpaid_bills(session: Session, user: User) -> List[LoanData]:
+    unpaid_bills = []
+    all_bills = session.query(LoanData).filter(LoanData.user_id == user.id).all()
+    for bill in all_bills:
+        _, principal_due = get_account_balance_from_str(
+            session, book_string=f"{bill.id}/bill/principal_due/a"
+        )
+        if principal_due > 0:
+            unpaid_bills.append(principal_due)
+
+    return unpaid_bills
