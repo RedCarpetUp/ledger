@@ -1,5 +1,6 @@
 from decimal import Decimal
 from typing import (
+    List,
     Optional,
     Tuple,
     List,
@@ -15,6 +16,7 @@ from rush.models import (
     LedgerEntry,
     LedgerTriggerEvent,
     LoanData,
+    User,
     get_or_create,
     User,
 )
@@ -78,8 +80,8 @@ def get_account_balance_from_str(
 
 def get_book_account_by_string(session: Session, book_string) -> BookAccount:
     identifier, identifier_type, name, account_type = book_string.split("/")
-    assert account_type in ("a", "l")
-    assert identifier_type in ("user", "lender", "bill")
+    assert account_type in ("a", "l", "r")
+    assert identifier_type in ("user", "lender", "bill", "redcarpet")
 
     book_account = get_or_create(
         session=session,

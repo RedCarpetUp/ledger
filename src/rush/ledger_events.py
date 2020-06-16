@@ -3,6 +3,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from rush.ledger_utils import (
+    create_ledger_entry,
     create_ledger_entry_from_str,
     get_account_balance,
     get_account_balance_from_str,
@@ -15,6 +16,26 @@ from rush.models import (
     LedgerTriggerEvent,
     LoanData,
 )
+
+
+def lender_disbursal_event(session: Session, event: LedgerTriggerEvent) -> None:
+    create_ledger_entry_from_str(
+        session,
+        event_id=event.id,
+        debit_book_str=f"12345/redcarpet/rc_cash/a",
+        credit_book_str=f"62311/lender/lender_capital/l",
+        amount=event.amount,
+    )
+
+
+def m2p_transfer_event(session: Session, event: LedgerTriggerEvent) -> None:
+    create_ledger_entry_from_str(
+        session,
+        event_id=event.id,
+        debit_book_str=f"62311/lender/pool_balance/a",
+        credit_book_str=f"12345/redcarpet/rc_cash/a",
+        amount=event.amount,
+    )
 
 
 def card_transaction_event(session: Session, user_id: int, event: LedgerTriggerEvent) -> None:
@@ -163,24 +184,34 @@ def payment_received_event(session: Session, bill: LoanData, event: LedgerTrigge
         pass
 
 
-def accrue_interest_event(session: Session, bill: LoanData, event: LedgerTriggerEvent) -> None:
-    _, principal_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/principal_due/a"
-    )
-    _, principal_received = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/principal_received/a"
-    )
-    # Accrue interest on entire principal. # TODO check if flat interest or reducing here.
-    total_principal_amount = principal_due + principal_received
-    interest_to_charge = total_principal_amount * Decimal("0.03")  # TODO Get interest percentage from db
+def accrue_interest_event(session: Session, bills: LoanData, event: LedgerTriggerEvent) -> None:
 
-    create_ledger_entry_from_str(
-        session,
-        event_id=event.id,
-        debit_book_str=f"{bill.id}/bill/interest_due/a",
-        credit_book_str=f"{bill.id}/bill/interest_due_cp/l",
-        amount=interest_to_charge,
-    )
+    for bill in bills:
+        _, principal_due = get_account_balance_from_str(
+            session, book_string=f"{bill.id}/bill/principal_due/a"
+        )
+        if principal_due > 0:
+            _, principal_received = get_account_balance_from_str(
+                session, book_string=f"{bill.id}/bill/principal_received/a"
+            )
+            # Accrue interest on entire principal. # TODO check if flat interest or reducing here.
+            total_principal_amount = principal_due + principal_received
+            interest_to_charge = total_principal_amount * Decimal(bill.rc_rate_of_interest_annual) / 1200
+
+            revenue_earned = get_book_account_by_string(
+                session, book_string=f"{bill.id}/bill/revenue_earned/r"
+            )
+            assert type(revenue_earned.id) == int
+            interest_due_book = get_book_account_by_string(
+                session, book_string=f"{bill.id}/bill/interest_due/a"
+            )
+            create_ledger_entry(
+                session,
+                event_id=event.id,
+                debit_book_id=interest_due_book.id,
+                credit_book_id=revenue_earned.id,
+                amount=interest_to_charge,
+            )
 
 
 def accrue_late_fine_event(session: Session, bill: LoanData, event: LedgerTriggerEvent) -> None:

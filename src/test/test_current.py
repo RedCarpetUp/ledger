@@ -14,11 +14,15 @@ from rush.accrue_financial_charges import (
 from rush.anomaly_detection import run_anomaly
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
-from rush.ledger_utils import (
+from rush.ledger_utils import (  # get_interest_for_each_bill,
     get_account_balance_from_str,
     get_all_unpaid_bills,
     is_bill_closed,
     is_min_paid,
+)
+from rush.lender_funds import (
+    lender_disbursal,
+    m2p_transfer,
 )
 from rush.models import (
     LoanData,
@@ -57,6 +61,18 @@ def test_user(session: Session) -> None:
     session.commit()
     a = session.query(User).first()
     u = UserPy(id=a.id, performed_by=123, email="sss", name="dfd", fullname="dfdf", nickname="dfdd",)
+
+
+def test_lender_disbursal(session: Session) -> None:
+    amount = 100000
+    val = lender_disbursal(session, amount)
+    assert val == Decimal(100000)
+
+
+def test_m2p_transfer(session: Session) -> None:
+    amount = 50000
+    val = m2p_transfer(session, amount)
+    assert val == Decimal(50000)
 
 
 def test_card_swipe(session: Session) -> None:
@@ -170,7 +186,8 @@ def _accrue_late_fine_bill_1(session: Session) -> None:
 
 def test_accrue_late_fine_bill_1(session: Session) -> None:
     test_generate_bill_1(session)
-    _partial_payment_bill_1(session)  # did only partial payment so accrue late fee.
+    # did only partial payment so accrue late fee.
+    _partial_payment_bill_1(session)
     _accrue_late_fine_bill_1(session)
 
 
@@ -199,7 +216,8 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
 def test_is_min_paid_bill_1(session: Session) -> None:
     test_generate_bill_1(session)
     _partial_payment_bill_1(session)
-    _accrue_late_fine_bill_1(session)  # did only partial payment so accrue late fee.
+    # did only partial payment so accrue late fee.
+    _accrue_late_fine_bill_1(session)
     _pay_minimum_amount_bill_1(session)
 
 
@@ -209,6 +227,7 @@ def _accrue_interest_bill_1(session: Session) -> None:
     bill = accrue_interest(session, user.id)
     _, interest_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/interest_due/a")
     assert interest_due == 30
+    # The value should be positive 30 but it is coming to be negative of 30
 
 
 def test_accrue_interest_bill_1(session: Session) -> None:
@@ -259,7 +278,8 @@ def _generate_bill_2(session: Session) -> None:
         .order_by(LoanData.agreement_date.desc())
         .first()
     )
-    assert is_bill_closed(session, previous_bill) is False  # Bill shouldn't be closed.
+    # Bill shouldn't be closed.
+    assert is_bill_closed(session, previous_bill) is False
 
     # Do transaction to create new bill.
     create_card_swipe(
@@ -335,3 +355,7 @@ def test_generate_bill_2(session: Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
     unpaid_bills = get_all_unpaid_bills(session, user)
     assert len(unpaid_bills) == 2
+
+    unpaid_bills = all_bills = session.query(LoanData).filter(LoanData.user_id == 99).all()
+    # interest = get_interest_for_each_bill(session, unpaid_bills)
+    # assert interest == Decimal(1404.00)
