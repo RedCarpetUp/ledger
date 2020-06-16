@@ -66,15 +66,9 @@ def bill_generate(session: Session, generate_date: Date, user_id: int) -> LoanDa
         .order_by(LoanData.agreement_date.desc())
         .first()
     )  # Get the latest bill of that user.
-
-    user = session.query(User).filter(User.id == user_id).one()
-    previous_bills = get_all_unpaid_bills(session, user)
-    if previous_bills:
-        previous_bills.pop(0)
-
     lt = LedgerTriggerEvent(name="bill_generate", post_date=generate_date)
     session.add(lt)
     session.flush()
 
-    bill_generate_event(session, previous_bills, bill, lt)
+    bill_generate_event(session, bill, lt)
     return bill

@@ -64,51 +64,14 @@ def card_transaction_event(session: Session, user_id: int, event: LedgerTriggerE
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
-        debit_book_str=f"{bill_id}/bill/unbilled_transactions/a",
+        debit_book_str=f"{bill_id}/bill/principal_due/a",
         credit_book_str="62311/lender/pool_balance/a",
         amount=amount,
     )
 
 
-def bill_generate_event(
-    session: Session, previous_bills: LoanData, new_bill: LoanData, event: LedgerTriggerEvent
-) -> None:
+def bill_generate_event(session: Session, new_bill: LoanData, event: LedgerTriggerEvent) -> None:
     # interest_monthly = 3
-    # Move all unbilled book amount to principal due
-    _, unbilled_balance = get_account_balance_from_str(
-        session, book_string=f"{new_bill.id}/bill/unbilled_transactions/a"
-    )
-
-    create_ledger_entry_from_str(
-        session,
-        event_id=event.id,
-        debit_book_str=f"{new_bill.id}/bill/principal_due/a",
-        credit_book_str=f"{new_bill.id}/bill/unbilled_transactions/a",
-        amount=unbilled_balance,
-    )
-
-    # check if there is any previous balance remaining.
-    if previous_bills:
-        for bill in previous_bills:
-            # Check if previous bill's min was paid or not. If not, add remaining to the same month's min.
-            _, min_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/min_due/a")
-            _, interest_received = get_account_balance_from_str(
-                session, book_string=f"{bill.id}/bill/interest_received/a"
-            )
-            _, principal_received = get_account_balance_from_str(
-                session, book_string=f"{bill.id}/bill/principal_received/a"
-            )
-            remaining_min = min_due - (interest_received + principal_received)
-
-            if remaining_min > 0:
-                create_ledger_entry_from_str(
-                    session,
-                    event_id=event.id,
-                    debit_book_str=f"{bill.id}/bill/min_due/a",
-                    credit_book_str=f"{bill.id}/bill/min_due_cp/l",
-                    amount=remaining_min,
-                )
-
     _, principal_due = get_account_balance_from_str(
         session=session, book_string=f"{new_bill.id}/bill/principal_due/a"
     )
