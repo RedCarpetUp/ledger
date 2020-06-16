@@ -227,6 +227,7 @@ def _accrue_interest_bill_1(session: Session) -> None:
     bill = accrue_interest(session, user.id)
     _, interest_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/interest_due/a")
     assert interest_due == 30
+    # The value should be positive 30 but it is coming to be negative of 30
 
 
 def test_accrue_interest_bill_1(session: Session) -> None:

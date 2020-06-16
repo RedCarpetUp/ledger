@@ -55,7 +55,7 @@ def accrue_interest(session: Session, user_id: int) -> LoanData:
         session.flush()
 
         accrue_interest_event(session, bills, lt)
-    return bill[0]
+    return bill
 
 
 def accrue_late_charges_prerequisites(
