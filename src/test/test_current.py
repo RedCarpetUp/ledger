@@ -1,4 +1,5 @@
 import contextlib
+import json
 from decimal import Decimal
 from io import StringIO
 
@@ -31,6 +32,7 @@ from rush.models import (
     UserPy,
 )
 from rush.payments import payment_received
+from rush.views import bill_view
 
 
 def test_current(get_alembic: alembic.config.Config) -> None:
@@ -355,3 +357,6 @@ def test_generate_bill_2(session: Session) -> None:
     unpaid_bills = all_bills = session.query(LoanData).filter(LoanData.user_id == 99).all()
     # interest = get_interest_for_each_bill(session, unpaid_bills)
     # assert interest == Decimal(1404.00)
+
+    json_value = bill_view(session, user)
+    assert json.loads(json_value)
