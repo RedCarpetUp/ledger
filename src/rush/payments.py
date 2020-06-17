@@ -19,8 +19,7 @@ def payment_received(
 
     unpaid_bills = get_all_unpaid_bills(session, user_id)
     # assert len(unpaid_bills) == 2
-    lt = LedgerTriggerEvent(
-        name="bill_close", amount=payment_amount, post_date=payment_date)
+    lt = LedgerTriggerEvent(name="bill_close", amount=payment_amount, post_date=payment_date)
     session.add(lt)
     session.flush()
     unpaid_bills.reverse()
