@@ -13,6 +13,7 @@ from rush.models import (
     LedgerTriggerEvent,
     LoanData,
     UserCard,
+    CardEmis,
 )
 
 
@@ -66,12 +67,22 @@ def bill_generate(session: Session, generate_date: Date, user_id: int) -> LoanDa
         .first()
     )  # Get the latest bill of that user.
 
+    # Get the card conected with the users account.
+    # TODO Consider for multiple cards
     user_card = (
         session.query(UserCard)
         .filter(UserCard.user_id == user_id)
         .first()
     )
-    create_emis_for_card(session, user_card, bill)
+    # If last emi does not exist then we can consider to be first set of emi creation
+    last_emi = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == user_card.id)
+        .order_by(CardEmis.due_date.desc())
+        .first()
+    )
+    if not last_emi:
+        create_emis_for_card(session, user_card, bill)
 
     previous_bill = (  # Get 2nd last bill.
         session.query(LoanData)
