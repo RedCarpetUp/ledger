@@ -14,7 +14,8 @@ from rush.accrue_financial_charges import (
 from rush.anomaly_detection import run_anomaly
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
-from rush.ledger_utils import (  # get_interest_for_each_bill,
+from rush.create_emi import create_emis_for_card
+from rush.ledger_utils import (
     get_account_balance_from_str,
     get_all_unpaid_bills,
     is_bill_closed,
@@ -359,3 +360,31 @@ def test_generate_bill_2(session: Session) -> None:
     unpaid_bills = all_bills = session.query(LoanData).filter(LoanData.user_id == 99).all()
     # interest = get_interest_for_each_bill(session, unpaid_bills)
     # assert interest == Decimal(1404.00)
+
+
+def test_emi_creation(session: Session) -> None:
+    a = User(id=108, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    session.add(a)
+
+    # assign card
+    uc = UserCard(user_id=a.id, card_activation_date=parse_date("2020-04-02"))
+    session.flush()
+    session.add(uc)
+
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-04-08 19:23:11"),
+        amount=Decimal(6000),
+        description="BigBasket.com",
+    )
+
+    bill = (
+        session.query(LoanData)
+        .filter(LoanData.user_id == a.id)
+        .order_by(LoanData.agreement_date.desc())
+        .first()
+    )  # Get the latest bill of that user.
+
+    last_emi = create_emis_for_card(session=session, user_card=uc, last_bill=bill)
+    assert last_emi.emi_number == 12

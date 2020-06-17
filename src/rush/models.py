@@ -177,23 +177,21 @@ class LoanDataPy(AuditMixinPy):
     bill_generation_date: DateTime
 
 
-class LoanEmis(AuditMixin):
-    __tablename__ = "loan_emis"
-    loan_id = Column(Integer, ForeignKey(LoanData.id))
-    due_date = Column(TIMESTAMP, nullable=False)
-    last_payment_date = Column(TIMESTAMP, nullable=False)
-
-
-@py_dataclass
-class LoanEmisPy(AuditMixinPy):
-    loan_id: int
-    due_date: DateTime
-    last_payment_date: DateTime
-
-
 class CardTransaction(AuditMixin):
     __tablename__ = "card_transaction"
     loan_id = Column(Integer, ForeignKey(LoanData.id))
     txn_time = Column(TIMESTAMP, nullable=False)
     amount = Column(Numeric, nullable=False)
     description = Column(String(100), nullable=False)
+
+
+class CardEmis(AuditMixin):
+    __tablename__ = "card_emis"
+    card_id = Column(Integer, ForeignKey(UserCard.id))
+    due_date = Column(TIMESTAMP, nullable=False)
+    due_amount = Column(Numeric, nullable=False)
+    interest_current_month = Column(Numeric, nullable=False)
+    interest_next_month = Column(Numeric, nullable=False)
+    emi_number = Column(Integer, nullable=False)
+    late_fee = Column(Numeric, nullable=False)
+    row_status = Column(String(length=10), nullable=False, default='active')
