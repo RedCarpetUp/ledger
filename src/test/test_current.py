@@ -301,11 +301,9 @@ def _generate_bill_2(session: Session) -> None:
     _, principal_due = get_account_balance_from_str(
         session=session, book_string=f"{bill.id}/bill/principal_due/a"
     )
-    # changed from 2900 to 2000
     assert principal_due == Decimal(2000)
 
     _, min_due = get_account_balance_from_str(session=session, book_string=f"{bill.id}/bill/min_due/a")
-    # changed from 377 to 260
     assert min_due == Decimal(260)
 
 
