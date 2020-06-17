@@ -8,7 +8,6 @@ from pendulum import (
 from sqlalchemy.orm import Session
 
 from rush.ledger_events import bill_generate_event
-from rush.ledger_utils import get_all_unpaid_bills
 from rush.models import (
     LedgerTriggerEvent,
     LoanData,

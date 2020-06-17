@@ -7,16 +7,15 @@ from rush.ledger_utils import (
     get_account_balance_from_str,
     get_all_unpaid_bills,
 )
-from rush.models import User
 
 
-def bill_view(session: Session, user: User) -> str:
+def bill_view(session: Session, user_id: int) -> str:
 
     opening_amount = 0
     opening_interest_due = 0
     opening_fine_due = 0
 
-    unpaid_bills = get_all_unpaid_bills(session, user)
+    unpaid_bills = get_all_unpaid_bills(session, user_id)
     latest_bill = unpaid_bills.pop(0)
     _, current_amount = get_account_balance_from_str(
         session, book_string=f"{latest_bill.id}/bill/principal_due/a"

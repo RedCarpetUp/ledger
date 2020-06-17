@@ -127,5 +127,9 @@ def reverse_late_charges_event(
             amount=entry.amount,
         )
 
+    # making a list because payment received event works on list of bills
+    unpaid_bill = []
+    unpaid_bill.append(bill)
+
     # Trigger another payment event for the fee reversed.
-    payment_received_event(session, bill, lt)
+    payment_received_event(session, unpaid_bill, lt)

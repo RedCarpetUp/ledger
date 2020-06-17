@@ -351,12 +351,12 @@ def test_generate_bill_2(session: Session) -> None:
     _accrue_interest_bill_1(session)
     _generate_bill_2(session)
     user = session.query(User).filter(User.id == 99).one()
-    unpaid_bills = get_all_unpaid_bills(session, user)
+    unpaid_bills = get_all_unpaid_bills(session, user.id)
     assert len(unpaid_bills) == 2
 
     unpaid_bills = all_bills = session.query(LoanData).filter(LoanData.user_id == 99).all()
     # interest = get_interest_for_each_bill(session, unpaid_bills)
     # assert interest == Decimal(1404.00)
 
-    json_value = bill_view(session, user)
+    json_value = bill_view(session, user.id)
     assert json.loads(json_value)

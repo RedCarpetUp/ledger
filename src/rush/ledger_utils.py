@@ -154,11 +154,11 @@ def get_remaining_bill_balance(session: Session, bill: LoanData) -> dict:
     }
 
 
-def get_all_unpaid_bills(session: Session, user: User) -> List[LoanData]:
+def get_all_unpaid_bills(session: Session, user_id: int) -> List[LoanData]:
     unpaid_bills = []
     all_bills = (
         session.query(LoanData)
-        .filter(LoanData.user_id == user.id)
+        .filter(LoanData.user_id == user_id)
         .order_by(LoanData.agreement_date.desc())
         .all()
     )
