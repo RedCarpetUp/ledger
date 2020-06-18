@@ -24,7 +24,7 @@ def create_emis_for_card(
     _, principal_due = get_account_balance_from_str(session, book_string=f"{last_bill.id}/bill/principal_due/a")
     _, interest_due = get_account_balance_from_str(session, book_string=f"{last_bill.id}/bill/interest_due/a")
     _, late_fine_due = get_account_balance_from_str(session, book_string=f"{last_bill.id}/bill/late_fine_due/a")
-    due_amount = principal_due / 12
+    due_amount = Decimal(principal_due / 12)
     # We will firstly create only 12 emis
     for i in range(1, 13):
         due_date = first_emi_due_date if i==1 else due_date + timedelta(days=user_card.statement_period_in_days+1)
@@ -52,7 +52,7 @@ def add_emi_on_new_bill(
     _, principal_due = get_account_balance_from_str(session, book_string=f"{last_bill.id}/bill/principal_due/a")
     _, interest_due = get_account_balance_from_str(session, book_string=f"{last_bill.id}/bill/interest_due/a")
     _, late_fine_due = get_account_balance_from_str(session, book_string=f"{last_bill.id}/bill/late_fine_due/a")
-    due_amount = principal_due / 12
+    due_amount = Decimal(principal_due / 12)
     all_emis = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == user_card.id)
@@ -67,7 +67,7 @@ def add_emi_on_new_bill(
             continue
         elif emi_dict['emi_number'] == ((new_end_emi_number - 12) + 1):
             emi_dict['late_fee'] += late_fine_due
-        emi_dict['due_amount'] += due_amount
+        emi_dict['due_amount'] += float(due_amount)
         new_emi_list.append(emi_dict)
     session.bulk_update_mappings(CardEmis, new_emi_list)
     # Get the second last emi for calculating values of the last emi

@@ -67,6 +67,20 @@ def bill_generate(session: Session, generate_date: Date, user_id: int) -> LoanDa
         .first()
     )  # Get the latest bill of that user.
 
+    previous_bill = (  # Get 2nd last bill.
+        session.query(LoanData)
+        .filter(LoanData.user_id == user_id)
+        .order_by(LoanData.agreement_date.desc())
+        .offset(1)
+        .first()
+    )
+
+    lt = LedgerTriggerEvent(name="bill_generate", post_date=generate_date)
+    session.add(lt)
+    session.flush()
+
+    bill_generate_event(session, previous_bill, bill, lt)
+
     # Get the card conected with the users account.
     # TODO Consider for multiple cards
     user_card = (
@@ -85,18 +99,5 @@ def bill_generate(session: Session, generate_date: Date, user_id: int) -> LoanDa
         create_emis_for_card(session, user_card, bill)
     else:
         add_emi_on_new_bill(session, user_card, bill, last_emi.emi_number)
-
-    previous_bill = (  # Get 2nd last bill.
-        session.query(LoanData)
-        .filter(LoanData.user_id == user_id)
-        .order_by(LoanData.agreement_date.desc())
-        .offset(1)
-        .first()
-    )
-
-    lt = LedgerTriggerEvent(name="bill_generate", post_date=generate_date)
-    session.add(lt)
-    session.flush()
-
-    bill_generate_event(session, previous_bill, bill, lt)
+        
     return bill

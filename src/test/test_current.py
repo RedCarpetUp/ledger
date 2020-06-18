@@ -419,15 +419,18 @@ def test_subsequent_emi_creation(session: Session) -> None:
         description="BigBasket.com",
     )
 
-    generate_date = parse_date("2020-05-01").date()
+    generate_date = parse_date("2020-06-01").date()
     bill_may = bill_generate(session=session, generate_date=generate_date, user_id=a.id)
 
-    last_emi = (
+    all_emis = (
         session.query(CardEmis)
-        .filter(CardEmis.card_id == uc.id)
-        .order_by(CardEmis.due_date.desc())
-        .first()
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.due_date.asc())
+        .all()
     )  # Get the latest emi of that user.
 
+    last_emi = all_emis[12]
+    first_emi = all_emis[0]
+    assert first_emi.due_amount == 500
     assert last_emi.emi_number == 13
     assert last_emi.due_date.strftime("%Y-%m-%d") == "2021-05-25"

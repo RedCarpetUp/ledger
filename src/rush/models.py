@@ -54,13 +54,13 @@ class AuditMixin(Base):
         )
         if old_row:
             old_row.row_status = "inactive"
-            session().flush()
+            session.flush()
         cls_keys = cls.__table__.columns.keys()
         keys_to_skip = [key for key in new_data.keys() if key not in cls_keys]
         new_skip_columns = keys_to_skip + list(skip_columns)
         for column in new_skip_columns:
             new_data.pop(column, None)
-        new_obj = cls.new(**new_data)
+        new_obj = cls.new(session, **new_data)
         session.flush()
         return new_obj
 
@@ -68,7 +68,6 @@ class AuditMixin(Base):
     def new(cls, session: Session, **kwargs) -> Any:
         obj = cls(**kwargs)
         session.add(obj)
-        session.flush()  # TODO remove this. this is only temporary.
         return obj
 
 
