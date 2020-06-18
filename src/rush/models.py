@@ -6,6 +6,8 @@ from typing import (
 )
 
 from pendulum import DateTime
+from datetime import datetime
+from decimal import Decimal
 from pydantic.dataclasses import dataclass as py_dataclass
 from sqlalchemy import (
     DECIMAL,
@@ -195,3 +197,11 @@ class CardEmis(AuditMixin):
     emi_number = Column(Integer, nullable=False)
     late_fee = Column(Numeric, nullable=False)
     row_status = Column(String(length=10), nullable=False, default='active')
+
+    def as_dict(self):
+        emi_dict = {
+            c.name: getattr(self, c.name).isoformat() if isinstance(getattr(self, c.name), datetime) else float(
+                getattr(self, c.name)) if isinstance(getattr(self, c.name), Decimal) else getattr(self, c.name)
+            for c in
+            self.__table__.columns}
+        return emi_dict

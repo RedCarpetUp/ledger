@@ -26,6 +26,7 @@ from rush.lender_funds import (
     m2p_transfer,
 )
 from rush.models import (
+    CardEmis,
     LoanData,
     User,
     UserCard,
@@ -388,3 +389,45 @@ def test_emi_creation(session: Session) -> None:
 
     last_emi = create_emis_for_card(session=session, user_card=uc, last_bill=bill)
     assert last_emi.emi_number == 12
+
+
+def test_subsequent_emi_creation(session: Session) -> None:
+    a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    session.add(a)
+
+    # assign card
+    uc = UserCard(user_id=a.id, card_activation_date=parse_date("2020-04-02"))
+    session.flush()
+    session.add(uc)
+
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-04-08 19:23:11"),
+        amount=Decimal(6000),
+        description="BigBasket.com",
+    )
+
+    generate_date = parse_date("2020-05-01").date()
+    bill_april = bill_generate(session=session, generate_date=generate_date, user_id=a.id)
+
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-08 19:23:11"),
+        amount=Decimal(6000),
+        description="BigBasket.com",
+    )
+
+    generate_date = parse_date("2020-05-01").date()
+    bill_may = bill_generate(session=session, generate_date=generate_date, user_id=a.id)
+
+    last_emi = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id)
+        .order_by(CardEmis.due_date.desc())
+        .first()
+    )  # Get the latest emi of that user.
+
+    assert last_emi.emi_number == 13
+    assert last_emi.due_date.strftime("%Y-%m-%d") == "2021-05-25"
