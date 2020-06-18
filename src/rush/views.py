@@ -1,6 +1,11 @@
 import json
 from decimal import Decimal
 
+from sqlalchemy import (
+    Integer,
+    String,
+    cast,
+)
 from sqlalchemy.orm import Session
 
 from rush.ledger_utils import (
@@ -8,7 +13,10 @@ from rush.ledger_utils import (
     get_all_unpaid_bills,
 )
 from rush.models import (
+    BookAccount,
     CardTransaction,
+    LedgerEntry,
+    LedgerTriggerEvent,
     LoanData,
 )
 
@@ -60,12 +68,37 @@ def bill_view(session: Session, user_id: int) -> str:
     )
 
 
-def transaction_view(session: Session, type_of_view: str, user_id: int, date: str) -> str:
-    all_transactions_of_a_user = (
-        session.query(LoanData)
-        .join(CardTransaction, LoanData.id=CardTransaction.loan_id)
-        .filter(LoanData.user_id=user_id, LoanData.agreement_date=date)
+def transaction_view(session: Session, bill_id: int) -> str:
+
+    all_book_accounts = (
+        session.query(BookAccount.id).filter(BookAccount.identifier == bill_id).subquery()
+    )
+
+    event_ids = (
+        session.query(LedgerEntry.event_id)
+        .filter(
+            LedgerEntry.debit_account.in_(all_book_accounts)
+            | LedgerEntry.credit_account.in_(all_book_accounts)
+        )
+        .subquery()
+    )
+
+    # These are the only events which are associated to payments and swipes.
+    all_transactions = (
+        session.query(LedgerTriggerEvent, LoanData, CardTransaction, LedgerEntry)
+        .join(LedgerEntry, LedgerEntry.event_id == LedgerTriggerEvent.id)
+        .join(
+            LoanData,
+            cast(LedgerTriggerEvent.extra_details["swipe_id"], String) == str(LoanData.card_id),
+        )
+        .join(CardTransaction, CardTransaction.loan_id == LoanData.id)
+        .filter(
+            LedgerTriggerEvent.id.in_(event_ids),
+            LedgerTriggerEvent.name.in_(["card_transaction", "bill_close"]),
+        )
+        .order_by(LedgerTriggerEvent.post_date)
         .all()
     )
-    # not sure if agreement_date is the criteria or not
-    return "work"
+    if all_transactions:
+        return json.dumps(all_transactions)
+    return json.dumps({"status": "working"})

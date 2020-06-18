@@ -32,7 +32,10 @@ from rush.models import (
     UserPy,
 )
 from rush.payments import payment_received
-from rush.views import bill_view
+from rush.views import (
+    bill_view,
+    transaction_view,
+)
 
 
 def test_current(get_alembic: alembic.config.Config) -> None:
@@ -358,5 +361,18 @@ def test_generate_bill_2(session: Session) -> None:
     # interest = get_interest_for_each_bill(session, unpaid_bills)
     # assert interest == Decimal(1404.00)
 
+
+def test_view(session: Session) -> None:
+    test_generate_bill_1(session)
+    _partial_payment_bill_1(session)
+    _accrue_late_fine_bill_1(session)
+    _pay_minimum_amount_bill_1(session)
+    _accrue_interest_bill_1(session)
+    _generate_bill_2(session)
+    user = session.query(User).filter(User.id == 99).one()
+
     json_value = bill_view(session, user.id)
+    assert json.loads(json_value)
+    bill = session.query(LoanData).filter(LoanData.user_id == user.id).first()
+    json_value = transaction_view(session, bill_id=bill.id)
     assert json.loads(json_value)
