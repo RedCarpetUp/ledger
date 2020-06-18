@@ -7,6 +7,10 @@ from rush.ledger_utils import (
     get_account_balance_from_str,
     get_all_unpaid_bills,
 )
+from rush.models import (
+    CardTransaction,
+    LoanData,
+)
 
 
 def bill_view(session: Session, user_id: int) -> str:
@@ -54,3 +58,14 @@ def bill_view(session: Session, user_id: int) -> str:
             "total_fine": "{total_fine}",
         }
     )
+
+
+def transaction_view(session: Session, type_of_view: str, user_id: int, date: str) -> str:
+    all_transactions_of_a_user = (
+        session.query(LoanData)
+        .join(CardTransaction, LoanData.id=CardTransaction.loan_id)
+        .filter(LoanData.user_id=user_id, LoanData.agreement_date=date)
+        .all()
+    )
+    # not sure if agreement_date is the criteria or not
+    return "work"
