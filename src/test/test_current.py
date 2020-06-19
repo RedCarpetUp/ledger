@@ -1,4 +1,5 @@
 import contextlib
+import json
 from decimal import Decimal
 from io import StringIO
 
@@ -33,6 +34,10 @@ from rush.models import (
     UserPy,
 )
 from rush.payments import payment_received
+from rush.views import (
+    bill_view,
+    transaction_view,
+)
 
 
 def test_current(get_alembic: alembic.config.Config) -> None:
@@ -299,18 +304,14 @@ def _generate_bill_2(session: Session) -> None:
 
     generate_date = parse_date("2020-06-01").date()
     bill = bill_generate(session=session, generate_date=generate_date, user_id=user.id)
-    _, opening_balance = get_account_balance_from_str(
-        session=session, book_string=f"{bill.id}/bill/opening_balance/a"
-    )
-    assert opening_balance == Decimal(900)
 
     _, principal_due = get_account_balance_from_str(
         session=session, book_string=f"{bill.id}/bill/principal_due/a"
     )
-    assert principal_due == Decimal(2900)
+    assert principal_due == Decimal(2000)
 
     _, min_due = get_account_balance_from_str(session=session, book_string=f"{bill.id}/bill/min_due/a")
-    assert min_due == Decimal(377)
+    assert min_due == Decimal(260)
 
 
 def _run_anomaly_bill_1(session: Session) -> None:
@@ -355,7 +356,7 @@ def test_generate_bill_2(session: Session) -> None:
     _accrue_interest_bill_1(session)
     _generate_bill_2(session)
     user = session.query(User).filter(User.id == 99).one()
-    unpaid_bills = get_all_unpaid_bills(session, user)
+    unpaid_bills = get_all_unpaid_bills(session, user.id)
     assert len(unpaid_bills) == 2
 
     unpaid_bills = all_bills = session.query(LoanData).filter(LoanData.user_id == 99).all()
@@ -434,3 +435,19 @@ def test_subsequent_emi_creation(session: Session) -> None:
     assert first_emi.due_amount == 600
     assert last_emi.emi_number == 13
     assert last_emi.due_date.strftime("%Y-%m-%d") == "2021-05-25"
+
+    
+def test_view(session: Session) -> None:
+    test_generate_bill_1(session)
+    _partial_payment_bill_1(session)
+    _accrue_late_fine_bill_1(session)
+    _pay_minimum_amount_bill_1(session)
+    _accrue_interest_bill_1(session)
+    _generate_bill_2(session)
+    user = session.query(User).filter(User.id == 99).one()
+
+    json_value = bill_view(session, user.id)
+    assert json.loads(json_value)
+    bill = session.query(LoanData).filter(LoanData.user_id == user.id).first()
+    json_value = transaction_view(session, bill_id=bill.id)
+    # assert json.loads(json_value)

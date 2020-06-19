@@ -12,6 +12,7 @@ from rush.create_emi import create_emis_for_card, add_emi_on_new_bill
 from rush.models import (
     LedgerTriggerEvent,
     LoanData,
+    User,
     UserCard,
     CardEmis,
 )
@@ -66,15 +67,6 @@ def bill_generate(session: Session, generate_date: Date, user_id: int) -> LoanDa
         .order_by(LoanData.agreement_date.desc())
         .first()
     )  # Get the latest bill of that user.
-
-    previous_bill = (  # Get 2nd last bill.
-        session.query(LoanData)
-        .filter(LoanData.user_id == user_id)
-        .order_by(LoanData.agreement_date.desc())
-        .offset(1)
-        .first()
-    )
-
     lt = LedgerTriggerEvent(name="bill_generate", post_date=generate_date)
     session.add(lt)
     session.flush()
