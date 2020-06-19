@@ -431,6 +431,6 @@ def test_subsequent_emi_creation(session: Session) -> None:
 
     last_emi = all_emis[12]
     first_emi = all_emis[0]
-    assert first_emi.due_amount == 500
+    assert first_emi.due_amount == 600
     assert last_emi.emi_number == 13
     assert last_emi.due_date.strftime("%Y-%m-%d") == "2021-05-25"

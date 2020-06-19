@@ -53,6 +53,8 @@ def add_emi_on_new_bill(
     _, interest_due = get_account_balance_from_str(session, book_string=f"{last_bill.id}/bill/interest_due/a")
     _, late_fine_due = get_account_balance_from_str(session, book_string=f"{last_bill.id}/bill/late_fine_due/a")
     due_amount = Decimal(principal_due / 12)
+    print('PRINCIPAL DUE')
+    print(principal_due)
     all_emis = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == user_card.id)
