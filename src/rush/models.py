@@ -195,12 +195,15 @@ class CardEmis(AuditMixin):
     interest_next_month = Column(Numeric, nullable=False)
     emi_number = Column(Integer, nullable=False)
     late_fee = Column(Numeric, nullable=False)
-    row_status = Column(String(length=10), nullable=False, default='active')
+    row_status = Column(String(length=10), nullable=False, default="active")
 
     def as_dict(self):
         emi_dict = {
-            c.name: getattr(self, c.name).isoformat() if isinstance(getattr(self, c.name), datetime) else float(
-                getattr(self, c.name)) if isinstance(getattr(self, c.name), Decimal) else getattr(self, c.name)
-            for c in
-            self.__table__.columns}
+            c.name: getattr(self, c.name).isoformat()
+            if isinstance(getattr(self, c.name), datetime)
+            else float(getattr(self, c.name))
+            if isinstance(getattr(self, c.name), Decimal)
+            else getattr(self, c.name)
+            for c in self.__table__.columns
+        }
         return emi_dict

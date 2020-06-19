@@ -71,15 +71,11 @@ def bill_generate(session: Session, generate_date: Date, user_id: int) -> LoanDa
     session.add(lt)
     session.flush()
 
-    bill_generate_event(session, previous_bill, bill, lt)
+    bill_generate_event(session, bill, lt)
 
     # Get the card conected with the users account.
     # TODO Consider for multiple cards
-    user_card = (
-        session.query(UserCard)
-        .filter(UserCard.user_id == user_id)
-        .first()
-    )
+    user_card = session.query(UserCard).filter(UserCard.user_id == user_id).first()
     # If last emi does not exist then we can consider to be first set of emi creation
     last_emi = (
         session.query(CardEmis)
@@ -91,5 +87,5 @@ def bill_generate(session: Session, generate_date: Date, user_id: int) -> LoanDa
         create_emis_for_card(session, user_card, bill)
     else:
         add_emi_on_new_bill(session, user_card, bill, last_emi.emi_number)
-        
+
     return bill
