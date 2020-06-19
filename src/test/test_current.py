@@ -35,13 +35,14 @@ from rush.payments import payment_received
 from rush.views import (
     bill_view,
     transaction_view,
+    user_view,
 )
 
 
 def test_current(get_alembic: alembic.config.Config) -> None:
     """Test that the alembic current command does not erorr"""
     # Runs with no error
-    # output = run_alembic_command(pg["engine"], "current", {})
+    # output = run_alembic_command(pg["engine"], "current",  {})
 
     stdout = StringIO()
     with contextlib.redirect_stdout(stdout):
@@ -370,9 +371,16 @@ def test_view(session: Session) -> None:
     _accrue_interest_bill_1(session)
     _generate_bill_2(session)
     user = session.query(User).filter(User.id == 99).one()
+    value = 1.1
+    print(value)
 
-    json_value = bill_view(session, user.id)
-    assert json.loads(json_value)
+    user_bill = user_view(session, user.id)
+    assert user_bill["current_bill_balance"] == Decimal(870)  # 870 to pay
+    assert user_bill["current_bill_interest"] == Decimal(30)  # 30 interest
+    assert user_bill["min_to_pay"] == Decimal(30)  # sum of all interest and fines
+    bill_details = bill_view(session, user.id)
+
     bill = session.query(LoanData).filter(LoanData.user_id == user.id).first()
-    json_value = transaction_view(session, bill_id=bill.id)
-    # assert json.loads(json_value)
+    transactions = transaction_view(session, bill_id=bill.id)
+    print(transactions[0]["transaction_type"])
+    # assert transactions[0]["amount"] == Decimal(0.0)

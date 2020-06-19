@@ -163,10 +163,7 @@ def get_all_unpaid_bills(session: Session, user_id: int) -> List[LoanData]:
         .all()
     )
     for bill in all_bills:
-        _, principal_due = get_account_balance_from_str(
-            session, book_string=f"{bill.id}/bill/principal_due/a"
-        )
-        if principal_due > 0:
+        if is_bill_closed(session, bill) == False:
             unpaid_bills.append(bill)
 
     return unpaid_bills

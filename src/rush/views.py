@@ -13,6 +13,8 @@ from sqlalchemy.orm import Session
 from rush.ledger_utils import (
     get_account_balance_from_str,
     get_all_unpaid_bills,
+    get_remaining_bill_balance,
+    is_bill_closed,
 )
 from rush.models import (
     BookAccount,
@@ -23,14 +25,31 @@ from rush.models import (
 )
 
 
-def bill_view(session: Session, user_id: int) -> str:
-
-    opening_amount = 0
-    opening_interest_due = 0
-    opening_fine_due = 0
+def user_view(session, user_id: int) -> dict:
     index = 0
-    bill_detials = []
-    unpaid_bill_details = []
+    total_due, min_amount, current_bill_principal_amount, current_bill_principal_interest = 0, 0, 0, 0
+    for bill in get_all_unpaid_bills(session, user_id):
+        bill_balance = get_remaining_bill_balance(session, bill)
+        total_due = total_due + bill_balance["total_due"]
+        min_amount = min_amount + bill_balance["interest_due"] + bill_balance["late_fine"]
+        if index == 0:
+            current_bill_principal_amount = bill_balance["principal_due"]
+            current_bill_principal_interest = min_amount
+
+    return {
+        "max_to_pay": total_due,
+        "min_to_pay": min_amount,
+        "current_bill_balance": current_bill_principal_amount,
+        "current_bill_interest": current_bill_principal_interest,
+        "previous_amount_to_pay": total_due
+        - current_bill_principal_amount
+        - current_bill_principal_interest,
+    }
+
+
+def bill_view(session: Session, user_id: int) -> list:
+
+    bill_details = []
     all_bills = (
         session.query(LoanData)
         .filter(LoanData.user_id == user_id)
@@ -38,60 +57,20 @@ def bill_view(session: Session, user_id: int) -> str:
         .all()
     )
     for bill in all_bills:
-        _, principal_due = get_account_balance_from_str(
-            session, book_string=f"{bill.id}/bill/principal_due/a"
-        )
-        _, interest_due = get_account_balance_from_str(
-            session=session, book_string=f"{bill.id}/bill/interest_due/a"
-        )
-        _, fine_due = get_account_balance_from_str(
-            session=session, book_string=f"{bill.id}/bill/late_fine_due/a"
-        )
-        bill_detials.append(
+        bill_balance = get_remaining_bill_balance(session, bill)
+        bill_details.append(
             {
-                "bill": bill,
-                "principal_due": principal_due,
-                "interest_due": interest_due,
-                "fine_due": fine_due,
+                "bill_id": bill.id,
+                "principal_due": bill_balance["principal_due"],
+                "interest_due": bill_balance["interest_due"],
+                "fine_due": bill_balance["late_fine"],
+                "paid_status": is_bill_closed(session, bill),
                 "transactions": transaction_view(session, bill.id),
             }
         )
-        if principal_due > 0:
-            if index == 0:
-                current_amount = principal_due
-                current_interest_due = interest_due
-                current_fine_due = fine_due
-            else:
-                opening_fine_due = opening_fine_due + fine_due
-                opening_interest_due = opening_interest_due + interest_due
-                opening_amount = opening_amount + principal_due
-            unpaid_bill_details.append(
-                {
-                    "bill": bill,
-                    "principal_due": principal_due,
-                    "interest_due": interest_due,
-                    "fine_due": fine_due,
-                    "transactions": transaction_view(session, bill.id),
-                }
-            )
-        index += 1
-
-    opening_balance = opening_amount + opening_interest_due + opening_fine_due
-    current_balance = current_amount + current_interest_due + current_fine_due
-    total_interest = opening_interest_due + current_fine_due
-    total_fine = opening_fine_due + current_fine_due
-
-    return json.dumps(
-        {
-            "opening_balance": "{opening_balance}",
-            "current_balance": "{current_balance}",
-            "total_interest": "{total_interest}",
-            "total_fine": "{total_fine}",
-        }
-    )
 
 
-def transaction_view(session: Session, bill_id: int) -> LedgerTriggerEvent:
+def transaction_view(session: Session, bill_id: int) -> list:
 
     all_book_accounts = (
         session.query(BookAccount.id).filter(BookAccount.identifier == bill_id).subquery()
@@ -108,7 +87,12 @@ def transaction_view(session: Session, bill_id: int) -> LedgerTriggerEvent:
 
     # These are the only events which are associated to payments and swipes.
     all_transactions = (
-        session.query(LedgerTriggerEvent.extra_details, CardTransaction.created_at, LedgerEntry.amount)
+        session.query(
+            LedgerTriggerEvent.name,
+            CardTransaction.description,
+            LedgerEntry.amount,
+            CardTransaction.txn_time,
+        )
         .join(LedgerEntry, LedgerEntry.event_id == LedgerTriggerEvent.id)
         .outerjoin(
             CardTransaction,
@@ -121,5 +105,14 @@ def transaction_view(session: Session, bill_id: int) -> LedgerTriggerEvent:
         .order_by(LedgerTriggerEvent.id.desc())
         .all()
     )
-
-    return all_transactions
+    transactions = []
+    for transaction in all_transactions:
+        transactions.append(
+            {
+                "transaction_type": transaction.name,
+                "amount": transaction.amount,
+                "transaction_date": transaction.txn_time,
+                "description": transaction.description,
+            }
+        )
+    return transactions
