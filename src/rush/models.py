@@ -196,6 +196,8 @@ class CardEmis(AuditMixin):
     emi_number = Column(Integer, nullable=False)
     late_fee = Column(Numeric, nullable=False)
     row_status = Column(String(length=10), nullable=False, default="active")
+    payment_received = Column(Numeric, nullable=False, default=Decimal(0))
+    payment_status = Column(String(length=10), nullable=False, default="UnPaid")
 
     def as_dict(self):
         emi_dict = {

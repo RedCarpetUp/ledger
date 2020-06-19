@@ -83,6 +83,8 @@ def upgrade() -> None:
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.Column("payment_received", sa.DECIMAL(), nullable=False),
+        sa.Column("payment_status", sa.String(10), nullable=False),
         sa.Column("card_id", sa.Integer(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["card_id"], ["user_card.id"], name="fk_card_emis_card_id"),

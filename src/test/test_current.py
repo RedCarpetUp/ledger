@@ -15,7 +15,10 @@ from rush.accrue_financial_charges import (
 from rush.anomaly_detection import run_anomaly
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
-from rush.create_emi import create_emis_for_card
+from rush.create_emi import (
+    create_emis_for_card,
+    refresh_schedule,
+)
 from rush.ledger_utils import (
     get_account_balance_from_str,
     get_all_unpaid_bills,
@@ -454,3 +457,27 @@ def test_view(session: Session) -> None:
     bill = session.query(LoanData).filter(LoanData.user_id == user.id).first()
     json_value = transaction_view(session, bill_id=bill.id)
     # assert json.loads(json_value)
+
+
+def test_refresh_schedule(session: Session) -> None:
+    a = User(id=2005, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    session.add(a)
+
+    # assign card
+    uc = UserCard(user_id=a.id, card_activation_date=parse_date("2020-04-02"))
+    session.flush()
+    session.add(uc)
+
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-04-08 19:23:11"),
+        amount=Decimal(6000),
+        description="BigBasket.com",
+    )
+
+    generate_date = parse_date("2020-05-01").date()
+    bill_april = bill_generate(session=session, generate_date=generate_date, user_id=a.id)
+
+    # Update later
+    assert a.id == 2005

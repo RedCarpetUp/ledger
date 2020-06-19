@@ -64,8 +64,6 @@ def add_emi_on_new_bill(
         session, book_string=f"{last_bill.id}/bill/late_fine_due/a"
     )
     due_amount = Decimal(principal_due / 12)
-    print("PRINCIPAL DUE")
-    print(principal_due)
     all_emis = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == user_card.id)
@@ -101,3 +99,49 @@ def add_emi_on_new_bill(
     session.add(new_emi)
     session.flush()
     return new_emi
+
+
+def refresh_schedule(session: Session, user_id: int) -> None:
+    all_bills = (
+        session.query(LoanData)
+        .filter(LoanData.user_id == user_id)
+        .order_by(LoanData.agreement_date.asc())
+        .all()
+    )
+    user_card = session.query(UserCard).filter(UserCard.user_id == user_id).first()
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == user_card.id)
+        .order_by(CardEmis.due_date.asc())
+    )
+    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    # To run test, remove later
+    # first_emi = emis_dict[0]
+    # return first_emi
+    payment_received_and_adjusted = Decimal(0)
+    last_paid_emi_number = 0
+    for bill in all_bills:
+        _, late_fee_received = get_account_balance_from_str(
+            session, book_string=f"{bill.id}/bill/late_fee_received/a", to_date=to_date
+        )
+        _, interest_received = get_account_balance_from_str(
+            session, book_string=f"{bill.id}/bill/interest_received/a", to_date=to_date
+        )
+        _, principal_received = get_account_balance_from_str(
+            session, book_string=f"{bill.id}/bill/principal_received/a", to_date=to_date
+        )
+        total_bill_principal = bill.total_principal  # To be received later from Raghavs method
+        payment_received_and_adjusted += late_fee_received + interest_received + principal_received
+        for emi in emis_dict:
+            if emi["emi_number"] <= last_paid_emi_number:
+                continue
+            diff = total_bill_principal - payment_received_and_adjusted
+            if diff >= 0:
+                emi["payment_received"] = payment_received_and_adjusted
+                if diff == 0:
+                    last_paid_emi_number = emi["emi_number"]
+                    emi["payment_status"] = "Paid"
+                break
+            emi["payment_received"] = total_bill_principal
+            payment_received_and_adjusted = abs(diff)
+    session.bulk_update_mappings(CardEmis, emis_dict)
