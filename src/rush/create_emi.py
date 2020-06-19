@@ -124,17 +124,16 @@ def refresh_schedule(session: Session, user_id: int) -> None:
     for bill in all_bills:
         events = get_affected_events(session, bill.id)
         for event in events:
-            if event.name == "bill_close":
+            if event.name == "payment_received":
                 payment_received_and_adjusted += event.amount
                 last_payment_date = event.post_date
-        total_bill_principal = bill.total_principal  # To be received later from Raghavs method
         for emi in emis_dict:
             if emi["emi_number"] <= last_paid_emi_number:
                 continue
             if not last_payment_date:
                 emi["last_payment_date"] = last_payment_date
-            if total_bill_principal and payment_received_and_adjusted:
-                diff = total_bill_principal - payment_received_and_adjusted
+            if payment_received_and_adjusted:
+                diff = emi["due_amount"] - payment_received_and_adjusted
                 emi["dpd"] = -99 if diff == 0 else (get_current_ist_time() - emi["due_date"]).days
                 if diff >= 0:
                     emi["payment_received"] = payment_received_and_adjusted
@@ -142,6 +141,6 @@ def refresh_schedule(session: Session, user_id: int) -> None:
                         last_paid_emi_number = emi["emi_number"]
                         emi["payment_status"] = "Paid"
                     break
-                emi["payment_received"] = total_bill_principal
+                emi["payment_received"] = emi["due_amount"]
                 payment_received_and_adjusted = abs(diff)
     session.bulk_update_mappings(CardEmis, emis_dict)
