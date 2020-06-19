@@ -196,6 +196,8 @@ class CardEmis(AuditMixin):
     emi_number = Column(Integer, nullable=False)
     late_fee = Column(Numeric, nullable=False)
     row_status = Column(String(length=10), nullable=False, default="active")
+    dpd = Column(Integer, nullable=True, default=0)
+    last_payment_date = Column(TIMESTAMP, nullable=True)
     payment_received = Column(Numeric, nullable=False, default=Decimal(0))
     payment_status = Column(String(length=10), nullable=False, default="UnPaid")
 
