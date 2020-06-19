@@ -201,8 +201,6 @@ class CardEmis(AuditMixin):
         emi_dict = {
             c.name: getattr(self, c.name).isoformat()
             if isinstance(getattr(self, c.name), datetime)
-            else float(getattr(self, c.name))
-            if isinstance(getattr(self, c.name), Decimal)
             else getattr(self, c.name)
             for c in self.__table__.columns
         }

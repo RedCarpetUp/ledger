@@ -80,7 +80,7 @@ def add_emi_on_new_bill(
             continue
         elif emi_dict["emi_number"] == ((new_end_emi_number - 12) + 1):
             emi_dict["late_fee"] += late_fine_due
-        emi_dict["due_amount"] += float(due_amount)
+        emi_dict["due_amount"] += due_amount
         new_emi_list.append(emi_dict)
     session.bulk_update_mappings(CardEmis, new_emi_list)
     # Get the second last emi for calculating values of the last emi
