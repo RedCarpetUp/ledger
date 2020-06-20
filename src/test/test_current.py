@@ -26,6 +26,7 @@ from rush.lender_funds import (
     m2p_transfer,
 )
 from rush.models import (
+    LedgerTriggerEvent,
     LoanData,
     User,
     UserCard,
@@ -363,24 +364,84 @@ def test_generate_bill_2(session: Session) -> None:
     # assert interest == Decimal(1404.00)
 
 
+def test_generate_bill_3(session: Session) -> None:
+    a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    session.add(a)
+
+    # assign card
+    uc = UserCard(user_id=a.id, card_activation_date=parse_date("2020-04-02"))
+    session.flush()
+    session.add(uc)
+
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-08 20:23:11"),
+        amount=Decimal(1500),
+        description="Flipkart.com",
+    )
+
+    generate_date = parse_date("2020-06-01").date()
+    bill = bill_generate(session=session, generate_date=generate_date, user_id=a.id)
+
+    _, unbilled_balance = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/unbilled_transactions/a"
+    )
+    assert unbilled_balance == 0
+
+    _, principal_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/principal_due/a"
+    )
+    assert principal_due == 1500
+
+    _, min_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/min_due/a")
+    assert min_due == 195
+
+
+def _pay_minimum_amount_bill_2(session: Session) -> None:
+    user = session.query(User).filter(User.id == 99).one()
+
+    bill = (
+        session.query(LoanData)
+        .filter(LoanData.user_id == user.id)
+        .order_by(LoanData.agreement_date.desc())
+        .first()
+    )
+
+    # Pay 10 more. and 100 for late fee.
+    bill = payment_received(
+        session=session,
+        user_id=user.id,
+        payment_amount=Decimal(110),
+        payment_date=parse_date("2020-06-20"),
+    )
+    balance_paid = (
+        session.query(LedgerTriggerEvent)
+        .order_by(LedgerTriggerEvent.post_date.desc())
+        .filter(LedgerTriggerEvent.name == "bill_close")
+        .first()
+    )
+    assert balance_paid.amount == Decimal(110)
+
+
 def test_view(session: Session) -> None:
-    test_generate_bill_1(session)
-    _partial_payment_bill_1(session)
+    test_generate_bill_3(session)
+    # _partial_payment_bill_1(session)
     _accrue_late_fine_bill_1(session)
-    _pay_minimum_amount_bill_1(session)
-    _accrue_interest_bill_1(session)
-    _generate_bill_2(session)
+    _pay_minimum_amount_bill_2(session)
+    # _accrue_interest_bill_1(session)
+    # _generate_bill_2(session)
     user = session.query(User).filter(User.id == 99).one()
     value = 1.1
     print(value)
 
     user_bill = user_view(session, user.id)
-    assert user_bill["current_bill_balance"] == Decimal(870)  # 870 to pay
-    assert user_bill["current_bill_interest"] == Decimal(30)  # 30 interest
-    assert user_bill["min_to_pay"] == Decimal(30)  # sum of all interest and fines
+    assert user_bill["current_bill_balance"] == Decimal(1490)  # 1490 to pay since 110 payment was made
+    assert user_bill["current_bill_interest"] == Decimal(0)  # 100 interest
+    assert user_bill["min_to_pay"] == Decimal(0)  # sum of all interest and fines
     bill_details = bill_view(session, user.id)
 
     bill = session.query(LoanData).filter(LoanData.user_id == user.id).first()
     transactions = transaction_view(session, bill_id=bill.id)
-    print(transactions[0]["transaction_type"])
-    # assert transactions[0]["amount"] == Decimal(0.0)
+    # print(transactions[0]["description"]+"")
+    assert transactions[0]["amount"] == Decimal(110)

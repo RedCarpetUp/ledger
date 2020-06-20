@@ -89,11 +89,10 @@ def transaction_view(session: Session, bill_id: int) -> list:
     all_transactions = (
         session.query(
             LedgerTriggerEvent.name,
+            LedgerTriggerEvent.amount,
             CardTransaction.description,
-            LedgerEntry.amount,
             CardTransaction.txn_time,
         )
-        .join(LedgerEntry, LedgerEntry.event_id == LedgerTriggerEvent.id)
         .outerjoin(
             CardTransaction,
             cast(LedgerTriggerEvent.extra_details["swipe_id"], String) == str(CardTransaction.id),
@@ -102,7 +101,7 @@ def transaction_view(session: Session, bill_id: int) -> list:
             LedgerTriggerEvent.id.in_(event_ids),
             LedgerTriggerEvent.name.in_(["card_transaction", "bill_close"]),
         )
-        .order_by(LedgerTriggerEvent.id.desc())
+        .order_by(LedgerTriggerEvent.post_date.desc())
         .all()
     )
     transactions = []
