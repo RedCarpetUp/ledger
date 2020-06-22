@@ -19,6 +19,7 @@ from rush.create_emi import (
     create_emis_for_card,
     refresh_schedule,
 )
+from rush.ledger_events import accrue_interest_event
 from rush.ledger_utils import (
     get_account_balance_from_str,
     get_all_unpaid_bills,
@@ -35,12 +36,14 @@ from rush.models import (
     User,
     UserCard,
     UserPy,
+    LedgerTriggerEvent,
 )
 from rush.payments import payment_received
 from rush.views import (
     bill_view,
     transaction_view,
 )
+from rush.accrue_financial_charges import accrue_interest_prerequisites
 
 
 def test_current(get_alembic: alembic.config.Config) -> None:
@@ -481,3 +484,76 @@ def test_refresh_schedule(session: Session) -> None:
 
     # Update later
     assert a.id == 2005
+
+
+def test_schedule_for_interest_and_payment(session: Session) -> None:
+    a = User(id=1991, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    session.add(a)
+
+    # assign card
+    uc = UserCard(user_id=a.id, card_activation_date=parse_date("2020-05-01"))
+    session.flush()
+    session.add(uc)
+
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-08 19:23:11"),
+        amount=Decimal(6000),
+        description="BigBasket.com",
+    )
+
+    generate_date = parse_date("2020-06-01").date()
+    bill_may = bill_generate(session=session, generate_date=generate_date, user_id=a.id)
+
+    # Accrue Interest
+    interest_date = parse_date("2020-06-29")
+    bills = (
+        session.query(LoanData)
+        .filter(LoanData.user_id == a.id)
+        .order_by(LoanData.agreement_date.desc())
+        .all()
+    )
+    can_charge_interest = accrue_interest_prerequisites(session, bill_may)
+    if can_charge_interest:  # if bill isn't paid fully accrue interest.
+        lt = LedgerTriggerEvent(name="accrue_interest", post_date=interest_date)
+        session.add(lt)
+        session.flush()
+        accrue_interest_event(session, bills, lt)
+
+    # Check calculated interest
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_may.id}/bill/interest_due/a"
+    )
+    assert interest_due == 180
+
+    # Check if emi is adjusted correctly in schedule
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.due_date.asc())
+    )
+    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    first_emi = emis_dict[0]
+    assert first_emi["interest_current_month"] == 84
+    assert first_emi["interest_next_month"] == 96
+
+    # Do Full Payment
+    payment_date = parse_date("2020-06-30")
+    amount = Decimal(6180)
+    bill = payment_received(
+        session=session, user_id=a.id, payment_amount=amount, payment_date=payment_date,
+    )
+
+    # Refresh Schedule
+    refresh_schedule(session, a.id)
+
+    # Check if amount is adjusted correctly in schedule
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.due_date.asc())
+    )
+    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    second_emi = emis_dict[1]
+    assert second_emi["due_amount"] == 0

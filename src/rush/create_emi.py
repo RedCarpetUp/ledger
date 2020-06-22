@@ -130,15 +130,17 @@ def refresh_schedule(session: Session, user_id: int) -> None:
             if last_payment_date:
                 emi["last_payment_date"] = last_payment_date
             if all_paid:
-                emi["payment_received"] = 0
-                emi["due_amount"] = 0
-                emi["total_closing_balance"] = 0
-                emi["interest_current_month"] = 0
-                emi["interest_next_month"] = 0
+                emi["payment_received"] = Decimal(0)
+                emi["due_amount"] = Decimal(0)
+                emi["total_closing_balance"] = Decimal(0)
+                emi["interest_current_month"] = Decimal(0)
+                emi["interest_next_month"] = Decimal(0)
                 emi["payment_status"] = "Paid"
+                last_paid_emi_number = emi["emi_number"]
+                continue
             if payment_received_and_adjusted:
                 diff = emi["due_amount"] - payment_received_and_adjusted
-                emi["dpd"] = -99 if diff == 0 else (get_current_ist_time() - emi["due_date"]).days
+                emi["dpd"] = -99 if diff == 0 else (get_current_ist_time().date() - emi["due_date"]).days
                 if diff >= 0:
                     emi["payment_received"] = payment_received_and_adjusted
                     emi["total_closing_balance"] -= payment_received_and_adjusted
@@ -176,8 +178,11 @@ def adjust_interest_in_emis(session: Session, user_id: int, post_date: DateTime)
     )
     emi_dict = emi.as_dict()
     _, interest_due = get_account_balance_from_str(
-        session=session, book_string=f"{bill.id}/bill/interest_due/a"
+        session=session, book_string=f"{latest_bill.id}/bill/interest_due/a"
     )
-    emi["interest_current_month"] = round(interest_due * (30 - emi_dict["due_date"].day) / 30, 2)
-    emi["interest_next_month"] = round(interest_due - emi["interest_current_month"], 2)
-    session.bulk_update_mappings(CardEmis, emi_dict)
+    emi_dict["interest_current_month"] = round(interest_due * (30 - emi_dict["due_date"].day) / 30, 2)
+    emi_dict["interest_next_month"] = round(interest_due - emi_dict["interest_current_month"], 2)
+    emi_dict["total_closing_balance"] += (
+        emi_dict["interest_current_month"] + emi_dict["interest_next_month"]
+    )
+    session.bulk_update_mappings(CardEmis, [emi_dict])

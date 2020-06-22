@@ -35,7 +35,7 @@ def get_affected_events(session: Session, book_identifier: int) -> List[LedgerTr
         session.query(LedgerTriggerEvent)
         .filter(
             LedgerTriggerEvent.id.in_(event_ids),
-            LedgerTriggerEvent.name.in_(["accrue_interest", "accrue_late_fine"]),
+            LedgerTriggerEvent.name.in_(["accrue_interest", "accrue_late_fine", "payment_received"]),
         )
         .order_by(LedgerTriggerEvent.post_date)
         .all()
