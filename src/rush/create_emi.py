@@ -133,6 +133,8 @@ def refresh_schedule(session: Session, user_id: int) -> None:
                 emi["payment_received"] = 0
                 emi["due_amount"] = 0
                 emi["total_closing_balance"] = 0
+                emi["interest_current_month"] = 0
+                emi["interest_next_month"] = 0
                 emi["payment_status"] = "Paid"
             if payment_received_and_adjusted:
                 diff = emi["due_amount"] - payment_received_and_adjusted
@@ -149,6 +151,8 @@ def refresh_schedule(session: Session, user_id: int) -> None:
                     emi["payment_received"] = payment_received_and_adjusted
                     emi["due_amount"] = payment_received_and_adjusted
                     emi["total_closing_balance"] = 0
+                    last_paid_emi_number = emi["emi_number"]
+                    emi["payment_status"] = "Paid"
                     continue
                 emi["payment_received"] = emi["due_amount"]
                 emi["total_closing_balance"] -= emi["due_amount"]
