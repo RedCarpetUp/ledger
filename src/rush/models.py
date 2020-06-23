@@ -11,6 +11,7 @@ from sqlalchemy import (
     DECIMAL,
     JSON,
     TIMESTAMP,
+    Boolean,
     Column,
     Date,
     ForeignKey,
@@ -123,7 +124,7 @@ class LedgerTriggerEventPy(AuditMixinPy):
 class BookAccount(AuditMixin):
     __tablename__ = "book_account"
     identifier = Column(Integer)
-    identifier_type = Column(String(50))  # bill, emi, user etc.
+    identifier_type = Column(String(50))  # bill, emi, user, lender etc.
     book_name = Column(String(50))
     account_type = Column(String(50))
     book_date = Column(Date())
@@ -164,8 +165,10 @@ class UserCard(AuditMixin):
 class LoanData(AuditMixin):
     __tablename__ = "loan_data"
     user_id = Column(Integer, ForeignKey(User.id))
+    lender_id = Column(Integer, nullable=False)
     agreement_date = Column(TIMESTAMP, nullable=False)
     card_id = Column(Integer, ForeignKey(UserCard.id))
+    is_generated = Column(Boolean, nullable=False, server_default="false")
     rc_rate_of_interest_annual = Column(Numeric, nullable=False)
     lender_rate_of_interest_annual = Column(Numeric, nullable=False)
 

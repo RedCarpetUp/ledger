@@ -20,15 +20,19 @@ def create_bill(
     session: Session,
     user_card: UserCard,
     new_bill_date: Date,
+    lender_id: int,
     rc_rate_of_interest_annual: Decimal,
     lender_rate_of_interest_annual: Decimal,
+    is_generated: bool,
 ) -> LoanData:
     new_bill = LoanData(
         user_id=user_card.user_id,
         card_id=user_card.id,
+        lender_id=lender_id,
         agreement_date=new_bill_date,
         rc_rate_of_interest_annual=rc_rate_of_interest_annual,
         lender_rate_of_interest_annual=lender_rate_of_interest_annual,
+        is_generated=is_generated,
     )
     session.add(new_bill)
     session.flush()
@@ -54,20 +58,24 @@ def get_or_create_bill_for_card_swipe(
         new_bill_date = last_valid_statement_date + timedelta(days=1)
     else:
         new_bill_date = user_card.card_activation_date
-    new_bill = create_bill(session, user_card, new_bill_date, 36, 18)
+    new_bill = create_bill(
+        session, user_card, new_bill_date, 62311, Decimal(36), Decimal(18), is_generated=False
+    )
     return new_bill
 
 
-def bill_generate(session: Session, generate_date: Date, user_id: int) -> LoanData:
+def bill_generate(session: Session, user_card: UserCard) -> LoanData:
     bill = (
         session.query(LoanData)
-        .filter(LoanData.user_id == user_id)
-        .order_by(LoanData.agreement_date.desc())
+        .filter(LoanData.user_id == user_card.user_id, LoanData.is_generated.is_(False))
+        .order_by(LoanData.agreement_date)
         .first()
-    )  # Get the latest bill of that user.
-    lt = LedgerTriggerEvent(name="bill_generate", post_date=generate_date)
+    )  # Get the first bill which is not generated.
+    lt = LedgerTriggerEvent(name="bill_generate", post_date=bill.agreement_date)
     session.add(lt)
     session.flush()
 
     bill_generate_event(session, bill, lt)
+    # TODO accrue interest too?
+    bill.is_generated = True
     return bill

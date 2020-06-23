@@ -42,6 +42,8 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["card_id"], ["user_card.id"], name="fk_loan_data_card_id"),
         sa.Column("rc_rate_of_interest_annual", sa.Integer(), nullable=False),
         sa.Column("lender_rate_of_interest_annual", sa.Integer(), nullable=False),
+        sa.Column("lender_id", sa.Integer(), nullable=False),
+        sa.Column("is_generated", sa.Boolean(), nullable=False, server_default="false"),
     )
     op.create_table(
         "loan_emis",
