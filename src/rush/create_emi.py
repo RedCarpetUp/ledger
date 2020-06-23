@@ -36,6 +36,7 @@ def create_emis_for_card(session: Session, user_card: UserCard, last_bill: LoanD
             emi_number=i,
             total_closing_balance=(principal_due - due_amount * (i - 1)),
             due_amount=due_amount,
+            total_due_amount=due_amount,
             due_date=due_date,
             late_fee=late_fine_due,
         )
@@ -65,18 +66,17 @@ def add_emi_on_new_bill(
         emi_dict = emi.as_dict()
         # We consider 12 because the first insertion had 12 emis
         if emi_dict["emi_number"] <= new_end_emi_number - 12:
-            emi_dict["total_closing_balance"] += (
-                emi_dict["interest_current_month"] + emi_dict["interest_next_month"]
-            )
             new_emi_list.append(emi_dict)
             continue
         elif emi_dict["emi_number"] == ((new_end_emi_number - 12) + 1):
             emi_dict["late_fee"] += late_fine_due
         emi_dict["due_amount"] += due_amount
-        emi_dict["total_closing_balance"] += (
-            (principal_due - (due_amount * (emi_dict["emi_number"] - (new_end_emi_number - 12) - 1)))
-            + emi_dict["interest_current_month"]
-            + emi_dict["interest_next_month"]
+        emi_dict["total_due_amount"] += due_amount
+        emi_dict["total_closing_balance"] += principal_due - (
+            due_amount * (emi_dict["emi_number"] - (new_end_emi_number - 12) - 1)
+        )
+        emi_dict["total_closing_balance_post_due_date"] += principal_due - (
+            due_amount * (emi_dict["emi_number"] - (new_end_emi_number - 12) - 1)
         )
         new_emi_list.append(emi_dict)
     session.bulk_update_mappings(CardEmis, new_emi_list)
@@ -88,6 +88,7 @@ def add_emi_on_new_bill(
         card_id=user_card.id,
         emi_number=new_end_emi_number,
         due_amount=due_amount,
+        total_due_amount=due_amount,
         total_closing_balance=(principal_due - (due_amount * (new_end_emi_number - 1))),
         due_date=last_emi_due_date,
         late_fee=late_fee,
@@ -130,34 +131,72 @@ def refresh_schedule(session: Session, user_id: int) -> None:
             if last_payment_date:
                 emi["last_payment_date"] = last_payment_date
             if all_paid:
-                emi["payment_received"] = Decimal(0)
-                emi["due_amount"] = Decimal(0)
-                emi["total_closing_balance"] = Decimal(0)
-                emi["interest_current_month"] = Decimal(0)
-                emi["interest_next_month"] = Decimal(0)
+                emi["payment_received"] = emi["late_fee_received"] = emi["interest_received"] = emi[
+                    "due_amount"
+                ] = emi["total_due_amount"] = emi["total_closing_balance"] = emi[
+                    "total_closing_balance_post_due_date"
+                ] = emi[
+                    "interest_current_month"
+                ] = emi[
+                    "interest_next_month"
+                ] = emi[
+                    "interest"
+                ] = Decimal(
+                    0
+                )
                 emi["payment_status"] = "Paid"
                 last_paid_emi_number = emi["emi_number"]
                 continue
             if payment_received_and_adjusted:
-                diff = emi["due_amount"] - payment_received_and_adjusted
-                emi["dpd"] = -99 if diff == 0 else (get_current_ist_time().date() - emi["due_date"]).days
-                if diff >= 0:
-                    emi["payment_received"] = payment_received_and_adjusted
-                    emi["total_closing_balance"] -= payment_received_and_adjusted
-                    if diff == 0:
-                        last_paid_emi_number = emi["emi_number"]
-                        emi["payment_status"] = "Paid"
-                    break
-                if payment_received_and_adjusted >= emi["total_closing_balance"]:
+                current_date = get_current_ist_time().date()
+                actual_closing_balance = emi["total_closing_balance_post_due_date"]
+                if current_date <= emi["due_date"]:
+                    actual_closing_balance = emi["total_closing_balance"]
+                if payment_received_and_adjusted >= actual_closing_balance:
                     all_paid = True
-                    emi["payment_received"] = payment_received_and_adjusted
-                    emi["due_amount"] = payment_received_and_adjusted
+                    emi["late_fee_received"] = emi["late_fee"]
+                    emi["interest_received"] = emi["interest"]
+                    emi["payment_received"] = emi["due_amount"]
                     emi["total_closing_balance"] = 0
+                    emi["total_closing_balance_post_due_date"] = 0
                     last_paid_emi_number = emi["emi_number"]
                     emi["payment_status"] = "Paid"
                     continue
+                diff = emi["total_due_amount"] - payment_received_and_adjusted
+                # -99 dpd if you can't figure out
+                emi["dpd"] = -99 if diff == 0 else (current_date - emi["due_date"]).days
+                if diff >= 0:
+                    if diff == 0:
+                        last_paid_emi_number = emi["emi_number"]
+                        emi["payment_status"] = "Paid"
+                    if payment_received_and_adjusted <= emi["late_fee"]:
+                        emi["late_fee_received"] = payment_received_and_adjusted
+                        emi["total_closing_balance"] -= payment_received_and_adjusted
+                        emi["total_closing_balance_post_due_date"] -= payment_received_and_adjusted
+                        break
+                    else:
+                        emi["late_fee_received"] = emi["late_fee"]
+                        payment_received_and_adjusted -= emi["late_fee"]
+                        if payment_received_and_adjusted <= emi["interest"]:
+                            emi["interest_received"] = payment_received_and_adjusted
+                            emi["total_closing_balance"] -= payment_received_and_adjusted
+                            emi["total_closing_balance_post_due_date"] -= payment_received_and_adjusted
+                            break
+                        else:
+                            emi["interest_received"] = emi["interest"]
+                            payment_received_and_adjusted -= emi["interest"]
+                            if payment_received_and_adjusted <= emi["due_amount"]:
+                                emi["payment_received"] = payment_received_and_adjusted
+                                emi["total_closing_balance"] -= payment_received_and_adjusted
+                                emi[
+                                    "total_closing_balance_post_due_date"
+                                ] -= payment_received_and_adjusted
+                                break
+                emi["late_fee_received"] = emi["late_fee"]
+                emi["interest_received"] = emi["interest"]
                 emi["payment_received"] = emi["due_amount"]
-                emi["total_closing_balance"] -= emi["due_amount"]
+                emi["payment_status"] = "Paid"
+                last_paid_emi_number = emi["emi_number"]
                 payment_received_and_adjusted = abs(diff)
     session.bulk_update_mappings(CardEmis, emis_dict)
 
@@ -182,7 +221,31 @@ def adjust_interest_in_emis(session: Session, user_id: int, post_date: DateTime)
     )
     emi_dict["interest_current_month"] = round(interest_due * (30 - emi_dict["due_date"].day) / 30, 2)
     emi_dict["interest_next_month"] = round(interest_due - emi_dict["interest_current_month"], 2)
-    emi_dict["total_closing_balance"] += (
-        emi_dict["interest_current_month"] + emi_dict["interest_next_month"]
+    emi_dict["interest"] = emi_dict["interest_current_month"] + emi_dict["interest_next_month"]
+    emi_dict["total_closing_balance_post_due_date"] += emi_dict["interest"]
+    emi_dict["total_due_amount"] += emi_dict["interest"]
+    session.bulk_update_mappings(CardEmis, [emi_dict])
+
+
+def adjust_late_fee_in_emis(session: Session, user_id: int, post_date: DateTime) -> None:
+    latest_bill = (
+        session.query(LoanData)
+        .filter(LoanData.user_id == user_id, LoanData.agreement_date < post_date)
+        .order_by(LoanData.agreement_date.desc())
+        .first()
     )
+    user_card = session.query(UserCard).filter(UserCard.user_id == user_id).first()
+    emi = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == user_card.id, CardEmis.due_date < post_date)
+        .order_by(CardEmis.due_date.desc())
+        .first()
+    )
+    emi_dict = emi.as_dict()
+    _, late_fee = get_account_balance_from_str(
+        session=session, book_string=f"{latest_bill.id}/bill/late_fine_due/a"
+    )
+    emi_dict["late_fee"] = late_fee
+    emi_dict["total_closing_balance_post_due_date"] += emi_dict["late_fee"]
+    emi_dict["total_due_amount"] += emi_dict["late_fee"]
     session.bulk_update_mappings(CardEmis, [emi_dict])

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from rush.accrue_financial_charges import (
     accrue_interest,
+    accrue_interest_prerequisites,
     accrue_late_charges,
 )
 from rush.anomaly_detection import run_anomaly
@@ -32,18 +33,17 @@ from rush.lender_funds import (
 )
 from rush.models import (
     CardEmis,
+    LedgerTriggerEvent,
     LoanData,
     User,
     UserCard,
     UserPy,
-    LedgerTriggerEvent,
 )
 from rush.payments import payment_received
 from rush.views import (
     bill_view,
     transaction_view,
 )
-from rush.accrue_financial_charges import accrue_interest_prerequisites
 
 
 def test_current(get_alembic: alembic.config.Config) -> None:
@@ -556,4 +556,4 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     )
     emis_dict = [u.__dict__ for u in all_emis_query.all()]
     second_emi = emis_dict[1]
-    assert second_emi["due_amount"] == 0
+    assert second_emi["total_due_amount"] == 0
