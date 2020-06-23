@@ -32,7 +32,10 @@ from rush.models import (
     UserCard,
     UserPy,
 )
-from rush.payments import payment_received
+from rush.payments import (
+    payment_received,
+    refund_payment,
+)
 from rush.views import (
     bill_view,
     transaction_view,
@@ -445,3 +448,20 @@ def test_view(session: Session) -> None:
     transactions = transaction_view(session, bill_id=bill.id)
     # print(transactions[0]["description"]+"")
     assert transactions[0]["amount"] == Decimal(110)
+
+
+def test_refund_or_prepayment(session: Session) -> None:
+    test_generate_bill_1(session)
+    _partial_payment_bill_1(session)
+    _accrue_late_fine_bill_1(session)
+    _pay_minimum_amount_bill_1(session)
+    _accrue_interest_bill_1(session)
+    _generate_bill_2(session)
+    user = session.query(User).filter(User.id == 99).one()
+    unpaid_bills = get_all_unpaid_bills(session, user.id)
+    status = refund_payment(session, 99, unpaid_bills[0].id)
+    assert status == True
+    _, amount = get_account_balance_from_str(
+        session, book_string=f"{unpaid_bills[0].id}/bill/merchant_refund/a"
+    )
+    assert amount == Decimal(2000)
