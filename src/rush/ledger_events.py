@@ -192,7 +192,7 @@ def refund_or_prepayment_event(
         create_ledger_entry_from_str(
             session,
             event_id=event.id,
-            debit_book_str=f"{bill_id}/bill/merchant_refund/a",
+            debit_book_str=f"62311/lender/merchant_refund/a",
             credit_book_str=f"{bill_id}/bill/unbilled_transactions/a",
             amount=event.amount,
         )
@@ -200,7 +200,7 @@ def refund_or_prepayment_event(
         create_ledger_entry_from_str(
             session,
             event_id=event.id,
-            debit_book_str=f"{bill_id}/bill/merchant_refund/a",
+            debit_book_str=f"62311/lender/merchant_refund/a",
             credit_book_str=f"{bill_id}/bill/pre_payment/l",
             amount=event.amount,
         )
@@ -208,14 +208,14 @@ def refund_or_prepayment_event(
         create_ledger_entry_from_str(
             session,
             event_id=event.id,
-            debit_book_str=f"{bill_id}/bill/lender_pg/a",
+            debit_book_str=f"62311/lender/lender_pg/a",
             credit_book_str=f"{bill_id}/bill/pre_payment/l",
             amount=event.amount,
         )
 
 
 def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> None:
-    all_lender_bills = session.query(LoanData).order_by(LedgerTriggerEvent.post_date.desc()).all()
+    all_lender_bills = session.query(LoanData).order_by(LoanData.id.desc()).all()
     for bill in all_lender_bills:
         if is_bill_closed(session, bill) == False:
             _, lender_principal = get_account_balance_from_str(

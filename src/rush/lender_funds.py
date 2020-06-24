@@ -35,5 +35,5 @@ def lender_interest_incur(session: Session) -> bool:
     lt = LedgerTriggerEvent(name="lender_interest_incur", post_date=get_current_ist_time())
     session.add(lt)
     session.flush()
-    lender_interest_incur_event(session)
+    lender_interest_incur_event(session, lt)
     return True

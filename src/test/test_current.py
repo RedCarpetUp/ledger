@@ -23,6 +23,7 @@ from rush.ledger_utils import (  # get_interest_for_each_bill,
 )
 from rush.lender_funds import (
     lender_disbursal,
+    lender_interest_incur,
     m2p_transfer,
 )
 from rush.models import (
@@ -459,9 +460,22 @@ def test_refund_or_prepayment(session: Session) -> None:
     _generate_bill_2(session)
     user = session.query(User).filter(User.id == 99).one()
     unpaid_bills = get_all_unpaid_bills(session, user.id)
-    status = refund_payment(session, 99, unpaid_bills[0].id)
+
+    status = refund_payment(session, 99, "after", unpaid_bills[0].id)
     assert status == True
-    _, amount = get_account_balance_from_str(
-        session, book_string=f"{unpaid_bills[0].id}/bill/merchant_refund/a"
-    )
+    _, amount = get_account_balance_from_str(session, book_string=f"62311/lender/merchant_refund/a")
     assert amount == Decimal(2000)
+
+    status = refund_payment(session, 99, "before", unpaid_bills[0].id)
+    _, amount = get_account_balance_from_str(session, book_string=f"62311/lender/merchant_refund/a")
+    assert amount == Decimal(4000)
+
+    status = refund_payment(session, 99, "prepayment", unpaid_bills[0].id)
+    _, amount = get_account_balance_from_str(
+        session, book_string=f"{unpaid_bills[0].id}/bill/pre_payment/l"
+    )
+    assert amount == Decimal(4000)
+
+    status = lender_interest_incur(session)
+    _, amount = get_account_balance_from_str(session, book_string=f"62311/lender/lender_payable/l")
+    assert amount == round(Decimal(3013.05), 2)
