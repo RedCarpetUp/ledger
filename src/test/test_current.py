@@ -1,4 +1,5 @@
 import contextlib
+import datetime
 import json
 from decimal import Decimal
 from io import StringIO
@@ -37,6 +38,7 @@ from rush.payments import (
     payment_received,
     refund_payment,
 )
+from rush.utils import get_current_ist_time
 from rush.views import (
     bill_view,
     transaction_view,
@@ -478,4 +480,4 @@ def test_refund_or_prepayment(session: Session) -> None:
 
     status = lender_interest_incur(session)
     _, amount = get_account_balance_from_str(session, book_string=f"62311/lender/lender_payable/l")
-    assert amount == round(Decimal(3013.05), 2)
+    assert round(amount, 2) == round(Decimal(3032.61), 2)

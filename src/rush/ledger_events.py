@@ -1,3 +1,4 @@
+import datetime
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
@@ -17,6 +18,7 @@ from rush.models import (
     LedgerTriggerEvent,
     LoanData,
 )
+from rush.utils import get_current_ist_time
 
 
 def lender_disbursal_event(session: Session, event: LedgerTriggerEvent) -> None:
@@ -215,7 +217,12 @@ def refund_or_prepayment_event(
 
 
 def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> None:
-    all_lender_bills = session.query(LoanData).order_by(LoanData.id.desc()).all()
+    all_lender_bills = (
+        session.query(LoanData.id, LoanData.lender_rate_of_interest_annual, CardTransaction.txn_time)
+        .join(CardTransaction, LoanData.id == CardTransaction.loan_id)
+        .order_by(LoanData.id.desc())
+        .all()
+    )
     for bill in all_lender_bills:
         if is_bill_closed(session, bill) == False:
             _, lender_principal = get_account_balance_from_str(
@@ -224,10 +231,15 @@ def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> 
             _, lender_unbilled = get_account_balance_from_str(
                 session, book_string=f"{bill.id}/bill/unbilled_transactions/a"
             )
+            time = get_current_ist_time() - bill.txn_time
             # subjected to change according to the trigger frequency
             lender_interest = (
-                bill.lender_rate_of_interest_annual * (lender_principal + lender_unbilled) / 1200
+                bill.lender_rate_of_interest_annual
+                * int(time.days)
+                * (lender_principal + lender_unbilled)
+                / 36500
             )
+            print(time.days)
             create_ledger_entry_from_str(
                 session,
                 event_id=event.id,
