@@ -13,6 +13,7 @@ from rush.ledger_utils import (
     get_remaining_bill_balance,
     is_bill_closed,
     is_min_paid,
+    get_all_unpaid_bills,
 )
 from rush.models import BookAccount, CardTransaction, LedgerTriggerEvent, LoanData, LedgerEntry
 from rush.utils import get_current_ist_time
@@ -214,48 +215,26 @@ def refund_or_prepayment_event(
 
 
 def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> None:
-    # book_accounts = (
-    #     session.query(BookAccount.id)
-    #     .filter(BookAccount.book_name.in_(["principal_due", "unbilled_transaction"]))
-    #     .all()
-    # )
-    # debit_balance = session.query(func.sum(LedgerEntry.amount)).filter(
-    #     LedgerEntry.debit_account.in_(book_accounts),
-    # ).subquery()
-    # unpaid_bills = (
-    #     session.query(func.sum(LedgerEntry.amount),
-    #                   LedgerEntry.credit_account, BookAccount.identifier.label("id"))
-    #     .join(BookAccount, BookAccount.id == LedgerEntry.credit_account)
-    #     .distinct(BookAccount.identifier)
-    #     .group_by(LedgerEntry.credit_account, BookAccount.identifier)
-    #     .having(~func.sum(LedgerEntry.amount).in_(debit_balance))
-    #     .filter(
-    #         LedgerEntry.credit_account.in_(book_accounts)
-    #         | LedgerEntry.debit_account.in_(book_accounts)
-    #     )
-    #     .subquery()
-    # )
-    all_lender_bills = (
-        session.query(
-            func.sum(
-                CardTransaction.amount
-                * LoanData.lender_rate_of_interest_annual
-                * extract("day", (event.post_date - CardTransaction.txn_time))
-                / 36550
-            ).label("amount"),
-            LoanData.id,
-        )
-        .join(LoanData, LoanData.id == CardTransaction.loan_id)
-        # .outerjoin(unpaid_bills, LoanData.id == unpaid_bills.c.id)
-        .group_by(CardTransaction.loan_id, LoanData.id, LoanData.lender_rate_of_interest_annual)
-        .all()
-    )
+    day = get_current_ist_time() - datetime.timedelta(30)
+    all_lender_bills = session.query(LoanData).all()
     for bill in all_lender_bills:
-        if is_bill_closed(session, bill) == False:
+        amount = 0
+        for i in range(0, 30):
+            day = get_current_ist_time() - datetime.timedelta(30 + i)
+            _, principal = get_account_balance_from_str(
+                session, book_string=f"{bill.id}/bill/principal_due/a", to_date=day
+            )
+            _, unbilled = get_account_balance_from_str(
+                session, book_string=f"{bill.id}/bill/principal_due/a", to_date=day
+            )
+            amount = amount + (principal + unbilled) * Decimal(
+                bill.lender_rate_of_interest_annual / 36550
+            )
+        if amount > 0:
             create_ledger_entry_from_str(
                 session,
                 event_id=event.id,
                 debit_book_str=f"{bill.id}/redcarpet/redcarpet_expenses/l",
                 credit_book_str="62311/lender/lender_payable/l",
-                amount=bill.amount,
+                amount=amount,
             )

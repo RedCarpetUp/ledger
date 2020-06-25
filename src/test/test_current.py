@@ -449,7 +449,6 @@ def test_view(session: Session) -> None:
 
     bill = session.query(LoanData).filter(LoanData.user_id == user.id).first()
     transactions = transaction_view(session, bill_id=bill.id)
-    # print(transactions[0]["description"]+"")
     assert transactions[0]["amount"] == Decimal(110)
 
 
@@ -480,4 +479,4 @@ def test_refund_or_prepayment(session: Session) -> None:
 
     status = lender_interest_incur(session)
     _, amount = get_account_balance_from_str(session, book_string=f"62311/lender/lender_payable/l")
-    assert round(amount, 2) == round(Decimal(3084.21), 2)
+    assert round(amount, 2) == round(Decimal(3022.70), 2)
