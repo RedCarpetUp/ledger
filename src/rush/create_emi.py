@@ -217,6 +217,12 @@ def adjust_interest_in_emis(session: Session, user_id: int, post_date: DateTime)
         .order_by(CardEmis.due_date.desc())
         .first()
     )
+    if not emi:
+        emi = (
+            session.query(CardEmis)
+            .order_by(CardEmis.due_date.asc())
+            .first()
+        )
     emi_dict = emi.as_dict()
     _, interest_due = get_account_balance_from_str(
         session=session, book_string=f"{latest_bill.id}/bill/interest_due/a"
@@ -243,6 +249,12 @@ def adjust_late_fee_in_emis(session: Session, user_id: int, post_date: DateTime)
         .order_by(CardEmis.due_date.desc())
         .first()
     )
+    if not emi:
+        emi = (
+            session.query(CardEmis)
+            .order_by(CardEmis.due_date.asc())
+            .first()
+        )
     emi_dict = emi.as_dict()
     _, late_fee = get_account_balance_from_str(
         session=session, book_string=f"{latest_bill.id}/bill/late_fine_due/a"

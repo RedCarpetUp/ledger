@@ -185,3 +185,7 @@ def accrue_late_fine_event(session: Session, bill: LoanData, event: LedgerTrigge
         credit_book_str=f"{bill.id}/bill/late_fine_cp/l",
         amount=event.amount,
     )
+    # adjust the given interest in schedule
+    from rush.create_emi import adjust_late_fee_in_emis
+
+    adjust_late_fee_in_emis(session, bill.user_id, event.post_date)
