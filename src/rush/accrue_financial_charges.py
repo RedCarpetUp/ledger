@@ -104,7 +104,7 @@ def reverse_late_charges_event(
         create_ledger_entry_from_str(
             session,
             event_id=lt.id,
-            debit_book_str=f"{bill.id}/bill/late_fine_due/a",
+            debit_book_str=f"{bill.id}/bill/late_fine_receivable/a",
             credit_book_str=f"{bill.id}/bill/late_fee_received/a",
             amount=lt.amount,
         )

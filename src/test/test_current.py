@@ -144,7 +144,9 @@ def test_generate_bill_1(session: Session) -> None:
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 0  # Should be 0 because it has moved to billed account.
 
-    _, billed_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/billed/a")
+    _, billed_amount = get_account_balance_from_str(
+        session, book_string=f"{bill_id}/bill/principal_receivable/a"
+    )
     assert billed_amount == 1000
 
     _, min_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/min/a")
@@ -161,7 +163,9 @@ def _partial_payment_bill_1(session: Session) -> None:
     )
 
     bill = unpaid_bills[0]
-    _, principal_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/billed/a")
+    _, principal_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/principal_receivable/a"
+    )
     assert principal_due == 1000 - amount
 
     min_due = bill.get_minimum_amount_to_pay(session)
@@ -176,7 +180,9 @@ def _min_payment_delayed_bill_1(session: Session) -> None:
         session=session, user_id=user.id, payment_amount=amount, payment_date=payment_date,
     )
 
-    _, principal_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/billed/a")
+    _, principal_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/principal_receivable/a"
+    )
     # payment got late and 100 rupees got settled in late fine.
     assert principal_due == 970
 
@@ -190,7 +196,7 @@ def _accrue_late_fine_bill_1(session: Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
     bill = accrue_late_charges(session, user.id)
 
-    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_due/a")
+    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_receivable/a")
     assert late_fine_due == Decimal(100)
 
     min_due = bill.get_minimum_amount_to_pay(session)
@@ -221,10 +227,12 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
     min_due = bill.get_minimum_amount_to_pay(session)
     assert min_due == Decimal(0)
 
-    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_due/a")
+    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_receivable/a")
     assert late_fine_due == Decimal(0)
 
-    _, principal_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/billed/a")
+    _, principal_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/principal_receivable/a"
+    )
     # payment got late and 100 rupees got settled in late fine.
     assert principal_due == Decimal("886.67")
 
@@ -242,7 +250,9 @@ def _accrue_interest_bill_1(session: Session) -> None:
     unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
     bill = unpaid_bills[0]
     accrue_interest_on_all_bills(session, bill.agreement_date, user_card)
-    _, interest_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/interest_due/a")
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/interest_receivable/a"
+    )
     assert interest_due == 30
 
 
@@ -318,7 +328,7 @@ def _generate_bill_2(session: Session) -> None:
     assert len(unpaid_bills) == 2
 
     _, principal_due = get_account_balance_from_str(
-        session=session, book_string=f"{bill.id}/bill/billed/a"
+        session=session, book_string=f"{bill.id}/bill/principal_receivable/a"
     )
     assert principal_due == Decimal(2000)
 
@@ -341,7 +351,7 @@ def _run_anomaly_bill_1(session: Session) -> None:
     )
     run_anomaly(session, bill)
 
-    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_due/a")
+    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_receivable/a")
     assert late_fine_due == Decimal(0)
 
     _, late_fee_received = get_account_balance_from_str(
@@ -349,7 +359,9 @@ def _run_anomaly_bill_1(session: Session) -> None:
     )
     assert late_fee_received == Decimal(0)
 
-    _, principal_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/billed/a")
+    _, principal_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/principal_receivable/a"
+    )
     # payment got moved from late received to principal received.
     assert principal_due == 970 - 100
 

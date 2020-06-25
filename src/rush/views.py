@@ -31,12 +31,14 @@ def bill_view(session: Session, user_id: int) -> str:
         .all()
     )
     for bill in all_bills:
-        _, principal_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/billed/a")
+        _, principal_due = get_account_balance_from_str(
+            session, book_string=f"{bill.id}/bill/principal_receivable/a"
+        )
         _, interest_due = get_account_balance_from_str(
-            session=session, book_string=f"{bill.id}/bill/interest_due/a"
+            session=session, book_string=f"{bill.id}/bill/interest_receivable/a"
         )
         _, fine_due = get_account_balance_from_str(
-            session=session, book_string=f"{bill.id}/bill/late_fine_due/a"
+            session=session, book_string=f"{bill.id}/bill/late_fine_receivable/a"
         )
         bill_detials.append(
             {

@@ -81,7 +81,9 @@ def bill_generate(session: Session, user_card: UserCard) -> LoanData:
     # TODO accrue interest too?
     bill.is_generated = True
 
-    _, billed_amount = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/billed/a")
+    _, billed_amount = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/principal_receivable/a"
+    )
     bill.principal = billed_amount
     principal_instalment = div(billed_amount, 12)  # TODO get tenure from table.
     bill.principal_instalment = principal_instalment

@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import List
+from typing import List, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -84,7 +84,7 @@ def bill_generate_event(session: Session, bill: LoanData, event: LedgerTriggerEv
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
-        debit_book_str=f"{bill_id}/bill/billed/a",
+        debit_book_str=f"{bill_id}/bill/principal_receivable/a",
         credit_book_str=f"{bill_id}/bill/unbilled/a",
         amount=unbilled_balance,
     )
@@ -116,9 +116,10 @@ def payment_received_event(session: Session, user_card: UserCard, event: LedgerT
 def _adjust_bill(
     session: Session, bill: LoanData, amount_to_adjust_in_this_bill: Decimal, event_id: int
 ) -> Decimal:
-    def adjust(payment_to_adjust_from: Decimal, to_acc: str, from_acc: str) -> Decimal:
+    def adjust(payment_to_adjust_from: Decimal, to_acc: str, from_acc: str) -> Tuple[Decimal, Decimal]:
+        balance_to_adjust = Decimal(0)
         if payment_to_adjust_from <= 0:
-            return payment_to_adjust_from
+            return payment_to_adjust_from, balance_to_adjust
         _, book_balance = get_account_balance_from_str(session, book_string=from_acc)
         if book_balance > 0:
             balance_to_adjust = min(payment_to_adjust_from, book_balance)
@@ -130,24 +131,33 @@ def _adjust_bill(
                 amount=balance_to_adjust,
             )
             payment_to_adjust_from -= balance_to_adjust
-        return payment_to_adjust_from
+        return payment_to_adjust_from, balance_to_adjust
 
     # Now adjust into other accounts.
-    remaining_amount = adjust(
+    remaining_amount, late_fee_adjusted = adjust(
         amount_to_adjust_in_this_bill,
-        to_acc=f"{bill.id}/bill/late_fee_received/a",
-        from_acc=f"{bill.id}/bill/late_fine_due/a",
+        to_acc=f"{bill.lender_id}/lender/pg_account/a",
+        from_acc=f"{bill.id}/bill/late_fine_receivable/a",
     )
-    remaining_amount = adjust(
+    remaining_amount, interest_adjusted = adjust(
         remaining_amount,
-        to_acc=f"{bill.id}/bill/interest_received/a",
-        from_acc=f"{bill.id}/bill/interest_due/a",
+        to_acc=f"{bill.lender_id}/lender/pg_account/a",
+        from_acc=f"{bill.id}/bill/interest_receivable/a",
     )
-    remaining_amount = adjust(
+    remaining_amount, principal_adjusted = adjust(
         remaining_amount,
-        to_acc=f"{bill.id}/bill/principal_received/a",
-        from_acc=f"{bill.id}/bill/billed/a",
+        to_acc=f"{bill.lender_id}/lender/pg_account/a",
+        from_acc=f"{bill.id}/bill/principal_receivable/a",
     )
+    # Lender has received money, so we reduce our liability now.
+    create_ledger_entry_from_str(
+        session,
+        event_id=event_id,
+        debit_book_str=f"{bill.lender_id}/lender/lender_payable/l",
+        credit_book_str=f"{bill.lender_id}/lender/pg_account/a",
+        amount=principal_adjusted,
+    )
+    # TODO Adjust lender interest expenses here as well.
     return remaining_amount
 
 
@@ -188,8 +198,8 @@ def accrue_interest_event(session: Session, bill: LoanData, event: LedgerTrigger
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
-        debit_book_str=f"{bill.id}/bill/interest_due/a",
-        credit_book_str=f"{bill.id}/bill/interest/r",
+        debit_book_str=f"{bill.id}/bill/interest_receivable/a",
+        credit_book_str=f"{bill.id}/bill/interest_earned/r",
         amount=event.amount,
     )
 
@@ -198,7 +208,7 @@ def accrue_late_fine_event(session: Session, bill: LoanData, event: LedgerTrigge
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
-        debit_book_str=f"{bill.id}/bill/late_fine_due/a",
+        debit_book_str=f"{bill.id}/bill/late_fine_receivable/a",
         credit_book_str=f"{bill.id}/bill/late_fine/r",
         amount=event.amount,
     )
