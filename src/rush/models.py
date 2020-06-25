@@ -1,4 +1,4 @@
-from decimal import Decimal as DecimalType
+from decimal import Decimal
 from typing import (
     Any,
     Dict,
@@ -150,7 +150,7 @@ class LedgerEntryPy(AuditMixinPy):
     event_id: int
     debit_account: int
     credit_account: int
-    amount: DecimalType
+    amount: Decimal
     business_date: DateTime
 
 
