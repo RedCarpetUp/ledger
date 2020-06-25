@@ -480,4 +480,4 @@ def test_refund_or_prepayment(session: Session) -> None:
 
     status = lender_interest_incur(session)
     _, amount = get_account_balance_from_str(session, book_string=f"62311/lender/lender_payable/l")
-    assert round(amount, 2) == round(Decimal(3032.61), 2)
+    assert round(amount, 2) == round(Decimal(3084.21), 2)
