@@ -763,7 +763,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     emis_dict = [u.__dict__ for u in all_emis_query.all()]
 
     # Accrue Interest
-    interest_date = parse_date("2020-06-16 00:00:00")
+    interest_date = parse_date("2020-06-01 01:00:00")
     bills = (
         session.query(LoanData)
         .filter(LoanData.user_id == a.id)
