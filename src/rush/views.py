@@ -1,19 +1,12 @@
 import json
-from decimal import Decimal
 
 from sqlalchemy import (
-    JSON,
-    Integer,
     String,
     cast,
-    text,
 )
 from sqlalchemy.orm import Session
 
-from rush.ledger_utils import (
-    get_account_balance_from_str,
-    get_all_unpaid_bills,
-)
+from rush.ledger_utils import get_account_balance_from_str
 from rush.models import (
     BookAccount,
     CardTransaction,
@@ -38,9 +31,7 @@ def bill_view(session: Session, user_id: int) -> str:
         .all()
     )
     for bill in all_bills:
-        _, principal_due = get_account_balance_from_str(
-            session, book_string=f"{bill.id}/bill/principal_due/a"
-        )
+        _, principal_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/billed/a")
         _, interest_due = get_account_balance_from_str(
             session=session, book_string=f"{bill.id}/bill/interest_due/a"
         )

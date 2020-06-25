@@ -169,8 +169,16 @@ class LoanData(AuditMixin):
     agreement_date = Column(TIMESTAMP, nullable=False)
     card_id = Column(Integer, ForeignKey(UserCard.id))
     is_generated = Column(Boolean, nullable=False, server_default="false")
-    rc_rate_of_interest_annual = Column(Numeric, nullable=False)
+    rc_rate_of_interest_annual = Column(Numeric, nullable=False)  # Make this monthly only
     lender_rate_of_interest_annual = Column(Numeric, nullable=False)
+    principal = Column(Numeric, nullable=True)
+    principal_instalment = Column(Numeric, nullable=True)
+
+    def get_minimum_amount_to_pay(self, session: Session) -> Decimal:
+        from rush.ledger_utils import get_account_balance_from_str
+
+        _, min_due = get_account_balance_from_str(session, book_string=f"{self.id}/bill/min/a")
+        return min_due
 
 
 @py_dataclass

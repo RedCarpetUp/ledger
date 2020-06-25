@@ -40,10 +40,12 @@ def upgrade() -> None:
         sa.Column("card_id", sa.Integer(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["card_id"], ["user_card.id"], name="fk_loan_data_card_id"),
-        sa.Column("rc_rate_of_interest_annual", sa.Integer(), nullable=False),
-        sa.Column("lender_rate_of_interest_annual", sa.Integer(), nullable=False),
+        sa.Column("rc_rate_of_interest_annual", sa.Numeric(), nullable=False),
+        sa.Column("lender_rate_of_interest_annual", sa.Numeric(), nullable=False),
         sa.Column("lender_id", sa.Integer(), nullable=False),
         sa.Column("is_generated", sa.Boolean(), nullable=False, server_default="false"),
+        sa.Column("principal", sa.Numeric(), nullable=True),
+        sa.Column("principal_instalment", sa.Numeric(), nullable=True),
     )
     op.create_table(
         "loan_emis",
@@ -63,7 +65,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("loan_id", sa.Integer(), nullable=False),
         sa.Column("txn_time", sa.TIMESTAMP(), nullable=False),
-        sa.Column("amount", sa.DECIMAL(), nullable=False),
+        sa.Column("amount", sa.Numeric(), nullable=False),
         sa.Column("description", sa.String(100), nullable=True),
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),

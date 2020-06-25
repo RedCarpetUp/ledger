@@ -8,12 +8,14 @@ from pendulum import (
 from sqlalchemy.orm import Session
 
 from rush.ledger_events import bill_generate_event
+from rush.ledger_utils import get_account_balance_from_str
+from rush.min_payment import add_min_to_all_bills
 from rush.models import (
     LedgerTriggerEvent,
     LoanData,
-    User,
     UserCard,
 )
+from rush.utils import div
 
 
 def create_bill(
@@ -78,4 +80,12 @@ def bill_generate(session: Session, user_card: UserCard) -> LoanData:
     bill_generate_event(session, bill, lt)
     # TODO accrue interest too?
     bill.is_generated = True
+
+    _, billed_amount = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/billed/a")
+    bill.principal = billed_amount
+    principal_instalment = div(billed_amount, 12)  # TODO get tenure from table.
+    bill.principal_instalment = principal_instalment
+
+    # After the bill has generated. Call the min generation event on all unpaid bills.
+    add_min_to_all_bills(session, bill.agreement_date, user_card)
     return bill
