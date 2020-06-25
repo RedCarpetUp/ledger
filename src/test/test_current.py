@@ -557,3 +557,245 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     emis_dict = [u.__dict__ for u in all_emis_query.all()]
     second_emi = emis_dict[1]
     assert second_emi["total_due_amount"] == 0
+
+
+def test_with_live_user_loan_id_4134872(session: Session) -> None:
+    a = User(
+        id=1764433,
+        performed_by=123,
+        name="UPENDRA",
+        fullname="UPENDRA SINGH",
+        nickname="UPENDRA",
+        email="upsigh921067@gmail.com",
+    )
+    session.add(a)
+
+    # assign card
+    # 25 days to enforce 15th june as first due date
+    uc = UserCard(
+        user_id=a.id,
+        card_activation_date=parse_date("2020-05-20 00:00:00"),
+        interest_free_period_in_days=25,
+    )
+    session.flush()
+    session.add(uc)
+
+    # Card transactions
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-20 17:23:01"),
+        amount=Decimal(129),
+        description="PAYTM                  Noida         IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-22 09:33:18"),
+        amount=Decimal(115),
+        description="TPL*UDIO               MUMBAI        IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-22 09:50:46"),
+        amount=Decimal(500),
+        description="AIRTELMONEY            MUMBAI        IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-22 12:50:05"),
+        amount=Decimal(2),
+        description="PHONEPE RECHARGE.      GURGAON       IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-23 01:18:54"),
+        amount=Decimal(100),
+        description="WWW YESBANK IN         GURGAON       IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-23 01:42:51"),
+        amount=Decimal(54),
+        description="WWW YESBANK IN         GURGAON       IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-23 01:49:44"),
+        amount=Decimal(1100),
+        description="Payu Payments Pvt ltd  Gurgaon       IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-23 13:12:33"),
+        amount=Decimal(99),
+        description="ULLU DIGITAL PRIVATE L MUMBAI        IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-24 16:29:25"),
+        amount=Decimal(2500),
+        description="WWW YESBANK IN         GURGAON       IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-24 22:09:42"),
+        amount=Decimal(99),
+        description="PayTM*KookuDigitalPriP Mumbai        IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-25 08:33:40"),
+        amount=Decimal(1400),
+        description="WWW YESBANK IN         GURGAON       IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-25 10:26:12"),
+        amount=Decimal(380),
+        description="WWW YESBANK IN         GURGAON       IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-25 11:40:05"),
+        amount=Decimal(199),
+        description="PAYTM                  Noida         IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-25 11:57:15"),
+        amount=Decimal(298),
+        description="PAYTM                  Noida         IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-25 12:25:57"),
+        amount=Decimal(298),
+        description="PAYTM                  Noida         IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-26 08:04:47"),
+        amount=Decimal(1450),
+        description="WWW YESBANK IN         GURGAON       IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-26 14:47:41"),
+        amount=Decimal(110),
+        description="TPL*UDIO               MUMBAI        IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-26 16:37:27"),
+        amount=Decimal(700),
+        description="WWW YESBANK IN         GURGAON       IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-26 22:10:58"),
+        amount=Decimal(160),
+        description="Linkyun Technology Pri Gurgaon       IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-27 12:25:25"),
+        amount=Decimal(299),
+        description="PAYTM                  Noida         IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-28 20:38:02"),
+        amount=Decimal(199),
+        description="Linkyun Technology Pri Gurgaon       IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-28 21:45:55"),
+        amount=Decimal(800),
+        description="WWW YESBANK IN         GURGAON       IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-29 10:05:58"),
+        amount=Decimal(525),
+        description="Payu Payments Pvt ltd  Gurgaon       IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-30 16:04:21"),
+        amount=Decimal(1400),
+        description="WWW YESBANK IN         GURGAON       IND",
+    )
+
+    # Generate bill
+    generate_date = parse_date("2020-06-01").date()
+    bill_may = bill_generate(session=session, generate_date=generate_date, user_id=a.id)
+
+    # Check if amount is adjusted correctly in schedule
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.due_date.asc())
+    )
+    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+
+    # Accrue Interest
+    interest_date = parse_date("2020-06-16 00:00:00")
+    bills = (
+        session.query(LoanData)
+        .filter(LoanData.user_id == a.id)
+        .order_by(LoanData.agreement_date.desc())
+        .all()
+    )
+    can_charge_interest = accrue_interest_prerequisites(session, bill_may)
+    if can_charge_interest:  # if bill isn't paid fully accrue interest.
+        lt = LedgerTriggerEvent(name="accrue_interest", post_date=interest_date)
+        session.add(lt)
+        session.flush()
+        accrue_interest_event(session, bills, lt)
+
+    # Do Partial Payment
+    payment_date = parse_date("2020-06-18 06:55:00")
+    amount = Decimal(324)
+    bill = payment_received(
+        session=session, user_id=a.id, payment_amount=amount, payment_date=payment_date,
+    )
+
+    # Refresh Schedule
+    refresh_schedule(session, a.id)
+
+    # Check if amount is adjusted correctly in schedule
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.due_date.asc())
+    )
+    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    first_emi = emis_dict[0]
+    second_emi = emis_dict[1]
+
+    assert first_emi["interest"] == Decimal("387.48")
+    assert first_emi["interest_received"] == Decimal("324")

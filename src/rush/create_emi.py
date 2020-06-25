@@ -35,6 +35,7 @@ def create_emis_for_card(session: Session, user_card: UserCard, last_bill: LoanD
             card_id=user_card.id,
             emi_number=i,
             total_closing_balance=(principal_due - due_amount * (i - 1)),
+            total_closing_balance_post_due_date=(principal_due - due_amount * (i - 1)),
             due_amount=due_amount,
             total_due_amount=due_amount,
             due_date=due_date,
@@ -90,6 +91,7 @@ def add_emi_on_new_bill(
         due_amount=due_amount,
         total_due_amount=due_amount,
         total_closing_balance=(principal_due - (due_amount * (new_end_emi_number - 1))),
+        total_closing_balance_post_due_date=(principal_due - (due_amount * (new_end_emi_number - 1))),
         due_date=last_emi_due_date,
         late_fee=late_fee,
     )
@@ -211,7 +213,7 @@ def adjust_interest_in_emis(session: Session, user_id: int, post_date: DateTime)
     user_card = session.query(UserCard).filter(UserCard.user_id == user_id).first()
     emi = (
         session.query(CardEmis)
-        .filter(CardEmis.card_id == user_card.id, CardEmis.due_date < post_date)
+        .filter(CardEmis.card_id == user_card.id, CardEmis.due_date <= post_date)
         .order_by(CardEmis.due_date.desc())
         .first()
     )
