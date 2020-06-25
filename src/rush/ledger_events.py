@@ -112,14 +112,23 @@ def payment_received_event(session: Session, user_card: UserCard, event: LedgerT
     if payment_received > 0:
         _adjust_for_prepayment(session)
 
+    lender_id = unpaid_bills[0].lender_id  # Will fail if there are no unpaid bills.
+    # Lender has received money, so we reduce our liability now.
+    create_ledger_entry_from_str(
+        session,
+        event_id=event.id,
+        debit_book_str=f"{lender_id}/lender/lender_payable/l",
+        credit_book_str=f"{lender_id}/lender/pg_account/a",
+        amount=payment_received,
+    )
+
 
 def _adjust_bill(
     session: Session, bill: LoanData, amount_to_adjust_in_this_bill: Decimal, event_id: int
 ) -> Decimal:
-    def adjust(payment_to_adjust_from: Decimal, to_acc: str, from_acc: str) -> Tuple[Decimal, Decimal]:
-        balance_to_adjust = Decimal(0)
+    def adjust(payment_to_adjust_from: Decimal, to_acc: str, from_acc: str) -> Decimal:
         if payment_to_adjust_from <= 0:
-            return payment_to_adjust_from, balance_to_adjust
+            return payment_to_adjust_from
         _, book_balance = get_account_balance_from_str(session, book_string=from_acc)
         if book_balance > 0:
             balance_to_adjust = min(payment_to_adjust_from, book_balance)
@@ -131,33 +140,24 @@ def _adjust_bill(
                 amount=balance_to_adjust,
             )
             payment_to_adjust_from -= balance_to_adjust
-        return payment_to_adjust_from, balance_to_adjust
+        return payment_to_adjust_from
 
     # Now adjust into other accounts.
-    remaining_amount, late_fee_adjusted = adjust(
+    remaining_amount = adjust(
         amount_to_adjust_in_this_bill,
         to_acc=f"{bill.lender_id}/lender/pg_account/a",
         from_acc=f"{bill.id}/bill/late_fine_receivable/a",
     )
-    remaining_amount, interest_adjusted = adjust(
+    remaining_amount = adjust(
         remaining_amount,
         to_acc=f"{bill.lender_id}/lender/pg_account/a",
         from_acc=f"{bill.id}/bill/interest_receivable/a",
     )
-    remaining_amount, principal_adjusted = adjust(
+    remaining_amount = adjust(
         remaining_amount,
         to_acc=f"{bill.lender_id}/lender/pg_account/a",
         from_acc=f"{bill.id}/bill/principal_receivable/a",
     )
-    # Lender has received money, so we reduce our liability now.
-    create_ledger_entry_from_str(
-        session,
-        event_id=event_id,
-        debit_book_str=f"{bill.lender_id}/lender/lender_payable/l",
-        credit_book_str=f"{bill.lender_id}/lender/pg_account/a",
-        amount=principal_adjusted,
-    )
-    # TODO Adjust lender interest expenses here as well.
     return remaining_amount
 
 
