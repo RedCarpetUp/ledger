@@ -61,7 +61,7 @@ def card_transaction_event(session: Session, user_card: UserCard, event: LedgerT
         session,
         event_id=event.id,
         debit_book_str=f"{lender_id}/lender/lender_capital/l",
-        credit_book_str=f"{lender_id}/lender/lender_payable/l",
+        credit_book_str=f"{user_card.id}/card/lender_payable/l",
         amount=amount,
     )
 
@@ -112,13 +112,12 @@ def payment_received_event(session: Session, user_card: UserCard, event: LedgerT
     if payment_received > 0:
         _adjust_for_prepayment(session)
 
-    lender_id = unpaid_bills[0].lender_id  # Will fail if there are no unpaid bills.
     # Lender has received money, so we reduce our liability now.
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
-        debit_book_str=f"{lender_id}/lender/lender_payable/l",
-        credit_book_str=f"{lender_id}/lender/pg_account/a",
+        debit_book_str=f"{user_card.id}/card/lender_payable/l",
+        credit_book_str=f"{user_card.id}/card/pg_account/a",
         amount=payment_received,
     )
 

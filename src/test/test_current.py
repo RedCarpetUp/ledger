@@ -108,8 +108,7 @@ def test_card_swipe(session: Session) -> None:
     _, card_balance = get_account_balance_from_str(session, f"{user_card_id}/card/available_limit/l")
     assert card_balance == -900
 
-    lender_id = session.query(LoanData.lender_id).filter(LoanData.id == swipe1.loan_id).scalar()
-    _, lender_payable = get_account_balance_from_str(session, f"{lender_id}/lender/lender_payable/l")
+    _, lender_payable = get_account_balance_from_str(session, f"{user_card_id}/card/lender_payable/l")
     assert lender_payable == 900
 
 
