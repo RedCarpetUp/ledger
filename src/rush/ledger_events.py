@@ -1,7 +1,11 @@
 import datetime
 from decimal import Decimal
 
-from sqlalchemy import func, extract
+import dateutil.relativedelta
+from sqlalchemy import (
+    extract,
+    func,
+)
 from sqlalchemy.orm import Session
 
 from rush.ledger_utils import (
@@ -9,14 +13,19 @@ from rush.ledger_utils import (
     create_ledger_entry_from_str,
     get_account_balance,
     get_account_balance_from_str,
+    get_all_unpaid_bills,
     get_book_account_by_string,
     get_remaining_bill_balance,
     is_bill_closed,
     is_min_paid,
-    get_all_unpaid_bills,
 )
-from rush.models import BookAccount, CardTransaction, LedgerTriggerEvent, LoanData, LedgerEntry
-from rush.utils import get_current_ist_time
+from rush.models import (
+    BookAccount,
+    CardTransaction,
+    LedgerEntry,
+    LedgerTriggerEvent,
+    LoanData,
+)
 
 
 def lender_disbursal_event(session: Session, event: LedgerTriggerEvent) -> None:
@@ -215,17 +224,63 @@ def refund_or_prepayment_event(
 
 
 def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> None:
-    day = get_current_ist_time() - datetime.timedelta(30)
+    last_lender_incur_trigger = (
+        session.query(LedgerTriggerEvent.post_date)
+        .filter(LedgerTriggerEvent.name.in_(["lender_interest_incur"]),)
+        .order_by(LedgerTriggerEvent.post_date.desc())
+        .offset(1)
+        .first()
+    )
+    if last_lender_incur_trigger == None:
+        last_lender_incur_trigger = event.post_date + dateutil.relativedelta.relativedelta(months=-1)
+    no_of_days = (event.post_date - last_lender_incur_trigger).days
     all_lender_bills = session.query(LoanData).all()
+
     for bill in all_lender_bills:
         amount = 0
-        for i in range(0, 30):
-            day = get_current_ist_time() - datetime.timedelta(30 + i)
-            _, principal = get_account_balance_from_str(
-                session, book_string=f"{bill.id}/bill/principal_due/a", to_date=day
+        # principal amount
+        principal_book_account = get_book_account_by_string(
+            session, book_string=f"{bill.id}/bill/principal_due/a"
+        )
+        principal_debit_balance = session.query(func.sum(LedgerEntry.amount)).filter(
+            LedgerEntry.debit_account == principal_book_account.id,
+        )
+        principal_credit_balance = session.query(func.sum(LedgerEntry.amount)).filter(
+            LedgerEntry.credit_account == principal_book_account.id,
+        )
+        # unbilled amount
+        unbilled_book_account = get_book_account_by_string(
+            session, book_string=f"{bill.id}/bill/principal_due/a"
+        )
+        unbilled_debit_balance = session.query(func.sum(LedgerEntry.amount)).filter(
+            LedgerEntry.debit_account == principal_book_account.id,
+        )
+        unbilled_credit_balance = session.query(func.sum(LedgerEntry.amount)).filter(
+            LedgerEntry.credit_account == principal_book_account.id,
+        )
+        for i in range(1, no_of_days + 1):
+            day = last_lender_incur_trigger + datetime.timedelta(i)
+            principal = (
+                principal_debit_balance.filter(
+                    LedgerEntry.event_id == LedgerTriggerEvent.id, LedgerTriggerEvent.post_date < day
+                ).scalar()
+                or 0
+            ) + (
+                principal_credit_balance.filter(
+                    LedgerEntry.event_id == LedgerTriggerEvent.id, LedgerTriggerEvent.post_date < day
+                ).scalar()
+                or 0
             )
-            _, unbilled = get_account_balance_from_str(
-                session, book_string=f"{bill.id}/bill/principal_due/a", to_date=day
+            unbilled = (
+                unbilled_debit_balance.filter(
+                    LedgerEntry.event_id == LedgerTriggerEvent.id, LedgerTriggerEvent.post_date < day
+                ).scalar()
+                or 0
+            ) + (
+                unbilled_credit_balance.filter(
+                    LedgerEntry.event_id == LedgerTriggerEvent.id, LedgerTriggerEvent.post_date < day
+                ).scalar()
+                or 0
             )
             amount = amount + (principal + unbilled) * Decimal(
                 bill.lender_rate_of_interest_annual / 36550

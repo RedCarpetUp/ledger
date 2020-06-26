@@ -68,6 +68,7 @@ def bill_view(session: Session, user_id: int) -> list:
                 "transactions": transaction_view(session, bill.id),
             }
         )
+    return bill_details
 
 
 def transaction_view(session: Session, bill_id: int) -> list:
