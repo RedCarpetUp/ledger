@@ -6,7 +6,7 @@ from pendulum import (
     DateTime,
 )
 from sqlalchemy.orm import Session
-from rush.utils import get_current_ist_time
+from rush.utils import get_current_ist_time, div, mul
 from rush.ledger_utils import get_account_balance_from_str
 from rush.anomaly_detection import get_affected_events
 from rush.models import CardEmis, UserCard, LoanData
@@ -17,12 +17,12 @@ def create_emis_for_card(session: Session, user_card: UserCard, last_bill: LoanD
         days=user_card.interest_free_period_in_days + 1
     )
     _, principal_due = get_account_balance_from_str(
-        session, book_string=f"{last_bill.id}/bill/principal_due/a"
+        session, book_string=f"{last_bill.id}/bill/principal_receivable/a"
     )
     _, late_fine_due = get_account_balance_from_str(
-        session, book_string=f"{last_bill.id}/bill/late_fine_due/a"
+        session, book_string=f"{last_bill.id}/bill/late_fine_receivable/a"
     )
-    due_amount = Decimal(principal_due / 12)
+    due_amount = div(principal_due,12)
     # We will firstly create only 12 emis
     for i in range(1, 13):
         due_date = (
@@ -34,8 +34,8 @@ def create_emis_for_card(session: Session, user_card: UserCard, last_bill: LoanD
         new_emi = CardEmis(
             card_id=user_card.id,
             emi_number=i,
-            total_closing_balance=(principal_due - due_amount * (i - 1)),
-            total_closing_balance_post_due_date=(principal_due - due_amount * (i - 1)),
+            total_closing_balance=(principal_due - mul(due_amount, (i-1))),
+            total_closing_balance_post_due_date=(principal_due - mul(due_amount, (i-1))),
             due_amount=due_amount,
             total_due_amount=due_amount,
             due_date=due_date,
@@ -51,12 +51,12 @@ def add_emi_on_new_bill(
 ) -> CardEmis:
     new_end_emi_number = last_emi_number + 1
     _, principal_due = get_account_balance_from_str(
-        session, book_string=f"{last_bill.id}/bill/principal_due/a"
+        session, book_string=f"{last_bill.id}/bill/principal_receivable/a"
     )
     _, late_fine_due = get_account_balance_from_str(
-        session, book_string=f"{last_bill.id}/bill/late_fine_due/a"
+        session, book_string=f"{last_bill.id}/bill/late_fine_receivable/a"
     )
-    due_amount = Decimal(principal_due / 12)
+    due_amount = div(principal_due,12)
     all_emis = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == user_card.id)
@@ -74,10 +74,10 @@ def add_emi_on_new_bill(
         emi_dict["due_amount"] += due_amount
         emi_dict["total_due_amount"] += due_amount
         emi_dict["total_closing_balance"] += principal_due - (
-            due_amount * (emi_dict["emi_number"] - (new_end_emi_number - 12) - 1)
+            mul(due_amount, (emi_dict["emi_number"] - (new_end_emi_number - 12) - 1))
         )
         emi_dict["total_closing_balance_post_due_date"] += principal_due - (
-            due_amount * (emi_dict["emi_number"] - (new_end_emi_number - 12) - 1)
+            mul(due_amount, (emi_dict["emi_number"] - (new_end_emi_number - 12) - 1))
         )
         new_emi_list.append(emi_dict)
     session.bulk_update_mappings(CardEmis, new_emi_list)
@@ -90,8 +90,8 @@ def add_emi_on_new_bill(
         emi_number=new_end_emi_number,
         due_amount=due_amount,
         total_due_amount=due_amount,
-        total_closing_balance=(principal_due - (due_amount * (new_end_emi_number - 1))),
-        total_closing_balance_post_due_date=(principal_due - (due_amount * (new_end_emi_number - 1))),
+        total_closing_balance=(principal_due - mul(due_amount, (new_end_emi_number - 1))),
+        total_closing_balance_post_due_date=(principal_due - mul(due_amount, (new_end_emi_number - 1))),
         due_date=last_emi_due_date,
         late_fee=late_fee,
     )
@@ -158,7 +158,7 @@ def refresh_schedule(session: Session, user_id: int) -> None:
                     all_paid = True
                     emi["late_fee_received"] = emi["late_fee"]
                     emi["interest_received"] = emi["interest"]
-                    emi["payment_received"] = emi["due_amount"]
+                    emi["payment_received"] = payment_received_and_adjusted - (emi["late_fee"] + emi["interest"])
                     emi["total_closing_balance"] = 0
                     emi["total_closing_balance_post_due_date"] = 0
                     last_paid_emi_number = emi["emi_number"]
@@ -206,7 +206,7 @@ def refresh_schedule(session: Session, user_id: int) -> None:
 def adjust_interest_in_emis(session: Session, user_id: int, post_date: DateTime) -> None:
     latest_bill = (
         session.query(LoanData)
-        .filter(LoanData.user_id == user_id, LoanData.agreement_date < post_date)
+        .filter(LoanData.user_id == user_id, LoanData.agreement_date <= post_date)
         .order_by(LoanData.agreement_date.desc())
         .first()
     )
@@ -225,10 +225,10 @@ def adjust_interest_in_emis(session: Session, user_id: int, post_date: DateTime)
         )
     emi_dict = emi.as_dict()
     _, interest_due = get_account_balance_from_str(
-        session=session, book_string=f"{latest_bill.id}/bill/interest_due/a"
+        session=session, book_string=f"{latest_bill.id}/bill/interest_receivable/a"
     )
-    emi_dict["interest_current_month"] = round(interest_due * (30 - emi_dict["due_date"].day) / 30, 2)
-    emi_dict["interest_next_month"] = round(interest_due - emi_dict["interest_current_month"], 2)
+    emi_dict["interest_current_month"] = div(mul(interest_due, (30 - emi_dict["due_date"].day)), 30)
+    emi_dict["interest_next_month"] = interest_due - emi_dict["interest_current_month"]
     emi_dict["interest"] = emi_dict["interest_current_month"] + emi_dict["interest_next_month"]
     emi_dict["total_closing_balance_post_due_date"] += emi_dict["interest"]
     emi_dict["total_due_amount"] += emi_dict["interest"]
@@ -257,7 +257,7 @@ def adjust_late_fee_in_emis(session: Session, user_id: int, post_date: DateTime)
         )
     emi_dict = emi.as_dict()
     _, late_fee = get_account_balance_from_str(
-        session=session, book_string=f"{latest_bill.id}/bill/late_fine_due/a"
+        session=session, book_string=f"{latest_bill.id}/bill/late_fine_receivable/a"
     )
     emi_dict["late_fee"] = late_fee
     emi_dict["total_closing_balance_post_due_date"] += emi_dict["late_fee"]

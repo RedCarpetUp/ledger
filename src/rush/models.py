@@ -1,4 +1,4 @@
-from decimal import Decimal as DecimalType
+from decimal import Decimal
 from typing import (
     Any,
     Dict,
@@ -13,6 +13,7 @@ from sqlalchemy import (
     DECIMAL,
     JSON,
     TIMESTAMP,
+    Boolean,
     Column,
     Date,
     ForeignKey,
@@ -124,7 +125,7 @@ class LedgerTriggerEventPy(AuditMixinPy):
 class BookAccount(AuditMixin):
     __tablename__ = "book_account"
     identifier = Column(Integer)
-    identifier_type = Column(String(50))  # bill, emi, user etc.
+    identifier_type = Column(String(50))  # bill, emi, user, lender etc.
     book_name = Column(String(50))
     account_type = Column(String(50))
     book_date = Column(Date())
@@ -150,7 +151,7 @@ class LedgerEntryPy(AuditMixinPy):
     event_id: int
     debit_account: int
     credit_account: int
-    amount: DecimalType
+    amount: Decimal
     business_date: DateTime
 
 
@@ -165,10 +166,20 @@ class UserCard(AuditMixin):
 class LoanData(AuditMixin):
     __tablename__ = "loan_data"
     user_id = Column(Integer, ForeignKey(User.id))
+    lender_id = Column(Integer, nullable=False)
     agreement_date = Column(TIMESTAMP, nullable=False)
     card_id = Column(Integer, ForeignKey(UserCard.id))
-    rc_rate_of_interest_annual = Column(Numeric, nullable=False)
+    is_generated = Column(Boolean, nullable=False, server_default="false")
+    rc_rate_of_interest_annual = Column(Numeric, nullable=False)  # Make this monthly only
     lender_rate_of_interest_annual = Column(Numeric, nullable=False)
+    principal = Column(Numeric, nullable=True)
+    principal_instalment = Column(Numeric, nullable=True)
+
+    def get_minimum_amount_to_pay(self, session: Session) -> Decimal:
+        from rush.ledger_utils import get_account_balance_from_str
+
+        _, min_due = get_account_balance_from_str(session, book_string=f"{self.id}/bill/min/a")
+        return min_due
 
 
 @py_dataclass
