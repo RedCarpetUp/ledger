@@ -25,6 +25,7 @@ from rush.models import (
     LedgerEntry,
     LedgerTriggerEvent,
     LoanData,
+    UserCard
 )
 
 
@@ -51,7 +52,8 @@ def m2p_transfer_event(session: Session, event: LedgerTriggerEvent) -> None:
 def card_transaction_event(session: Session, user_id: int, event: LedgerTriggerEvent) -> None:
     amount = event.amount
     swipe_id = event.extra_details["swipe_id"]
-    bill_id = session.query(CardTransaction.loan_id).filter_by(id=swipe_id).scalar()
+    bill_id = session.query(CardTransaction.loan_id).filter_by(
+        id=swipe_id).scalar()
     # Reduce user's card balance
     create_ledger_entry_from_str(
         session,
@@ -99,7 +101,8 @@ def bill_generate_event(session: Session, new_bill: LoanData, event: LedgerTrigg
     )
 
     # Also store min amount. Assuming it to be 3% interest + 10% principal.
-    min_balance = principal_due * Decimal("0.03") + principal_due * Decimal("0.10")
+    min_balance = principal_due * \
+        Decimal("0.03") + principal_due * Decimal("0.10")
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
@@ -115,7 +118,8 @@ def payment_received_event(session: Session, bills: LoanData, event: LedgerTrigg
     def adjust_dues(payment_to_adjust_from: Decimal, debit_str: str, credit_str: str) -> Decimal:
         if payment_to_adjust_from <= 0:
             return payment_to_adjust_from
-        _, book_balance = get_account_balance_from_str(session, book_string=credit_str)
+        _, book_balance = get_account_balance_from_str(
+            session, book_string=credit_str)
         if book_balance > 0:
             balance_to_adjust = min(payment_to_adjust_from, book_balance)
             create_ledger_entry_from_str(
@@ -165,7 +169,8 @@ def accrue_interest_event(session: Session, bills: LoanData, event: LedgerTrigge
             )
             # Accrue interest on entire principal. # TODO check if flat interest or reducing here.
             total_principal_amount = principal_due + principal_received
-            interest_to_charge = total_principal_amount * Decimal(bill.rc_rate_of_interest_annual) / 1200
+            interest_to_charge = total_principal_amount * \
+                Decimal(bill.rc_rate_of_interest_annual) / 1200
 
             revenue_earned = get_book_account_by_string(
                 session, book_string=f"{bill.id}/bill/revenue_earned/r"
@@ -232,64 +237,25 @@ def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> 
         .first()
     )
     if last_lender_incur_trigger == None:
-        last_lender_incur_trigger = event.post_date + dateutil.relativedelta.relativedelta(months=-1)
+        last_lender_incur_trigger = event.post_date + \
+            dateutil.relativedelta.relativedelta(months=-1)
     no_of_days = (event.post_date - last_lender_incur_trigger).days
-    all_lender_bills = session.query(LoanData).all()
+    all_user_cards = session.query(UserCard).all()
 
-    for bill in all_lender_bills:
-        amount = 0
-        # principal amount
-        principal_book_account = get_book_account_by_string(
-            session, book_string=f"{bill.id}/bill/principal_due/a"
+    for card in all_user_cards:
+        book_account = get_book_account_by_string(
+            session, book_string=f"{card.id}/card/lender_payable/l"
         )
-        principal_debit_balance = session.query(func.sum(LedgerEntry.amount)).filter(
-            LedgerEntry.debit_account == principal_book_account.id,
-        )
-        principal_credit_balance = session.query(func.sum(LedgerEntry.amount)).filter(
-            LedgerEntry.credit_account == principal_book_account.id,
-        )
-        # unbilled amount
-        unbilled_book_account = get_book_account_by_string(
-            session, book_string=f"{bill.id}/bill/principal_due/a"
-        )
-        unbilled_debit_balance = session.query(func.sum(LedgerEntry.amount)).filter(
-            LedgerEntry.debit_account == principal_book_account.id,
-        )
-        unbilled_credit_balance = session.query(func.sum(LedgerEntry.amount)).filter(
-            LedgerEntry.credit_account == principal_book_account.id,
-        )
-        for i in range(1, no_of_days + 1):
-            day = last_lender_incur_trigger + datetime.timedelta(i)
-            principal = (
-                principal_debit_balance.filter(
-                    LedgerEntry.event_id == LedgerTriggerEvent.id, LedgerTriggerEvent.post_date < day
-                ).scalar()
-                or 0
-            ) + (
-                principal_credit_balance.filter(
-                    LedgerEntry.event_id == LedgerTriggerEvent.id, LedgerTriggerEvent.post_date < day
-                ).scalar()
-                or 0
+        balance_per_date = (
+            session.query(LedgerTriggerEvent.post_date, func.sum(
+                LedgerEntry.amount).label("amount"))
+            .join(LedgerTriggerEvent, LedgerTriggerEvent.id == LedgerEntry.id)
+            .group_by(LedgerTriggerEvent.post_date)
+            .order_by(LedgerTriggerEvent.post_date.desc())
+            .filter(
+                LedgerEntry.debit_account == book_account.id,
             )
-            unbilled = (
-                unbilled_debit_balance.filter(
-                    LedgerEntry.event_id == LedgerTriggerEvent.id, LedgerTriggerEvent.post_date < day
-                ).scalar()
-                or 0
-            ) + (
-                unbilled_credit_balance.filter(
-                    LedgerEntry.event_id == LedgerTriggerEvent.id, LedgerTriggerEvent.post_date < day
-                ).scalar()
-                or 0
-            )
-            amount = amount + (principal + unbilled) * Decimal(
-                bill.lender_rate_of_interest_annual / 36550
-            )
-        if amount > 0:
-            create_ledger_entry_from_str(
-                session,
-                event_id=event.id,
-                debit_book_str=f"{bill.id}/redcarpet/redcarpet_expenses/l",
-                credit_book_str="62311/lender/lender_payable/l",
-                amount=amount,
-            )
+            .subquery()
+        )
+        ans = session.query(balance_per_date.post_date, func.sum(
+            balance_per_date.amount).over(order_by=balance_per_date.post_date)).all()
