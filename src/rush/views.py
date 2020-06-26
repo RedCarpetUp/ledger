@@ -1,12 +1,8 @@
 import json
-from decimal import Decimal
 
 from sqlalchemy import (
-    JSON,
-    Integer,
     String,
     cast,
-    text,
 )
 from sqlalchemy.orm import Session
 

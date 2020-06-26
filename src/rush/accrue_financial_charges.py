@@ -13,7 +13,7 @@ from rush.ledger_utils import (
     create_ledger_entry,
     create_ledger_entry_from_str,
     get_account_balance_from_str,
-    get_book_account_by_string,
+    get_all_unpaid_bills,
     is_bill_closed,
     is_min_paid,
 )
@@ -21,8 +21,13 @@ from rush.models import (
     LedgerEntry,
     LedgerTriggerEvent,
     LoanData,
+    UserCard,
 )
-from rush.utils import get_current_ist_time
+from rush.utils import (
+    div,
+    get_current_ist_time,
+    mul,
+)
 
 
 def accrue_interest_prerequisites(
@@ -34,28 +39,17 @@ def accrue_interest_prerequisites(
     return False  # prerequisites failed.
 
 
-def accrue_interest(session: Session, user_id: int) -> LoanData:
-    bill = (
-        session.query(LoanData)
-        .filter(LoanData.user_id == user_id)
-        .order_by(LoanData.agreement_date.desc())
-        .first()
-    )  # Get the latest bill of that user.
-    bills = (
-        session.query(LoanData)
-        .filter(LoanData.user_id == user_id)
-        .order_by(LoanData.agreement_date.desc())
-        .all()
-    )
-    can_charge_interest = accrue_interest_prerequisites(session, bill)
-    if can_charge_interest:  # if bill isn't paid fully accrue interest.
-        # TODO get correct date here.
-        lt = LedgerTriggerEvent(name="accrue_interest", post_date=get_current_ist_time())
-        session.add(lt)
+def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_card: UserCard) -> None:
+    unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
+    for bill in unpaid_bills:
+        # TODO get tenure from loan table.
+        interest_on_principal = mul(bill.principal, div(div(bill.rc_rate_of_interest_annual, 12), 100))
+        min_event = LedgerTriggerEvent(
+            name="accrue_interest", post_date=post_date, amount=interest_on_principal
+        )
+        session.add(min_event)
         session.flush()
-
-        accrue_interest_event(session, bills, lt)
-    return bill
+        accrue_interest_event(session, bill, min_event)
 
 
 def accrue_late_charges_prerequisites(
@@ -74,7 +68,8 @@ def accrue_late_charges(session: Session, user_id: int) -> LoanData:
         .order_by(LoanData.agreement_date.desc())
         .first()
     )  # Get the latest bill of that user.
-    can_charge_fee = accrue_late_charges_prerequisites(session, bill)
+    can_charge_fee = bill.get_minimum_amount_to_pay(session) > 0
+    #  accrue_late_charges_prerequisites(session, bill)
     if can_charge_fee:  # if min isn't paid charge late fine.
         # TODO get correct date here.
         lt = LedgerTriggerEvent(
@@ -109,7 +104,7 @@ def reverse_late_charges_event(
         create_ledger_entry_from_str(
             session,
             event_id=lt.id,
-            debit_book_str=f"{bill.id}/bill/late_fine_due/a",
+            debit_book_str=f"{bill.id}/bill/late_fine_receivable/a",
             credit_book_str=f"{bill.id}/bill/late_fee_received/a",
             amount=lt.amount,
         )

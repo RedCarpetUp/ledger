@@ -15,7 +15,6 @@ from rush.models import (
     LedgerEntry,
     LedgerTriggerEvent,
     LoanData,
-    User,
     get_or_create,
 )
 
@@ -79,7 +78,7 @@ def get_account_balance_from_str(
 def get_book_account_by_string(session: Session, book_string) -> BookAccount:
     identifier, identifier_type, name, account_type = book_string.split("/")
     assert account_type in ("a", "l", "r")
-    assert identifier_type in ("user", "lender", "bill", "redcarpet")
+    assert identifier_type in ("user", "lender", "bill", "redcarpet", "card")
 
     book_account = get_or_create(
         session=session,
@@ -117,21 +116,21 @@ def is_min_paid(session: Session, bill: LoanData, to_date: Optional[DateTime] = 
 def is_bill_closed(session: Session, bill: LoanData, to_date: Optional[DateTime] = None) -> bool:
     # Check if principal is paid. If not, return false.
     _, principal_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/principal_due/a", to_date=to_date
+        session, book_string=f"{bill.id}/bill/principal_receivable/a", to_date=to_date
     )
     if principal_due != 0:
         return False
 
     # Check if interest is paid. If not, return false.
     _, interest_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/interest_due/a", to_date=to_date
+        session, book_string=f"{bill.id}/bill/interest_receivable/a", to_date=to_date
     )
     if interest_due != 0:
         return False
 
     # Check if late fine is paid. If not, return false.
     _, late_fine_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/late_fine_due/a", to_date=to_date
+        session, book_string=f"{bill.id}/bill/late_fine_receivable/a", to_date=to_date
     )
     if late_fine_due != 0:
         return False
@@ -140,11 +139,13 @@ def is_bill_closed(session: Session, bill: LoanData, to_date: Optional[DateTime]
 
 def get_remaining_bill_balance(session: Session, bill: LoanData) -> dict:
     _, principal_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/principal_due/a"
+        session, book_string=f"{bill.id}/bill/principal_receivable/a"
     )
-    _, interest_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/interest_due/a")
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/interest_receivable/a"
+    )
     _, late_fine_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/late_fine_due/a"
+        session, book_string=f"{bill.id}/bill/late_fine_receivable/a"
     )
     return {
         "total_due": principal_due + interest_due + late_fine_due,
@@ -159,7 +160,7 @@ def get_all_unpaid_bills(session: Session, user_id: int) -> List[LoanData]:
     all_bills = (
         session.query(LoanData)
         .filter(LoanData.user_id == user_id)
-        .order_by(LoanData.agreement_date.desc())
+        .order_by(LoanData.agreement_date)
         .all()
     )
     for bill in all_bills:
