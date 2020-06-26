@@ -31,5 +31,5 @@ def create_card_swipe(
     )
     session.add(lt)
     session.flush()  # need id. TODO Gotta use table relationships
-    card_transaction_event(session, user_card.user_id, lt)
+    card_transaction_event(session, user_card, lt)
     return swipe

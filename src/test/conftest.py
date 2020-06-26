@@ -108,7 +108,7 @@ def postgres_server(docker_client: docker.DockerClient) -> Iterator[Dict[str, st
                 },
             )
     wait_for_postgres(conn_args)
-    engine = create_engine(PYTEST_DB, echo=True)
+    engine = create_engine(PYTEST_DB)
     session_factory = sessionmaker(bind=engine)
     print("\n----- CREATE TEST DB CONNECTION POOL\n")
 
