@@ -21,3 +21,4 @@ def add_min_to_all_bills(session: Session, post_date: DateTime, user_card: UserC
         min_amount = bill.principal_instalment + interest_on_principal
 
         add_min_amount_event(session, bill, min_event, min_amount)
+        min_event.amount += min_amount

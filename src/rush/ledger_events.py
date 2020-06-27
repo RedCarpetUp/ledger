@@ -206,14 +206,14 @@ def _adjust_for_prepayment(session: Session) -> None:
     pass  # TODO
 
 
-def accrue_interest_event(session: Session, bill: LoanData, event: LedgerTriggerEvent) -> None:
-    interest_on_principal = mul(bill.principal, div(div(bill.rc_rate_of_interest_annual, 12), 100))
+def accrue_interest_event(session: Session, bill: LoanData, event: LedgerTriggerEvent,
+                          amount: Decimal) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
         debit_book_str=f"{bill.id}/bill/interest_receivable/a",
         credit_book_str=f"{bill.id}/bill/interest_earned/r",
-        amount=interest_on_principal,
+        amount=amount,
     )
 
 

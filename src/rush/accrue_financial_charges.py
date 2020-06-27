@@ -44,7 +44,9 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_car
     session.flush()
     for bill in unpaid_bills:
         # TODO get tenure from loan table.
-        accrue_interest_event(session, bill, accrue_event)
+        interest_on_principal = mul(bill.principal, div(div(bill.rc_rate_of_interest_annual, 12), 100))
+        accrue_interest_event(session, bill, accrue_event, interest_on_principal)
+        accrue_event.amount += interest_on_principal
 
 
 def accrue_late_charges_prerequisites(
