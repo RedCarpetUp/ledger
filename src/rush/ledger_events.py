@@ -347,7 +347,6 @@ def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> 
                     )
                 )
                 * remaining_credit_balance.c.amount
-                * 18
                 / 36500
             ).label("amount")
         ).subquery("remaing_credit")
@@ -413,15 +412,14 @@ def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> 
                     )
                 )
                 * remaining_debit_balance.c.amount
-                * 18
                 / 36500
             ).label("amount")
         ).subquery("remaing_debit")
 
         total_amount = (
-            (session.query(func.sum(remaining_credit.c.amount)).scalar() or 0)
+            mul(Decimal(session.query(func.sum(remaining_credit.c.amount)).scalar() or 0), 18)
             + last_credit_balance
-            - (session.query(func.sum(remaining_debit.c.amount)).scalar() or 0)
+            - mul(Decimal(session.query(func.sum(remaining_debit.c.amount)).scalar() or 0), 18)
             - last_debit_balance
         )
         if total_amount > 0:
