@@ -396,3 +396,56 @@ def test_view(session: Session) -> None:
     bill = session.query(LoanData).filter(LoanData.user_id == user.id).first()
     json_value = transaction_view(session, bill_id=bill.id)
     # assert json.loads(json_value)
+
+
+def test_interest_reversal(session: Session) -> None:
+    test_generate_bill_1(session)
+    _partial_payment_bill_1(session)
+    _accrue_late_fine_bill_1(session)
+    _pay_minimum_amount_bill_1(session)
+    _accrue_interest_bill_1(session)
+
+    #  Pay 500 rupees
+    user_card = session.query(UserCard).filter(UserCard.user_id == 99).one()
+    payment_date = parse_date("2020-05-14")
+    amount = Decimal(500)
+    unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
+    payment_received(
+        session=session, user_card=user_card, payment_amount=amount, payment_date=payment_date,
+    )
+
+    bill = unpaid_bills[0]
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/interest_receivable/a"
+    )
+    assert interest_due == 0
+
+    _, interest_earned = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/interest_earned/r"
+    )
+    assert interest_earned == 30
+
+    _, principal_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/principal_receivable/a"
+    )
+    assert principal_due == Decimal("416.67")
+
+    run_anomaly(session, bill)  # This removes interest.
+
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/interest_receivable/a"
+    )
+    assert interest_due == 0
+
+    _, interest_earned = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/interest_earned/r"
+    )
+    assert interest_earned == 0
+
+    _, principal_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/principal_receivable/a"
+    )
+    assert principal_due == Decimal("386.67")
+
+    # TODO more testing scenarios.
+    # 1. interest is not settled. 2. There are multiple bills.

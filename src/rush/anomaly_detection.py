@@ -3,9 +3,7 @@ from typing import List
 from sqlalchemy.orm import Session
 
 from rush.accrue_financial_charges import (
-    accrue_interest_prerequisites,
-    accrue_late_charges_prerequisites,
-    reverse_late_charges,
+    reverse_interest_charges,
 )
 from rush.models import (
     BookAccount,
@@ -47,12 +45,11 @@ def run_anomaly(session: Session, bill: LoanData) -> None:
     events = get_affected_events(session, bill.id)
     for event in events:
         if event.name == "accrue_interest":
-            do_prerequisites_meet = accrue_interest_prerequisites(session, bill, to_date=event.post_date)
-            if not do_prerequisites_meet:
-                print("reverse event")
+            reverse_interest_charges(session, event)
         elif event.name == "accrue_late_fine":
-            do_prerequisites_meet = accrue_late_charges_prerequisites(
-                session, bill, to_date=event.post_date
-            )
-            if not do_prerequisites_meet:
-                reverse_late_charges(session, bill, event)
+            pass
+            # do_prerequisites_meet = accrue_late_charges_prerequisites(
+            #     session, bill, to_date=event.post_date
+            # )
+            # if not do_prerequisites_meet:
+            #     reverse_late_charges(session, bill, event)

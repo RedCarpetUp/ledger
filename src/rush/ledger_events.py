@@ -123,7 +123,11 @@ def payment_received_event(session: Session, user_card: UserCard, event: LedgerT
 
 
 def _adjust_bill(
-    session: Session, bill: LoanData, amount_to_adjust_in_this_bill: Decimal, event_id: int
+    session: Session,
+    bill: LoanData,
+    amount_to_adjust_in_this_bill: Decimal,
+    event_id: int,
+    debit_acc_str: str,
 ) -> Decimal:
     def adjust(payment_to_adjust_from: Decimal, to_acc: str, from_acc: str) -> Decimal:
         if payment_to_adjust_from <= 0:
@@ -144,18 +148,14 @@ def _adjust_bill(
     # Now adjust into other accounts.
     remaining_amount = adjust(
         amount_to_adjust_in_this_bill,
-        to_acc=f"{bill.lender_id}/lender/pg_account/a",
+        to_acc=debit_acc_str,  # f"{bill.lender_id}/lender/pg_account/a"
         from_acc=f"{bill.id}/bill/late_fine_receivable/a",
     )
     remaining_amount = adjust(
-        remaining_amount,
-        to_acc=f"{bill.lender_id}/lender/pg_account/a",
-        from_acc=f"{bill.id}/bill/interest_receivable/a",
+        remaining_amount, to_acc=debit_acc_str, from_acc=f"{bill.id}/bill/interest_receivable/a",
     )
     remaining_amount = adjust(
-        remaining_amount,
-        to_acc=f"{bill.lender_id}/lender/pg_account/a",
-        from_acc=f"{bill.id}/bill/principal_receivable/a",
+        remaining_amount, to_acc=debit_acc_str, from_acc=f"{bill.id}/bill/principal_receivable/a",
     )
     return remaining_amount
 
@@ -176,7 +176,13 @@ def _adjust_for_min(
             credit_book_str=f"{bill.id}/bill/min/a",
             amount=amount_to_adjust_in_this_bill,
         )
-        remaining_amount = _adjust_bill(session, bill, amount_to_adjust_in_this_bill, event_id)
+        remaining_amount = _adjust_bill(
+            session,
+            bill,
+            amount_to_adjust_in_this_bill,
+            event_id,
+            debit_acc_str=f"{bill.lender_id}/lender/pg_account/a",
+        )
         assert remaining_amount == 0  # Can't be more than 0
     return payment_received  # The remaining amount goes back to the main func.
 
@@ -185,7 +191,13 @@ def _adjust_for_complete_bill(
     session: Session, bills: List[LoanData], payment_received: Decimal, event_id: int
 ) -> Decimal:
     for bill in bills:
-        payment_received = _adjust_bill(session, bill, payment_received, event_id)
+        payment_received = _adjust_bill(
+            session,
+            bill,
+            payment_received,
+            event_id,
+            debit_acc_str=f"{bill.lender_id}/lender/pg_account/a",
+        )
     return payment_received  # The remaining amount goes back to the main func.
 
 

@@ -8,6 +8,7 @@ from rush.ledger_events import (
     accrue_interest_event,
     accrue_late_fine_event,
     payment_received_event,
+    _adjust_bill,
 )
 from rush.ledger_utils import (
     create_ledger_entry,
@@ -22,6 +23,7 @@ from rush.models import (
     LedgerTriggerEvent,
     LoanData,
     UserCard,
+    BookAccount,
 )
 from rush.utils import (
     div,
@@ -80,6 +82,76 @@ def accrue_late_charges(session: Session, user_id: int) -> LoanData:
 
         accrue_late_fine_event(session, bill, lt)
     return bill
+
+
+def reverse_interest_charges(session: Session, event_to_reverse: LedgerTriggerEvent) -> None:
+    """
+    This event is intended only when the complete amount has been paid and we need to remove the
+    interest that we accrued before due_date. For example, interest gets accrued on 1st. Last date is
+    15th. If user pays the complete principal before 15th, we remove the interest. Removing interest
+    is more convenient than adding it on 16th.
+    """
+    event = LedgerTriggerEvent(name="reverse_interest_charges", post_date=get_current_ist_time())
+    session.add(event)
+    session.flush()
+
+    # I first find what all bills the previous event touched.
+    bills = (
+        session.query(LoanData)
+        .distinct()
+        .filter(
+            LedgerEntry.debit_account == BookAccount.id,
+            LedgerEntry.event_id == event_to_reverse.id,
+            BookAccount.identifier_type == "bill",
+            LoanData.id == BookAccount.identifier,
+        )
+        .all()
+    )
+    interest_that_was_added = event_to_reverse.amount
+
+    inter_bill_movement_entries = []
+    # I don't think this needs to be a list but I'm not sure. Ideally only one bill should be open.
+    bills_to_slide = []
+    for bill in bills:
+        # We check how much got settled in the interest which we're planning to remove.
+        interest_book, interest_due = get_account_balance_from_str(
+            session, f"{bill.id}/bill/interest_receivable/a"
+        )
+        settled_amount = interest_that_was_added - interest_due
+
+        if interest_due > 0:
+            # We reverse the original entry by whatever is the remaining amount.
+            create_ledger_entry_from_str(
+                session,
+                event_id=event.id,
+                debit_book_str=f"{bill.id}/bill/interest_earned/r",
+                credit_book_str=f"{bill.id}/bill/interest_receivable/a",
+                amount=interest_due,
+            )
+
+        # We need to remove the amount that got adjusted in interest. interest_earned account needs
+        # to be removed by the interest_that_was_added amount.
+        d = {"acc_to_remove_from": f"{bill.id}/bill/interest_earned/r", "amount": settled_amount}
+        inter_bill_movement_entries.append(d)  # Move amount from this bill to some other bill.
+
+        if not is_bill_closed(session, bill):
+            bills_to_slide.append(bill)  # The bill which is open and we slide the above entries in here.
+
+    for bill in bills_to_slide:
+        for entry in inter_bill_movement_entries:
+            if entry["amount"] == 0:
+                continue
+            remaining_amount = _adjust_bill(
+                session, bill, entry["amount"], event.id, debit_acc_str=entry["acc_to_remove_from"]
+            )
+            # if not all of it got adjusted in this bill, move remaining amount to next bill.
+            # if got adjusted then this will be 0.
+            entry["amount"] = remaining_amount
+
+    # Check if there's still amount that's left. If yes, then we received extra prepayment.
+    is_prepayment = any(d["amount"] > 0 for d in inter_bill_movement_entries)
+    if is_prepayment:
+        pass  # TODO prepayment
 
 
 def reverse_late_charges(session: Session, bill: LoanData, event_to_reverse: LedgerTriggerEvent) -> None:
