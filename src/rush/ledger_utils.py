@@ -159,7 +159,7 @@ def get_all_unpaid_bills(session: Session, user_id: int) -> List[LoanData]:
     unpaid_bills = []
     all_bills = (
         session.query(LoanData)
-        .filter(LoanData.user_id == user_id)
+        .filter(LoanData.user_id == user_id, LoanData.is_generated.is_(True))
         .order_by(LoanData.agreement_date)
         .all()
     )
