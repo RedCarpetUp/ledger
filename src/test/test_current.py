@@ -518,4 +518,4 @@ def test_refund_or_prepayment(session: Session) -> None:
     uc = session.query(UserCard).filter(UserCard.user_id == 99).one()
 
     _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
-    assert round(amount, 2) == round(Decimal(3109.48), 2)
+    assert amount == Decimal(3094.19)
