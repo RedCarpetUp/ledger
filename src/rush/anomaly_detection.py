@@ -2,9 +2,7 @@ from typing import List
 
 from sqlalchemy.orm import Session
 
-from rush.accrue_financial_charges import (
-    reverse_interest_charges,
-)
+from rush.accrue_financial_charges import reverse_interest_charges
 from rush.models import (
     BookAccount,
     LedgerEntry,

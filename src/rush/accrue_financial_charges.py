@@ -5,10 +5,10 @@ from pendulum import DateTime
 from sqlalchemy.orm import Session
 
 from rush.ledger_events import (
+    _adjust_bill,
     accrue_interest_event,
     accrue_late_fine_event,
     payment_received_event,
-    _adjust_bill,
 )
 from rush.ledger_utils import (
     create_ledger_entry,
@@ -19,17 +19,13 @@ from rush.ledger_utils import (
     is_min_paid,
 )
 from rush.models import (
+    BookAccount,
     LedgerEntry,
     LedgerTriggerEvent,
     LoanData,
     UserCard,
-    BookAccount,
 )
-from rush.utils import (
-    div,
-    get_current_ist_time,
-    mul,
-)
+from rush.utils import get_current_ist_time
 
 
 def accrue_interest_prerequisites(
@@ -43,15 +39,12 @@ def accrue_interest_prerequisites(
 
 def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_card: UserCard) -> None:
     unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
+    accrue_event = LedgerTriggerEvent(name="accrue_interest", post_date=post_date)
+    session.add(accrue_event)
+    session.flush()
     for bill in unpaid_bills:
         # TODO get tenure from loan table.
-        interest_on_principal = mul(bill.principal, div(div(bill.rc_rate_of_interest_annual, 12), 100))
-        min_event = LedgerTriggerEvent(
-            name="accrue_interest", post_date=post_date, amount=interest_on_principal
-        )
-        session.add(min_event)
-        session.flush()
-        accrue_interest_event(session, bill, min_event)
+        accrue_interest_event(session, bill, accrue_event)
 
 
 def accrue_late_charges_prerequisites(
@@ -96,23 +89,25 @@ def reverse_interest_charges(session: Session, event_to_reverse: LedgerTriggerEv
     session.flush()
 
     # I first find what all bills the previous event touched.
-    bills = (
-        session.query(LoanData)
+    bills_and_ledger_entry = (
+        session.query(LoanData, LedgerEntry)
         .distinct()
         .filter(
             LedgerEntry.debit_account == BookAccount.id,
             LedgerEntry.event_id == event_to_reverse.id,
             BookAccount.identifier_type == "bill",
             LoanData.id == BookAccount.identifier,
+            BookAccount.book_name == "interest_receivable",
+            LoanData.is_generated.is_(True),
         )
         .all()
     )
-    interest_that_was_added = event_to_reverse.amount
 
     inter_bill_movement_entries = []
     # I don't think this needs to be a list but I'm not sure. Ideally only one bill should be open.
     bills_to_slide = []
-    for bill in bills:
+    for bill, ledger_entry in bills_and_ledger_entry:
+        interest_that_was_added = ledger_entry.amount
         # We check how much got settled in the interest which we're planning to remove.
         interest_book, interest_due = get_account_balance_from_str(
             session, f"{bill.id}/bill/interest_receivable/a"

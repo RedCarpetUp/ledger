@@ -14,6 +14,7 @@ from rush.models import (
     LoanData,
     UserCard,
 )
+from rush.utils import mul, div
 
 
 def lender_disbursal_event(session: Session, event: LedgerTriggerEvent) -> None:
@@ -90,15 +91,15 @@ def bill_generate_event(session: Session, bill: LoanData, event: LedgerTriggerEv
     )
 
 
-def add_min_amount_event(session: Session, bill: LoanData, event: LedgerTriggerEvent) -> None:
-    bill_id = bill.id
-
+def add_min_amount_event(
+    session: Session, bill: LoanData, event: LedgerTriggerEvent, amount: Decimal
+) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
-        debit_book_str=f"{bill_id}/bill/min/a",
-        credit_book_str=f"{bill_id}/bill/min/l",
-        amount=event.amount,
+        debit_book_str=f"{bill.id}/bill/min/a",
+        credit_book_str=f"{bill.id}/bill/min/l",
+        amount=amount,
     )
 
 
@@ -206,12 +207,13 @@ def _adjust_for_prepayment(session: Session) -> None:
 
 
 def accrue_interest_event(session: Session, bill: LoanData, event: LedgerTriggerEvent) -> None:
+    interest_on_principal = mul(bill.principal, div(div(bill.rc_rate_of_interest_annual, 12), 100))
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
         debit_book_str=f"{bill.id}/bill/interest_receivable/a",
         credit_book_str=f"{bill.id}/bill/interest_earned/r",
-        amount=event.amount,
+        amount=interest_on_principal,
     )
 
 
@@ -225,4 +227,4 @@ def accrue_late_fine_event(session: Session, bill: LoanData, event: LedgerTrigge
     )
 
     # Add into min amount of the bill too.
-    add_min_amount_event(session, bill, event)
+    add_min_amount_event(session, bill, event, event.amount)

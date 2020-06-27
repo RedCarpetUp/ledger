@@ -7,6 +7,7 @@ from pendulum import (
 )
 from sqlalchemy.orm import Session
 
+from rush.accrue_financial_charges import accrue_interest_on_all_bills
 from rush.ledger_events import bill_generate_event
 from rush.ledger_utils import get_account_balance_from_str
 from rush.min_payment import add_min_to_all_bills
@@ -90,4 +91,7 @@ def bill_generate(session: Session, user_card: UserCard) -> LoanData:
 
     # After the bill has generated. Call the min generation event on all unpaid bills.
     add_min_to_all_bills(session, bill.agreement_date, user_card)
+
+    # Accrue interest on all bills. Before the actual date, yes.
+    accrue_interest_on_all_bills(session, bill.agreement_date, user_card)
     return bill
