@@ -7,12 +7,17 @@ from rush.models import (
     LedgerTriggerEvent,
     UserCard,
 )
-from rush.utils import mul, div
+from rush.utils import (
+    div,
+    mul,
+)
 
 
 def add_min_to_all_bills(session: Session, post_date: DateTime, user_card: UserCard) -> None:
     unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
-    min_event = LedgerTriggerEvent(name="min_amount_added", post_date=post_date)
+    min_event = LedgerTriggerEvent(
+        name="min_amount_added", card_id=user_card.id, post_date=post_date, amount=0
+    )
     session.add(min_event)
     session.flush()
     for bill in unpaid_bills:

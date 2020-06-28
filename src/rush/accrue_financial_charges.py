@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 from typing import Optional
 
@@ -15,6 +16,7 @@ from rush.ledger_utils import (
     create_ledger_entry_from_str,
     get_account_balance_from_str,
     get_all_unpaid_bills,
+    get_remaining_bill_balance,
     is_bill_closed,
     is_min_paid,
 )
@@ -25,21 +27,59 @@ from rush.models import (
     LoanData,
     UserCard,
 )
-from rush.utils import get_current_ist_time
+from rush.utils import (
+    div,
+    get_current_ist_time,
+    mul,
+)
 
 
-def accrue_interest_prerequisites(
-    session: Session, bill: LoanData, to_date: Optional[DateTime] = None
+def _get_total_outstanding(session, user_card):
+    # Temp func.
+    all_bills = (
+        session.query(LoanData)
+        .filter(LoanData.card_id == user_card.id, LoanData.is_generated.is_(True))
+        .all()
+    )
+    total_outstanding = sum(get_remaining_bill_balance(session, bill)["total_due"] for bill in all_bills)
+    return total_outstanding
+
+
+def can_remove_interest(
+    session: Session,
+    user_card: UserCard,
+    interest_event: LedgerTriggerEvent,
+    event_date: Optional[DateTime] = None,
 ) -> bool:
-    # If not closed, we can accrue interest.
-    if not is_bill_closed(session, bill, to_date):
+    """
+    We check if the payment has come before the due date and if the total outstanding amount is
+    less than or equal to the interest we charged this month. If it is, then user has paid the complete
+    payment and we can remove the interest.
+    """
+    latest_bill = (
+        session.query(LoanData)
+        .filter(LoanData.user_id == user_card.user_id, LoanData.is_generated.is_(True))
+        .order_by(LoanData.agreement_date.desc())
+        .first()
+    )
+    due_date = latest_bill.agreement_date + timedelta(days=user_card.interest_free_period_in_days)
+    payment_came_after_due_date = event_date.date() > due_date
+    if payment_came_after_due_date:
+        return False
+
+    this_month_interest = interest_event.amount  # The total interest amount which we last accrued.
+    total_outstanding = _get_total_outstanding(session, user_card)
+
+    if total_outstanding <= this_month_interest:  # the amount has been paid sans interest.
         return True
-    return False  # prerequisites failed.
+    return False
 
 
 def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_card: UserCard) -> None:
     unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
-    accrue_event = LedgerTriggerEvent(name="accrue_interest", post_date=post_date)
+    accrue_event = LedgerTriggerEvent(
+        name="accrue_interest", card_id=user_card.id, post_date=post_date, amount=0
+    )
     session.add(accrue_event)
     session.flush()
     for bill in unpaid_bills:
@@ -53,9 +93,7 @@ def accrue_late_charges_prerequisites(
     session: Session, bill: LoanData, to_date: Optional[DateTime] = None
 ) -> bool:
     # if not paid, we can charge late fee.
-    if not is_min_paid(session, bill, to_date):
-        return True
-    return False
+    return bill.get_minimum_amount_to_pay(session, to_date) > 0
 
 
 def accrue_late_charges(session: Session, user_id: int) -> LoanData:
@@ -79,14 +117,18 @@ def accrue_late_charges(session: Session, user_id: int) -> LoanData:
     return bill
 
 
-def reverse_interest_charges(session: Session, event_to_reverse: LedgerTriggerEvent) -> None:
+def reverse_interest_charges(
+    session: Session, event_to_reverse: LedgerTriggerEvent, user_card: UserCard, payment_date: DateTime
+) -> None:
     """
     This event is intended only when the complete amount has been paid and we need to remove the
     interest that we accrued before due_date. For example, interest gets accrued on 1st. Last date is
     15th. If user pays the complete principal before 15th, we remove the interest. Removing interest
     is more convenient than adding it on 16th.
     """
-    event = LedgerTriggerEvent(name="reverse_interest_charges", post_date=get_current_ist_time())
+    event = LedgerTriggerEvent(
+        name="reverse_interest_charges", card_id=user_card.id, post_date=payment_date
+    )
     session.add(event)
     session.flush()
 

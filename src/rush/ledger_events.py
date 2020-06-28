@@ -1,5 +1,8 @@
 from decimal import Decimal
-from typing import List, Tuple
+from typing import (
+    List,
+    Tuple,
+)
 
 from sqlalchemy.orm import Session
 
@@ -14,7 +17,10 @@ from rush.models import (
     LoanData,
     UserCard,
 )
-from rush.utils import mul, div
+from rush.utils import (
+    div,
+    mul,
+)
 
 
 def lender_disbursal_event(session: Session, event: LedgerTriggerEvent) -> None:
@@ -206,8 +212,9 @@ def _adjust_for_prepayment(session: Session) -> None:
     pass  # TODO
 
 
-def accrue_interest_event(session: Session, bill: LoanData, event: LedgerTriggerEvent,
-                          amount: Decimal) -> None:
+def accrue_interest_event(
+    session: Session, bill: LoanData, event: LedgerTriggerEvent, amount: Decimal
+) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,

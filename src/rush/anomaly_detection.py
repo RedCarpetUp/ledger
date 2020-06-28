@@ -1,53 +1,49 @@
 from typing import List
 
+from pendulum import DateTime
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from rush.accrue_financial_charges import reverse_interest_charges
+from rush.accrue_financial_charges import (
+    can_remove_interest,
+    reverse_interest_charges,
+)
 from rush.models import (
-    BookAccount,
-    LedgerEntry,
     LedgerTriggerEvent,
-    LoanData,
+    UserCard,
 )
 
 
-def get_affected_events(session: Session, book_identifier: int) -> List[LedgerTriggerEvent]:
-    # The book identifier here will be of a particular bill.
-    # TODO Maybe have bill_id column in events table?
-    all_book_accounts = (
-        session.query(BookAccount.id).filter(BookAccount.identifier == book_identifier).subquery()
+def get_affected_events(session: Session, user_card: UserCard) -> List[LedgerTriggerEvent]:
+    rank_func = (
+        func.rank()
+        .over(order_by=LedgerTriggerEvent.post_date.desc(), partition_by=LedgerTriggerEvent.name)
+        .label("rnk")
     )
-    event_ids = (
-        session.query(LedgerEntry.event_id)
+    events = (
+        session.query(LedgerTriggerEvent, rank_func)
         .filter(
-            LedgerEntry.debit_account.in_(all_book_accounts)
-            | LedgerEntry.credit_account.in_(all_book_accounts),
-        )
-        .subquery()
-    )
-
-    # These are the only events which can be affected by a delay in payment.
-    ledger_events = (
-        session.query(LedgerTriggerEvent)
-        .filter(
-            LedgerTriggerEvent.id.in_(event_ids),
+            LedgerTriggerEvent.card_id == user_card.id,
+            # These are the only events which can be affected by a payment.
             LedgerTriggerEvent.name.in_(["accrue_interest", "accrue_late_fine"]),
         )
-        .order_by(LedgerTriggerEvent.post_date)
+        .from_self(LedgerTriggerEvent)
+        .filter(rank_func == 1)
         .all()
     )
-    return ledger_events
+    return events
 
 
-def run_anomaly(session: Session, bill: LoanData) -> None:
-    events = get_affected_events(session, bill.id)
+def run_anomaly(session: Session, user_card: UserCard, event_date: DateTime) -> None:
+    events = get_affected_events(session, user_card)
     for event in events:
         if event.name == "accrue_interest":
-            reverse_interest_charges(session, event)
+            if can_remove_interest(session, user_card, event, event_date):
+                reverse_interest_charges(session, event, user_card, event_date)
         elif event.name == "accrue_late_fine":
             pass
             # do_prerequisites_meet = accrue_late_charges_prerequisites(
-            #     session, bill, to_date=event.post_date
+            #     session, bill, event_date=event.post_date
             # )
             # if not do_prerequisites_meet:
             #     reverse_late_charges(session, bill, event)

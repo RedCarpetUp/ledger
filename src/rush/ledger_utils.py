@@ -93,7 +93,7 @@ def get_book_account_by_string(session: Session, book_string) -> BookAccount:
 
 def is_min_paid(session: Session, bill: LoanData, to_date: Optional[DateTime] = None) -> bool:
     _, min_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/min_due/a", to_date=to_date
+        session, book_string=f"{bill.id}/bill/min/a", to_date=to_date
     )
     _, interest_received = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/interest_received/a", to_date=to_date
@@ -103,7 +103,7 @@ def is_min_paid(session: Session, bill: LoanData, to_date: Optional[DateTime] = 
     )
     amount_received = interest_received + principal_received
 
-    # Consider all receivables if to_date is not null. Assuming it's being checked for anomlay.
+    # Consider all receivables if event_date is not null. Assuming it's being checked for anomlay.
     # In that case the payment can be settled in any of the receivables.
     if to_date:
         _, late_fee_received = get_account_balance_from_str(
