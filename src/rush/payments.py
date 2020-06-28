@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from rush.ledger_events import (
     payment_received_event,
+    recovery_event,
     refund_event,
     writeoff_event,
 )
@@ -25,10 +26,20 @@ from rush.views import user_view
 def payment_received(
     session: Session, user_card: UserCard, payment_amount: Decimal, payment_date: DateTime
 ) -> None:
-    lt = LedgerTriggerEvent(name="payment_received", amount=payment_amount, post_date=payment_date)
-    session.add(lt)
-    session.flush()
-    payment_received_event(session, user_card, lt)
+    _, lender_expenses = get_account_balance_from_str(
+        session, book_string=f"{user_card.id}/card/lender_expenses/l"
+    )
+
+    if lender_expenses > 0:
+        lt = LedgerTriggerEvent(name="recovery_received", amount=payment_amount, post_date=payment_date)
+        session.add(lt)
+        session.flush()
+        recovery_event(session, user_card, lt)
+    else:
+        lt = LedgerTriggerEvent(name="payment_received", amount=payment_amount, post_date=payment_date)
+        session.add(lt)
+        session.flush()
+        payment_received_event(session, user_card, lt)
 
 
 def refund_payment(session, user_id: int, bill_id: int) -> bool:
