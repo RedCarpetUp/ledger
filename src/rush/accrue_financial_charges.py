@@ -55,6 +55,8 @@ def can_remove_interest(
     We check if the payment has come before the due date and if the total outstanding amount is
     less than or equal to the interest we charged this month. If it is, then user has paid the complete
     payment and we can remove the interest.
+    This function gets called at every payment. We also need to check if the interest is even there to
+    be removed.
     """
     latest_bill = (
         session.query(LoanData)
@@ -62,13 +64,18 @@ def can_remove_interest(
         .order_by(LoanData.agreement_date.desc())
         .first()
     )
+    # First check if there is even interest accrued in the latest bill.
+    interest_accrued = get_account_balance_from_str(session, f"{latest_bill.id}/bill/interest_earned/r")
+    if interest_accrued == 0:
+        return False  # Nothing to remove.
+
     due_date = latest_bill.agreement_date + timedelta(days=user_card.interest_free_period_in_days)
     payment_came_after_due_date = event_date.date() > due_date
     if payment_came_after_due_date:
         return False
 
     this_month_interest = interest_event.amount  # The total interest amount which we last accrued.
-    total_outstanding = _get_total_outstanding(session, user_card)
+    total_outstanding = _get_total_outstanding(session, user_card)  # TODO outstanding as of due_date.
 
     if total_outstanding <= this_month_interest:  # the amount has been paid sans interest.
         return True
