@@ -403,30 +403,14 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
 
     #  Pay 500 rupees
     user_card = session.query(UserCard).filter(UserCard.user_id == 99).one()
-    payment_date = parse_date("2020-05-14")
-    amount = Decimal(500)
+    payment_date = parse_date("2020-05-14 19:23:11")
+    amount = Decimal("886.67")
     unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
     payment_received(
         session=session, user_card=user_card, payment_amount=amount, payment_date=payment_date,
     )
 
     bill = unpaid_bills[0]
-    _, interest_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/interest_receivable/a"
-    )
-    assert interest_due == 0
-
-    _, interest_earned = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/interest_earned/r"
-    )
-    assert interest_earned == 30
-
-    _, principal_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/principal_receivable/a"
-    )
-    assert principal_due == Decimal("416.67")
-
-    run_anomaly(session, bill)  # This removes interest.
 
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/interest_receivable/a"
@@ -441,7 +425,7 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
     _, principal_due = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/principal_receivable/a"
     )
-    assert principal_due == Decimal("386.67")
+    assert principal_due == Decimal(0)
 
     # TODO more testing scenarios.
     # 1. interest is not settled. 2. There are multiple bills.
@@ -456,7 +440,7 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
 
     #  Pay 500 rupees
     user_card = session.query(UserCard).filter(UserCard.user_id == 99).one()
-    payment_date = parse_date("2020-06-14")
+    payment_date = parse_date("2020-06-14 19:23:11")
     amount = Decimal("2916.67")
     unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
     payment_received(
@@ -464,25 +448,50 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
     )
 
     first_bill = unpaid_bills[0]
-    assert is_bill_closed(session, first_bill) is True
-    _, interest_earned = get_account_balance_from_str(
-        session, book_string=f"{first_bill.id}/bill/interest_earned/r"
-    )
-    assert interest_earned == 60
-
     second_bill = unpaid_bills[1]
-    assert is_bill_closed(session, second_bill) is False
-
-    _, principal_due = get_account_balance_from_str(
-        session, book_string=f"{second_bill.id}/bill/principal_receivable/a"
-    )
-    assert principal_due == Decimal("90")  # 90 rupees which got settled into interest must be remaining
-
-    run_anomaly(session, second_bill)  # This removes interest.
 
     _, interest_earned = get_account_balance_from_str(
         session, book_string=f"{first_bill.id}/bill/interest_earned/r"
     )
     assert interest_earned == 30  # 30 Interest got removed from first bill.
 
-    assert is_bill_closed(session, first_bill) is True  # 90 got settled in new bill.
+    _, interest_earned = get_account_balance_from_str(
+        session, book_string=f"{second_bill.id}/bill/interest_earned/r"
+    )
+    assert interest_earned == 0
+
+    assert is_bill_closed(session, first_bill) is True
+    assert is_bill_closed(session, second_bill) is True  # 90 got settled in new bill.
+
+
+def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
+    test_generate_bill_1(session)
+    _partial_payment_bill_1(session)
+    _accrue_late_fine_bill_1(session)
+    _pay_minimum_amount_bill_1(session)
+    _generate_bill_2(session)
+
+    user_card = session.query(UserCard).filter(UserCard.user_id == 99).one()
+    payment_date = parse_date(
+        "2020-06-18 19:23:11"
+    )  # Payment came after due date. Interest won't get reversed.
+    amount = Decimal("2916.67")
+    unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
+    payment_received(
+        session=session, user_card=user_card, payment_amount=amount, payment_date=payment_date,
+    )
+
+    first_bill = unpaid_bills[0]
+    second_bill = unpaid_bills[1]
+
+    _, interest_earned = get_account_balance_from_str(
+        session, book_string=f"{first_bill.id}/bill/interest_earned/r"
+    )
+    assert interest_earned == 60  # 30 Interest did not get removed.
+
+    _, interest_earned = get_account_balance_from_str(
+        session, book_string=f"{second_bill.id}/bill/interest_earned/r"
+    )
+    assert interest_earned == 60
+    assert is_bill_closed(session, first_bill) is True
+    assert is_bill_closed(session, second_bill) is False
