@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 
 from rush.ledger_events import (
     payment_received_event,
-    refund_or_prepayment_event,
+    refund_event,
+    writeoff_event,
 )
 from rush.ledger_utils import (
     get_account_balance_from_str,
@@ -18,6 +19,7 @@ from rush.models import (
     UserCard,
 )
 from rush.utils import get_current_ist_time
+from rush.views import user_view
 
 
 def payment_received(
@@ -29,7 +31,7 @@ def payment_received(
     payment_received_event(session, user_card, lt)
 
 
-def refund_payment(session, user_id: int, type: str, bill_id: int) -> bool:
+def refund_payment(session, user_id: int, bill_id: int) -> bool:
 
     bill = (
         session.query(CardTransaction.amount)
@@ -37,18 +39,31 @@ def refund_payment(session, user_id: int, type: str, bill_id: int) -> bool:
         .filter(LoanData.id == bill_id)
         .first()
     )
+    user_card = session.query(UserCard).filter(UserCard.user_id == user_id).one()
     amount = Decimal(bill.amount)
-    if type == "after":
-        _, interest = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/interest_due/a")
-        _, late_fine = get_account_balance_from_str(
-            session, book_string=f"{bill_id}/bill/late_fine_due/a"
-        )
-        amount = amount + interest + late_fine
-    if type == "prepayment":
-        lt = LedgerTriggerEvent(name="pre_payment", amount=amount, post_date=get_current_ist_time())
-    else:
-        lt = LedgerTriggerEvent(name="refund_bill", amount=amount, post_date=get_current_ist_time())
+    _, min = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/min/a")
+    amount = amount + min
+    lt = LedgerTriggerEvent(name="refund_bill", amount=amount, post_date=get_current_ist_time())
     session.add(lt)
     session.flush()
-    refund_or_prepayment_event(session, type, bill_id, lt)
+    current_bill = session.query(LoanData).filter(LoanData.id == bill_id).one()
+    refund_event(session, current_bill, user_card, lt)
     return True
+
+
+def writeoff_payment(session: Session, user_id: int) -> bool:
+
+    unpaid_bills = get_all_unpaid_bills(session, user_id)
+
+    if len(unpaid_bills) >= 3:
+        usercard = session.query(UserCard).filter(UserCard.user_id == user_id).one()
+        balance = user_view(session, user_id)["max_to_pay"]
+        lt = LedgerTriggerEvent(
+            name="writeoff_payment", amount=balance, post_date=get_current_ist_time()
+        )
+        session.add(lt)
+        session.flush()
+        writeoff_event(session, usercard, lt)
+        return True
+    else:
+        return False

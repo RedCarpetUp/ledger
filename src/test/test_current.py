@@ -39,6 +39,7 @@ from rush.models import (
 from rush.payments import (
     payment_received,
     refund_payment,
+    writeoff_payment,
 )
 from rush.utils import get_current_ist_time
 from rush.views import (
@@ -498,24 +499,17 @@ def test_refund_or_prepayment(session: Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
     unpaid_bills = get_all_unpaid_bills(session, user.id)
 
-    status = refund_payment(session, 99, "after", unpaid_bills[0].id)
+    status = refund_payment(session, 99, unpaid_bills[0].id)
     assert status == True
     _, amount = get_account_balance_from_str(session, book_string=f"62311/lender/merchant_refund/a")
-    assert amount == Decimal(1000)
-
-    status = refund_payment(session, 99, "before", unpaid_bills[0].id)
-    _, amount = get_account_balance_from_str(session, book_string=f"62311/lender/merchant_refund/a")
-    assert amount == Decimal(2000)
-
-    status = refund_payment(session, 99, "prepayment", unpaid_bills[0].id)
-    _, amount = get_account_balance_from_str(
-        session, book_string=f"{unpaid_bills[0].id}/bill/pre_payment/l"
-    )
-    assert amount == Decimal(2000)
+    assert amount == Decimal("886.67")  # payment done before
 
     status = lender_interest_incur(session)
 
     uc = session.query(UserCard).filter(UserCard.user_id == 99).one()
 
     _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
-    assert amount == Decimal("3094.19")
+    assert amount == Decimal("3095.18")
+
+    status = writeoff_payment(session, 99)
+    assert status == False
