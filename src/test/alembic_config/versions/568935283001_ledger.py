@@ -1,7 +1,7 @@
 """ledger
 
 Revision ID: 568935283001
-Revises: 6b8e1aa27f1f
+Revises: 1a5c43fc5b50
 Create Date: 2020-04-27 19:10:48.061667
 
 """
@@ -10,7 +10,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "568935283001"
-down_revision = "6b8e1aa27f1f"
+down_revision = "1a5c43fc5b50"
 branch_labels = None
 depends_on = None
 
