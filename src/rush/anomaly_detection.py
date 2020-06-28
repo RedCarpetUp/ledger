@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 
 from rush.accrue_financial_charges import (
     can_remove_interest,
-    reverse_interest_charges,
     is_late_fee_valid,
+    reverse_interest_charges,
     reverse_late_charges,
 )
 from rush.models import (
