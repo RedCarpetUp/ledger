@@ -184,6 +184,16 @@ class LoanData(AuditMixin):
         )
         return min_due
 
+    @staticmethod
+    def get_latest_bill(session: Session, user_id: int) -> Any:
+        latest_bill = (
+            session.query(LoanData)
+            .filter(LoanData.user_id == user_id, LoanData.is_generated.is_(True))
+            .order_by(LoanData.agreement_date.desc())
+            .first()
+        )
+        return latest_bill
+
 
 @py_dataclass
 class LoanDataPy(AuditMixinPy):

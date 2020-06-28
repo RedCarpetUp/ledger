@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 from rush.accrue_financial_charges import (
     can_remove_interest,
     reverse_interest_charges,
+    is_late_fee_valid,
+    reverse_late_charges,
 )
 from rush.models import (
     LedgerTriggerEvent,
@@ -35,15 +37,19 @@ def get_affected_events(session: Session, user_card: UserCard) -> List[LedgerTri
 
 
 def run_anomaly(session: Session, user_card: UserCard, event_date: DateTime) -> None:
+    """
+    This checks for any anomalies after we have received the payment. If the interest needs to be
+    removed because the complete payment has been made before due date. If the late fee event is not
+    valid because there was a delay in payment. Etc.
+    """
     events = get_affected_events(session, user_card)
     for event in events:
         if event.name == "accrue_interest":
             if can_remove_interest(session, user_card, event, event_date):
-                reverse_interest_charges(session, event, user_card, event_date)
+                reverse_interest_charges(
+                    session, event_to_reverse=event, user_card=user_card, payment_date=event_date
+                )
         elif event.name == "accrue_late_fine":
-            pass
-            # do_prerequisites_meet = accrue_late_charges_prerequisites(
-            #     session, bill, event_date=event.post_date
-            # )
-            # if not do_prerequisites_meet:
-            #     reverse_late_charges(session, bill, event)
+            is_charge_valid = is_late_fee_valid(session, user_card)
+            if not is_charge_valid:
+                reverse_late_charges(session, user_card=user_card, event_to_reverse=event)

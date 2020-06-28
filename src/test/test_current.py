@@ -202,8 +202,9 @@ def test_partial_payment_bill_1(session: Session) -> None:
 
 
 def _accrue_late_fine_bill_1(session: Session) -> None:
-    user = session.query(User).filter(User.id == 99).one()
-    bill = accrue_late_charges(session, user.id)
+    user_card = session.query(UserCard).filter(UserCard.user_id == 99).one()
+    event_date = parse_date("2020-05-16 00:00:00")
+    bill = accrue_late_charges(session, user_card, event_date)
 
     _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_receivable/a")
     assert late_fine_due == Decimal(100)
@@ -239,6 +240,9 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
     _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_receivable/a")
     assert late_fine_due == Decimal(0)
 
+    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine/r")
+    assert late_fine_due == Decimal(100)
+
     _, principal_due = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/principal_receivable/a"
     )
@@ -251,6 +255,40 @@ def test_accrue_interest_bill_1(session: Session) -> None:
     _partial_payment_bill_1(session)
     _accrue_late_fine_bill_1(session)
     _pay_minimum_amount_bill_1(session)
+
+
+def test_late_fee_reversal_bill_1(session: Session) -> None:
+    test_generate_bill_1(session)
+    _partial_payment_bill_1(session)
+    _accrue_late_fine_bill_1(session)
+
+    user_card = session.query(UserCard).filter(UserCard.user_id == 99).one()
+
+    unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
+
+    # Pay 13.33 more. and 100 for late fee.
+    payment_received(
+        session=session,
+        user_card=user_card,
+        payment_amount=Decimal("113.33"),
+        payment_date=parse_date("2020-05-14"),  # Payment came before the due date.
+    )
+    bill = unpaid_bills[0]
+    # assert is_min_paid(session, bill) is True
+    min_due = bill.get_minimum_amount_to_pay(session)
+    assert min_due == Decimal(0)
+
+    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_receivable/a")
+    assert late_fine_due == Decimal(0)
+
+    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine/r")
+    assert late_fine_due == Decimal(0)
+
+    _, principal_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/principal_receivable/a"
+    )
+    # payment got late and 100 rupees got settled in late fine.
+    assert principal_due == Decimal("816.67")
 
 
 def test_is_bill_paid_bill_1(session: Session) -> None:

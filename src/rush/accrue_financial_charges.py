@@ -9,16 +9,13 @@ from rush.ledger_events import (
     _adjust_bill,
     accrue_interest_event,
     accrue_late_fine_event,
-    payment_received_event,
 )
 from rush.ledger_utils import (
-    create_ledger_entry,
     create_ledger_entry_from_str,
     get_account_balance_from_str,
     get_all_unpaid_bills,
     get_remaining_bill_balance,
     is_bill_closed,
-    is_min_paid,
 )
 from rush.models import (
     BookAccount,
@@ -58,12 +55,7 @@ def can_remove_interest(
     This function gets called at every payment. We also need to check if the interest is even there to
     be removed.
     """
-    latest_bill = (
-        session.query(LoanData)
-        .filter(LoanData.user_id == user_card.user_id, LoanData.is_generated.is_(True))
-        .order_by(LoanData.agreement_date.desc())
-        .first()
-    )
+    latest_bill = LoanData.get_latest_bill(session, user_card.user_id)
     # First check if there is even interest accrued in the latest bill.
     interest_accrued = get_account_balance_from_str(session, f"{latest_bill.id}/bill/interest_earned/r")
     if interest_accrued == 0:
@@ -96,32 +88,40 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_car
         accrue_event.amount += interest_on_principal
 
 
-def accrue_late_charges_prerequisites(
-    session: Session, bill: LoanData, to_date: Optional[DateTime] = None
-) -> bool:
-    # if not paid, we can charge late fee.
-    return bill.get_minimum_amount_to_pay(session, to_date) > 0
+def is_late_fee_valid(session: Session, user_card: UserCard) -> bool:
+    """
+    Late fee gets charged if user fails to pay the minimum due before the due date.
+    We check if the min was paid before due date and there's late fee charged.
+    """
+    latest_bill = LoanData.get_latest_bill(session, user_card.user_id)
+    # TODO get bill from event?
+
+    # First check if there is even late fee accrued in the latest bill.
+    late_fee_accrued = get_account_balance_from_str(session, f"{latest_bill.id}/bill/late_fine/r")
+    if late_fee_accrued == 0:
+        return False  # Nothing to remove.
+
+    due_date = latest_bill.agreement_date + timedelta(days=user_card.interest_free_period_in_days)
+    min_balance_as_of_due_date = latest_bill.get_minimum_amount_to_pay(session, due_date)
+    if min_balance_as_of_due_date > 0:
+        return True  # if there's balance pending in min then the late fee charge is valid.
+    return False
 
 
-def accrue_late_charges(session: Session, user_id: int) -> LoanData:
-    bill = (
-        session.query(LoanData)
-        .filter(LoanData.user_id == user_id)
-        .order_by(LoanData.agreement_date.desc())
-        .first()
-    )  # Get the latest bill of that user.
-    can_charge_fee = bill.get_minimum_amount_to_pay(session) > 0
+def accrue_late_charges(session: Session, user_card: UserCard, post_date: DateTime) -> LoanData:
+    latest_bill = LoanData.get_latest_bill(session, user_card.user_id)
+    can_charge_fee = latest_bill.get_minimum_amount_to_pay(session) > 0
     #  accrue_late_charges_prerequisites(session, bill)
     if can_charge_fee:  # if min isn't paid charge late fine.
         # TODO get correct date here.
-        lt = LedgerTriggerEvent(
-            name="accrue_late_fine", post_date=get_current_ist_time(), amount=Decimal(100)
+        event = LedgerTriggerEvent(
+            name="accrue_late_fine", post_date=post_date, card_id=user_card.id, amount=Decimal(100)
         )
-        session.add(lt)
+        session.add(event)
         session.flush()
 
-        accrue_late_fine_event(session, bill, lt)
-    return bill
+        accrue_late_fine_event(session, latest_bill, event)
+    return latest_bill
 
 
 def reverse_interest_charges(
@@ -160,9 +160,7 @@ def reverse_interest_charges(
     for bill, ledger_entry in bills_and_ledger_entry:
         interest_that_was_added = ledger_entry.amount
         # We check how much got settled in the interest which we're planning to remove.
-        interest_book, interest_due = get_account_balance_from_str(
-            session, f"{bill.id}/bill/interest_receivable/a"
-        )
+        _, interest_due = get_account_balance_from_str(session, f"{bill.id}/bill/interest_receivable/a")
         settled_amount = interest_that_was_added - interest_due
 
         if interest_due > 0:
@@ -200,49 +198,51 @@ def reverse_interest_charges(
         pass  # TODO prepayment
 
 
-def reverse_late_charges(session: Session, bill: LoanData, event_to_reverse: LedgerTriggerEvent) -> None:
-    lt = LedgerTriggerEvent(name="reverse_accrue_late_fine", post_date=get_current_ist_time())
-    session.add(lt)
+def reverse_late_charges(
+    session: Session, user_card: UserCard, event_to_reverse: LedgerTriggerEvent
+) -> None:
+    event = LedgerTriggerEvent(name="reverse_late_charges", post_date=get_current_ist_time())
+    session.add(event)
     session.flush()
 
-    reverse_late_charges_event(session, bill, lt, event_to_reverse)
-
-
-def reverse_late_charges_event(
-    session: Session, bill: LoanData, lt: LedgerTriggerEvent, event_to_reverse: LedgerTriggerEvent
-) -> None:
-    # Move from late_receivable to desired accounts.
-    _, late_fee_received = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/late_fee_received/a"
+    bill = (
+        session.query(LoanData)
+        .distinct()
+        .filter(
+            LedgerEntry.debit_account == BookAccount.id,
+            LedgerEntry.event_id == event_to_reverse.id,
+            BookAccount.identifier_type == "bill",
+            LoanData.id == BookAccount.identifier,
+            BookAccount.book_name == "late_fine_receivable",
+            LoanData.is_generated.is_(True),
+        )
+        .one()
     )
-    late_fee_to_reverse = min(late_fee_received, event_to_reverse.amount)
-    # Remove any received late fine back to due.
-    lt.amount = late_fee_to_reverse  # Store the amount in event.
-    if late_fee_to_reverse > 0:
+    late_fine_charged = event_to_reverse.amount
+    # We check how much got settled in the interest which we're planning to remove.
+    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_receivable/a")
+    settled_amount = late_fine_charged - late_fine_due
+
+    if late_fine_due > 0:
+        # We reverse the original entry by whatever is the remaining amount.
         create_ledger_entry_from_str(
             session,
-            event_id=lt.id,
-            debit_book_str=f"{bill.id}/bill/late_fine_receivable/a",
-            credit_book_str=f"{bill.id}/bill/late_fee_received/a",
-            amount=lt.amount,
+            event_id=event.id,
+            debit_book_str=f"{bill.id}/bill/late_fine/r",
+            credit_book_str=f"{bill.id}/bill/late_fine_receivable/a",
+            amount=late_fine_due,
         )
-
-    # Get rid of the due late fine as well by reversing the old event's entries.
-    entries_to_reverse = (
-        session.query(LedgerEntry).filter(LedgerEntry.event_id == event_to_reverse.id).all()
-    )
-    for entry in entries_to_reverse:
-        create_ledger_entry(
+        # Remove from min too. But only what's due. Rest doesn't matter.
+        create_ledger_entry_from_str(
             session,
-            event_id=lt.id,
-            debit_book_id=entry.credit_account,
-            credit_book_id=entry.debit_account,
-            amount=entry.amount,
+            event_id=event.id,
+            debit_book_str=f"{bill.id}/bill/min/l",
+            credit_book_str=f"{bill.id}/bill/min/a",
+            amount=late_fine_due,
         )
-
-    # making a list because payment received event works on list of bills
-    unpaid_bill = []
-    unpaid_bill.append(bill)
-
-    # Trigger another payment event for the fee reversed.
-    payment_received_event(session, unpaid_bill, lt)
+    if settled_amount > 0:
+        remaining_amount = _adjust_bill(
+            session, bill, settled_amount, event.id, debit_acc_str=f"{bill.id}/bill/late_fine/r"
+        )
+        if remaining_amount > 0:
+            pass  # TODO prepayment
