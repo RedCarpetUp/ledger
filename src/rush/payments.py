@@ -52,8 +52,6 @@ def refund_payment(session, user_id: int, bill_id: int) -> bool:
     )
     user_card = session.query(UserCard).filter(UserCard.user_id == user_id).one()
     amount = Decimal(bill.amount)
-    _, min = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/min/a")
-    amount = amount + min
     lt = LedgerTriggerEvent(name="refund_bill", amount=amount, post_date=get_current_ist_time())
     session.add(lt)
     session.flush()

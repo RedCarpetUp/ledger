@@ -184,6 +184,25 @@ def _partial_payment_bill_1(session: Session) -> None:
     assert min_due == Decimal("13.33")
 
 
+def _partial_payment_bill_2(session: Session) -> None:
+    user_card = session.query(UserCard).filter(UserCard.user_id == 99).one()
+    payment_date = parse_date("2020-05-03")
+    amount = Decimal(2000)
+    unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
+    payment_received(
+        session=session, user_card=user_card, payment_amount=amount, payment_date=payment_date,
+    )
+
+    bill = unpaid_bills[0]
+    _, principal_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/principal_receivable/a"
+    )
+    assert principal_due == 2000 - amount
+
+    min_due = bill.get_minimum_amount_to_pay(session)
+    assert min_due == Decimal("0")
+
+
 def _min_payment_delayed_bill_1(session: Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
     payment_date = parse_date("2020-05-03")
@@ -363,6 +382,48 @@ def _generate_bill_2(session: Session) -> None:
     assert first_bill_min_due == Decimal("113.33")
 
 
+def _generate_bill_3(session: Session) -> None:
+    user = session.query(User).filter(User.id == 99).one()
+    uc = session.query(UserCard).filter_by(user_id=user.id).one()
+
+    previous_bill = (  # new bill isn't generated yet so get latest.
+        session.query(LoanData)
+        .filter(LoanData.user_id == user.id)
+        .order_by(LoanData.agreement_date.desc())
+        .first()
+    )
+    # Bill shouldn't be closed.
+    assert is_bill_closed(session, previous_bill) is False
+
+    # Do transaction to create new bill.
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-06-08 19:23:11"),
+        amount=Decimal(1000),
+        description="BigB.com",
+    )
+
+    _, user_card_balance = get_account_balance_from_str(
+        session=session, book_string=f"{uc.id}/card/available_limit/a"
+    )
+    # previously 1000 now 2000 after a 1000 purchase
+    assert user_card_balance == Decimal(-2000)
+
+    bill = bill_generate(session=session, user_card=uc)
+
+    unpaid_bills = get_all_unpaid_bills(session, user.id)
+    assert len(unpaid_bills) == 2
+
+    _, principal_due = get_account_balance_from_str(
+        session=session, book_string=f"{bill.id}/bill/principal_receivable/a"
+    )
+    assert principal_due == Decimal(1000)
+
+    min_due = bill.get_minimum_amount_to_pay(session)
+    assert min_due == Decimal("113.33")
+
+
 def _run_anomaly_bill_1(session: Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
 
@@ -489,27 +550,129 @@ def test_view(session: Session) -> None:
     assert transactions[0]["amount"] == Decimal(1500)
 
 
-def test_refund_or_prepayment(session: Session) -> None:
+def test_refund_1(session: Session) -> None:
     test_generate_bill_1(session)
-    _partial_payment_bill_1(session)
-    _accrue_late_fine_bill_1(session)
-    _pay_minimum_amount_bill_1(session)
-    _accrue_interest_bill_1(session)
-    _generate_bill_2(session)
+    _generate_bill_3(session)
     user = session.query(User).filter(User.id == 99).one()
     unpaid_bills = get_all_unpaid_bills(session, user.id)
 
     status = refund_payment(session, 99, unpaid_bills[0].id)
     assert status == True
     _, amount = get_account_balance_from_str(session, book_string=f"62311/lender/merchant_refund/a")
-    assert amount == Decimal("886.67")  # payment done before
+    assert amount == Decimal("1000")  # 1000 refunded
 
+
+def test_refund_2(session: Session) -> None:
+    test_generate_bill_1(session)
+    _partial_payment_bill_1(session)
+    _generate_bill_3(session)
+    user = session.query(User).filter(User.id == 99).one()
+    unpaid_bills = get_all_unpaid_bills(session, user.id)
+
+    status = refund_payment(session, 99, unpaid_bills[0].id)
+    assert status == True
+    _, amount = get_account_balance_from_str(session, book_string=f"62311/lender/merchant_refund/a")
+    assert amount == Decimal("1100")  # 1100 refunded
+
+
+def test_lender_incur(session: Session) -> None:
+    test_refund_1(session)
     status = lender_interest_incur(session)
-
     uc = session.query(UserCard).filter(UserCard.user_id == 99).one()
-
     _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
-    assert amount == Decimal("3095.18")
+    assert amount == Decimal("2054.74")  # on date 2020-06-28
 
+
+def test_prepayment(session: Session) -> None:
+    test_generate_bill_1(session)
+    uc = session.query(UserCard).filter(UserCard.user_id == 99).one()
+    user_card_id = uc.id
+
+    # prepayment of rs 2000 done
+    payment_date = parse_date("2020-05-03")
+    amount = Decimal(2000)
+    payment_received(
+        session=session, user_card=uc, payment_amount=amount, payment_date=payment_date,
+    )
+
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-08 19:23:11"),
+        amount=Decimal(1000),
+        description="BigBasket.com",
+    )
+    bill_id = swipe.loan_id
+
+    _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
+    assert unbilled_amount == 1000
+
+    bill = bill_generate(session=session, user_card=uc)
+
+    assert bill.is_generated is True
+
+    _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
+    # Should be 0 because it has moved to billed account.
+    assert unbilled_amount == 0
+
+    _, billed_amount = get_account_balance_from_str(
+        session, book_string=f"{bill_id}/bill/principal_receivable/a"
+    )
+    assert billed_amount == 0  # since there is prepayment of 2000rs
+
+
+def test_writeoff(session: Session) -> None:
     status = writeoff_payment(session, 99)
     assert status == False
+
+    a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    session.add(a)
+    session.flush()
+
+    # assign card
+    uc = UserCard(user_id=a.id, card_activation_date=parse_date("2020-03-02"))
+    session.add(uc)
+    session.flush()
+
+    user_card_id = uc.id
+
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-03-08 19:23:11"),
+        amount=Decimal(1000),
+        description="BigBasket.com",
+    )
+    bill_id = swipe.loan_id
+    bill = bill_generate(session=session, user_card=uc)
+    assert bill.is_generated is True
+
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-04-08 19:23:11"),
+        amount=Decimal(1500),
+        description="BigBasket.com",
+    )
+    bill_id = swipe.loan_id
+    bill = bill_generate(session=session, user_card=uc)
+    assert bill.is_generated is True
+
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-08 19:23:11"),
+        amount=Decimal(1200),
+        description="BigBasket.com",
+    )
+    bill_id = swipe.loan_id
+    bill = bill_generate(session=session, user_card=uc)
+    assert bill.is_generated is True
+
+    status = writeoff_payment(session, 99)
+    assert status == True
+
+    _, writeoff_amount = get_account_balance_from_str(
+        session, book_string=f"{user_card_id}/card/lender_expenses/e"
+    )
+    assert writeoff_amount == Decimal("3700")

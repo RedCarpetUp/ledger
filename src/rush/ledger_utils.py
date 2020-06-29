@@ -63,6 +63,8 @@ def get_account_balance(
         final_balance = debit_balance - credit_balance
     elif book_account.account_type == "l":
         final_balance = credit_balance - debit_balance
+    elif book_account.account_type == "e":
+        final_balance = credit_balance - debit_balance
 
     return final_balance
 
@@ -77,7 +79,7 @@ def get_account_balance_from_str(
 
 def get_book_account_by_string(session: Session, book_string) -> BookAccount:
     identifier, identifier_type, name, account_type = book_string.split("/")
-    assert account_type in ("a", "l", "r")
+    assert account_type in ("a", "l", "r", "e")
     assert identifier_type in ("user", "lender", "bill", "redcarpet", "card")
 
     book_account = get_or_create(

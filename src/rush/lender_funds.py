@@ -32,7 +32,7 @@ def m2p_transfer(session: Session, amount: Decimal) -> Decimal:
 
 
 def lender_interest_incur(session: Session) -> bool:
-    lt = LedgerTriggerEvent(name="lender_interest_incur", post_date=get_current_ist_time())
+    lt = LedgerTriggerEvent(name="lender_interest_incur", post_date=DateTime(2020, 6, 27))
     session.add(lt)
     session.flush()
     lender_interest_incur_event(session, lt)
