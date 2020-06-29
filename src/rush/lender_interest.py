@@ -1,8 +1,12 @@
 from decimal import Decimal
 
-from rush.utils import mul, div
 from sqlalchemy.orm import Session
+
 from rush.models import LoanData
+from rush.utils import (
+    div,
+    mul,
+)
 
 
 def lender_interest(session: Session, amount: Decimal, card_id: int) -> Decimal:

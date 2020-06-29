@@ -23,6 +23,7 @@ from rush.ledger_utils import (
     is_bill_closed,
     is_min_paid,
 )
+from rush.lender_interest import lender_interest
 from rush.models import (
     BookAccount,
     CardTransaction,
@@ -35,8 +36,6 @@ from rush.utils import (
     div,
     mul,
 )
-
-from rush.lender_interest import lender_interest
 
 
 def lender_disbursal_event(session: Session, event: LedgerTriggerEvent) -> None:
@@ -469,35 +468,3 @@ def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> 
                 credit_book_str=f"{card.id}/card/lender_payable/l",
                 amount=total_amount,
             )
-
-
-def writeoff_event(session: Session, user_card: UserCard, event: LedgerTriggerEvent) -> None:
-    create_ledger_entry_from_str(
-        session,
-        event_id=event.id,
-        debit_book_str=f"{user_card.id}/card/lender_payable/l",
-        credit_book_str=f"{user_card.id}/card/lender_expenses/e",
-        amount=event.amount,
-    )
-
-
-def recovery_event(session: Session, user_card: UserCard, event: LedgerTriggerEvent) -> None:
-    payment_received = Decimal(event.amount)
-    unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
-
-    payment_received = _adjust_for_min(session, unpaid_bills, payment_received, user_card.id, event.id)
-    payment_received = _adjust_for_complete_bill(
-        session, unpaid_bills, payment_received, user_card.id, event.id
-    )
-
-    if payment_received > 0:
-        _adjust_for_prepayment_recovery(session, user_card.id, event.id, payment_received)
-
-    # Lender has received money, so we reduce our liability now.
-    create_ledger_entry_from_str(
-        session,
-        event_id=event.id,
-        debit_book_str=f"{user_card.id}/card/pg_account/a",
-        credit_book_str=f"{user_card.id}/card/lender_expenses/e",
-        amount=payment_received,
-    )

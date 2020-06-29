@@ -39,7 +39,6 @@ from rush.models import (
 from rush.payments import (
     payment_received,
     refund_payment,
-    writeoff_payment,
 )
 from rush.utils import get_current_ist_time
 from rush.views import (
@@ -645,76 +644,4 @@ def test_prepayment(session: Session) -> None:
     _, billed_amount = get_account_balance_from_str(
         session, book_string=f"{bill_id}/bill/principal_receivable/a"
     )
-    assert billed_amount == 30  # since there is prepayment of 2000rs
-
-
-def test_writeoff_recovery(session: Session) -> None:
-    status = writeoff_payment(session, 99)
-    assert status == False
-
-    a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    session.add(a)
-    session.flush()
-
-    # assign card
-    uc = UserCard(user_id=a.id, card_activation_date=parse_date("2020-03-02"))
-    session.add(uc)
-    session.flush()
-
-    user_card_id = uc.id
-
-    swipe = create_card_swipe(
-        session=session,
-        user_card=uc,
-        txn_time=parse_date("2020-03-08 19:23:11"),
-        amount=Decimal(1000),
-        description="BigBasket.com",
-    )
-    bill_id = swipe.loan_id
-    bill = bill_generate(session=session, user_card=uc)
-    assert bill.is_generated is True
-
-    swipe = create_card_swipe(
-        session=session,
-        user_card=uc,
-        txn_time=parse_date("2020-04-08 19:23:11"),
-        amount=Decimal(1500),
-        description="BigBasket.com",
-    )
-    bill_id = swipe.loan_id
-    bill = bill_generate(session=session, user_card=uc)
-    assert bill.is_generated is True
-
-    swipe = create_card_swipe(
-        session=session,
-        user_card=uc,
-        txn_time=parse_date("2020-05-08 19:23:11"),
-        amount=Decimal(1200),
-        description="BigBasket.com",
-    )
-    bill_id = swipe.loan_id
-    bill = bill_generate(session=session, user_card=uc)
-    assert bill.is_generated is True
-    unpaid_bills = get_all_unpaid_bills(session, 99)
-    bill = unpaid_bills[0]
-
-    # accrue_interest_on_all_bills(session, bill.agreement_date, uc)
-    # event_date = parse_date("2020-05-16 00:00:00")
-    # accrue_late_charges(session, uc, event_date)
-    status = writeoff_payment(session, 99)
-    assert status == True
-
-    _, writeoff_amount = get_account_balance_from_str(
-        session, book_string=f"{user_card_id}/card/lender_expenses/e"
-    )
-    assert writeoff_amount == Decimal("-3916")
-
-    payment_date = parse_date("2020-05-03")
-    payment_received(session, uc, Decimal("3916"), payment_date)
-
-    # _, writeoff_amount = get_account_balance_from_str(
-    #     session, book_string=f"{user_card_id}/card/lender_expenses/e"
-    # )
-    # assert writeoff_amount == Decimal("0")
-    user_info = user_view(session, 99)
-    assert user_info["max_to_pay"] == 0  # 0 since all bills are paid.
+    assert billed_amount == 30
