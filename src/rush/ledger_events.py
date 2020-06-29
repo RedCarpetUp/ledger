@@ -149,7 +149,7 @@ def payment_received_event(session: Session, user_card: UserCard, event: LedgerT
     payment_received = _adjust_for_complete_bill(session, unpaid_bills, payment_received, event.id)
 
     if payment_received > 0:
-        _adjust_for_prepayment(session, user_card.id, event.post_date, payment_received)
+        _adjust_for_prepayment(session, user_card.id, event.id, payment_received)
 
     # Lender has received money, so we reduce our liability now.
     create_ledger_entry_from_str(
@@ -229,15 +229,10 @@ def _adjust_for_complete_bill(
     return payment_received  # The remaining amount goes back to the main func.
 
 
-def _adjust_for_prepayment(
-    session: Session, card_id: int, event_date: datetime, amount: Decimal
-) -> None:
-    lt = LedgerTriggerEvent(name="pre_payment", amount=amount, post_date=event_date)
-    session.add(lt)
-    session.flush()
+def _adjust_for_prepayment(session: Session, card_id: int, event_id: int, amount: Decimal) -> None:
     create_ledger_entry_from_str(
         session,
-        event_id=lt.id,
+        event_id=event_id,
         debit_book_str=f"62311/lender/lender_pg/a",
         credit_book_str=f"{card_id}/card/pre_payment/l",
         amount=amount,
@@ -277,14 +272,11 @@ def refund_event(
     )
 
     def _adjust_prepayment_on_refund(
-        session: Session, card_id: int, event_date: datetime, amount: Decimal
+        session: Session, card_id: int, event_id: int, amount: Decimal
     ) -> None:
-        lt = LedgerTriggerEvent(name="pre_payment", amount=amount, post_date=event_date)
-        session.add(lt)
-        session.flush()
         create_ledger_entry_from_str(
             session,
-            event_id=lt.id,
+            event_id=event_id,
             debit_book_str=f"62311/lender/merchant_refund/a",
             credit_book_str=f"{card_id}/card/pre_payment/l",
             amount=amount,
@@ -340,9 +332,9 @@ def refund_event(
                 else:
                     amount = mul(amount, 2) + interest_balance + late_fine
                 if amount > 0:
-                    _adjust_prepayment_on_refund(session, user_card.id, event.post_date, amount)
+                    _adjust_prepayment_on_refund(session, user_card.id, event.id, amount)
         else:
-            _adjust_prepayment_on_refund(session, user_card.id, event.post_date, event.amount)
+            _adjust_prepayment_on_refund(session, user_card.id, event.id, event.amount)
 
 
 def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> None:
@@ -531,7 +523,7 @@ def recovery_event(session: Session, user_card: UserCard, event: LedgerTriggerEv
     )
 
     if payment_received > 0:
-        _adjust_for_prepayment_recovery(session, user_card.id, event.post_date, payment_received)
+        _adjust_for_prepayment_recovery(session, user_card.id, event.id, payment_received)
 
 
 def _adjust_bill_recovery(
@@ -605,14 +597,11 @@ def _adjust_for_complete_bill_recovery(
 
 
 def _adjust_for_prepayment_recovery(
-    session: Session, card_id: int, event_date: datetime, amount: Decimal
+    session: Session, card_id: int, event_id: int, amount: Decimal
 ) -> None:
-    lt = LedgerTriggerEvent(name="pre_payment", amount=amount, post_date=event_date)
-    session.add(lt)
-    session.flush()
     create_ledger_entry_from_str(
         session,
-        event_id=lt.id,
+        event_id=event_id,
         debit_book_str=f"{card_id}/card/lender_expenses/e",
         credit_book_str=f"{card_id}/card/pre_payment/l",
         amount=amount,
