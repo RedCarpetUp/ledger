@@ -31,6 +31,7 @@ def user_view(session, user_id: int) -> dict:
         if index == 0:
             current_bill_principal_amount = bill_balance["principal_due"]
             current_bill_principal_interest = min_amount
+        index = index + 1
 
     return {
         "max_to_pay": total_due,

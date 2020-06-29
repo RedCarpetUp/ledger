@@ -27,7 +27,7 @@ def payment_received(
     session: Session, user_card: UserCard, payment_amount: Decimal, payment_date: DateTime
 ) -> None:
     _, lender_expenses = get_account_balance_from_str(
-        session, book_string=f"{user_card.id}/card/lender_expenses/l"
+        session, book_string=f"{user_card.id}/card/lender_expenses/e"
     )
 
     if lender_expenses > 0:

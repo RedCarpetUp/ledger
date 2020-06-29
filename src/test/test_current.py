@@ -621,7 +621,7 @@ def test_prepayment(session: Session) -> None:
     assert billed_amount == 0  # since there is prepayment of 2000rs
 
 
-def test_writeoff(session: Session) -> None:
+def test_writeoff_recovery(session: Session) -> None:
     status = writeoff_payment(session, 99)
     assert status == False
 
@@ -668,11 +668,25 @@ def test_writeoff(session: Session) -> None:
     bill_id = swipe.loan_id
     bill = bill_generate(session=session, user_card=uc)
     assert bill.is_generated is True
+    unpaid_bills = get_all_unpaid_bills(session, 99)
+    bill = unpaid_bills[0]
 
+    accrue_interest_on_all_bills(session, bill.agreement_date, uc)
+    accrue_late_charges(session, 99)
     status = writeoff_payment(session, 99)
     assert status == True
 
     _, writeoff_amount = get_account_balance_from_str(
         session, book_string=f"{user_card_id}/card/lender_expenses/e"
     )
-    assert writeoff_amount == Decimal("3700")
+    assert writeoff_amount == Decimal("3911")
+
+    payment_date = parse_date("2020-05-03")
+    payment_received(session, uc, Decimal("3911"), payment_date)
+
+    _, writeoff_amount = get_account_balance_from_str(
+        session, book_string=f"{user_card_id}/card/lender_expenses/e"
+    )
+    assert writeoff_amount == Decimal("0")
+    user_info = user_view(session, 99)
+    assert user_info["max_to_pay"] == 0  # 0 since all bills are paid.

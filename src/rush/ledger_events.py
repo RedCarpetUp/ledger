@@ -556,17 +556,17 @@ def _adjust_bill_recovery(
     # Now adjust into other accounts.
     remaining_amount = adjust(
         amount_to_adjust_in_this_bill,
-        to_acc=f"{card_id}/lender/lender_expenses/e",
+        to_acc=f"{card_id}/card/lender_expenses/e",
         from_acc=f"{bill.id}/bill/late_fine_receivable/a",
     )
     remaining_amount = adjust(
         remaining_amount,
-        to_acc=f"{card_id}/lender/lender_expenses/e",
+        to_acc=f"{card_id}/card/lender_expenses/e",
         from_acc=f"{bill.id}/bill/interest_receivable/a",
     )
     remaining_amount = adjust(
         remaining_amount,
-        to_acc=f"{card_id}/lender/lender_expenses/e",
+        to_acc=f"{card_id}/card/lender_expenses/e",
         from_acc=f"{bill.id}/bill/principal_receivable/a",
     )
     return remaining_amount
@@ -613,7 +613,7 @@ def _adjust_for_prepayment_recovery(
     create_ledger_entry_from_str(
         session,
         event_id=lt.id,
-        debit_book_str=f"{card_id}/lender/lender_expenses/e",
+        debit_book_str=f"{card_id}/card/lender_expenses/e",
         credit_book_str=f"{card_id}/card/pre_payment/l",
         amount=amount,
     )
