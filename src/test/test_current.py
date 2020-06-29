@@ -8,11 +8,7 @@ from alembic.command import current as alembic_current
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
-from rush.accrue_financial_charges import (
-    accrue_interest_on_all_bills,
-    accrue_interest_prerequisites,
-    accrue_late_charges,
-)
+from rush.accrue_financial_charges import accrue_late_charges
 from rush.anomaly_detection import run_anomaly
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
@@ -563,9 +559,6 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     generate_date = parse_date("2020-06-01").date()
     bill_may = bill_generate(session=session, user_card=uc)
 
-    # Accrue Interest
-    accrue_interest_on_all_bills(session, bill_may.agreement_date, uc)
-
     # Check calculated interest
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_may.id}/bill/interest_receivable/a"
@@ -807,9 +800,6 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     )
     emis_dict = [u.__dict__ for u in all_emis_query.all()]
 
-    # Accrue Interest
-    accrue_interest_on_all_bills(session, bill_may.agreement_date, uc)
-
     # Do Partial Payment
     payment_date = parse_date("2020-06-18 06:55:00")
     amount = Decimal(324)
@@ -833,7 +823,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     assert first_emi["interest"] == Decimal("387.48")
     assert first_emi["interest_received"] == Decimal("324")
 
-    
+
 def test_interest_reversal_interest_already_settled(session: Session) -> None:
     test_generate_bill_1(session)
     _partial_payment_bill_1(session)
