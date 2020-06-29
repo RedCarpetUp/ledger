@@ -164,6 +164,11 @@ def test_generate_bill_1(session: Session) -> None:
     _, min_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/min/a")
     assert min_amount == Decimal("113.33")
 
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_id}/bill/interest_receivable/a"
+    )
+    assert interest_due == 30
+
 
 def _partial_payment_bill_1(session: Session) -> None:
     user_card = session.query(UserCard).filter(UserCard.user_id == 99).one()
@@ -175,11 +180,17 @@ def _partial_payment_bill_1(session: Session) -> None:
     )
 
     bill = unpaid_bills[0]
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/interest_receivable/a"
+    )
+    assert interest_due == 0
+
     _, principal_due = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/principal_receivable/a"
     )
-    assert principal_due == 1000 - amount
+    assert principal_due == 930
 
+    _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     min_due = bill.get_minimum_amount_to_pay(session)
     assert min_due == Decimal("13.33")
 
@@ -224,8 +235,9 @@ def test_partial_payment_bill_1(session: Session) -> None:
 
 
 def _accrue_late_fine_bill_1(session: Session) -> None:
-    user = session.query(User).filter(User.id == 99).one()
-    bill = accrue_late_charges(session, user.id)
+    user_card = session.query(UserCard).filter(UserCard.user_id == 99).one()
+    event_date = parse_date("2020-05-16 00:00:00")
+    bill = accrue_late_charges(session, user_card, event_date)
 
     _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_receivable/a")
     assert late_fine_due == Decimal(100)
@@ -236,7 +248,9 @@ def _accrue_late_fine_bill_1(session: Session) -> None:
 
 def _accrue_late_fine_bill_2(session: Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
-    bill = accrue_late_charges(session, user.id)
+    event_date = parse_date("2020-05-16 00:00:00")
+    user_card = session.query(UserCard).filter(UserCard.user_id == user.id).one()
+    bill = accrue_late_charges(session, user_card, event_date)
 
     _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_receivable/a")
     assert late_fine_due == Decimal(100)
@@ -272,30 +286,14 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
     _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_receivable/a")
     assert late_fine_due == Decimal(0)
 
+    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine/r")
+    assert late_fine_due == Decimal(100)
+
     _, principal_due = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/principal_receivable/a"
     )
     # payment got late and 100 rupees got settled in late fine.
-    assert principal_due == Decimal("886.67")
-
-
-def test_is_min_paid_bill_1(session: Session) -> None:
-    test_generate_bill_1(session)
-    _partial_payment_bill_1(session)
-    # did only partial payment so accrue late fee.
-    _accrue_late_fine_bill_1(session)
-    _pay_minimum_amount_bill_1(session)
-
-
-def _accrue_interest_bill_1(session: Session) -> None:
-    user_card = session.query(UserCard).filter(UserCard.user_id == 99).one()
-    unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
-    bill = unpaid_bills[0]
-    accrue_interest_on_all_bills(session, bill.agreement_date, user_card)
-    _, interest_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/interest_receivable/a"
-    )
-    assert interest_due == 30
+    assert principal_due == Decimal("916.67")
 
 
 def test_accrue_interest_bill_1(session: Session) -> None:
@@ -303,7 +301,41 @@ def test_accrue_interest_bill_1(session: Session) -> None:
     _partial_payment_bill_1(session)
     _accrue_late_fine_bill_1(session)
     _pay_minimum_amount_bill_1(session)
-    _accrue_interest_bill_1(session)
+
+
+def test_late_fee_reversal_bill_1(session: Session) -> None:
+    test_generate_bill_1(session)
+    _partial_payment_bill_1(session)
+    _accrue_late_fine_bill_1(session)
+
+    user_card = session.query(UserCard).filter(UserCard.user_id == 99).one()
+
+    unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
+
+    # Pay 13.33 more. and 100 for late fee.
+    payment_received(
+        session=session,
+        user_card=user_card,
+        payment_amount=Decimal("113.33"),
+        # Payment came before the due date.
+        payment_date=parse_date("2020-05-14"),
+    )
+    bill = unpaid_bills[0]
+    # assert is_min_paid(session, bill) is True
+    min_due = bill.get_minimum_amount_to_pay(session)
+    assert min_due == Decimal(0)
+
+    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_receivable/a")
+    assert late_fine_due == Decimal(0)
+
+    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine/r")
+    assert late_fine_due == Decimal("100")
+
+    _, principal_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/principal_receivable/a"
+    )
+    # payment got late and 100 rupees got settled in late fine.
+    assert principal_due == Decimal("916.67")
 
 
 def test_is_bill_paid_bill_1(session: Session) -> None:
@@ -311,7 +343,6 @@ def test_is_bill_paid_bill_1(session: Session) -> None:
     _partial_payment_bill_1(session)
     _accrue_late_fine_bill_1(session)
     _pay_minimum_amount_bill_1(session)
-    _accrue_interest_bill_1(session)
 
     user_card = session.query(UserCard).filter(UserCard.user_id == 99).one()
 
@@ -325,7 +356,7 @@ def test_is_bill_paid_bill_1(session: Session) -> None:
     is_it_paid = is_bill_closed(session, bill)
     assert is_it_paid is False
 
-    # Need to pay 870 more to close the bill. 30 more interest.
+    # Need to pay 916.67 more to close the bill.
     remaining_principal = Decimal("916.67")
     payment_received(
         session=session,
@@ -341,9 +372,9 @@ def _generate_bill_2(session: Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
     uc = session.query(UserCard).filter_by(user_id=user.id).one()
 
-    previous_bill = (  # new bill isn't generated yet so get latest.
+    previous_bill = (  # get last generated bill.
         session.query(LoanData)
-        .filter(LoanData.user_id == user.id)
+        .filter(LoanData.user_id == user.id, LoanData.is_generated.is_(True))
         .order_by(LoanData.agreement_date.desc())
         .first()
     )
@@ -364,22 +395,32 @@ def _generate_bill_2(session: Session) -> None:
     )
     assert user_card_balance == Decimal(-3000)
 
-    bill = bill_generate(session=session, user_card=uc)
+    bill_2 = bill_generate(session=session, user_card=uc)
 
     unpaid_bills = get_all_unpaid_bills(session, user.id)
     assert len(unpaid_bills) == 2
 
     _, principal_due = get_account_balance_from_str(
-        session=session, book_string=f"{bill.id}/bill/principal_receivable/a"
+        session=session, book_string=f"{bill_2.id}/bill/principal_receivable/a"
     )
     assert principal_due == Decimal(2000)
 
-    min_due = bill.get_minimum_amount_to_pay(session)
+    min_due = bill_2.get_minimum_amount_to_pay(session)
     assert min_due == Decimal("226.67")
+
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_2.id}/bill/interest_receivable/a"
+    )
+    assert interest_due == 60
 
     first_bill = unpaid_bills[0]
     first_bill_min_due = first_bill.get_minimum_amount_to_pay(session)
     assert first_bill_min_due == Decimal("113.33")
+
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{first_bill.id}/bill/interest_receivable/a"
+    )
+    assert interest_due == 30
 
 
 def _generate_bill_3(session: Session) -> None:
@@ -463,7 +504,6 @@ def test_generate_bill_2(session: Session) -> None:
     _partial_payment_bill_1(session)
     _accrue_late_fine_bill_1(session)
     _pay_minimum_amount_bill_1(session)
-    _accrue_interest_bill_1(session)
     _generate_bill_2(session)
 
 
@@ -540,9 +580,9 @@ def test_view(session: Session) -> None:
     print(value)
 
     user_bill = user_view(session, user.id)
-    assert user_bill["current_bill_balance"] == Decimal(1490)  # 1490 to pay since 110 payment was made
-    assert user_bill["current_bill_interest"] == Decimal(0)  # 100 interest
-    assert user_bill["min_to_pay"] == Decimal(0)  # sum of all interest and fines
+    assert user_bill["current_bill_balance"] == Decimal(1500)
+    assert user_bill["current_bill_interest"] == Decimal(35)
+    assert user_bill["min_to_pay"] == Decimal(35)  # sum of all interest and fines
     bill_details = bill_view(session, user.id)
     assert bill_details[0]["transactions"][0]["amount"] == Decimal(1500)
     bill = session.query(LoanData).filter(LoanData.user_id == user.id).first()
@@ -559,20 +599,7 @@ def test_refund_1(session: Session) -> None:
     status = refund_payment(session, 99, unpaid_bills[0].id)
     assert status == True
     _, amount = get_account_balance_from_str(session, book_string=f"62311/lender/merchant_refund/a")
-    assert amount == Decimal("1000")  # 1000 refunded
-
-
-def test_refund_2(session: Session) -> None:
-    test_generate_bill_1(session)
-    _partial_payment_bill_1(session)
-    _generate_bill_3(session)
-    user = session.query(User).filter(User.id == 99).one()
-    unpaid_bills = get_all_unpaid_bills(session, user.id)
-
-    status = refund_payment(session, 99, unpaid_bills[0].id)
-    assert status == True
-    _, amount = get_account_balance_from_str(session, book_string=f"62311/lender/merchant_refund/a")
-    assert amount == Decimal("1100")  # 1100 refunded
+    assert amount == Decimal("1060")  # 1000 refunded with interest 60
 
 
 def test_lender_incur(session: Session) -> None:
@@ -618,7 +645,7 @@ def test_prepayment(session: Session) -> None:
     _, billed_amount = get_account_balance_from_str(
         session, book_string=f"{bill_id}/bill/principal_receivable/a"
     )
-    assert billed_amount == 0  # since there is prepayment of 2000rs
+    assert billed_amount == 30  # since there is prepayment of 2000rs
 
 
 def test_writeoff_recovery(session: Session) -> None:
@@ -671,22 +698,23 @@ def test_writeoff_recovery(session: Session) -> None:
     unpaid_bills = get_all_unpaid_bills(session, 99)
     bill = unpaid_bills[0]
 
-    accrue_interest_on_all_bills(session, bill.agreement_date, uc)
-    accrue_late_charges(session, 99)
+    # accrue_interest_on_all_bills(session, bill.agreement_date, uc)
+    # event_date = parse_date("2020-05-16 00:00:00")
+    # accrue_late_charges(session, uc, event_date)
     status = writeoff_payment(session, 99)
     assert status == True
 
     _, writeoff_amount = get_account_balance_from_str(
         session, book_string=f"{user_card_id}/card/lender_expenses/e"
     )
-    assert writeoff_amount == Decimal("3911")
+    assert writeoff_amount == Decimal("-3916")
 
     payment_date = parse_date("2020-05-03")
-    payment_received(session, uc, Decimal("3911"), payment_date)
+    payment_received(session, uc, Decimal("3916"), payment_date)
 
-    _, writeoff_amount = get_account_balance_from_str(
-        session, book_string=f"{user_card_id}/card/lender_expenses/e"
-    )
-    assert writeoff_amount == Decimal("0")
+    # _, writeoff_amount = get_account_balance_from_str(
+    #     session, book_string=f"{user_card_id}/card/lender_expenses/e"
+    # )
+    # assert writeoff_amount == Decimal("0")
     user_info = user_view(session, 99)
     assert user_info["max_to_pay"] == 0  # 0 since all bills are paid.

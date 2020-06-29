@@ -25,6 +25,7 @@ def create_card_swipe(
     lt = LedgerTriggerEvent(
         performed_by=user_card.user_id,
         name="card_transaction",
+        card_id=user_card.id,
         post_date=txn_time,
         amount=amount,
         extra_details={"swipe_id": swipe.id},

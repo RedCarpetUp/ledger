@@ -13,6 +13,8 @@ from rush.ledger_utils import (
     get_account_balance_from_str,
     get_all_unpaid_bills,
 )
+from rush.anomaly_detection import run_anomaly
+
 from rush.models import (
     CardTransaction,
     LedgerTriggerEvent,

@@ -59,11 +59,9 @@ def get_account_balance(
         )
     credit_balance = credit_balance.scalar() or 0
 
-    if book_account.account_type == "a":
+    if book_account.account_type in ("a", "e"):
         final_balance = debit_balance - credit_balance
-    elif book_account.account_type == "l":
-        final_balance = credit_balance - debit_balance
-    elif book_account.account_type == "e":
+    elif book_account.account_type in ("l", "r"):
         final_balance = credit_balance - debit_balance
 
     return final_balance
@@ -95,7 +93,7 @@ def get_book_account_by_string(session: Session, book_string) -> BookAccount:
 
 def is_min_paid(session: Session, bill: LoanData, to_date: Optional[DateTime] = None) -> bool:
     _, min_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/min_due/a", to_date=to_date
+        session, book_string=f"{bill.id}/bill/min/a", to_date=to_date
     )
     _, interest_received = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/interest_received/a", to_date=to_date
@@ -105,7 +103,7 @@ def is_min_paid(session: Session, bill: LoanData, to_date: Optional[DateTime] = 
     )
     amount_received = interest_received + principal_received
 
-    # Consider all receivables if to_date is not null. Assuming it's being checked for anomlay.
+    # Consider all receivables if event_date is not null. Assuming it's being checked for anomlay.
     # In that case the payment can be settled in any of the receivables.
     if to_date:
         _, late_fee_received = get_account_balance_from_str(
@@ -161,7 +159,7 @@ def get_all_unpaid_bills(session: Session, user_id: int) -> List[LoanData]:
     unpaid_bills = []
     all_bills = (
         session.query(LoanData)
-        .filter(LoanData.user_id == user_id)
+        .filter(LoanData.user_id == user_id, LoanData.is_generated.is_(True))
         .order_by(LoanData.agreement_date)
         .all()
     )
