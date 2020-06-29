@@ -2,6 +2,7 @@ from decimal import Decimal
 from typing import (
     Any,
     Dict,
+    Optional,
     Tuple,
 )
 
@@ -107,15 +108,6 @@ class UserPy(AuditMixinPy):
     nickname: str
 
 
-class LedgerTriggerEvent(AuditMixin):
-
-    __tablename__ = "ledger_trigger_event"
-    name = Column(String(50))
-    post_date = Column(TIMESTAMP)
-    amount = Column(Numeric)
-    extra_details = Column(JSON, default="{}")
-
-
 @py_dataclass
 class LedgerTriggerEventPy(AuditMixinPy):
     name: str
@@ -138,14 +130,6 @@ class BookAccountPy(AuditMixinPy):
     account_type: str
 
 
-class LedgerEntry(AuditMixin):
-    __tablename__ = "ledger_entry"
-    event_id = Column(Integer, ForeignKey(LedgerTriggerEvent.id))
-    debit_account = Column(Integer, ForeignKey(BookAccount.id))
-    credit_account = Column(Integer, ForeignKey(BookAccount.id))
-    amount = Column(DECIMAL)
-
-
 @py_dataclass
 class LedgerEntryPy(AuditMixinPy):
     event_id: int
@@ -163,6 +147,24 @@ class UserCard(AuditMixin):
     interest_free_period_in_days = Column(Integer, default=45, nullable=False)
 
 
+class LedgerTriggerEvent(AuditMixin):
+
+    __tablename__ = "ledger_trigger_event"
+    name = Column(String(50))
+    card_id = Column(Integer, ForeignKey(UserCard.id))
+    post_date = Column(TIMESTAMP)
+    amount = Column(Numeric)
+    extra_details = Column(JSON, default="{}")
+
+
+class LedgerEntry(AuditMixin):
+    __tablename__ = "ledger_entry"
+    event_id = Column(Integer, ForeignKey(LedgerTriggerEvent.id))
+    debit_account = Column(Integer, ForeignKey(BookAccount.id))
+    credit_account = Column(Integer, ForeignKey(BookAccount.id))
+    amount = Column(DECIMAL)
+
+
 class LoanData(AuditMixin):
     __tablename__ = "loan_data"
     user_id = Column(Integer, ForeignKey(User.id))
@@ -175,11 +177,23 @@ class LoanData(AuditMixin):
     principal = Column(Numeric, nullable=True)
     principal_instalment = Column(Numeric, nullable=True)
 
-    def get_minimum_amount_to_pay(self, session: Session) -> Decimal:
+    def get_minimum_amount_to_pay(self, session: Session, to_date: Optional[DateTime] = None) -> Decimal:
         from rush.ledger_utils import get_account_balance_from_str
 
-        _, min_due = get_account_balance_from_str(session, book_string=f"{self.id}/bill/min/a")
+        _, min_due = get_account_balance_from_str(
+            session, book_string=f"{self.id}/bill/min/a", to_date=to_date
+        )
         return min_due
+
+    @staticmethod
+    def get_latest_bill(session: Session, user_id: int) -> Any:
+        latest_bill = (
+            session.query(LoanData)
+            .filter(LoanData.user_id == user_id, LoanData.is_generated.is_(True))
+            .order_by(LoanData.agreement_date.desc())
+            .first()
+        )
+        return latest_bill
 
 
 @py_dataclass

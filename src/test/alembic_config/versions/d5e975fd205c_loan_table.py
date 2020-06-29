@@ -102,6 +102,21 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["card_id"], ["user_card.id"], name="fk_card_emis_card_id"),
     )
 
+    op.create_table(
+        "ledger_trigger_event",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.Column("post_date", sa.TIMESTAMP(), nullable=False),
+        sa.Column("amount", sa.DECIMAL(), nullable=True),
+        sa.Column("extra_details", sa.JSON(), nullable=False),
+        sa.Column("name", sa.String(), nullable=False),
+        sa.Column("card_id", sa.Integer(), nullable=True),
+        sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
+        sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
+        sa.PrimaryKeyConstraint("id"),
+        sa.ForeignKeyConstraint(["card_id"], ["user_card.id"], name="fk_ledger_trigger_event_card_id"),
+    )
+
 
 def downgrade() -> None:
     pass

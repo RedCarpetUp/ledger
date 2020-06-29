@@ -7,6 +7,7 @@ from pendulum import (
 )
 from sqlalchemy.orm import Session
 
+from rush.accrue_financial_charges import accrue_interest_on_all_bills
 from rush.ledger_events import bill_generate_event
 from rush.create_emi import create_emis_for_card, add_emi_on_new_bill
 from rush.ledger_utils import get_account_balance_from_str
@@ -54,14 +55,14 @@ def get_or_create_bill_for_card_swipe(
         .first()
     )
     if last_bill:
-        last_bill_date = last_bill.agreement_date.date()
+        last_bill_date = last_bill.agreement_date
         last_valid_statement_date = last_bill_date + timedelta(days=user_card.statement_period_in_days)
         does_swipe_belong_to_current_bill = txn_time.date() <= last_valid_statement_date
         if does_swipe_belong_to_current_bill:
             return last_bill
         new_bill_date = last_valid_statement_date + timedelta(days=1)
     else:
-        new_bill_date = user_card.card_activation_date
+        new_bill_date = user_card.card_activation_date.date()
     new_bill = create_bill(
         session, user_card, new_bill_date, 62311, Decimal(36), Decimal(18), is_generated=False
     )
@@ -75,7 +76,7 @@ def bill_generate(session: Session, user_card: UserCard) -> LoanData:
         .order_by(LoanData.agreement_date)
         .first()
     )  # Get the first bill which is not generated.
-    lt = LedgerTriggerEvent(name="bill_generate", post_date=bill.agreement_date)
+    lt = LedgerTriggerEvent(name="bill_generate", card_id=user_card.id, post_date=bill.agreement_date)
     session.add(lt)
     session.flush()
 
@@ -106,4 +107,6 @@ def bill_generate(session: Session, user_card: UserCard) -> LoanData:
     else:
         add_emi_on_new_bill(session, user_card, bill, last_emi.emi_number)
 
+    # Accrue interest on all bills. Before the actual date, yes.
+    accrue_interest_on_all_bills(session, bill.agreement_date, user_card)
     return bill

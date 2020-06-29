@@ -1,5 +1,8 @@
 from decimal import Decimal
-from typing import List, Tuple
+from typing import (
+    List,
+    Tuple,
+)
 
 from sqlalchemy.orm import Session
 
@@ -13,6 +16,10 @@ from rush.models import (
     LedgerTriggerEvent,
     LoanData,
     UserCard,
+)
+from rush.utils import (
+    div,
+    mul,
 )
 
 
@@ -90,15 +97,15 @@ def bill_generate_event(session: Session, bill: LoanData, event: LedgerTriggerEv
     )
 
 
-def add_min_amount_event(session: Session, bill: LoanData, event: LedgerTriggerEvent) -> None:
-    bill_id = bill.id
-
+def add_min_amount_event(
+    session: Session, bill: LoanData, event: LedgerTriggerEvent, amount: Decimal
+) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
-        debit_book_str=f"{bill_id}/bill/min/a",
-        credit_book_str=f"{bill_id}/bill/min/l",
-        amount=event.amount,
+        debit_book_str=f"{bill.id}/bill/min/a",
+        credit_book_str=f"{bill.id}/bill/min/l",
+        amount=amount,
     )
 
 
@@ -123,7 +130,11 @@ def payment_received_event(session: Session, user_card: UserCard, event: LedgerT
 
 
 def _adjust_bill(
-    session: Session, bill: LoanData, amount_to_adjust_in_this_bill: Decimal, event_id: int
+    session: Session,
+    bill: LoanData,
+    amount_to_adjust_in_this_bill: Decimal,
+    event_id: int,
+    debit_acc_str: str,
 ) -> Decimal:
     def adjust(payment_to_adjust_from: Decimal, to_acc: str, from_acc: str) -> Decimal:
         if payment_to_adjust_from <= 0:
@@ -144,18 +155,14 @@ def _adjust_bill(
     # Now adjust into other accounts.
     remaining_amount = adjust(
         amount_to_adjust_in_this_bill,
-        to_acc=f"{bill.lender_id}/lender/pg_account/a",
+        to_acc=debit_acc_str,  # f"{bill.lender_id}/lender/pg_account/a"
         from_acc=f"{bill.id}/bill/late_fine_receivable/a",
     )
     remaining_amount = adjust(
-        remaining_amount,
-        to_acc=f"{bill.lender_id}/lender/pg_account/a",
-        from_acc=f"{bill.id}/bill/interest_receivable/a",
+        remaining_amount, to_acc=debit_acc_str, from_acc=f"{bill.id}/bill/interest_receivable/a",
     )
     remaining_amount = adjust(
-        remaining_amount,
-        to_acc=f"{bill.lender_id}/lender/pg_account/a",
-        from_acc=f"{bill.id}/bill/principal_receivable/a",
+        remaining_amount, to_acc=debit_acc_str, from_acc=f"{bill.id}/bill/principal_receivable/a",
     )
     return remaining_amount
 
@@ -176,7 +183,13 @@ def _adjust_for_min(
             credit_book_str=f"{bill.id}/bill/min/a",
             amount=amount_to_adjust_in_this_bill,
         )
-        remaining_amount = _adjust_bill(session, bill, amount_to_adjust_in_this_bill, event_id)
+        remaining_amount = _adjust_bill(
+            session,
+            bill,
+            amount_to_adjust_in_this_bill,
+            event_id,
+            debit_acc_str=f"{bill.lender_id}/lender/pg_account/a",
+        )
         assert remaining_amount == 0  # Can't be more than 0
     return payment_received  # The remaining amount goes back to the main func.
 
@@ -185,7 +198,13 @@ def _adjust_for_complete_bill(
     session: Session, bills: List[LoanData], payment_received: Decimal, event_id: int
 ) -> Decimal:
     for bill in bills:
-        payment_received = _adjust_bill(session, bill, payment_received, event_id)
+        payment_received = _adjust_bill(
+            session,
+            bill,
+            payment_received,
+            event_id,
+            debit_acc_str=f"{bill.lender_id}/lender/pg_account/a",
+        )
     return payment_received  # The remaining amount goes back to the main func.
 
 
@@ -193,13 +212,15 @@ def _adjust_for_prepayment(session: Session) -> None:
     pass  # TODO
 
 
-def accrue_interest_event(session: Session, bill: LoanData, event: LedgerTriggerEvent) -> None:
+def accrue_interest_event(
+    session: Session, bill: LoanData, event: LedgerTriggerEvent, amount: Decimal
+) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
         debit_book_str=f"{bill.id}/bill/interest_receivable/a",
         credit_book_str=f"{bill.id}/bill/interest_earned/r",
-        amount=event.amount,
+        amount=amount,
     )
     # adjust the given interest in schedule
     from rush.create_emi import adjust_interest_in_emis
@@ -221,4 +242,4 @@ def accrue_late_fine_event(session: Session, bill: LoanData, event: LedgerTrigge
     adjust_late_fee_in_emis(session, bill.user_id, event.post_date)
 
     # Add into min amount of the bill too.
-    add_min_amount_event(session, bill, event)
+    add_min_amount_event(session, bill, event, event.amount)
