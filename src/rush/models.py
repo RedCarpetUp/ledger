@@ -7,6 +7,8 @@ from typing import (
 )
 
 from pendulum import DateTime
+from datetime import datetime
+from decimal import Decimal
 from pydantic.dataclasses import dataclass as py_dataclass
 from sqlalchemy import (
     DECIMAL,
@@ -54,13 +56,13 @@ class AuditMixin(Base):
         )
         if old_row:
             old_row.row_status = "inactive"
-            session().flush()
+            session.flush()
         cls_keys = cls.__table__.columns.keys()
         keys_to_skip = [key for key in new_data.keys() if key not in cls_keys]
         new_skip_columns = keys_to_skip + list(skip_columns)
         for column in new_skip_columns:
             new_data.pop(column, None)
-        new_obj = cls.new(**new_data)
+        new_obj = cls.new(session, **new_data)
         session.flush()
         return new_obj
 
@@ -68,7 +70,6 @@ class AuditMixin(Base):
     def new(cls, session: Session, **kwargs) -> Any:
         obj = cls(**kwargs)
         session.add(obj)
-        session.flush()  # TODO remove this. this is only temporary.
         return obj
 
 
@@ -202,23 +203,40 @@ class LoanDataPy(AuditMixinPy):
     bill_generation_date: DateTime
 
 
-class LoanEmis(AuditMixin):
-    __tablename__ = "loan_emis"
-    loan_id = Column(Integer, ForeignKey(LoanData.id))
-    due_date = Column(TIMESTAMP, nullable=False)
-    last_payment_date = Column(TIMESTAMP, nullable=False)
-
-
-@py_dataclass
-class LoanEmisPy(AuditMixinPy):
-    loan_id: int
-    due_date: DateTime
-    last_payment_date: DateTime
-
-
 class CardTransaction(AuditMixin):
     __tablename__ = "card_transaction"
     loan_id = Column(Integer, ForeignKey(LoanData.id))
     txn_time = Column(TIMESTAMP, nullable=False)
     amount = Column(Numeric, nullable=False)
     description = Column(String(100), nullable=False)
+
+
+class CardEmis(AuditMixin):
+    __tablename__ = "card_emis"
+    card_id = Column(Integer, ForeignKey(UserCard.id))
+    due_date = Column(TIMESTAMP, nullable=False)
+    due_amount = Column(Numeric, nullable=False, default=Decimal(0))
+    total_due_amount = Column(Numeric, nullable=False, default=Decimal(0))
+    interest_current_month = Column(Numeric, nullable=False, default=Decimal(0))
+    interest_next_month = Column(Numeric, nullable=False, default=Decimal(0))
+    interest = Column(Numeric, nullable=False, default=Decimal(0))
+    emi_number = Column(Integer, nullable=False)
+    late_fee = Column(Numeric, nullable=False, default=Decimal(0))
+    row_status = Column(String(length=10), nullable=False, default="active")
+    dpd = Column(Integer, nullable=True, default=0)
+    last_payment_date = Column(TIMESTAMP, nullable=True)
+    total_closing_balance = Column(Numeric, nullable=False, default=Decimal(0))
+    total_closing_balance_post_due_date = Column(Numeric, nullable=False, default=Decimal(0))
+    late_fee_received = Column(Numeric, nullable=False, default=Decimal(0))
+    interest_received = Column(Numeric, nullable=False, default=Decimal(0))
+    payment_received = Column(Numeric, nullable=False, default=Decimal(0))
+    payment_status = Column(String(length=10), nullable=False, default="UnPaid")
+
+    def as_dict(self):
+        emi_dict = {
+            c.name: getattr(self, c.name).isoformat()
+            if isinstance(getattr(self, c.name), datetime)
+            else getattr(self, c.name)
+            for c in self.__table__.columns
+        }
+        return emi_dict

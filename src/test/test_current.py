@@ -10,14 +10,15 @@ from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from rush.accrue_financial_charges import (
-    accrue_interest_on_all_bills,
-    accrue_late_charges,
-)
+from rush.accrue_financial_charges import accrue_late_charges
 from rush.anomaly_detection import run_anomaly
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
-from rush.ledger_utils import (  # get_interest_for_each_bill,
+from rush.create_emi import (
+    create_emis_for_card,
+    refresh_schedule,
+)
+from rush.ledger_utils import (
     get_account_balance_from_str,
     get_all_unpaid_bills,
     is_bill_closed,
@@ -30,6 +31,7 @@ from rush.lender_funds import (
 from rush.models import (
     BookAccount,
     LedgerEntry,
+    CardEmis,
     LedgerTriggerEvent,
     LoanData,
     User,
@@ -505,7 +507,6 @@ def test_generate_bill_2(session: Session) -> None:
     _pay_minimum_amount_bill_1(session)
     _generate_bill_2(session)
 
-
 def test_generate_bill_3(session: Session) -> None:
     a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(a)
@@ -539,7 +540,493 @@ def test_generate_bill_3(session: Session) -> None:
     _, min_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/min/a")
     assert min_due == 170
 
+def test_emi_creation(session: Session) -> None:
+    a = User(id=108, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    session.add(a)
 
+    # assign card
+    uc = UserCard(user_id=a.id, card_activation_date=parse_date("2020-04-02"))
+    session.flush()
+    session.add(uc)
+
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-04-08 19:23:11"),
+        amount=Decimal(6000),
+        description="BigBasket.com",
+    )
+
+    # Generate bill
+    bill_april = bill_generate(session=session, user_card=uc)
+
+    all_emis = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.due_date.asc())
+        .all()
+    )  # Get the latest emi of that user.
+
+    last_emi = all_emis[11]
+    assert last_emi.emi_number == 12
+
+
+def test_subsequent_emi_creation(session: Session) -> None:
+    a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    session.add(a)
+
+    # assign card
+    uc = UserCard(user_id=a.id, card_activation_date=parse_date("2020-04-02"))
+    session.flush()
+    session.add(uc)
+
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-04-08 19:23:11"),
+        amount=Decimal(6000),
+        description="BigBasket.com",
+    )
+
+    generate_date = parse_date("2020-05-01").date()
+    bill_april = bill_generate(session=session, user_card=uc)
+
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-08 19:23:11"),
+        amount=Decimal(6000),
+        description="BigBasket.com",
+    )
+
+    generate_date = parse_date("2020-06-01").date()
+    bill_may = bill_generate(session=session, user_card=uc)
+
+    all_emis = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.due_date.asc())
+        .all()
+    )  # Get the latest emi of that user.
+
+    last_emi = all_emis[12]
+    first_emi = all_emis[0]
+    second_emi = all_emis[1]
+    assert first_emi.due_amount == 500
+    assert last_emi.due_amount == 500
+    assert second_emi.due_amount == 1000
+    assert last_emi.emi_number == 13
+    assert last_emi.due_date.strftime("%Y-%m-%d") == "2021-05-25"
+
+
+def test_refresh_schedule(session: Session) -> None:
+    a = User(id=2005, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    session.add(a)
+    
+    # assign card
+    uc = UserCard(user_id=a.id, card_activation_date=parse_date("2020-04-02"))
+    session.flush()
+    session.add(uc)
+    
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-04-08 19:23:11"),
+        amount=Decimal(6000),
+        description="BigBasket.com",
+    )
+
+    generate_date = parse_date("2020-05-01").date()
+    bill_april = bill_generate(session=session, user_card=uc)
+
+    # Update later
+    assert a.id == 2005
+def test_schedule_for_interest_and_payment(session: Session) -> None:
+    a = User(id=1991, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    session.add(a)
+
+    # assign card
+    uc = UserCard(user_id=a.id, card_activation_date=parse_date("2020-05-01"))
+    session.flush()
+    session.add(uc)
+
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-08 19:23:11"),
+        amount=Decimal(6000),
+        description="BigBasket.com",
+    )
+
+    generate_date = parse_date("2020-06-01").date()
+    bill_may = bill_generate(session=session, user_card=uc)
+
+    # Check calculated interest
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_may.id}/bill/interest_receivable/a"
+    )
+    assert interest_due == 180
+
+    # Check if emi is adjusted correctly in schedule
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.due_date.asc())
+    )
+    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    first_emi = emis_dict[0]
+    assert first_emi["interest_current_month"] == 84
+    assert first_emi["interest_next_month"] == 96
+
+    # Do Full Payment
+    payment_date = parse_date("2020-06-30")
+    amount = Decimal(6180)
+    bill = payment_received(
+        session=session, user_card=uc, payment_amount=amount, payment_date=payment_date,
+    )
+
+    # Refresh Schedule
+    refresh_schedule(session, a.id)
+
+    # Check if amount is adjusted correctly in schedule
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.due_date.asc())
+    )
+    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    second_emi = emis_dict[1]
+    assert second_emi["total_due_amount"] == 0
+
+
+def test_with_live_user_loan_id_4134872(session: Session) -> None:
+    a = User(
+        id=1764433,
+        performed_by=123,
+        name="UPENDRA",
+        fullname="UPENDRA SINGH",
+        nickname="UPENDRA",
+        email="upsigh921067@gmail.com",
+    )
+    session.add(a)
+
+    # assign card
+    # 25 days to enforce 15th june as first due date
+    uc = UserCard(
+        user_id=a.id,
+        card_activation_date=parse_date("2020-05-20 00:00:00"),
+        interest_free_period_in_days=25,
+    )
+    session.flush()
+    session.add(uc)
+
+    # Card transactions
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-20 17:23:01"),
+        amount=Decimal(129),
+        description="PAYTM                  Noida         IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-22 09:33:18"),
+        amount=Decimal(115),
+        description="TPL*UDIO               MUMBAI        IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-22 09:50:46"),
+        amount=Decimal(500),
+        description="AIRTELMONEY            MUMBAI        IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-22 12:50:05"),
+        amount=Decimal(2),
+        description="PHONEPE RECHARGE.      GURGAON       IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-23 01:18:54"),
+        amount=Decimal(100),
+        description="WWW YESBANK IN         GURGAON       IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-23 01:42:51"),
+        amount=Decimal(54),
+        description="WWW YESBANK IN         GURGAON       IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-23 01:49:44"),
+        amount=Decimal(1100),
+        description="Payu Payments Pvt ltd  Gurgaon       IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-23 13:12:33"),
+        amount=Decimal(99),
+        description="ULLU DIGITAL PRIVATE L MUMBAI        IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-24 16:29:25"),
+        amount=Decimal(2500),
+        description="WWW YESBANK IN         GURGAON       IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-24 22:09:42"),
+        amount=Decimal(99),
+        description="PayTM*KookuDigitalPriP Mumbai        IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-25 08:33:40"),
+        amount=Decimal(1400),
+        description="WWW YESBANK IN         GURGAON       IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-25 10:26:12"),
+        amount=Decimal(380),
+        description="WWW YESBANK IN         GURGAON       IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-25 11:40:05"),
+        amount=Decimal(199),
+        description="PAYTM                  Noida         IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-25 11:57:15"),
+        amount=Decimal(298),
+        description="PAYTM                  Noida         IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-25 12:25:57"),
+        amount=Decimal(298),
+        description="PAYTM                  Noida         IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-26 08:04:47"),
+        amount=Decimal(1450),
+        description="WWW YESBANK IN         GURGAON       IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-26 14:47:41"),
+        amount=Decimal(110),
+        description="TPL*UDIO               MUMBAI        IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-26 16:37:27"),
+        amount=Decimal(700),
+        description="WWW YESBANK IN         GURGAON       IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-26 22:10:58"),
+        amount=Decimal(160),
+        description="Linkyun Technology Pri Gurgaon       IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-27 12:25:25"),
+        amount=Decimal(299),
+        description="PAYTM                  Noida         IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-28 20:38:02"),
+        amount=Decimal(199),
+        description="Linkyun Technology Pri Gurgaon       IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-28 21:45:55"),
+        amount=Decimal(800),
+        description="WWW YESBANK IN         GURGAON       IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-29 10:05:58"),
+        amount=Decimal(525),
+        description="Payu Payments Pvt ltd  Gurgaon       IND",
+    )
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-30 16:04:21"),
+        amount=Decimal(1400),
+        description="WWW YESBANK IN         GURGAON       IND",
+    )
+
+    # Generate bill
+    generate_date = parse_date("2020-06-01").date()
+    bill_may = bill_generate(session=session, user_card=uc)
+
+    # Check if amount is adjusted correctly in schedule
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.due_date.asc())
+    )
+    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+
+    # Do Partial Payment
+    payment_date = parse_date("2020-06-18 06:55:00")
+    amount = Decimal(324)
+    bill = payment_received(
+        session=session, user_card=uc, payment_amount=amount, payment_date=payment_date,
+    )
+
+    # Refresh Schedule
+    refresh_schedule(session, a.id)
+
+    # Check if amount is adjusted correctly in schedule
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.due_date.asc())
+    )
+    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    first_emi = emis_dict[0]
+    second_emi = emis_dict[1]
+
+    assert first_emi["interest"] == Decimal("387.48")
+    assert first_emi["interest_received"] == Decimal("324")
+
+
+def test_interest_reversal_interest_already_settled(session: Session) -> None:
+    test_generate_bill_1(session)
+    _partial_payment_bill_1(session)
+    _accrue_late_fine_bill_1(session)
+    _pay_minimum_amount_bill_1(session)
+
+    #  Pay 500 rupees
+    user_card = session.query(UserCard).filter(UserCard.user_id == 99).one()
+    payment_date = parse_date("2020-05-14 19:23:11")
+    amount = Decimal("886.67")
+    unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
+    payment_received(
+        session=session, user_card=user_card, payment_amount=amount, payment_date=payment_date,
+    )
+
+    bill = unpaid_bills[0]
+
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/interest_receivable/a"
+    )
+    assert interest_due == 0
+
+    _, interest_earned = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/interest_earned/r"
+    )
+    assert interest_earned == 0
+
+    _, principal_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/principal_receivable/a"
+    )
+    assert principal_due == Decimal(0)
+
+    # TODO more testing scenarios.
+    # 1. interest is not settled. 2. There are multiple bills.
+
+
+def test_interest_reversal_multiple_bills(session: Session) -> None:
+    test_generate_bill_1(session)
+    _partial_payment_bill_1(session)
+    _accrue_late_fine_bill_1(session)
+    _pay_minimum_amount_bill_1(session)
+    _generate_bill_2(session)
+
+    #  Pay 500 rupees
+    user_card = session.query(UserCard).filter(UserCard.user_id == 99).one()
+    payment_date = parse_date("2020-06-14 19:23:11")
+    amount = Decimal("2916.67")
+    unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
+    payment_received(
+        session=session, user_card=user_card, payment_amount=amount, payment_date=payment_date,
+    )
+
+    first_bill = unpaid_bills[0]
+    second_bill = unpaid_bills[1]
+
+    _, interest_earned = get_account_balance_from_str(
+        session, book_string=f"{first_bill.id}/bill/interest_earned/r"
+    )
+    assert interest_earned == 30  # 30 Interest got removed from first bill.
+
+    _, interest_earned = get_account_balance_from_str(
+        session, book_string=f"{second_bill.id}/bill/interest_earned/r"
+    )
+    assert interest_earned == 0
+
+    assert is_bill_closed(session, first_bill) is True
+    assert is_bill_closed(session, second_bill) is True  # 90 got settled in new bill.
+
+
+def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
+    test_generate_bill_1(session)
+    _partial_payment_bill_1(session)
+    _accrue_late_fine_bill_1(session)
+    _pay_minimum_amount_bill_1(session)
+    _generate_bill_2(session)
+
+    user_card = session.query(UserCard).filter(UserCard.user_id == 99).one()
+    payment_date = parse_date(
+        "2020-06-18 19:23:11"
+    )  # Payment came after due date. Interest won't get reversed.
+    amount = Decimal("2916.67")
+    unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
+    payment_received(
+        session=session, user_card=user_card, payment_amount=amount, payment_date=payment_date,
+    )
+
+    first_bill = unpaid_bills[0]
+    second_bill = unpaid_bills[1]
+
+    _, interest_earned = get_account_balance_from_str(
+        session, book_string=f"{first_bill.id}/bill/interest_earned/r"
+    )
+    assert interest_earned == 60  # 30 Interest did not get removed.
+
+    _, interest_earned = get_account_balance_from_str(
+        session, book_string=f"{second_bill.id}/bill/interest_earned/r"
+    )
+    assert interest_earned == 60
+    assert is_bill_closed(session, first_bill) is True
+    assert is_bill_closed(session, second_bill) is False
+    
 def _pay_minimum_amount_bill_2(session: Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
     user_card = session.query(UserCard).filter(UserCard.user_id == 99).one()
