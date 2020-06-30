@@ -640,13 +640,14 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         amount=Decimal(500),
         description="AIRTELMONEY            MUMBAI        IND",
     )
-    create_card_swipe(
-        session=session,
-        user_card=uc,
-        txn_time=parse_date("2020-05-22 12:50:05"),
-        amount=Decimal(2),
-        description="PHONEPE RECHARGE.      GURGAON       IND",
-    )
+    # This was refunded so can be used to test refund
+    # create_card_swipe(
+    #     session=session,
+    #     user_card=uc,
+    #     txn_time=parse_date("2020-05-22 12:50:05"),
+    #     amount=Decimal(2),
+    #     description="PHONEPE RECHARGE.      GURGAON       IND",
+    # )
     create_card_swipe(
         session=session,
         user_card=uc,
@@ -820,7 +821,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     first_emi = emis_dict[0]
     second_emi = emis_dict[1]
 
-    assert first_emi["interest"] == Decimal("387.48")
+    assert first_emi["interest"] == Decimal("387.83")
     assert first_emi["interest_received"] == Decimal("324")
 
 

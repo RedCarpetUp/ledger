@@ -1,5 +1,5 @@
 from datetime import timedelta
-from decimal import Decimal
+from decimal import Decimal, ROUND_UP
 
 from pendulum import (
     Date,
@@ -226,11 +226,17 @@ def adjust_interest_in_emis(session: Session, user_id: int, post_date: DateTime)
         session=session, book_string=f"{latest_bill.id}/bill/interest_receivable/a"
     )
     if interest_due > 0:
+        # Adjust for rounding because total due amount has to be rounded
+        rounded_total_due = (emi_dict["total_due_amount"] + interest_due).quantize(
+            Decimal("1."), rounding=ROUND_UP
+        )
+        diff = rounded_total_due - (emi_dict["total_due_amount"] + interest_due)
+        emi_dict["total_closing_balance_post_due_date"] += interest_due
+        interest_due += diff
+        emi_dict["total_due_amount"] = rounded_total_due
         emi_dict["interest_current_month"] = div(mul(interest_due, (30 - emi_dict["due_date"].day)), 30)
         emi_dict["interest_next_month"] = interest_due - emi_dict["interest_current_month"]
         emi_dict["interest"] = emi_dict["interest_current_month"] + emi_dict["interest_next_month"]
-        emi_dict["total_closing_balance_post_due_date"] += emi_dict["interest"]
-        emi_dict["total_due_amount"] += emi_dict["interest"]
         session.bulk_update_mappings(CardEmis, [emi_dict])
 
 
@@ -255,7 +261,13 @@ def adjust_late_fee_in_emis(session: Session, user_id: int, post_date: DateTime)
         session=session, book_string=f"{latest_bill.id}/bill/late_fine_receivable/a"
     )
     if late_fee > 0:
+        # Adjust for rounding because total due amount has to be round
+        rounded_total_due = (emi_dict["total_due_amount"] + late_fee).quantize(
+            Decimal("1."), rounding=ROUND_UP
+        )
+        diff = rounded_total_due - (emi_dict["total_due_amount"] + late_fee)
+        emi_dict["total_closing_balance_post_due_date"] += late_fee
+        late_fee += diff
+        emi_dict["total_due_amount"] = rounded_total_due
         emi_dict["late_fee"] = late_fee
-        emi_dict["total_closing_balance_post_due_date"] += emi_dict["late_fee"]
-        emi_dict["total_due_amount"] += emi_dict["late_fee"]
         session.bulk_update_mappings(CardEmis, [emi_dict])
