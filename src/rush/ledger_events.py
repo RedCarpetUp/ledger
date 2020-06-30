@@ -288,28 +288,14 @@ def accrue_late_fine_event(session: Session, bill: LoanData, event: LedgerTrigge
 def refund_event(
     session: Session, bill: LoanData, user_card: UserCard, event: LedgerTriggerEvent
 ) -> None:
-
-    # Refund before bill generation
     _, amount_billed = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/principal_receivable/a"
     )
-
-    def _adjust_prepayment_on_refund(
-        session: Session, card_id: int, event_id: int, amount: Decimal
-    ) -> None:
-        create_ledger_entry_from_str(
-            session,
-            event_id=event_id,
-            debit_book_str=f"62311/lender/merchant_refund/a",
-            credit_book_str=f"{card_id}/card/pre_payment/l",
-            amount=amount,
-        )
-
-    if amount_billed == 0:
+    if amount_billed == 0:  # Refund before bill generation
         create_ledger_entry_from_str(
             session,
             event_id=event.id,
-            debit_book_str=f"62311/lender/merchant_refund/a",
+            debit_book_str=f"{bill.lender_id}/lender/merchant_refund/a",
             credit_book_str=f"{bill.id}/bill/unbilled/a",
             amount=event.amount,
         )
@@ -322,13 +308,15 @@ def refund_event(
             session, book_string=f"{bill.id}/bill/late_fine_receivable/a"
         )
         amount = event.amount + interest_balance + late_fine
-        _adjust_bill(session, bill, amount, event.id, debit_acc_str="62311/lender/merchant_refund/a")
         create_ledger_entry_from_str(
             session,
             event_id=event.id,
             debit_book_str=f"{bill.id}/bill/min/l",
             credit_book_str=f"{bill.id}/bill/min/a",
             amount=min_balance,
+        )
+        _adjust_bill(
+            session, bill, amount, event.id, debit_acc_str=f"{bill.lender_id}/lender/merchant_refund/a"
         )
 
 
