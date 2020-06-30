@@ -146,11 +146,17 @@ def payment_received_event(session: Session, user_card: UserCard, event: LedgerT
     payment_received = Decimal(event.amount)
     unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
 
-    payment_received = _adjust_for_min(session, unpaid_bills, payment_received, event.id)
-    payment_received = _adjust_for_complete_bill(session, unpaid_bills, payment_received, event.id)
+    payment_received = _adjust_for_min(
+        session, unpaid_bills, payment_received, event.id, debit_book_str="lender/pg_account/a"
+    )
+    payment_received = _adjust_for_complete_bill(
+        session, unpaid_bills, payment_received, event.id, debit_book_str="lender/pg_account/a"
+    )
 
     if payment_received > 0:
-        _adjust_for_prepayment(session, user_card.id, event.id, payment_received)
+        _adjust_for_prepayment(
+            session, user_card.id, event.id, payment_received, debit_book_str="62311/lender/pg_account/a"
+        )
 
     # Lender has received money, so we reduce our liability now.
     create_ledger_entry_from_str(
@@ -158,7 +164,7 @@ def payment_received_event(session: Session, user_card: UserCard, event: LedgerT
         event_id=event.id,
         debit_book_str=f"{user_card.id}/card/lender_payable/l",
         credit_book_str=f"{user_card.id}/card/pg_account/a",
-        amount=payment_received,
+        amount=Decimal(event.amount),
     )
 
 
@@ -201,7 +207,11 @@ def _adjust_bill(
 
 
 def _adjust_for_min(
-    session: Session, bills: List[LoanData], payment_received: Decimal, event_id: int
+    session: Session,
+    bills: List[LoanData],
+    payment_received: Decimal,
+    event_id: int,
+    debit_book_str: str,
 ) -> Decimal:
     for bill in bills:
         min_due = bill.get_minimum_amount_to_pay(session)
@@ -222,14 +232,18 @@ def _adjust_for_min(
             bill,
             amount_to_adjust_in_this_bill,
             event_id,
-            debit_acc_str=f"{bill.lender_id}/lender/pg_account/a",
+            debit_acc_str=f"{bill.lender_id}/" + debit_book_str,
         )
         assert remaining_amount == 0  # Can't be more than 0
     return payment_received  # The remaining amount goes back to the main func.
 
 
 def _adjust_for_complete_bill(
-    session: Session, bills: List[LoanData], payment_received: Decimal, event_id: int
+    session: Session,
+    bills: List[LoanData],
+    payment_received: Decimal,
+    event_id: int,
+    debit_book_str: str,
 ) -> Decimal:
     for bill in bills:
         payment_received = _adjust_bill(
@@ -237,16 +251,18 @@ def _adjust_for_complete_bill(
             bill,
             payment_received,
             event_id,
-            debit_acc_str=f"{bill.lender_id}/lender/pg_account/a",
+            debit_acc_str=f"{bill.lender_id}/" + debit_book_str,
         )
     return payment_received  # The remaining amount goes back to the main func.
 
 
-def _adjust_for_prepayment(session: Session, card_id: int, event_id: int, amount: Decimal) -> None:
+def _adjust_for_prepayment(
+    session: Session, card_id: int, event_id: int, amount: Decimal, debit_book_str: str
+) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event_id,
-        debit_book_str=f"62311/lender/pg_account/a",
+        debit_book_str=debit_book_str,
         credit_book_str=f"{card_id}/card/pre_payment/l",
         amount=amount,
     )
@@ -300,7 +316,11 @@ def refund_event(
             amount=event.amount,
         )
     else:
+        bills = []
         _, min_balance = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/min/a")
+        _adjust_for_min(
+            session, bills, min_balance, event.id, debit_book_str=f"lender/merchant_refund/a"
+        )
         _, interest_balance = get_account_balance_from_str(
             session, book_string=f"{bill.id}/bill/interest_receivable/a"
         )
@@ -308,15 +328,16 @@ def refund_event(
             session, book_string=f"{bill.id}/bill/late_fine_receivable/a"
         )
         amount = event.amount + interest_balance + late_fine
-        create_ledger_entry_from_str(
-            session,
-            event_id=event.id,
-            debit_book_str=f"{bill.id}/bill/min/l",
-            credit_book_str=f"{bill.id}/bill/min/a",
-            amount=min_balance,
+        bills.append(bill)
+        amount = _adjust_for_min(
+            session, bills, amount, event.id, debit_book_str=f"lender/merchant_refund/a"
         )
-        _adjust_bill(
-            session, bill, amount, event.id, debit_acc_str=f"{bill.lender_id}/lender/merchant_refund/a"
+        _adjust_for_prepayment(
+            session,
+            user_card.id,
+            event.id,
+            amount,
+            debit_book_str=f"{bill.lender_id}/lender/merchant_refund/a",
         )
 
 
