@@ -318,8 +318,7 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
         session=session,
         user_card=user_card,
         payment_amount=Decimal("113.33"),
-        # Payment came before the due date.
-        payment_date=parse_date("2020-06-14"),
+        payment_date=parse_date("2020-06-14"),  # Payment came before the due date.
     )
     bill = unpaid_bills[0]
     # assert is_min_paid(session, bill) is True
@@ -997,8 +996,7 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
     assert interest_earned == 0
 
     assert is_bill_closed(session, first_bill) is True
-    # 90 got settled in new bill.
-    assert is_bill_closed(session, second_bill) is True
+    assert is_bill_closed(session, second_bill) is True  # 90 got settled in new bill.
 
 
 def test_failed_interest_reversal_multiple_bills(session: Session) -> None:

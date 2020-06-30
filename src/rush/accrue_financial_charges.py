@@ -66,13 +66,10 @@ def can_remove_interest(
     if payment_came_after_due_date:
         return False
 
-    # The total interest amount which we last accrued.
-    this_month_interest = interest_event.amount
-    # TODO outstanding as of due_date.
-    total_outstanding = _get_total_outstanding(session, user_card)
+    this_month_interest = interest_event.amount  # The total interest amount which we last accrued.
+    total_outstanding = _get_total_outstanding(session, user_card)  # TODO outstanding as of due_date.
 
-    # the amount has been paid sans interest.
-    if total_outstanding <= this_month_interest:
+    if total_outstanding <= this_month_interest:  # the amount has been paid sans interest.
         return True
     return False
 
@@ -106,8 +103,9 @@ def is_late_fee_valid(session: Session, user_card: UserCard) -> bool:
 
     due_date = latest_bill.agreement_date + timedelta(days=user_card.interest_free_period_in_days)
     min_balance_as_of_due_date = latest_bill.get_minimum_amount_to_pay(session, due_date)
-    if min_balance_as_of_due_date > 0:
-        # if there's balance pending in min then the late fee charge is valid.
+    if (
+        min_balance_as_of_due_date > 0
+    ):  # if there's balance pending in min then the late fee charge is valid.
         return True
     return False
 
@@ -180,11 +178,11 @@ def reverse_interest_charges(
         # We need to remove the amount that got adjusted in interest. interest_earned account needs
         # to be removed by the interest_that_was_added amount.
         d = {"acc_to_remove_from": f"{bill.id}/bill/interest_earned/r", "amount": settled_amount}
-        # Move amount from this bill to some other bill.
-        inter_bill_movement_entries.append(d)
+        inter_bill_movement_entries.append(d)  # Move amount from this bill to some other bill.
 
-        if not is_bill_closed(session, bill):
-            # The bill which is open and we slide the above entries in here.
+        if not is_bill_closed(
+            session, bill
+        ):  # The bill which is open and we slide the above entries in here.
             bills_to_slide.append(bill)
 
     for bill in bills_to_slide:

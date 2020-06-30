@@ -92,8 +92,7 @@ def bill_generate(session: Session, user_card: UserCard) -> LoanData:
         session, book_string=f"{bill.id}/bill/principal_receivable/a"
     )
     bill.principal = billed_amount
-    # TODO get tenure from table.
-    principal_instalment = div(billed_amount, 12)
+    principal_instalment = div(billed_amount, 12)  # TODO get tenure from table.
     bill.principal_instalment = principal_instalment
 
     # After the bill has generated. Call the min generation event on all unpaid bills.
