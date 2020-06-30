@@ -77,7 +77,7 @@ def get_account_balance_from_str(
 
 def get_book_account_by_string(session: Session, book_string) -> BookAccount:
     identifier, identifier_type, name, account_type = book_string.split("/")
-    assert account_type in ("a", "l", "r")
+    assert account_type in ("a", "l", "r", "e")
     assert identifier_type in ("user", "lender", "bill", "redcarpet", "card")
 
     book_account = get_or_create(
@@ -164,10 +164,7 @@ def get_all_unpaid_bills(session: Session, user_id: int) -> List[LoanData]:
         .all()
     )
     for bill in all_bills:
-        _, principal_due = get_account_balance_from_str(
-            session, book_string=f"{bill.id}/bill/principal_receivable/a"
-        )
-        if principal_due > 0:
+        if is_bill_closed(session, bill) == False:
             unpaid_bills.append(bill)
 
     return unpaid_bills
