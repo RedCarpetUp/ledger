@@ -227,7 +227,9 @@ def adjust_interest_in_emis(session: Session, user_id: int, post_date: DateTime)
     )
     if interest_due > 0:
         # Adjust for rounding because total due amount has to be rounded
-        rounded_total_due = (emi_dict["total_due_amount"] + interest_due).quantize(Decimal('1.'), rounding=ROUND_UP)
+        rounded_total_due = (emi_dict["total_due_amount"] + interest_due).quantize(
+            Decimal("1."), rounding=ROUND_UP
+        )
         diff = rounded_total_due - (emi_dict["total_due_amount"] + interest_due)
         emi_dict["total_closing_balance_post_due_date"] += interest_due
         interest_due += diff
@@ -260,7 +262,9 @@ def adjust_late_fee_in_emis(session: Session, user_id: int, post_date: DateTime)
     )
     if late_fee > 0:
         # Adjust for rounding because total due amount has to be round
-        rounded_total_due = (emi_dict["total_due_amount"] + late_fee).quantize(Decimal('1.'), rounding=ROUND_UP)
+        rounded_total_due = (emi_dict["total_due_amount"] + late_fee).quantize(
+            Decimal("1."), rounding=ROUND_UP
+        )
         diff = rounded_total_due - (emi_dict["total_due_amount"] + late_fee)
         emi_dict["total_closing_balance_post_due_date"] += late_fee
         late_fee += diff
