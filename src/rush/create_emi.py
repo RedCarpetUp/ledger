@@ -6,10 +6,19 @@ from pendulum import (
     DateTime,
 )
 from sqlalchemy.orm import Session
-from rush.utils import get_current_ist_time, div, mul
-from rush.ledger_utils import get_account_balance_from_str
+
 from rush.anomaly_detection import get_affected_events
-from rush.models import CardEmis, UserCard, LoanData
+from rush.ledger_utils import get_account_balance_from_str
+from rush.models import (
+    CardEmis,
+    LoanData,
+    UserCard,
+)
+from rush.utils import (
+    div,
+    get_current_ist_time,
+    mul,
+)
 
 
 def create_emis_for_card(session: Session, user_card: UserCard, last_bill: LoanData) -> CardEmis:

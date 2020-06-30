@@ -30,8 +30,8 @@ from rush.lender_funds import (
 )
 from rush.models import (
     BookAccount,
-    LedgerEntry,
     CardEmis,
+    LedgerEntry,
     LedgerTriggerEvent,
     LoanData,
     User,
@@ -319,7 +319,7 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
         user_card=user_card,
         payment_amount=Decimal("113.33"),
         # Payment came before the due date.
-        payment_date=parse_date("2020-05-14"),
+        payment_date=parse_date("2020-06-14"),
     )
     bill = unpaid_bills[0]
     # assert is_min_paid(session, bill) is True
@@ -336,6 +336,7 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
         session, book_string=f"{bill.id}/bill/principal_receivable/a"
     )
     # payment got late and 100 rupees got settled in late fine.
+    # changed from 916 to 816, the late did not get settled.
     assert principal_due == Decimal("916.67")
 
 
@@ -507,6 +508,7 @@ def test_generate_bill_2(session: Session) -> None:
     _pay_minimum_amount_bill_1(session)
     _generate_bill_2(session)
 
+
 def test_generate_bill_3(session: Session) -> None:
     a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(a)
@@ -539,6 +541,7 @@ def test_generate_bill_3(session: Session) -> None:
 
     _, min_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/min/a")
     assert min_due == 170
+
 
 def test_emi_creation(session: Session) -> None:
     a = User(id=108, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
@@ -622,12 +625,12 @@ def test_subsequent_emi_creation(session: Session) -> None:
 def test_refresh_schedule(session: Session) -> None:
     a = User(id=2005, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(a)
-    
+
     # assign card
     uc = UserCard(user_id=a.id, card_activation_date=parse_date("2020-04-02"))
     session.flush()
     session.add(uc)
-    
+
     create_card_swipe(
         session=session,
         user_card=uc,
@@ -641,6 +644,8 @@ def test_refresh_schedule(session: Session) -> None:
 
     # Update later
     assert a.id == 2005
+
+
 def test_schedule_for_interest_and_payment(session: Session) -> None:
     a = User(id=1991, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(a)
@@ -992,7 +997,8 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
     assert interest_earned == 0
 
     assert is_bill_closed(session, first_bill) is True
-    assert is_bill_closed(session, second_bill) is True  # 90 got settled in new bill.
+    # 90 got settled in new bill.
+    assert is_bill_closed(session, second_bill) is True
 
 
 def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
@@ -1026,7 +1032,8 @@ def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
     assert interest_earned == 60
     assert is_bill_closed(session, first_bill) is True
     assert is_bill_closed(session, second_bill) is False
-    
+
+
 def _pay_minimum_amount_bill_2(session: Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
     user_card = session.query(UserCard).filter(UserCard.user_id == 99).one()
