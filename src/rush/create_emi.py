@@ -262,13 +262,7 @@ def adjust_late_fee_in_emis(session: Session, user_id: int, post_date: DateTime)
         session=session, book_string=f"{latest_bill.id}/bill/late_fine_receivable/a"
     )
     if late_fee > 0:
-        # Adjust for rounding because total due amount has to be round
-        rounded_total_due = (emi_dict["total_due_amount"] + late_fee).quantize(
-            Decimal("1."), rounding=ROUND_UP
-        )
-        diff = rounded_total_due - (emi_dict["total_due_amount"] + late_fee)
         emi_dict["total_closing_balance_post_due_date"] += late_fee
-        late_fee += diff
-        emi_dict["total_due_amount"] = rounded_total_due
-        emi_dict["late_fee"] = late_fee
+        emi_dict["total_due_amount"] += late_fee
+        emi_dict["late_fee"] += late_fee
         session.bulk_update_mappings(CardEmis, [emi_dict])

@@ -121,6 +121,7 @@ def accrue_late_charges(session: Session, user_card: UserCard, post_date: DateTi
     #  accrue_late_charges_prerequisites(session, bill)
     if can_charge_fee:  # if min isn't paid charge late fine.
         # TODO get correct date here.
+        # Adjust for rounding because total due amount has to be rounded
         event = LedgerTriggerEvent(
             name="accrue_late_fine", post_date=post_date, card_id=user_card.id, amount=Decimal(100)
         )
