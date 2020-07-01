@@ -16,10 +16,9 @@ def div(x: Decimal, y: [Decimal, int, str], fp: Decimal = Decimal(".01")) -> Dec
     return (x / y).quantize(fp)
 
 
-def get_updated_fee_amount_from_principal(principal: Decimal, fee: Decimal) -> Decimal:
+def get_updated_fee_diff_amount_from_principal(principal: Decimal, fee: Decimal) -> Decimal:
     # Adjust for rounding because total due amount has to be rounded
     divided_principal = div(principal, 12)
     rounded_total_due = (divided_principal + fee).quantize(Decimal("1."), rounding=ROUND_UP)
     diff = rounded_total_due - (divided_principal + fee)
-    fee += diff
-    return fee
+    return diff
