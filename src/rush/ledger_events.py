@@ -164,7 +164,7 @@ def payment_received_event(
         create_ledger_entry_from_str(
             session,
             event_id=event.id,
-            debit_book_str=f"{user_card.id}/redcarpet/bad_debt_allowance/a",
+            debit_book_str=f"{user_card.id}/card/bad_debt_allowance/ca",
             credit_book_str=f"{user_card.id}/card/pg_account/a",
             amount=Decimal(event.amount),
         )
@@ -514,7 +514,7 @@ def writeoff_event(session: Session, user_card: UserCard, event: LedgerTriggerEv
         session,
         event_id=event.id,
         debit_book_str=f"{user_card.id}/card/lender_payable/l",
-        credit_book_str=f"{user_card.id}/redcarpet/bad_debt_allowance/a",
+        credit_book_str=f"{user_card.id}/card/bad_debt_allowance/ca",
         amount=event.amount,
     )
     create_ledger_entry_from_str(

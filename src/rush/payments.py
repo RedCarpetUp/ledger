@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from pendulum import DateTime
+from dateutil import relativedelta
 from sqlalchemy.orm import Session
 
 from rush.anomaly_detection import run_anomaly
@@ -63,18 +64,22 @@ def refund_payment(session, user_id: int, bill_id: int) -> bool:
 def writeoff_payment(session: Session, user_id: int) -> bool:
 
     unpaid_bills = get_all_unpaid_bills(session, user_id)
-
-    if len(unpaid_bills) >= 3:
-        usercard = session.query(UserCard).filter(UserCard.user_id == user_id).one()
-        _, balance = get_account_balance_from_str(
-            session, book_string=f"{usercard.id}/card/lender_payable/l"
-        )
-        lt = LedgerTriggerEvent(
-            name="writeoff_payment", amount=balance, post_date=get_current_ist_time()
-        )
-        session.add(lt)
-        session.flush()
-        writeoff_event(session, usercard, lt)
-        return True
+    if len(unpaid_bills) >= 1:
+        r = relativedelta.relativedelta(get_current_ist_time(), unpaid_bills[0].agreement_date)
+        months = r.months + (12 * r.years)
+        if months >= 3:
+            usercard = session.query(UserCard).filter(UserCard.user_id == user_id).one()
+            _, balance = get_account_balance_from_str(
+                session, book_string=f"{usercard.id}/card/lender_payable/l"
+            )
+            lt = LedgerTriggerEvent(
+                name="writeoff_payment", amount=balance, post_date=get_current_ist_time()
+            )
+            session.add(lt)
+            session.flush()
+            writeoff_event(session, usercard, lt)
+            return True
+        else:
+            return False
     else:
         return False

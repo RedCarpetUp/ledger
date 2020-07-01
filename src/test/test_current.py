@@ -1204,15 +1204,15 @@ def test_writeoff_recovery(session: Session) -> None:
     )
     assert writeoff_amount == Decimal("3844.74")
     _, bad_amount = get_account_balance_from_str(
-        session, book_string=f"{user_card_id}/redcarpet/bad_debt_allowance/a"
+        session, book_string=f"{user_card_id}/card/bad_debt_allowance/ca"
     )
-    assert bad_amount == Decimal("-3844.74")
+    assert bad_amount == Decimal("3844.74")
     payment_received(session, uc, Decimal("3844.74"), parse_date("2020-06-16 00:00:00"))
     _, writeoff_amount = get_account_balance_from_str(
         session, book_string=f"{user_card_id}/card/writeoff_expenses/e"
     )
     assert writeoff_amount == Decimal("0.00")
     _, bad_amount = get_account_balance_from_str(
-        session, book_string=f"{user_card_id}/redcarpet/bad_debt_allowance/a"
+        session, book_string=f"{user_card_id}/card/bad_debt_allowance/ca"
     )
     assert bad_amount == Decimal("0.00")
