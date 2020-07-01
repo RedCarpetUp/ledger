@@ -108,8 +108,10 @@ def is_late_fee_valid(session: Session, user_card: UserCard) -> bool:
 
     due_date = latest_bill.agreement_date + timedelta(days=user_card.interest_free_period_in_days)
     min_balance_as_of_due_date = latest_bill.get_minimum_amount_to_pay(session, due_date)
-    if min_balance_as_of_due_date > 0:
-        return True  # if there's balance pending in min then the late fee charge is valid.
+    if (
+        min_balance_as_of_due_date > 0
+    ):  # if there's balance pending in min then the late fee charge is valid.
+        return True
     return False
 
 
@@ -183,8 +185,10 @@ def reverse_interest_charges(
         d = {"acc_to_remove_from": f"{bill.id}/bill/interest_earned/r", "amount": settled_amount}
         inter_bill_movement_entries.append(d)  # Move amount from this bill to some other bill.
 
-        if not is_bill_closed(session, bill):
-            bills_to_slide.append(bill)  # The bill which is open and we slide the above entries in here.
+        if not is_bill_closed(
+            session, bill
+        ):  # The bill which is open and we slide the above entries in here.
+            bills_to_slide.append(bill)
 
     for bill in bills_to_slide:
         for entry in inter_bill_movement_entries:

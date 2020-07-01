@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal
 from typing import (
     Any,
@@ -7,8 +8,6 @@ from typing import (
 )
 
 from pendulum import DateTime
-from datetime import datetime
-from decimal import Decimal
 from pydantic.dataclasses import dataclass as py_dataclass
 from sqlalchemy import (
     DECIMAL,
