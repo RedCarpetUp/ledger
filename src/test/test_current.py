@@ -336,7 +336,7 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
     )
     # payment got late and 100 rupees got settled in late fine.
     # changed from 916 to 816, the late did not get settled.
-    assert principal_due == Decimal("916.67")
+    assert principal_due == Decimal("917.34")
 
 
 def test_is_bill_paid_bill_1(session: Session) -> None:
@@ -1091,7 +1091,7 @@ def test_refund_1(session: Session) -> None:
     status = refund_payment(session, 99, unpaid_bills[0].id)
     assert status == True
     _, amount = get_account_balance_from_str(session, book_string=f"62311/lender/merchant_refund/a")
-    assert amount == Decimal("1060")  # 1000 refunded with interest 60
+    assert amount == Decimal("1061.34")  # 1000 refunded with interest 60
 
 
 def test_lender_incur(session: Session) -> None:
@@ -1137,4 +1137,4 @@ def test_prepayment(session: Session) -> None:
     _, billed_amount = get_account_balance_from_str(
         session, book_string=f"{bill_id}/bill/principal_receivable/a"
     )
-    assert billed_amount == 30
+    assert billed_amount == Decimal("30.67")
