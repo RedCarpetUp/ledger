@@ -28,6 +28,7 @@ from rush.utils import (
     div,
     get_current_ist_time,
     mul,
+    get_updated_fee_amount_from_principal,
 )
 
 
@@ -84,6 +85,10 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_car
     for bill in unpaid_bills:
         # TODO get tenure from loan table.
         interest_on_principal = mul(bill.principal, div(div(bill.rc_rate_of_interest_annual, 12), 100))
+        # Adjust for rounding because total due amount has to be rounded
+        interest_on_principal = get_updated_fee_amount_from_principal(
+            bill.principal, interest_on_principal
+        )
         accrue_interest_event(session, bill, accrue_event, interest_on_principal)
         accrue_event.amount += interest_on_principal
 

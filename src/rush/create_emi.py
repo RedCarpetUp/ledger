@@ -213,31 +213,23 @@ def adjust_interest_in_emis(session: Session, user_id: int, post_date: DateTime)
         .first()
     )
     user_card = session.query(UserCard).filter(UserCard.user_id == user_id).first()
-    emi = (
+    emis_for_this_bill = (
         session.query(CardEmis)
-        .filter(CardEmis.card_id == user_card.id, CardEmis.due_date <= post_date)
-        .order_by(CardEmis.due_date.desc())
-        .first()
+        .filter(CardEmis.card_id == user_card.id, CardEmis.due_date >= post_date)
+        .order_by(CardEmis.due_date.asc())
     )
-    if not emi:
-        emi = session.query(CardEmis).order_by(CardEmis.due_date.asc()).first()
-    emi_dict = emi.as_dict()
+    emis_dict = [u.__dict__ for u in emis_for_this_bill.all()]
     _, interest_due = get_account_balance_from_str(
         session=session, book_string=f"{latest_bill.id}/bill/interest_receivable/a"
     )
     if interest_due > 0:
-        # Adjust for rounding because total due amount has to be rounded
-        rounded_total_due = (emi_dict["total_due_amount"] + interest_due).quantize(
-            Decimal("1."), rounding=ROUND_UP
-        )
-        diff = rounded_total_due - (emi_dict["total_due_amount"] + interest_due)
-        emi_dict["total_closing_balance_post_due_date"] += interest_due
-        interest_due += diff
-        emi_dict["total_due_amount"] = rounded_total_due
-        emi_dict["interest_current_month"] = div(mul(interest_due, (30 - emi_dict["due_date"].day)), 30)
-        emi_dict["interest_next_month"] = interest_due - emi_dict["interest_current_month"]
-        emi_dict["interest"] = emi_dict["interest_current_month"] + emi_dict["interest_next_month"]
-        session.bulk_update_mappings(CardEmis, [emi_dict])
+        for emi in emis_dict:
+            emi["total_closing_balance_post_due_date"] += interest_due
+            emi["total_due_amount"] += interest_due
+            emi["interest_current_month"] += div(mul(interest_due, (30 - emi["due_date"].day)), 30)
+            emi["interest_next_month"] += interest_due - emi["interest_current_month"]
+            emi["interest"] += emi["interest_current_month"] + emi["interest_next_month"]
+        session.bulk_update_mappings(CardEmis, emis_dict)
 
 
 def adjust_late_fee_in_emis(session: Session, user_id: int, post_date: DateTime) -> None:

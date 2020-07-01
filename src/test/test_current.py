@@ -157,7 +157,7 @@ def test_generate_bill_1(session: Session) -> None:
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_id}/bill/interest_receivable/a"
     )
-    assert interest_due == 30
+    assert interest_due == Decimal("30.67")
 
 
 def _partial_payment_bill_1(session: Session) -> None:
@@ -178,7 +178,7 @@ def _partial_payment_bill_1(session: Session) -> None:
     _, principal_due = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/principal_receivable/a"
     )
-    assert principal_due == 930
+    assert principal_due == Decimal("930.67")
 
     min_due = bill.get_minimum_amount_to_pay(session)
     assert min_due == Decimal("13.33")
@@ -250,7 +250,7 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
         session, book_string=f"{bill.id}/bill/principal_receivable/a"
     )
     # payment got late and 100 rupees got settled in late fine.
-    assert principal_due == Decimal("916.67")
+    assert principal_due == Decimal("917.34")
 
 
 def test_accrue_interest_bill_1(session: Session) -> None:
@@ -291,7 +291,7 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
         session, book_string=f"{bill.id}/bill/principal_receivable/a"
     )
     # payment got late and 100 rupees got settled in late fine.
-    assert principal_due == Decimal("816.67")
+    assert principal_due == Decimal("817.34")
 
 
 def test_is_bill_paid_bill_1(session: Session) -> None:
@@ -312,8 +312,8 @@ def test_is_bill_paid_bill_1(session: Session) -> None:
     is_it_paid = is_bill_closed(session, bill)
     assert is_it_paid is False
 
-    # Need to pay 916.67 more to close the bill.
-    remaining_principal = Decimal("916.67")
+    # Need to pay 917.34 more to close the bill.
+    remaining_principal = Decimal("917.34")
     payment_received(
         session=session,
         user_card=user_card,
@@ -367,7 +367,7 @@ def _generate_bill_2(session: Session) -> None:
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_2.id}/bill/interest_receivable/a"
     )
-    assert interest_due == 60
+    assert interest_due == Decimal("60.33")
 
     first_bill = unpaid_bills[0]
     first_bill_min_due = first_bill.get_minimum_amount_to_pay(session)
@@ -376,7 +376,7 @@ def _generate_bill_2(session: Session) -> None:
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{first_bill.id}/bill/interest_receivable/a"
     )
-    assert interest_due == 30
+    assert interest_due == Decimal("30.67")
 
 
 def _run_anomaly_bill_1(session: Session) -> None:
@@ -871,7 +871,7 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
     #  Pay 500 rupees
     user_card = session.query(UserCard).filter(UserCard.user_id == 99).one()
     payment_date = parse_date("2020-06-14 19:23:11")
-    amount = Decimal("2916.67")
+    amount = Decimal("3008.34")
     unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
     payment_received(
         session=session, user_card=user_card, payment_amount=amount, payment_date=payment_date,
@@ -883,12 +883,12 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
     _, interest_earned = get_account_balance_from_str(
         session, book_string=f"{first_bill.id}/bill/interest_earned/r"
     )
-    assert interest_earned == 30  # 30 Interest got removed from first bill.
+    assert interest_earned == Decimal("61.34")  # 30 Interest got removed from first bill.
 
     _, interest_earned = get_account_balance_from_str(
         session, book_string=f"{second_bill.id}/bill/interest_earned/r"
     )
-    assert interest_earned == 0
+    assert interest_earned == Decimal("60.33")
 
     assert is_bill_closed(session, first_bill) is True
     assert is_bill_closed(session, second_bill) is True  # 90 got settled in new bill.
@@ -917,11 +917,11 @@ def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
     _, interest_earned = get_account_balance_from_str(
         session, book_string=f"{first_bill.id}/bill/interest_earned/r"
     )
-    assert interest_earned == 60  # 30 Interest did not get removed.
+    assert interest_earned == Decimal("61.34")  # 30 Interest did not get removed.
 
     _, interest_earned = get_account_balance_from_str(
         session, book_string=f"{second_bill.id}/bill/interest_earned/r"
     )
-    assert interest_earned == 60
+    assert interest_earned == Decimal("60.33")
     assert is_bill_closed(session, first_bill) is True
     assert is_bill_closed(session, second_bill) is False
