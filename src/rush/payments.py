@@ -7,6 +7,7 @@ from rush.anomaly_detection import run_anomaly
 from rush.ledger_events import (
     payment_received_event,
     refund_event,
+    writeoff_event,
 )
 from rush.ledger_utils import (
     get_account_balance_from_str,
@@ -25,12 +26,19 @@ from rush.views import user_view
 def payment_received(
     session: Session, user_card: UserCard, payment_amount: Decimal, payment_date: DateTime
 ) -> None:
+
+    _, writeoff_amount = get_account_balance_from_str(
+        session, book_string=f"{user_card.id}/card/writeoff_expenses/e"
+    )
     lt = LedgerTriggerEvent(
         name="payment_received", card_id=user_card.id, amount=payment_amount, post_date=payment_date
     )
     session.add(lt)
     session.flush()
-    payment_received_event(session, user_card, lt)
+    if writeoff_amount > 0:
+        payment_received_event(session, user_card, "recovery", lt)
+    else:
+        payment_received_event(session, user_card, "payment", lt)
     run_anomaly(session, user_card, payment_date)
 
 
@@ -50,3 +58,23 @@ def refund_payment(session, user_id: int, bill_id: int) -> bool:
     current_bill = session.query(LoanData).filter(LoanData.id == bill_id).one()
     refund_event(session, current_bill, user_card, lt)
     return True
+
+
+def writeoff_payment(session: Session, user_id: int) -> bool:
+
+    unpaid_bills = get_all_unpaid_bills(session, user_id)
+
+    if len(unpaid_bills) >= 3:
+        usercard = session.query(UserCard).filter(UserCard.user_id == user_id).one()
+        _, balance = get_account_balance_from_str(
+            session, book_string=f"{usercard.id}/card/lender_payable/l"
+        )
+        lt = LedgerTriggerEvent(
+            name="writeoff_payment", amount=balance, post_date=get_current_ist_time()
+        )
+        session.add(lt)
+        session.flush()
+        writeoff_event(session, usercard, lt)
+        return True
+    else:
+        return False

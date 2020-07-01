@@ -142,7 +142,9 @@ def add_min_amount_event(
     )
 
 
-def payment_received_event(session: Session, user_card: UserCard, event: LedgerTriggerEvent) -> None:
+def payment_received_event(
+    session: Session, user_card: UserCard, type: str, event: LedgerTriggerEvent
+) -> None:
     payment_received = Decimal(event.amount)
     unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
 
@@ -157,15 +159,35 @@ def payment_received_event(session: Session, user_card: UserCard, event: LedgerT
         _adjust_for_prepayment(
             session, user_card.id, event.id, payment_received, debit_book_str="62311/lender/pg_account/a"
         )
-
-    # Lender has received money, so we reduce our liability now.
-    create_ledger_entry_from_str(
-        session,
-        event_id=event.id,
-        debit_book_str=f"{user_card.id}/card/lender_payable/l",
-        credit_book_str=f"{user_card.id}/card/pg_account/a",
-        amount=Decimal(event.amount),
-    )
+    if type == "recovery":
+        # Lender has received money, so we reduce our expenses.
+        create_ledger_entry_from_str(
+            session,
+            event_id=event.id,
+            debit_book_str=f"{user_card.id}/redcarpet/bad_debt_allowance/a",
+            credit_book_str=f"{user_card.id}/card/pg_account/a",
+            amount=Decimal(event.amount),
+        )
+        create_ledger_entry_from_str(
+            session,
+            event_id=event.id,
+            debit_book_str=f"{user_card.id}/redcarpet/redcarpet_account/a",
+            credit_book_str=f"{user_card.id}/card/writeoff_expenses/e",
+            amount=Decimal(event.amount),
+        )
+    elif type == "payment":
+        _, balance = get_account_balance_from_str(
+            session, book_string=f"{user_card.id}/card/lender_payable/l"
+        )
+        amount = min(balance, event.amount)
+        # Lender has received money, so we reduce our liability now.
+        create_ledger_entry_from_str(
+            session,
+            event_id=event.id,
+            debit_book_str=f"{user_card.id}/card/lender_payable/l",
+            credit_book_str=f"{user_card.id}/card/pg_account/a",
+            amount=Decimal(amount),
+        )
 
 
 def _adjust_bill(
@@ -485,3 +507,20 @@ def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> 
                 credit_book_str=f"{card.id}/card/lender_payable/l",
                 amount=total_amount,
             )
+
+
+def writeoff_event(session: Session, user_card: UserCard, event: LedgerTriggerEvent) -> None:
+    create_ledger_entry_from_str(
+        session,
+        event_id=event.id,
+        debit_book_str=f"{user_card.id}/card/lender_payable/l",
+        credit_book_str=f"{user_card.id}/redcarpet/bad_debt_allowance/a",
+        amount=event.amount,
+    )
+    create_ledger_entry_from_str(
+        session,
+        event_id=event.id,
+        debit_book_str=f"{user_card.id}/card/writeoff_expenses/e",
+        credit_book_str=f"{user_card.id}/redcarpet/redcarpet_account/a",
+        amount=event.amount,
+    )
