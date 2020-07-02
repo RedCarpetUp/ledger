@@ -239,3 +239,14 @@ class CardEmis(AuditMixin):
             for c in self.__table__.columns
         }
         return emi_dict
+
+
+class EmiPaymentMapping(AuditMixin):
+    __tablename__ = "emi_payment_mapping"
+    card_id = Column(Integer, ForeignKey(UserCard.id), nullable=False)
+    emi_number = Column(Integer, nullable=False)
+    payment_date = Column(TIMESTAMP, nullable=False)
+    payment_request_id = Column(String(), nullable=False)
+    interest_received = Column(Numeric, nullable=True, default=Decimal(0))
+    late_fee_received = Column(Numeric, nullable=True, default=Decimal(0))
+    principal_received = Column(Numeric, nullable=True, default=Decimal(0))

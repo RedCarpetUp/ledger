@@ -14,6 +14,7 @@ from rush.models import (
     LoanData,
     UserCard,
     LedgerTriggerEvent,
+    EmiPaymentMapping,
 )
 from rush.utils import (
     div,
@@ -111,6 +112,145 @@ def add_emi_on_new_bill(
 
 
 def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerEvent = None) -> None:
+    def slide_payments_repeated_logic(
+        emis_dict,
+        payment_received_and_adjusted,
+        payment_request_id,
+        last_payment_date,
+        last_paid_emi_number,
+        all_paid=False,
+    ) -> None:
+        for emi in emis_dict:
+            if emi["emi_number"] <= last_paid_emi_number:
+                continue
+            if last_payment_date:
+                emi["last_payment_date"] = last_payment_date
+            if all_paid:
+                emi["payment_received"] = emi["late_fee_received"] = emi["interest_received"] = emi[
+                    "due_amount"
+                ] = emi["total_due_amount"] = emi["total_closing_balance"] = emi[
+                    "total_closing_balance_post_due_date"
+                ] = emi[
+                    "interest_current_month"
+                ] = emi[
+                    "interest_next_month"
+                ] = emi[
+                    "interest"
+                ] = Decimal(
+                    0
+                )
+                emi["payment_status"] = "Paid"
+                last_paid_emi_number = emi["emi_number"]
+                continue
+            if payment_received_and_adjusted:
+                current_date = get_current_ist_time().date()
+                actual_closing_balance = emi["total_closing_balance_post_due_date"]
+                if current_date <= emi["due_date"]:
+                    actual_closing_balance = emi["total_closing_balance"]
+                if payment_received_and_adjusted >= actual_closing_balance:
+                    all_paid = True
+                    emi["late_fee_received"] = emi["late_fee"]
+                    emi["interest_received"] = emi["interest"]
+                    emi["payment_received"] = payment_received_and_adjusted - (
+                        emi["late_fee"] + emi["interest"]
+                    )
+                    emi["total_closing_balance"] = 0
+                    emi["total_closing_balance_post_due_date"] = 0
+                    last_paid_emi_number = emi["emi_number"]
+                    emi["payment_status"] = "Paid"
+                    # Create payment mapping
+                    create_emi_payment_mapping(
+                        session,
+                        user_card,
+                        emi["emi_number"],
+                        last_payment_date,
+                        payment_request_id,
+                        emi["interest_received"],
+                        emi["late_fee_received"],
+                        emi["payment_received"],
+                    )
+                    continue
+                diff = emi["total_due_amount"] - payment_received_and_adjusted
+                # -99 dpd if you can't figure out
+                emi["dpd"] = -99 if diff == 0 else (current_date - emi["due_date"]).days
+                if diff >= 0:
+                    if diff == 0:
+                        last_paid_emi_number = emi["emi_number"]
+                        emi["payment_status"] = "Paid"
+                    if payment_received_and_adjusted <= emi["late_fee"]:
+                        emi["late_fee_received"] = payment_received_and_adjusted
+                        emi["total_closing_balance"] -= payment_received_and_adjusted
+                        emi["total_closing_balance_post_due_date"] -= payment_received_and_adjusted
+                        # Create payment mapping
+                        create_emi_payment_mapping(
+                            session,
+                            user_card,
+                            emi["emi_number"],
+                            last_payment_date,
+                            payment_request_id,
+                            emi["interest_received"],
+                            emi["late_fee_received"],
+                            emi["payment_received"],
+                        )
+                        break
+                    else:
+                        emi["late_fee_received"] = emi["late_fee"]
+                        payment_received_and_adjusted -= emi["late_fee"]
+                        if payment_received_and_adjusted <= emi["interest"]:
+                            emi["interest_received"] = payment_received_and_adjusted
+                            emi["total_closing_balance"] -= payment_received_and_adjusted
+                            emi["total_closing_balance_post_due_date"] -= payment_received_and_adjusted
+                            # Create payment mapping
+                            create_emi_payment_mapping(
+                                session,
+                                user_card,
+                                emi["emi_number"],
+                                last_payment_date,
+                                payment_request_id,
+                                emi["interest_received"],
+                                emi["late_fee_received"],
+                                emi["payment_received"],
+                            )
+                            break
+                        else:
+                            emi["interest_received"] = emi["interest"]
+                            payment_received_and_adjusted -= emi["interest"]
+                            if payment_received_and_adjusted <= emi["due_amount"]:
+                                emi["payment_received"] = payment_received_and_adjusted
+                                emi["total_closing_balance"] -= payment_received_and_adjusted
+                                emi[
+                                    "total_closing_balance_post_due_date"
+                                ] -= payment_received_and_adjusted
+                                # Create payment mapping
+                                create_emi_payment_mapping(
+                                    session,
+                                    user_card,
+                                    emi["emi_number"],
+                                    last_payment_date,
+                                    payment_request_id,
+                                    emi["interest_received"],
+                                    emi["late_fee_received"],
+                                    emi["payment_received"],
+                                )
+                                break
+                emi["late_fee_received"] = emi["late_fee"]
+                emi["interest_received"] = emi["interest"]
+                emi["payment_received"] = emi["due_amount"]
+                emi["payment_status"] = "Paid"
+                last_paid_emi_number = emi["emi_number"]
+                # Create payment mapping
+                create_emi_payment_mapping(
+                    session,
+                    user_card,
+                    emi["emi_number"],
+                    last_payment_date,
+                    payment_request_id,
+                    emi["interest_received"],
+                    emi["late_fee_received"],
+                    emi["payment_received"],
+                )
+                payment_received_and_adjusted = abs(diff)
+
     user_card = session.query(UserCard).filter(UserCard.user_id == user_id).first()
     all_emis_query = (
         session.query(CardEmis)
@@ -121,7 +261,7 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
     # To run test, remove later
     # first_emi = emis_dict[0]
     # return first_emi
-    payment_received_and_adjusted = Decimal(0)
+    payment_request_id = None
     last_paid_emi_number = 0
     last_payment_date = None
     all_paid = False
@@ -129,84 +269,32 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
     if not payment_event:
         for event in events:
             if event.name == "payment_received":
+                payment_received_and_adjusted = Decimal(0)
                 payment_received_and_adjusted += event.amount
+                payment_request_id = event.extra_details.get("payment_request_id")
                 last_payment_date = event.post_date
-    else:
-        payment_received_and_adjusted += payment_event.amount
-        last_payment_date = payment_event.post_date
-    for emi in emis_dict:
-        if emi["emi_number"] <= last_paid_emi_number:
-            continue
-        if last_payment_date:
-            emi["last_payment_date"] = last_payment_date
-        if all_paid:
-            emi["payment_received"] = emi["late_fee_received"] = emi["interest_received"] = emi[
-                "due_amount"
-            ] = emi["total_due_amount"] = emi["total_closing_balance"] = emi[
-                "total_closing_balance_post_due_date"
-            ] = emi[
-                "interest_current_month"
-            ] = emi[
-                "interest_next_month"
-            ] = emi[
-                "interest"
-            ] = Decimal(
-                0
-            )
-            emi["payment_status"] = "Paid"
-            last_paid_emi_number = emi["emi_number"]
-            continue
-        if payment_received_and_adjusted:
-            current_date = get_current_ist_time().date()
-            actual_closing_balance = emi["total_closing_balance_post_due_date"]
-            if current_date <= emi["due_date"]:
-                actual_closing_balance = emi["total_closing_balance"]
-            if payment_received_and_adjusted >= actual_closing_balance:
-                all_paid = True
-                emi["late_fee_received"] = emi["late_fee"]
-                emi["interest_received"] = emi["interest"]
-                emi["payment_received"] = payment_received_and_adjusted - (
-                    emi["late_fee"] + emi["interest"]
+                slide_payments_repeated_logic(
+                    emis_dict,
+                    payment_received_and_adjusted,
+                    payment_request_id,
+                    last_payment_date,
+                    last_paid_emi_number,
+                    all_paid=all_paid,
                 )
-                emi["total_closing_balance"] = 0
-                emi["total_closing_balance_post_due_date"] = 0
-                last_paid_emi_number = emi["emi_number"]
-                emi["payment_status"] = "Paid"
-                continue
-            diff = emi["total_due_amount"] - payment_received_and_adjusted
-            # -99 dpd if you can't figure out
-            emi["dpd"] = -99 if diff == 0 else (current_date - emi["due_date"]).days
-            if diff >= 0:
-                if diff == 0:
-                    last_paid_emi_number = emi["emi_number"]
-                    emi["payment_status"] = "Paid"
-                if payment_received_and_adjusted <= emi["late_fee"]:
-                    emi["late_fee_received"] = payment_received_and_adjusted
-                    emi["total_closing_balance"] -= payment_received_and_adjusted
-                    emi["total_closing_balance_post_due_date"] -= payment_received_and_adjusted
-                    break
-                else:
-                    emi["late_fee_received"] = emi["late_fee"]
-                    payment_received_and_adjusted -= emi["late_fee"]
-                    if payment_received_and_adjusted <= emi["interest"]:
-                        emi["interest_received"] = payment_received_and_adjusted
-                        emi["total_closing_balance"] -= payment_received_and_adjusted
-                        emi["total_closing_balance_post_due_date"] -= payment_received_and_adjusted
-                        break
-                    else:
-                        emi["interest_received"] = emi["interest"]
-                        payment_received_and_adjusted -= emi["interest"]
-                        if payment_received_and_adjusted <= emi["due_amount"]:
-                            emi["payment_received"] = payment_received_and_adjusted
-                            emi["total_closing_balance"] -= payment_received_and_adjusted
-                            emi["total_closing_balance_post_due_date"] -= payment_received_and_adjusted
-                            break
-            emi["late_fee_received"] = emi["late_fee"]
-            emi["interest_received"] = emi["interest"]
-            emi["payment_received"] = emi["due_amount"]
-            emi["payment_status"] = "Paid"
-            last_paid_emi_number = emi["emi_number"]
-            payment_received_and_adjusted = abs(diff)
+    else:
+        payment_received_and_adjusted = Decimal(0)
+        payment_received_and_adjusted += payment_event.amount
+        payment_request_id = payment_event.extra_details.get("payment_request_id")
+        last_payment_date = payment_event.post_date
+        slide_payments_repeated_logic(
+            emis_dict,
+            payment_received_and_adjusted,
+            payment_request_id,
+            last_payment_date,
+            last_paid_emi_number,
+            all_paid=all_paid,
+        )
+
     session.bulk_update_mappings(CardEmis, emis_dict)
 
 
@@ -262,3 +350,27 @@ def adjust_late_fee_in_emis(session: Session, user_id: int, post_date: DateTime)
         emi_dict["total_due_amount"] += late_fee
         emi_dict["late_fee"] += late_fee
         session.bulk_update_mappings(CardEmis, [emi_dict])
+
+
+def create_emi_payment_mapping(
+    session: Session,
+    user_card: UserCard,
+    emi_number: int,
+    payment_date: DateTime,
+    payment_request_id: str,
+    interest_received: Decimal,
+    late_fee_received: Decimal,
+    principal_received: Decimal,
+) -> None:
+    new_payment_mapping = EmiPaymentMapping(
+        card_id=user_card.id,
+        emi_number=emi_number,
+        payment_date=payment_date,
+        payment_request_id=payment_request_id,
+        interest_received=interest_received,
+        late_fee_received=late_fee_received,
+        principal_received=principal_received,
+    )
+    session.add(new_payment_mapping)
+    session.flush()
+    return new_payment_mapping
