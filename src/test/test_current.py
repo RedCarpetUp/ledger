@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from rush.accrue_financial_charges import accrue_late_charges
 from rush.anomaly_detection import run_anomaly
+from rush.card import create_user_card
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
 from rush.create_emi import (
@@ -93,9 +94,9 @@ def test_m2p_transfer(session: Session) -> None:
 
 
 def test_card_swipe(session: Session) -> None:
-    uc = UserCard(user_id=2, card_activation_date=parse_date("2020-05-01"))
-    session.add(uc)
-    session.flush()
+    uc = create_user_card(
+        session=session, user_id=2, card_activation_date=parse_date("2020-05-01"), card_type="ruby"
+    )
     user_card_id = uc.id
 
     swipe1 = create_card_swipe(
@@ -131,9 +132,9 @@ def test_generate_bill_1(session: Session) -> None:
     session.flush()
 
     # assign card
-    uc = UserCard(user_id=a.id, card_activation_date=parse_date("2020-04-02"))
-    session.add(uc)
-    session.flush()
+    uc = create_user_card(
+        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+    )
 
     user_card_id = uc.id
 
@@ -511,11 +512,12 @@ def test_generate_bill_2(session: Session) -> None:
 def test_generate_bill_3(session: Session) -> None:
     a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(a)
+    session.flush()
 
     # assign card
-    uc = UserCard(user_id=a.id, card_activation_date=parse_date("2020-04-02"))
-    session.flush()
-    session.add(uc)
+    uc = create_user_card(
+        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+    )
 
     create_card_swipe(
         session=session,
@@ -545,11 +547,12 @@ def test_generate_bill_3(session: Session) -> None:
 def test_emi_creation(session: Session) -> None:
     a = User(id=108, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(a)
+    session.flush()
 
     # assign card
-    uc = UserCard(user_id=a.id, card_activation_date=parse_date("2020-04-02"))
-    session.flush()
-    session.add(uc)
+    uc = create_user_card(
+        session=session, card_type="ruby", user_id=a.id, card_activation_date=parse_date("2020-04-02")
+    )
 
     create_card_swipe(
         session=session,
@@ -576,11 +579,12 @@ def test_emi_creation(session: Session) -> None:
 def test_subsequent_emi_creation(session: Session) -> None:
     a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(a)
+    session.flush()
 
     # assign card
-    uc = UserCard(user_id=a.id, card_activation_date=parse_date("2020-04-02"))
-    session.flush()
-    session.add(uc)
+    uc = create_user_card(
+        session=session, card_type="ruby", user_id=a.id, card_activation_date=parse_date("2020-04-02")
+    )
 
     create_card_swipe(
         session=session,
@@ -624,11 +628,12 @@ def test_subsequent_emi_creation(session: Session) -> None:
 def test_refresh_schedule(session: Session) -> None:
     a = User(id=2005, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(a)
+    session.flush()
 
     # assign card
-    uc = UserCard(user_id=a.id, card_activation_date=parse_date("2020-04-02"))
-    session.flush()
-    session.add(uc)
+    uc = create_user_card(
+        session=session, card_type="ruby", user_id=a.id, card_activation_date=parse_date("2020-04-02")
+    )
 
     create_card_swipe(
         session=session,
@@ -648,9 +653,12 @@ def test_refresh_schedule(session: Session) -> None:
 def test_schedule_for_interest_and_payment(session: Session) -> None:
     a = User(id=1991, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(a)
+    session.flush()
 
     # assign card
-    uc = UserCard(user_id=a.id, card_activation_date=parse_date("2020-05-01"))
+    uc = create_user_card(
+        session=session, card_type="ruby", user_id=a.id, card_activation_date=parse_date("2020-05-01")
+    )
     session.flush()
     session.add(uc)
 
@@ -713,10 +721,13 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         email="upsigh921067@gmail.com",
     )
     session.add(a)
+    session.flush()
 
     # assign card
     # 25 days to enforce 15th june as first due date
-    uc = UserCard(
+    uc = create_user_card(
+        session=session,
+        card_type="ruby",
         user_id=a.id,
         card_activation_date=parse_date("2020-05-20 00:00:00"),
         interest_free_period_in_days=25,
