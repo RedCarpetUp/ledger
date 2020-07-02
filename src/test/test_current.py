@@ -991,7 +991,8 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
     _, interest_earned = get_account_balance_from_str(
         session, book_string=f"{first_bill.id}/bill/interest_earned/r"
     )
-    assert interest_earned == Decimal("61.34")  # 30 Interest got removed from first bill.
+    # 30 Interest got removed from first bill.
+    assert interest_earned == Decimal("61.34")
 
     _, interest_earned = get_account_balance_from_str(
         session, book_string=f"{second_bill.id}/bill/interest_earned/r"
@@ -1026,7 +1027,8 @@ def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
     _, interest_earned = get_account_balance_from_str(
         session, book_string=f"{first_bill.id}/bill/interest_earned/r"
     )
-    assert interest_earned == Decimal("61.34")  # 30 Interest did not get removed.
+    # 30 Interest did not get removed.
+    assert interest_earned == Decimal("61.34")
 
     _, interest_earned = get_account_balance_from_str(
         session, book_string=f"{second_bill.id}/bill/interest_earned/r"
@@ -1101,8 +1103,14 @@ def test_lender_incur(session: Session) -> None:
     test_refund_1(session)
     status = lender_interest_incur(session)
     uc = session.query(UserCard).filter(UserCard.user_id == 99).one()
-    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
-    assert amount == Decimal("2054.74")  # on date 2020-06-28
+    _, amount = get_account_balance_from_str(
+        session, book_string=f"{uc.id}/card/lender_payable_interest/l"
+    )
+    assert amount == Decimal("54.74")  # on date 2020-06-28
+    _, amount = get_account_balance_from_str(
+        session, book_string=f"{uc.id}/redcarpet/redcarpet_expenses/e"
+    )
+    assert amount == Decimal("54.74")  # on date 2020-06-28
 
 
 def test_prepayment(session: Session) -> None:
