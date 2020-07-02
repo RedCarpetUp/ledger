@@ -145,14 +145,18 @@ def add_min_amount_event(
 def payment_received_event(
     session: Session, user_card: UserCard, type: str, event: LedgerTriggerEvent
 ) -> None:
+
+    debit_book_str = "lender/pg_account/a"
+    if type == "recovery":
+        debit_book_str = f"{user_card.id}/card/bad_debt_allowance/ca"
     payment_received = Decimal(event.amount)
     unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
 
     payment_received = _adjust_for_min(
-        session, unpaid_bills, payment_received, event.id, debit_book_str="lender/pg_account/a"
+        session, unpaid_bills, payment_received, event.id, type, debit_book_str=debit_book_str
     )
     payment_received = _adjust_for_complete_bill(
-        session, unpaid_bills, payment_received, event.id, debit_book_str="lender/pg_account/a"
+        session, unpaid_bills, payment_received, event.id, type, debit_book_str=debit_book_str
     )
 
     if payment_received > 0:
@@ -161,13 +165,6 @@ def payment_received_event(
         )
     if type == "recovery":
         # Lender has received money, so we reduce our expenses.
-        create_ledger_entry_from_str(
-            session,
-            event_id=event.id,
-            debit_book_str=f"{user_card.id}/card/bad_debt_allowance/ca",
-            credit_book_str=f"{user_card.id}/card/pg_account/a",
-            amount=Decimal(event.amount),
-        )
         create_ledger_entry_from_str(
             session,
             event_id=event.id,
@@ -233,6 +230,7 @@ def _adjust_for_min(
     bills: List[LoanData],
     payment_received: Decimal,
     event_id: int,
+    type: str,
     debit_book_str: str,
 ) -> Decimal:
     for bill in bills:
@@ -249,12 +247,11 @@ def _adjust_for_min(
             credit_book_str=f"{bill.id}/bill/min/a",
             amount=amount_to_adjust_in_this_bill,
         )
+        debit_acc = debit_book_str
+        if type == "payment":
+            debit_acc = f"{bill.lender_id}/" + debit_book_str
         remaining_amount = _adjust_bill(
-            session,
-            bill,
-            amount_to_adjust_in_this_bill,
-            event_id,
-            debit_acc_str=f"{bill.lender_id}/" + debit_book_str,
+            session, bill, amount_to_adjust_in_this_bill, event_id, debit_acc_str=debit_acc,
         )
         assert remaining_amount == 0  # Can't be more than 0
     return payment_received  # The remaining amount goes back to the main func.
@@ -265,15 +262,15 @@ def _adjust_for_complete_bill(
     bills: List[LoanData],
     payment_received: Decimal,
     event_id: int,
+    type: str,
     debit_book_str: str,
 ) -> Decimal:
     for bill in bills:
+        debit_acc = debit_book_str
+        if type == "payment":
+            debit_acc = f"{bill.lender_id}/" + debit_book_str
         payment_received = _adjust_bill(
-            session,
-            bill,
-            payment_received,
-            event_id,
-            debit_acc_str=f"{bill.lender_id}/" + debit_book_str,
+            session, bill, payment_received, event_id, debit_acc_str=debit_acc,
         )
     return payment_received  # The remaining amount goes back to the main func.
 
@@ -341,7 +338,7 @@ def refund_event(
         bills = []
         _, min_balance = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/min/a")
         _adjust_for_min(
-            session, bills, min_balance, event.id, debit_book_str=f"lender/merchant_refund/a"
+            session, bills, min_balance, event.id, "payment", debit_book_str=f"lender/merchant_refund/a"
         )
         _, interest_balance = get_account_balance_from_str(
             session, book_string=f"{bill.id}/bill/interest_receivable/a"
@@ -352,7 +349,7 @@ def refund_event(
         amount = event.amount + interest_balance + late_fine
         bills.append(bill)
         amount = _adjust_for_min(
-            session, bills, amount, event.id, debit_book_str=f"lender/merchant_refund/a"
+            session, bills, amount, event.id, "payment", debit_book_str=f"lender/merchant_refund/a"
         )
         _adjust_for_prepayment(
             session,
