@@ -191,7 +191,9 @@ def _partial_payment_bill_1(session: Session) -> None:
     )
     assert principal_due == Decimal("930.67")
 
-    _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+    _, lender_amount = get_account_balance_from_str(
+        session, book_string=f"{bill.lender_id}/lender/pg_account/a"
+    )
     min_due = bill.get_minimum_amount_to_pay(session)
     assert min_due == Decimal("13.33")
 
@@ -1097,13 +1099,15 @@ def test_refund_1(session: Session) -> None:
     assert min_balance == Decimal("226.66")  # min before refund
     status = refund_payment(session, 99, unpaid_bills[0].id)
     assert status == True
-    _, amount = get_account_balance_from_str(session, book_string=f"62311/lender/merchant_refund/a")
+    _, amount = get_account_balance_from_str(
+        session, book_string=f"{unpaid_bills[0].lender_id}/lender/merchant_refund/a"
+    )
     assert amount == Decimal("0")
     _, principal_amount = get_account_balance_from_str(
         session, book_string=f"{unpaid_bills[0].id}/bill/principal_receivable/a"
     )
     # refund of 1000 did not cover the whole interest and principal
-    assert principal_amount == Decimal("61.34")
+    assert principal_amount == Decimal("174.67")
     _, interest_amount = get_account_balance_from_str(
         session, book_string=f"{unpaid_bills[0].id}/bill/interest_receivable/a"
     )
@@ -1125,6 +1129,7 @@ def test_refund_1(session: Session) -> None:
         description="BigBasket.com",
     )
     bill_id = swipe.loan_id
+    lender_id = session.query(LoanData.lender_id).filter(LoanData.id == bill_id).limit(1).scalar()
     _, unbilled = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled == Decimal("900")
     status = refund_payment(session, 99, bill_id)

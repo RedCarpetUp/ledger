@@ -30,7 +30,7 @@ def payment_received(
     )
     session.add(lt)
     session.flush()
-    payment_received_event(session, user_card, lt)
+    payment_received_event(session, user_card, "lender/pg_account/a", lt)
     run_anomaly(session, user_card, payment_date)
 
 
