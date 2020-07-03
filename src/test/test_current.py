@@ -16,7 +16,7 @@ from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
 from rush.create_emi import (
     create_emis_for_card,
-    refresh_schedule,
+    slide_payments,
 )
 from rush.ledger_utils import (
     get_account_balance_from_str,
@@ -31,6 +31,7 @@ from rush.lender_funds import (
 from rush.models import (
     BookAccount,
     CardEmis,
+    EmiPaymentMapping,
     LedgerEntry,
     LedgerTriggerEvent,
     LoanData,
@@ -177,7 +178,11 @@ def _partial_payment_bill_1(session: Session) -> None:
     amount = Decimal(100)
     unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
     payment_received(
-        session=session, user_card=user_card, payment_amount=amount, payment_date=payment_date,
+        session=session,
+        user_card=user_card,
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id="a123",
     )
 
     bill = unpaid_bills[0]
@@ -202,7 +207,11 @@ def _partial_payment_bill_2(session: Session) -> None:
     amount = Decimal(2000)
     unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
     payment_received(
-        session=session, user_card=user_card, payment_amount=amount, payment_date=payment_date,
+        session=session,
+        user_card=user_card,
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id="a123",
     )
 
     bill = unpaid_bills[0]
@@ -220,7 +229,11 @@ def _min_payment_delayed_bill_1(session: Session) -> None:
     payment_date = parse_date("2020-05-03")
     amount = Decimal(130)
     bill = payment_received(
-        session=session, user_id=user.id, payment_amount=amount, payment_date=payment_date,
+        session=session,
+        user_id=user.id,
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id="a123",
     )
 
     _, principal_due = get_account_balance_from_str(
@@ -278,6 +291,7 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
         user_card=user_card,
         payment_amount=Decimal("113.33"),
         payment_date=parse_date("2020-05-20"),
+        payment_request_id="a123",
     )
     bill = unpaid_bills[0]
     # assert is_min_paid(session, bill) is True
@@ -319,6 +333,7 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
         user_card=user_card,
         payment_amount=Decimal("113.33"),
         payment_date=parse_date("2020-06-14"),  # Payment came before the due date.
+        payment_request_id="a123",
     )
     bill = unpaid_bills[0]
     # assert is_min_paid(session, bill) is True
@@ -364,6 +379,7 @@ def test_is_bill_paid_bill_1(session: Session) -> None:
         user_card=user_card,
         payment_amount=remaining_principal,
         payment_date=parse_date("2020-05-05"),
+        payment_request_id="a123",
     )
     is_it_paid_now = is_bill_closed(session, bill)
     assert is_it_paid_now is True
@@ -621,30 +637,6 @@ def test_subsequent_emi_creation(session: Session) -> None:
     assert last_emi.due_date.strftime("%Y-%m-%d") == "2021-05-25"
 
 
-def test_refresh_schedule(session: Session) -> None:
-    a = User(id=2005, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    session.add(a)
-
-    # assign card
-    uc = UserCard(user_id=a.id, card_activation_date=parse_date("2020-04-02"))
-    session.flush()
-    session.add(uc)
-
-    create_card_swipe(
-        session=session,
-        user_card=uc,
-        txn_time=parse_date("2020-04-08 19:23:11"),
-        amount=Decimal(6000),
-        description="BigBasket.com",
-    )
-
-    generate_date = parse_date("2020-05-01").date()
-    bill_april = bill_generate(session=session, user_card=uc)
-
-    # Update later
-    assert a.id == 2005
-
-
 def test_schedule_for_interest_and_payment(session: Session) -> None:
     a = User(id=1991, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(a)
@@ -686,11 +678,15 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     payment_date = parse_date("2020-06-30")
     amount = Decimal(6180)
     bill = payment_received(
-        session=session, user_card=uc, payment_amount=amount, payment_date=payment_date,
+        session=session,
+        user_card=uc,
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id="a123",
     )
 
     # Refresh Schedule
-    refresh_schedule(session, a.id)
+    # slide_payments(session, a.id)
 
     # Check if amount is adjusted correctly in schedule
     all_emis_query = (
@@ -911,11 +907,15 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     payment_date = parse_date("2020-06-18 06:55:00")
     amount = Decimal(324)
     bill = payment_received(
-        session=session, user_card=uc, payment_amount=amount, payment_date=payment_date,
+        session=session,
+        user_card=uc,
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id="a123",
     )
 
     # Refresh Schedule
-    refresh_schedule(session, a.id)
+    # slide_payments(session, a.id)
 
     # Check if amount is adjusted correctly in schedule
     all_emis_query = (
@@ -943,7 +943,11 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
     amount = Decimal("886.67")
     unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
     payment_received(
-        session=session, user_card=user_card, payment_amount=amount, payment_date=payment_date,
+        session=session,
+        user_card=user_card,
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id="a123",
     )
 
     bill = unpaid_bills[0]
@@ -980,7 +984,11 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
     amount = Decimal("3008.34")
     unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
     payment_received(
-        session=session, user_card=user_card, payment_amount=amount, payment_date=payment_date,
+        session=session,
+        user_card=user_card,
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id="a123",
     )
 
     first_bill = unpaid_bills[0]
@@ -1014,7 +1022,11 @@ def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
     amount = Decimal("2916.67")
     unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
     payment_received(
-        session=session, user_card=user_card, payment_amount=amount, payment_date=payment_date,
+        session=session,
+        user_card=user_card,
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id="a123",
     )
 
     first_bill = unpaid_bills[0]
@@ -1050,6 +1062,7 @@ def _pay_minimum_amount_bill_2(session: Session) -> None:
         user_card=user_card,
         payment_amount=Decimal(110),
         payment_date=parse_date("2020-06-20"),
+        payment_request_id="a123",
     )
     balance_paid = (
         session.query(LedgerTriggerEvent)
@@ -1111,7 +1124,11 @@ def test_prepayment(session: Session) -> None:
     payment_date = parse_date("2020-05-03")
     amount = Decimal(2000)
     payment_received(
-        session=session, user_card=uc, payment_amount=amount, payment_date=payment_date,
+        session=session,
+        user_card=uc,
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id="a123",
     )
 
     swipe = create_card_swipe(
@@ -1138,3 +1155,11 @@ def test_prepayment(session: Session) -> None:
         session, book_string=f"{bill_id}/bill/principal_receivable/a"
     )
     assert billed_amount == Decimal("30.67")
+
+    emi_payment_mapping = (
+        session.query(EmiPaymentMapping).filter(EmiPaymentMapping.card_id == user_card_id).all()
+    )
+    first_payment_mapping = emi_payment_mapping[0]
+    assert first_payment_mapping.emi_number == 1
+    assert first_payment_mapping.interest_received == Decimal("30.67")
+    assert first_payment_mapping.principal_received == Decimal("1969.33")
