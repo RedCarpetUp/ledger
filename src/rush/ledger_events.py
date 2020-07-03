@@ -179,6 +179,14 @@ def payment_received_event(
             credit_book_str=f"{user_card.id}/lender/pg_account/a",
             amount=Decimal(event.amount),
         )
+    else:
+        create_ledger_entry_from_str(
+            session,
+            event_id=event.id,
+            debit_book_str=f"{user_card.id}/card/lender_payable/l",
+            credit_book_str=f"{bills[0].lender_id}/lender/merchant_refund/a",
+            amount=Decimal(event.amount),
+        )
 
 
 def _adjust_bill(
@@ -326,6 +334,13 @@ def refund_event(
             event_id=event.id,
             debit_book_str=f"{bill.lender_id}/lender/merchant_refund/a",
             credit_book_str=f"{bill.id}/bill/unbilled/a",
+            amount=event.amount,
+        )
+        create_ledger_entry_from_str(
+            session,
+            event_id=event.id,
+            debit_book_str=f"{user_card.id}/card/lender_payable/l",
+            credit_book_str=f"{bill.lender_id}/lender/merchant_refund/a",
             amount=event.amount,
         )
     else:

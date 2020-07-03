@@ -1098,7 +1098,7 @@ def test_refund_1(session: Session) -> None:
     status = refund_payment(session, 99, unpaid_bills[0].id)
     assert status == True
     _, amount = get_account_balance_from_str(session, book_string=f"62311/lender/merchant_refund/a")
-    assert amount == Decimal("1000")
+    assert amount == Decimal("0")
     _, principal_amount = get_account_balance_from_str(
         session, book_string=f"{unpaid_bills[0].id}/bill/principal_receivable/a"
     )
@@ -1132,7 +1132,7 @@ def test_refund_1(session: Session) -> None:
     _, unbilled = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled == Decimal("0")
     _, amount = get_account_balance_from_str(session, book_string=f"62311/lender/merchant_refund/a")
-    assert amount == Decimal("1900")
+    assert amount == Decimal("0")
 
 
 def test_lender_incur(session: Session) -> None:
@@ -1140,7 +1140,7 @@ def test_lender_incur(session: Session) -> None:
     status = lender_interest_incur(session)
     uc = session.query(UserCard).filter(UserCard.user_id == 99).one()
     _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
-    assert amount == Decimal("2990.25")  # on date 2020-06-28
+    assert amount == Decimal("1061.20")  # on date 2020-06-28
 
 
 def test_prepayment(session: Session) -> None:
