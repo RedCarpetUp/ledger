@@ -18,10 +18,18 @@ from rush.utils import get_current_ist_time
 
 
 def payment_received(
-    session: Session, user_card: UserCard, payment_amount: Decimal, payment_date: DateTime
+    session: Session,
+    user_card: UserCard,
+    payment_amount: Decimal,
+    payment_date: DateTime,
+    payment_request_id: str,
 ) -> None:
     lt = LedgerTriggerEvent(
-        name="payment_received", card_id=user_card.id, amount=payment_amount, post_date=payment_date
+        name="payment_received",
+        card_id=user_card.id,
+        amount=payment_amount,
+        post_date=payment_date,
+        extra_details={"payment_request_id": payment_request_id},
     )
     session.add(lt)
     session.flush()

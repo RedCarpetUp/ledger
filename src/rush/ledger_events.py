@@ -156,6 +156,11 @@ def payment_received_event(session: Session, user_card: BaseCard, event: LedgerT
         amount=Decimal(event.amount),
     )
 
+    # Slide payment in emi
+    from rush.create_emi import slide_payments
+
+    slide_payments(session, user_card.user_id, payment_event=event)
+
 
 def _adjust_bill(
     session: Session,

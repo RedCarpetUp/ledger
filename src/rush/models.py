@@ -198,3 +198,14 @@ class CardEmis(AuditMixin):
     interest_received = Column(Numeric, nullable=False, default=Decimal(0))
     payment_received = Column(Numeric, nullable=False, default=Decimal(0))
     payment_status = Column(String(length=10), nullable=False, default="UnPaid")
+
+
+class EmiPaymentMapping(AuditMixin):
+    __tablename__ = "emi_payment_mapping"
+    card_id = Column(Integer, ForeignKey(UserCard.id), nullable=False)
+    emi_number = Column(Integer, nullable=False)
+    payment_date = Column(TIMESTAMP, nullable=False)
+    payment_request_id = Column(String(), nullable=False)
+    interest_received = Column(Numeric, nullable=True, default=Decimal(0))
+    late_fee_received = Column(Numeric, nullable=True, default=Decimal(0))
+    principal_received = Column(Numeric, nullable=True, default=Decimal(0))
