@@ -37,8 +37,7 @@ def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -
             return last_bill
         new_bill_date = last_valid_statement_date + timedelta(days=1)
     else:
-        print(user_card.card_activation_date)
-        new_bill_date = user_card.card_activation_date.date()
+        new_bill_date = user_card.card_activation_date
     new_bill = user_card.create_bill(
         new_bill_date=new_bill_date,
         lender_id=62311,
