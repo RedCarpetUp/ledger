@@ -8,10 +8,6 @@ from rush.ledger_events import (
     payment_received_event,
     refund_event,
 )
-from rush.ledger_utils import (
-    get_account_balance_from_str,
-    get_all_unpaid_bills,
-)
 from rush.models import (
     CardTransaction,
     LedgerTriggerEvent,
@@ -19,7 +15,6 @@ from rush.models import (
     UserCard,
 )
 from rush.utils import get_current_ist_time
-from rush.views import user_view
 
 
 def payment_received(

@@ -11,10 +11,10 @@ from rush.anomaly_detection import get_affected_events
 from rush.ledger_utils import get_account_balance_from_str
 from rush.models import (
     CardEmis,
+    EmiPaymentMapping,
+    LedgerTriggerEvent,
     LoanData,
     UserCard,
-    LedgerTriggerEvent,
-    EmiPaymentMapping,
 )
 from rush.utils import (
     div,
@@ -75,7 +75,7 @@ def add_emi_on_new_bill(
     )
     new_emi_list = []
     for emi in all_emis:
-        emi_dict = emi.as_dict()
+        emi_dict = emi.as_dict_for_json()
         # We consider 12 because the first insertion had 12 emis
         if emi_dict["emi_number"] <= new_end_emi_number - 12:
             new_emi_list.append(emi_dict)
@@ -341,7 +341,7 @@ def adjust_late_fee_in_emis(session: Session, user_id: int, post_date: DateTime)
     )
     if not emi:
         emi = session.query(CardEmis).order_by(CardEmis.due_date.asc()).first()
-    emi_dict = emi.as_dict()
+    emi_dict = emi.as_dict_for_json()
     _, late_fee = get_account_balance_from_str(
         session=session, book_string=f"{latest_bill.id}/bill/late_fine_receivable/a"
     )
