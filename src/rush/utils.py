@@ -1,4 +1,7 @@
-from decimal import Decimal, ROUND_UP
+from decimal import (
+    ROUND_UP,
+    Decimal,
+)
 
 import pendulum
 from pendulum import DateTime

@@ -142,30 +142,43 @@ def add_min_amount_event(
     )
 
 
-def payment_received_event(session: Session, user_card: UserCard, event: LedgerTriggerEvent) -> None:
+def payment_received_event(
+    session: Session,
+    user_card: UserCard,
+    event: LedgerTriggerEvent,
+    bills: LoanData = None,
+    type: str = None,
+) -> None:
     payment_received = Decimal(event.amount)
     unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
-
+    if bills:
+        unpaid_bills = bills
+    debit_book_str = "lender/pg_account/a"
+    if type == "refund":
+        debit_book_str = f"{bills[0].lender_id}/lender/merchant_refund/a"
     payment_received = _adjust_for_min(
-        session, unpaid_bills, payment_received, event.id, debit_book_str="lender/pg_account/a"
+        session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str, type=type
     )
     payment_received = _adjust_for_complete_bill(
-        session, unpaid_bills, payment_received, event.id, debit_book_str="lender/pg_account/a"
+        session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str, type=type
     )
 
     if payment_received > 0:
+        if type == None:
+            debit_book_str = f"{user_card.id}/" + debit_book_str
         _adjust_for_prepayment(
-            session, user_card.id, event.id, payment_received, debit_book_str="62311/lender/pg_account/a"
+            session, user_card.id, event.id, payment_received, debit_book_str=debit_book_str
         )
 
-    # Lender has received money, so we reduce our liability now.
-    create_ledger_entry_from_str(
-        session,
-        event_id=event.id,
-        debit_book_str=f"{user_card.id}/card/lender_payable/l",
-        credit_book_str=f"{user_card.id}/card/pg_account/a",
-        amount=Decimal(event.amount),
-    )
+    if type == "payment":
+        # Lender has received money, so we reduce our liability now.
+        create_ledger_entry_from_str(
+            session,
+            event_id=event.id,
+            debit_book_str=f"{user_card.id}/card/lender_payable/l",
+            credit_book_str=f"{user_card.id}/lender/pg_account/a",
+            amount=Decimal(event.amount),
+        )
 
 
 def _adjust_bill(
@@ -212,6 +225,7 @@ def _adjust_for_min(
     payment_received: Decimal,
     event_id: int,
     debit_book_str: str,
+    type: str,
 ) -> Decimal:
     for bill in bills:
         min_due = bill.get_minimum_amount_to_pay(session)
@@ -227,12 +241,11 @@ def _adjust_for_min(
             credit_book_str=f"{bill.id}/bill/min/a",
             amount=amount_to_adjust_in_this_bill,
         )
+        debit_acc = f"{bill.lender_id}/" + debit_book_str
+        if type == "refund":
+            debit_acc = debit_book_str
         remaining_amount = _adjust_bill(
-            session,
-            bill,
-            amount_to_adjust_in_this_bill,
-            event_id,
-            debit_acc_str=f"{bill.lender_id}/" + debit_book_str,
+            session, bill, amount_to_adjust_in_this_bill, event_id, debit_acc_str=debit_acc,
         )
         assert remaining_amount == 0  # Can't be more than 0
     return payment_received  # The remaining amount goes back to the main func.
@@ -244,14 +257,14 @@ def _adjust_for_complete_bill(
     payment_received: Decimal,
     event_id: int,
     debit_book_str: str,
+    type: str,
 ) -> Decimal:
     for bill in bills:
+        debit_acc = f"{bill.lender_id}/" + debit_book_str
+        if type == "refund":
+            debit_acc = debit_book_str
         payment_received = _adjust_bill(
-            session,
-            bill,
-            payment_received,
-            event_id,
-            debit_acc_str=f"{bill.lender_id}/" + debit_book_str,
+            session, bill, payment_received, event_id, debit_acc_str=debit_acc,
         )
     return payment_received  # The remaining amount goes back to the main func.
 
@@ -317,28 +330,9 @@ def refund_event(
         )
     else:
         bills = []
-        _, min_balance = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/min/a")
-        _adjust_for_min(
-            session, bills, min_balance, event.id, debit_book_str=f"lender/merchant_refund/a"
-        )
-        _, interest_balance = get_account_balance_from_str(
-            session, book_string=f"{bill.id}/bill/interest_receivable/a"
-        )
-        _, late_fine = get_account_balance_from_str(
-            session, book_string=f"{bill.id}/bill/late_fine_receivable/a"
-        )
-        amount = event.amount + interest_balance + late_fine
+        amount = event.amount
         bills.append(bill)
-        amount = _adjust_for_min(
-            session, bills, amount, event.id, debit_book_str=f"lender/merchant_refund/a"
-        )
-        _adjust_for_prepayment(
-            session,
-            user_card.id,
-            event.id,
-            amount,
-            debit_book_str=f"{bill.lender_id}/lender/merchant_refund/a",
-        )
+        payment_received_event(session, user_card, event, bills, "refund")
 
 
 def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> None:
