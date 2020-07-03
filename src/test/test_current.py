@@ -1104,10 +1104,35 @@ def test_refund_1(session: Session) -> None:
     )
     # refund of 1000 did not cover the whole interest and principal
     assert principal_amount == Decimal("61.34")
+    _, interest_amount = get_account_balance_from_str(
+        session, book_string=f"{unpaid_bills[0].id}/bill/interest_receivable/a"
+    )
+    assert interest_amount == Decimal("0")
+    _, late_fine_amount = get_account_balance_from_str(
+        session, book_string=f"{unpaid_bills[0].id}/bill/late_fine_receivable/a"
+    )
+    assert late_fine_amount == Decimal("0")
     _, min_balance = get_account_balance_from_str(
         session, book_string=f"{unpaid_bills[0].id}/bill/min/a"
     )
     assert min_balance == Decimal("0")
+    uc = session.query(UserCard).filter(UserCard.user_id == 99).one()
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-06-08 10:23:11"),
+        amount=Decimal(900),
+        description="BigBasket.com",
+    )
+    bill_id = swipe.loan_id
+    _, unbilled = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
+    assert unbilled == Decimal("900")
+    status = refund_payment(session, 99, bill_id)
+    assert status == True
+    _, unbilled = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
+    assert unbilled == Decimal("0")
+    _, amount = get_account_balance_from_str(session, book_string=f"62311/lender/merchant_refund/a")
+    assert amount == Decimal("1900")
 
 
 def test_lender_incur(session: Session) -> None:
@@ -1115,7 +1140,7 @@ def test_lender_incur(session: Session) -> None:
     status = lender_interest_incur(session)
     uc = session.query(UserCard).filter(UserCard.user_id == 99).one()
     _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
-    assert amount == Decimal("2054.74")  # on date 2020-06-28
+    assert amount == Decimal("2990.25")  # on date 2020-06-28
 
 
 def test_prepayment(session: Session) -> None:

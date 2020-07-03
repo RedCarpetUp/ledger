@@ -170,7 +170,7 @@ def payment_received_event(
             session, user_card.id, event.id, payment_received, debit_book_str=debit_book_str
         )
 
-    if type == "payment":
+    if type == None:
         # Lender has received money, so we reduce our liability now.
         create_ledger_entry_from_str(
             session,
