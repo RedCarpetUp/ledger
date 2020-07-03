@@ -37,39 +37,23 @@ class AuditMixin(Base):
     performed_by = Column(Integer, default=1, nullable=True)
 
     @classmethod
-    def snapshot(
-        cls,
-        primary_key: str,
-        new_data: Dict[str, Any],
-        session: Session,
-        skip_columns: Tuple[str, ...] = ("id", "created_at", "updated_at"),
-    ) -> Any:
-        old_row = (
-            session.query(cls)
-            .filter(
-                getattr(cls, primary_key) == new_data[primary_key],
-                getattr(cls, "row_status") == "active",
-            )
-            .with_for_update(skip_locked=True)
-            .one_or_none()
-        )
-        if old_row:
-            old_row.row_status = "inactive"
-            session.flush()
-        cls_keys = cls.__table__.columns.keys()
-        keys_to_skip = [key for key in new_data.keys() if key not in cls_keys]
-        new_skip_columns = keys_to_skip + list(skip_columns)
-        for column in new_skip_columns:
-            new_data.pop(column, None)
-        new_obj = cls.new(session, **new_data)
-        session.flush()
-        return new_obj
-
-    @classmethod
     def new(cls, session: Session, **kwargs) -> Any:
         obj = cls(**kwargs)
         session.add(obj)
         return obj
+
+    def as_dict(self):
+        d = {c.name: getattr(self, c.name) for c in self.__table__.columns}
+        return d
+
+    def as_dict_for_json(self):
+        d = {
+            c.name: getattr(self, c.name).isoformat()
+            if isinstance(getattr(self, c.name), datetime)
+            else getattr(self, c.name)
+            for c in self.__table__.columns
+        }
+        return d
 
 
 def get_or_create(session: Session, model: Any, defaults: Dict[Any, Any] = None, **kwargs: str) -> Any:
@@ -141,6 +125,7 @@ class LedgerEntryPy(AuditMixinPy):
 class UserCard(AuditMixin):
     __tablename__ = "user_card"
     user_id = Column(Integer, ForeignKey(User.id), nullable=False)
+    card_type = Column(String, nullable=False)
     card_activation_date = Column(Date, nullable=True)
     statement_period_in_days = Column(Integer, default=30, nullable=False)  # 30 days
     interest_free_period_in_days = Column(Integer, default=45, nullable=False)
@@ -175,24 +160,7 @@ class LoanData(AuditMixin):
     lender_rate_of_interest_annual = Column(Numeric, nullable=False)
     principal = Column(Numeric, nullable=True)
     principal_instalment = Column(Numeric, nullable=True)
-
-    def get_minimum_amount_to_pay(self, session: Session, to_date: Optional[DateTime] = None) -> Decimal:
-        from rush.ledger_utils import get_account_balance_from_str
-
-        _, min_due = get_account_balance_from_str(
-            session, book_string=f"{self.id}/bill/min/a", to_date=to_date
-        )
-        return min_due
-
-    @staticmethod
-    def get_latest_bill(session: Session, user_id: int) -> Any:
-        latest_bill = (
-            session.query(LoanData)
-            .filter(LoanData.user_id == user_id, LoanData.is_generated.is_(True))
-            .order_by(LoanData.agreement_date.desc())
-            .first()
-        )
-        return latest_bill
+    interest_to_charge = Column(Numeric, nullable=True)
 
 
 @py_dataclass
@@ -230,12 +198,3 @@ class CardEmis(AuditMixin):
     interest_received = Column(Numeric, nullable=False, default=Decimal(0))
     payment_received = Column(Numeric, nullable=False, default=Decimal(0))
     payment_status = Column(String(length=10), nullable=False, default="UnPaid")
-
-    def as_dict(self):
-        emi_dict = {
-            c.name: getattr(self, c.name).isoformat()
-            if isinstance(getattr(self, c.name), datetime)
-            else getattr(self, c.name)
-            for c in self.__table__.columns
-        }
-        return emi_dict

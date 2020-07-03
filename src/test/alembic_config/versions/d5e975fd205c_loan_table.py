@@ -20,6 +20,7 @@ def upgrade() -> None:
         "user_card",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=False),
+        sa.Column("card_type", sa.String(), nullable=False),
         sa.Column("card_activation_date", sa.Date(), nullable=True),
         sa.Column("statement_period_in_days", sa.Integer(), nullable=False),
         sa.Column("interest_free_period_in_days", sa.Integer, nullable=True),
@@ -46,6 +47,7 @@ def upgrade() -> None:
         sa.Column("is_generated", sa.Boolean(), nullable=False, server_default="false"),
         sa.Column("principal", sa.Numeric(), nullable=True),
         sa.Column("principal_instalment", sa.Numeric(), nullable=True),
+        sa.Column("interest_to_charge", sa.Numeric(), nullable=True),
     )
     op.create_table(
         "loan_emis",
