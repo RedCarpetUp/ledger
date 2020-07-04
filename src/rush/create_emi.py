@@ -11,6 +11,8 @@ from rush.anomaly_detection import get_affected_events
 from rush.ledger_utils import get_account_balance_from_str
 from rush.models import (
     CardEmis,
+    EmiPaymentMapping,
+    LedgerTriggerEvent,
     LoanData,
     UserCard,
 )
@@ -73,7 +75,7 @@ def add_emi_on_new_bill(
     )
     new_emi_list = []
     for emi in all_emis:
-        emi_dict = emi.as_dict()
+        emi_dict = emi.as_dict_for_json()
         # We consider 12 because the first insertion had 12 emis
         if emi_dict["emi_number"] <= new_end_emi_number - 12:
             new_emi_list.append(emi_dict)
@@ -109,33 +111,15 @@ def add_emi_on_new_bill(
     return new_emi
 
 
-def refresh_schedule(session: Session, user_id: int) -> None:
-    all_bills = (
-        session.query(LoanData)
-        .filter(LoanData.user_id == user_id)
-        .order_by(LoanData.agreement_date.asc())
-        .all()
-    )
-    user_card = session.query(UserCard).filter(UserCard.user_id == user_id).first()
-    all_emis_query = (
-        session.query(CardEmis)
-        .filter(CardEmis.card_id == user_card.id)
-        .order_by(CardEmis.due_date.asc())
-    )
-    emis_dict = [u.__dict__ for u in all_emis_query.all()]
-    # To run test, remove later
-    # first_emi = emis_dict[0]
-    # return first_emi
-    payment_received_and_adjusted = Decimal(0)
-    last_paid_emi_number = 0
-    last_payment_date = None
-    all_paid = False
-    for bill in all_bills:
-        events = get_affected_events(session, user_card)
-        for event in events:
-            if event.name == "payment_received":
-                payment_received_and_adjusted += event.amount
-                last_payment_date = event.post_date
+def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerEvent = None) -> None:
+    def slide_payments_repeated_logic(
+        emis_dict,
+        payment_received_and_adjusted,
+        payment_request_id,
+        last_payment_date,
+        last_paid_emi_number,
+        all_paid=False,
+    ) -> None:
         for emi in emis_dict:
             if emi["emi_number"] <= last_paid_emi_number:
                 continue
@@ -174,6 +158,17 @@ def refresh_schedule(session: Session, user_id: int) -> None:
                     emi["total_closing_balance_post_due_date"] = 0
                     last_paid_emi_number = emi["emi_number"]
                     emi["payment_status"] = "Paid"
+                    # Create payment mapping
+                    create_emi_payment_mapping(
+                        session,
+                        user_card,
+                        emi["emi_number"],
+                        last_payment_date,
+                        payment_request_id,
+                        emi["interest_received"],
+                        emi["late_fee_received"],
+                        emi["payment_received"],
+                    )
                     continue
                 diff = emi["total_due_amount"] - payment_received_and_adjusted
                 # -99 dpd if you can't figure out
@@ -186,6 +181,17 @@ def refresh_schedule(session: Session, user_id: int) -> None:
                         emi["late_fee_received"] = payment_received_and_adjusted
                         emi["total_closing_balance"] -= payment_received_and_adjusted
                         emi["total_closing_balance_post_due_date"] -= payment_received_and_adjusted
+                        # Create payment mapping
+                        create_emi_payment_mapping(
+                            session,
+                            user_card,
+                            emi["emi_number"],
+                            last_payment_date,
+                            payment_request_id,
+                            emi["interest_received"],
+                            emi["late_fee_received"],
+                            emi["payment_received"],
+                        )
                         break
                     else:
                         emi["late_fee_received"] = emi["late_fee"]
@@ -194,6 +200,17 @@ def refresh_schedule(session: Session, user_id: int) -> None:
                             emi["interest_received"] = payment_received_and_adjusted
                             emi["total_closing_balance"] -= payment_received_and_adjusted
                             emi["total_closing_balance_post_due_date"] -= payment_received_and_adjusted
+                            # Create payment mapping
+                            create_emi_payment_mapping(
+                                session,
+                                user_card,
+                                emi["emi_number"],
+                                last_payment_date,
+                                payment_request_id,
+                                emi["interest_received"],
+                                emi["late_fee_received"],
+                                emi["payment_received"],
+                            )
                             break
                         else:
                             emi["interest_received"] = emi["interest"]
@@ -204,13 +221,80 @@ def refresh_schedule(session: Session, user_id: int) -> None:
                                 emi[
                                     "total_closing_balance_post_due_date"
                                 ] -= payment_received_and_adjusted
+                                # Create payment mapping
+                                create_emi_payment_mapping(
+                                    session,
+                                    user_card,
+                                    emi["emi_number"],
+                                    last_payment_date,
+                                    payment_request_id,
+                                    emi["interest_received"],
+                                    emi["late_fee_received"],
+                                    emi["payment_received"],
+                                )
                                 break
                 emi["late_fee_received"] = emi["late_fee"]
                 emi["interest_received"] = emi["interest"]
                 emi["payment_received"] = emi["due_amount"]
                 emi["payment_status"] = "Paid"
                 last_paid_emi_number = emi["emi_number"]
+                # Create payment mapping
+                create_emi_payment_mapping(
+                    session,
+                    user_card,
+                    emi["emi_number"],
+                    last_payment_date,
+                    payment_request_id,
+                    emi["interest_received"],
+                    emi["late_fee_received"],
+                    emi["payment_received"],
+                )
                 payment_received_and_adjusted = abs(diff)
+
+    user_card = session.query(UserCard).filter(UserCard.user_id == user_id).first()
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == user_card.id)
+        .order_by(CardEmis.due_date.asc())
+    )
+    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    # To run test, remove later
+    # first_emi = emis_dict[0]
+    # return first_emi
+    payment_request_id = None
+    last_paid_emi_number = 0
+    last_payment_date = None
+    all_paid = False
+    events = get_affected_events(session, user_card)
+    if not payment_event:
+        for event in events:
+            if event.name == "payment_received":
+                payment_received_and_adjusted = Decimal(0)
+                payment_received_and_adjusted += event.amount
+                payment_request_id = event.extra_details.get("payment_request_id")
+                last_payment_date = event.post_date
+                slide_payments_repeated_logic(
+                    emis_dict,
+                    payment_received_and_adjusted,
+                    payment_request_id,
+                    last_payment_date,
+                    last_paid_emi_number,
+                    all_paid=all_paid,
+                )
+    else:
+        payment_received_and_adjusted = Decimal(0)
+        payment_received_and_adjusted += payment_event.amount
+        payment_request_id = payment_event.extra_details.get("payment_request_id")
+        last_payment_date = payment_event.post_date
+        slide_payments_repeated_logic(
+            emis_dict,
+            payment_received_and_adjusted,
+            payment_request_id,
+            last_payment_date,
+            last_paid_emi_number,
+            all_paid=all_paid,
+        )
+
     session.bulk_update_mappings(CardEmis, emis_dict)
 
 
@@ -257,7 +341,7 @@ def adjust_late_fee_in_emis(session: Session, user_id: int, post_date: DateTime)
     )
     if not emi:
         emi = session.query(CardEmis).order_by(CardEmis.due_date.asc()).first()
-    emi_dict = emi.as_dict()
+    emi_dict = emi.as_dict_for_json()
     _, late_fee = get_account_balance_from_str(
         session=session, book_string=f"{latest_bill.id}/bill/late_fine_receivable/a"
     )
@@ -266,3 +350,27 @@ def adjust_late_fee_in_emis(session: Session, user_id: int, post_date: DateTime)
         emi_dict["total_due_amount"] += late_fee
         emi_dict["late_fee"] += late_fee
         session.bulk_update_mappings(CardEmis, [emi_dict])
+
+
+def create_emi_payment_mapping(
+    session: Session,
+    user_card: UserCard,
+    emi_number: int,
+    payment_date: DateTime,
+    payment_request_id: str,
+    interest_received: Decimal,
+    late_fee_received: Decimal,
+    principal_received: Decimal,
+) -> None:
+    new_payment_mapping = EmiPaymentMapping(
+        card_id=user_card.id,
+        emi_number=emi_number,
+        payment_date=payment_date,
+        payment_request_id=payment_request_id,
+        interest_received=interest_received,
+        late_fee_received=late_fee_received,
+        principal_received=principal_received,
+    )
+    session.add(new_payment_mapping)
+    session.flush()
+    return new_payment_mapping

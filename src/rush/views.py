@@ -6,9 +6,12 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session
 
+from rush.card import (
+    BaseCard,
+    get_user_card,
+)
 from rush.ledger_utils import (
     get_account_balance_from_str,
-    get_all_unpaid_bills,
     get_remaining_bill_balance,
     is_bill_closed,
 )
@@ -21,10 +24,12 @@ from rush.models import (
 )
 
 
-def user_view(session, user_id: int) -> dict:
+def user_view(session, user_card: BaseCard) -> dict:
     index = 0
     total_due, min_amount, current_bill_principal_amount, current_bill_principal_interest = 0, 0, 0, 0
-    for bill in get_all_unpaid_bills(session, user_id):
+    unpaid_bills = user_card.get_unpaid_bills()
+
+    for bill in unpaid_bills:
         bill_balance = get_remaining_bill_balance(session, bill)
         total_due = total_due + bill_balance["total_due"]
         min_amount = min_amount + bill_balance["interest_due"] + bill_balance["late_fine"]
@@ -44,12 +49,12 @@ def user_view(session, user_id: int) -> dict:
     }
 
 
-def bill_view(session: Session, user_id: int) -> list:
+def bill_view(session: Session, user_card: BaseCard) -> list:
 
     bill_details = []
     all_bills = (
         session.query(LoanData)
-        .filter(LoanData.user_id == user_id)
+        .filter(LoanData.user_id == user_card.user_id)
         .order_by(LoanData.agreement_date.desc())
         .all()
     )
