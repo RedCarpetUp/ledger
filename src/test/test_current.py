@@ -211,11 +211,12 @@ def _partial_payment_bill_2(session: Session) -> None:
 
 def _min_payment_delayed_bill_1(session: Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
+    user_card = get_user_card(session, user.id)
     payment_date = parse_date("2020-05-03")
     amount = Decimal(130)
     bill = payment_received(
         session=session,
-        user_id=user.id,
+        user_card=user_card,
         payment_amount=amount,
         payment_date=payment_date,
         payment_request_id="a123",
@@ -1146,3 +1147,14 @@ def test_prepayment(session: Session) -> None:
     assert first_payment_mapping.emi_number == 1
     assert first_payment_mapping.interest_received == Decimal("30.67")
     assert first_payment_mapping.principal_received == Decimal("1969.33")
+
+    # Check if amount is adjusted correctly in schedule
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.due_date.asc())
+    )
+    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    second_emi = emis_dict[1]
+    assert second_emi["payment_status"] == "UnPaid"
+    assert second_emi["due_amount"] == Decimal("2.56")

@@ -90,6 +90,7 @@ def add_emi_on_new_bill(
         emi_dict["total_closing_balance_post_due_date"] += principal_due - (
             mul(due_amount, (emi_dict["emi_number"] - (new_end_emi_number - 12) - 1))
         )
+        emi_dict["payment_status"] = "UnPaid"
         new_emi_list.append(emi_dict)
     session.bulk_update_mappings(CardEmis, new_emi_list)
     # Get the second last emi for calculating values of the last emi
@@ -147,7 +148,10 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
                 actual_closing_balance = emi["total_closing_balance_post_due_date"]
                 if current_date <= emi["due_date"]:
                     actual_closing_balance = emi["total_closing_balance"]
-                if payment_received_and_adjusted >= actual_closing_balance:
+                if (
+                    payment_received_and_adjusted >= actual_closing_balance
+                    and actual_closing_balance > 0
+                ):
                     all_paid = True
                     emi["late_fee_received"] = emi["late_fee"]
                     emi["interest_received"] = emi["interest"]
