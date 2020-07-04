@@ -8,25 +8,29 @@ from rush.ledger_events import (
     payment_received_event,
     refund_event,
 )
-from rush.ledger_utils import (
-    get_account_balance_from_str,
-    get_all_unpaid_bills,
-)
 from rush.models import (
     CardTransaction,
     LedgerTriggerEvent,
     LoanData,
     UserCard,
 )
+from rush.card import get_user_card
 from rush.utils import get_current_ist_time
-from rush.views import user_view
 
 
 def payment_received(
-    session: Session, user_card: UserCard, payment_amount: Decimal, payment_date: DateTime
+    session: Session,
+    user_card: UserCard,
+    payment_amount: Decimal,
+    payment_date: DateTime,
+    payment_request_id: str,
 ) -> None:
     lt = LedgerTriggerEvent(
-        name="payment_received", card_id=user_card.id, amount=payment_amount, post_date=payment_date
+        name="payment_received",
+        card_id=user_card.id,
+        amount=payment_amount,
+        post_date=payment_date,
+        extra_details={"payment_request_id": payment_request_id},
     )
     session.add(lt)
     session.flush()
@@ -34,7 +38,7 @@ def payment_received(
     run_anomaly(session, user_card, payment_date)
 
 
-def refund_payment(session, user_id: int, bill_id: int) -> bool:
+def refund_payment(session, user_id: int, bill_id: int, refund_request_id: str) -> bool:
 
     bill = (
         session.query(CardTransaction.amount)
@@ -42,9 +46,14 @@ def refund_payment(session, user_id: int, bill_id: int) -> bool:
         .filter(LoanData.id == bill_id)
         .first()
     )
-    user_card = session.query(UserCard).filter(UserCard.user_id == user_id).one()
+    user_card = get_user_card(session, user_id)
     amount = Decimal(bill.amount)
-    lt = LedgerTriggerEvent(name="refund_bill", amount=amount, post_date=get_current_ist_time())
+    lt = LedgerTriggerEvent(
+        name="refund_bill",
+        amount=amount,
+        post_date=get_current_ist_time(),
+        extra_details={"payment_request_id": refund_request_id},
+    )
     session.add(lt)
     session.flush()
     current_bill = session.query(LoanData).filter(LoanData.id == bill_id).one()

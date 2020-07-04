@@ -1,9 +1,5 @@
-import datetime
 from decimal import Decimal
-from typing import (
-    List,
-    Tuple,
-)
+from typing import List
 
 import dateutil.relativedelta
 from sqlalchemy import (
@@ -14,27 +10,20 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session
 
+from rush.card import BaseCard
+from rush.card.base_card import BaseBill
 from rush.ledger_utils import (
     create_ledger_entry_from_str,
     get_account_balance_from_str,
-    get_all_unpaid_bills,
     get_book_account_by_string,
-    get_remaining_bill_balance,
-    is_bill_closed,
-    is_min_paid,
 )
 from rush.lender_interest import lender_interest
 from rush.models import (
-    BookAccount,
     CardTransaction,
     LedgerEntry,
     LedgerTriggerEvent,
     LoanData,
     UserCard,
-)
-from rush.utils import (
-    div,
-    mul,
 )
 
 
@@ -58,7 +47,7 @@ def m2p_transfer_event(session: Session, event: LedgerTriggerEvent) -> None:
     )
 
 
-def card_transaction_event(session: Session, user_card: UserCard, event: LedgerTriggerEvent) -> None:
+def card_transaction_event(session: Session, user_card: BaseCard, event: LedgerTriggerEvent) -> None:
     amount = Decimal(event.amount)
     user_card_id = user_card.id
     swipe_id = event.extra_details["swipe_id"]
@@ -99,7 +88,7 @@ def card_transaction_event(session: Session, user_card: UserCard, event: LedgerT
 
 
 def bill_generate_event(
-    session: Session, bill: LoanData, user_card_id: int, event: LedgerTriggerEvent
+    session: Session, bill: BaseBill, user_card_id: int, event: LedgerTriggerEvent
 ) -> None:
     bill_id = bill.id
 
@@ -131,7 +120,7 @@ def bill_generate_event(
 
 
 def add_min_amount_event(
-    session: Session, bill: LoanData, event: LedgerTriggerEvent, amount: Decimal
+    session: Session, bill: BaseBill, event: LedgerTriggerEvent, amount: Decimal
 ) -> None:
     create_ledger_entry_from_str(
         session,
@@ -144,13 +133,14 @@ def add_min_amount_event(
 
 def payment_received_event(
     session: Session,
-    user_card: UserCard,
+    user_card: BaseCard,
     debit_book_str: str,
     event: LedgerTriggerEvent,
     lender_id: int = None,
 ) -> None:
     payment_received = Decimal(event.amount)
-    unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
+    unpaid_bills = user_card.get_unpaid_bills()
+
     payment_received = _adjust_for_min(
         session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str,
     )
@@ -182,6 +172,11 @@ def payment_received_event(
             credit_book_str=f"{lender_id}/lender/merchant_refund/a",
             amount=Decimal(event.amount),
         )
+
+    # Slide payment in emi
+    from rush.create_emi import slide_payments
+
+    slide_payments(session, user_card.user_id, payment_event=event)
 
 
 def _adjust_bill(
@@ -224,17 +219,18 @@ def _adjust_bill(
 
 def _adjust_for_min(
     session: Session,
-    bills: List[LoanData],
+    bills: List[BaseBill],
     payment_received: Decimal,
     event_id: int,
     debit_book_str: str,
 ) -> Decimal:
     for bill in bills:
-        min_due = bill.get_minimum_amount_to_pay(session)
+        min_due = bill.get_minimum_amount_to_pay()
         amount_to_adjust_in_this_bill = min(min_due, payment_received)
         # Remove amount from the original variable.
         payment_received -= amount_to_adjust_in_this_bill
-
+        if amount_to_adjust_in_this_bill == 0:
+            continue
         # Reduce min amount
         create_ledger_entry_from_str(
             session,
@@ -253,15 +249,18 @@ def _adjust_for_min(
 
 def _adjust_for_complete_bill(
     session: Session,
-    bills: List[LoanData],
+    bills: List[BaseBill],
     payment_received: Decimal,
     event_id: int,
     debit_book_str: str,
 ) -> Decimal:
     for bill in bills:
-        debit_acc = f"{bill.lender_id}/" + debit_book_str
         payment_received = _adjust_bill(
-            session, bill, payment_received, event_id, debit_acc_str=debit_acc,
+            session,
+            bill,
+            payment_received,
+            event_id,
+            debit_acc_str=f"{bill.lender_id}/{debit_book_str}",
         )
     return payment_received  # The remaining amount goes back to the main func.
 
@@ -279,7 +278,7 @@ def _adjust_for_prepayment(
 
 
 def accrue_interest_event(
-    session: Session, bill: LoanData, event: LedgerTriggerEvent, amount: Decimal
+    session: Session, bill: BaseBill, event: LedgerTriggerEvent, amount: Decimal
 ) -> None:
     create_ledger_entry_from_str(
         session,
@@ -312,7 +311,7 @@ def accrue_late_fine_event(session: Session, bill: LoanData, event: LedgerTrigge
 
 
 def refund_event(
-    session: Session, bill: LoanData, user_card: UserCard, event: LedgerTriggerEvent
+    session: Session, bill: LoanData, user_card: BaseCard, event: LedgerTriggerEvent
 ) -> None:
     _, amount_billed = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/principal_receivable/a"

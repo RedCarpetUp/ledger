@@ -1,6 +1,5 @@
 from decimal import Decimal
 from typing import (
-    List,
     Optional,
     Tuple,
 )
@@ -153,18 +152,3 @@ def get_remaining_bill_balance(session: Session, bill: LoanData) -> dict:
         "interest_due": interest_due,
         "late_fine": late_fine_due,
     }
-
-
-def get_all_unpaid_bills(session: Session, user_id: int) -> List[LoanData]:
-    unpaid_bills = []
-    all_bills = (
-        session.query(LoanData)
-        .filter(LoanData.user_id == user_id, LoanData.is_generated.is_(True))
-        .order_by(LoanData.agreement_date)
-        .all()
-    )
-    for bill in all_bills:
-        if is_bill_closed(session, bill) == False:
-            unpaid_bills.append(bill)
-
-    return unpaid_bills

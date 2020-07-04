@@ -5,15 +5,16 @@ from typing import Optional
 from pendulum import DateTime
 from sqlalchemy.orm import Session
 
+from rush.card import BaseCard
 from rush.ledger_events import (
     _adjust_bill,
+    _adjust_for_prepayment,
     accrue_interest_event,
     accrue_late_fine_event,
 )
 from rush.ledger_utils import (
     create_ledger_entry_from_str,
     get_account_balance_from_str,
-    get_all_unpaid_bills,
     get_remaining_bill_balance,
     is_bill_closed,
 )
@@ -27,7 +28,6 @@ from rush.models import (
 from rush.utils import (
     div,
     get_current_ist_time,
-    get_updated_fee_diff_amount_from_principal,
     mul,
 )
 
@@ -45,7 +45,7 @@ def _get_total_outstanding(session, user_card):
 
 def can_remove_interest(
     session: Session,
-    user_card: UserCard,
+    user_card: BaseCard,
     interest_event: LedgerTriggerEvent,
     event_date: Optional[DateTime] = None,
 ) -> bool:
@@ -56,7 +56,7 @@ def can_remove_interest(
     This function gets called at every payment. We also need to check if the interest is even there to
     be removed.
     """
-    latest_bill = LoanData.get_latest_bill(session, user_card.user_id)
+    latest_bill = user_card.get_latest_generated_bill()
     # First check if there is even interest accrued in the latest bill.
     interest_accrued = get_account_balance_from_str(session, f"{latest_bill.id}/bill/interest_earned/r")
     if interest_accrued == 0:
@@ -67,38 +67,35 @@ def can_remove_interest(
     if payment_came_after_due_date:
         return False
 
-    this_month_interest = interest_event.amount  # The total interest amount which we last accrued.
-    total_outstanding = _get_total_outstanding(session, user_card)  # TODO outstanding as of due_date.
+    # The total interest amount which we last accrued.
+    this_month_interest = interest_event.amount
+    # TODO outstanding as of due_date.
+    total_outstanding = _get_total_outstanding(session, user_card)
 
-    if total_outstanding <= this_month_interest:  # the amount has been paid sans interest.
+    # the amount has been paid sans interest.
+    if total_outstanding <= this_month_interest:
         return True
     return False
 
 
 def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_card: UserCard) -> None:
-    unpaid_bills = get_all_unpaid_bills(session, user_card.user_id)
+    unpaid_bills = user_card.get_unpaid_bills()
     accrue_event = LedgerTriggerEvent(
         name="accrue_interest", card_id=user_card.id, post_date=post_date, amount=0
     )
     session.add(accrue_event)
     session.flush()
     for bill in unpaid_bills:
-        # TODO get tenure from loan table.
-        interest_on_principal = mul(bill.principal, div(div(bill.rc_rate_of_interest_annual, 12), 100))
-        # Adjust for rounding because total due amount has to be rounded
-        interest_on_principal += get_updated_fee_diff_amount_from_principal(
-            bill.principal, interest_on_principal
-        )
-        accrue_interest_event(session, bill, accrue_event, interest_on_principal)
-        accrue_event.amount += interest_on_principal
+        accrue_interest_event(session, bill, accrue_event, bill.table.interest_to_charge)
+        accrue_event.amount += bill.table.interest_to_charge
 
 
-def is_late_fee_valid(session: Session, user_card: UserCard) -> bool:
+def is_late_fee_valid(session: Session, user_card: BaseCard) -> bool:
     """
     Late fee gets charged if user fails to pay the minimum due before the due date.
     We check if the min was paid before due date and there's late fee charged.
     """
-    latest_bill = LoanData.get_latest_bill(session, user_card.user_id)
+    latest_bill = user_card.get_latest_generated_bill()
     # TODO get bill from event?
 
     # First check if there is even late fee accrued in the latest bill.
@@ -107,7 +104,7 @@ def is_late_fee_valid(session: Session, user_card: UserCard) -> bool:
         return False  # Nothing to remove.
 
     due_date = latest_bill.agreement_date + timedelta(days=user_card.interest_free_period_in_days)
-    min_balance_as_of_due_date = latest_bill.get_minimum_amount_to_pay(session, due_date)
+    min_balance_as_of_due_date = latest_bill.get_minimum_amount_to_pay(due_date)
     if (
         min_balance_as_of_due_date > 0
     ):  # if there's balance pending in min then the late fee charge is valid.
@@ -115,9 +112,9 @@ def is_late_fee_valid(session: Session, user_card: UserCard) -> bool:
     return False
 
 
-def accrue_late_charges(session: Session, user_card: UserCard, post_date: DateTime) -> LoanData:
-    latest_bill = LoanData.get_latest_bill(session, user_card.user_id)
-    can_charge_fee = latest_bill.get_minimum_amount_to_pay(session) > 0
+def accrue_late_charges(session: Session, user_card: BaseCard, post_date: DateTime) -> LoanData:
+    latest_bill = user_card.get_latest_generated_bill()
+    can_charge_fee = latest_bill.get_minimum_amount_to_pay() > 0
     #  accrue_late_charges_prerequisites(session, bill)
     if can_charge_fee:  # if min isn't paid charge late fine.
         # TODO get correct date here.
@@ -184,7 +181,8 @@ def reverse_interest_charges(
         # We need to remove the amount that got adjusted in interest. interest_earned account needs
         # to be removed by the interest_that_was_added amount.
         d = {"acc_to_remove_from": f"{bill.id}/bill/interest_earned/r", "amount": settled_amount}
-        inter_bill_movement_entries.append(d)  # Move amount from this bill to some other bill.
+        # Move amount from this bill to some other bill.
+        inter_bill_movement_entries.append(d)
 
         if not is_bill_closed(
             session, bill
@@ -205,7 +203,12 @@ def reverse_interest_charges(
     # Check if there's still amount that's left. If yes, then we received extra prepayment.
     is_prepayment = any(d["amount"] > 0 for d in inter_bill_movement_entries)
     if is_prepayment:
-        pass  # TODO prepayment
+        for entry in inter_bill_movement_entries:
+            if entry["amount"] == 0:
+                continue
+            _adjust_for_prepayment(
+                session, user_card.user_id, event.id, entry["amount"], entry["acc_to_remove_from"]
+            )
 
 
 def reverse_late_charges(
