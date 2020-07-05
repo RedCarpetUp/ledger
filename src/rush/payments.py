@@ -20,6 +20,7 @@ from rush.models import (
     LoanData,
     UserCard,
 )
+from rush.ledger_utils import get_account_balance_from_str
 from rush.utils import get_current_ist_time
 
 
@@ -70,13 +71,9 @@ def writeoff_payment(session: Session, user_id: int) -> bool:
 
     usercard = get_user_card(session, 99)
     if _check_writeoff(session, user_id, usercard):
-        _, balance_interest = get_account_balance_from_str(
-            session, book_string=f"{usercard.id}/card/lender_payable_interest/l"
-        )
         _, balance = get_account_balance_from_str(
             session, book_string=f"{usercard.id}/card/lender_payable/l"
         )
-        balance = balance + balance_interest
         lt = LedgerTriggerEvent(
             name="writeoff_payment", amount=balance, post_date=get_current_ist_time()
         )
