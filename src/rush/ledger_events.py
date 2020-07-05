@@ -396,16 +396,15 @@ def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> 
         credit_balance_per_date = (
             session.query(
                 cast(LedgerTriggerEvent.post_date, Date).label("post_date"),
-                LedgerEntry.amount.label("amount"),
+                func.sum(LedgerEntry.amount).label("amount"),
             )
-            .order_by(LedgerTriggerEvent.post_date.desc())
+            .group_by(func.date(LedgerTriggerEvent.post_date), LedgerEntry.amount)
             .filter(
                 LedgerEntry.event_id == LedgerTriggerEvent.id,
                 LedgerEntry.credit_account == book_account.id,
                 # LedgerTriggerEvent.post_date <= event.post_date,
                 # LedgerTriggerEvent.post_date >= last_lender_incur_trigger,
             )
-            # .all()
             .subquery("credit_balance_per_date")
         )
         credit_balance = (
@@ -418,6 +417,7 @@ def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> 
             .group_by(credit_balance_per_date.c.post_date, credit_balance_per_date.c.amount)
             .order_by(credit_balance_per_date.c.post_date.desc())
             .subquery("credit_balance")
+            # .all()
         )
         last_credit_balance = Decimal(
             session.query(
@@ -465,9 +465,9 @@ def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> 
         debit_balance_per_date = (
             session.query(
                 cast(LedgerTriggerEvent.post_date, Date).label("post_date"),
-                LedgerEntry.amount.label("amount"),
+                func.sum(LedgerEntry.amount).label("amount"),
             )
-            .order_by(LedgerTriggerEvent.post_date.desc())
+            .group_by(func.date(LedgerTriggerEvent.post_date), LedgerEntry.amount)
             .filter(
                 LedgerEntry.event_id == LedgerTriggerEvent.id,
                 LedgerEntry.debit_account == book_account.id,
@@ -528,7 +528,37 @@ def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> 
                 # - remaining_debit_balance.c.amount
             ).label("amount")
         ).subquery("remaing_debit")
-
+        if last_trigger == None:
+            last_debit_balance = last_debit_balance - Decimal(
+                session.query(
+                    (
+                        func.pow(
+                            lender_interest_rate,
+                            extract("day", (debit_balance.c.post_date - last_lender_incur_trigger)),
+                        )
+                        * debit_balance.c.amount
+                    )
+                    - debit_balance.c.amount
+                )
+                .limit(1)
+                .scalar()
+                or 0
+            )
+            last_credit_balance = last_credit_balance - Decimal(
+                session.query(
+                    (
+                        func.pow(
+                            lender_interest_rate,
+                            extract("day", (credit_balance.c.post_date - last_lender_incur_trigger)),
+                        )
+                        * credit_balance.c.amount
+                    )
+                    - credit_balance.c.amount
+                )
+                .limit(1)
+                .scalar()
+                or 0
+            )
         total_amount = (
             Decimal(session.query(func.sum(remaining_credit.c.amount)).scalar() or 0)
             - Decimal(session.query(func.sum(remaining_credit_balance.c.amount)).scalar() or 0)

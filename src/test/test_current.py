@@ -1140,80 +1140,80 @@ def test_refund_1(session: Session) -> None:
     assert amount == Decimal("0")
 
 
-# def test_lender_incur(session: Session) -> None:
-#     a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas")
-#     session.add(a)
-#     session.flush()
+def test_lender_incur(session: Session) -> None:
+    a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas")
+    session.add(a)
+    session.flush()
 
-#     # assign card
-#     uc = create_user_card(
-#         session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
-#     )
-#     swipe = create_card_swipe(
-#         session=session,
-#         user_card=uc,
-#         txn_time=parse_date("2020-06-08 19:23:11"),
-#         amount=Decimal(1000),
-#         description="BigBasket.com",
-#     )
-#     bill_id = swipe.loan_id
-#     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
-#     assert unbilled_amount == 1000
-#     bill = bill_generate(session=session, user_card=uc)
-#     assert bill.table.is_generated is True
-#     status = lender_interest_incur(session, parse_date("2020-06-27 00:00:00"))
-#     uc = get_user_card(session, 99)
-#     _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
-#     assert amount == Decimal("1015.35")  # on date 2020-06-27
-#     _, amount = get_account_balance_from_str(
-#         session, book_string=f"{uc.id}/redcarpet/redcarpet_expenses/e"
-#     )
-#     assert amount == Decimal("15.35")  # on date 2020-06-27
-#     swipe = create_card_swipe(
-#         session=session,
-#         user_card=uc,
-#         txn_time=parse_date("2020-06-29 19:23:11"),
-#         amount=Decimal(1500),
-#         description="BigBasket.com",
-#     )
-#     bill = bill_generate(session=session, user_card=uc)
-#     assert bill.table.is_generated is True
-#     # interest on 1015.35 for 2 days and then 2515.35 for 3 days
-#     status = lender_interest_incur(session, parse_date("2020-07-01 00:00:00"))
-#     uc = get_user_card(session, 99)
-#     _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
-#     assert amount == Decimal("2520.55")  # on date 2020-07-01
+    # assign card
+    uc = create_user_card(
+        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+    )
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-06-08 19:23:11"),
+        amount=Decimal(1000),
+        description="BigBasket.com",
+    )
+    bill_id = swipe.loan_id
+    _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
+    assert unbilled_amount == 1000
+    bill = bill_generate(session=session, user_card=uc)
+    assert bill.table.is_generated is True
+    status = lender_interest_incur(session, parse_date("2020-06-27 00:00:00"))
+    uc = get_user_card(session, 99)
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
+    assert amount == Decimal("1009.41")  # on date 2020-06-27
+    _, amount = get_account_balance_from_str(
+        session, book_string=f"{uc.id}/redcarpet/redcarpet_expenses/e"
+    )
+    assert amount == Decimal("9.41")  # on date 2020-06-27
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-06-29 19:23:11"),
+        amount=Decimal(1500),
+        description="BigBasket.com",
+    )
+    bill = bill_generate(session=session, user_card=uc)
+    assert bill.table.is_generated is True
+    # interest on 1015.35 for 2 days and then 2515.35 for 3 days
+    status = lender_interest_incur(session, parse_date("2020-07-01 00:00:00"))
+    uc = get_user_card(session, 99)
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
+    assert amount == Decimal("2514.54")  # on date 2020-07-01
 
 
-# def test_lender_incur_two(session: Session) -> None:
-#     a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas")
-#     session.add(a)
-#     session.flush()
+def test_lender_incur_two(session: Session) -> None:
+    a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas")
+    session.add(a)
+    session.flush()
 
-#     # assign card
-#     uc = create_user_card(
-#         session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
-#     )
-#     swipe = create_card_swipe(
-#         session=session,
-#         user_card=uc,
-#         txn_time=parse_date("2020-07-29 19:23:11"),
-#         amount=Decimal(500),
-#         description="BigBasket.com",
-#     )
-#     swipe = create_card_swipe(
-#         session=session,
-#         user_card=uc,
-#         txn_time=parse_date("2020-07-29 10:23:11"),
-#         amount=Decimal(500),
-#         description="BigBasket.com",
-#     )
-#     bill = bill_generate(session=session, user_card=uc)
-#     assert bill.table.is_generated is True
-#     # interest on 1015.35 for 2 days and then 2515.35 for 3 days
-#     status = lender_interest_incur(session, parse_date("2020-08-01 00:00:00"))
-#     _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
-#     assert amount == Decimal("2520.55")  # on date 2020-07-01
+    # assign card
+    uc = create_user_card(
+        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+    )
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-07-29 19:23:11"),
+        amount=Decimal(500),
+        description="BigBasket.com",
+    )
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-07-29 10:23:11"),
+        amount=Decimal(500),
+        description="BigBasket.com",
+    )
+    bill = bill_generate(session=session, user_card=uc)
+    assert bill.table.is_generated is True
+    # interest on 1015.35 for 2 days and then 2515.35 for 3 days
+    status = lender_interest_incur(session, parse_date("2020-08-01 00:00:00"))
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
+    assert amount == Decimal("1001.48")  # on date 2020-07-01
 
 
 def test_prepayment(session: Session) -> None:
@@ -1312,22 +1312,22 @@ def test_writeoff(session: Session) -> None:
     _, redcarpet_amount = get_account_balance_from_str(
         session, book_string=f"{user_card_id}/redcarpet/redcarpet_account/a"
     )
-    assert redcarpet_amount == Decimal("-3809.55")
+    assert redcarpet_amount == Decimal("-3798.59")
     _, writeoff_amount = get_account_balance_from_str(
         session, book_string=f"{user_card_id}/card/writeoff_expenses/e"
     )
-    assert writeoff_amount == Decimal("3809.55")
+    assert writeoff_amount == Decimal("3798.59")
     _, bad_amount = get_account_balance_from_str(
         session, book_string=f"{user_card_id}/card/bad_debt_allowance/ca"
     )
-    assert bad_amount == Decimal("3809.55")
+    assert bad_amount == Decimal("3798.59")
 
 
 def test_writeoff_recovery_one(session: Session) -> None:
     test_writeoff(session)
     uc = get_user_card(session, 99)
     payment_received(
-        session, uc, Decimal(3809.55), payment_date=parse_date("2020-07-01"), payment_request_id="abcde"
+        session, uc, Decimal(3798.59), payment_date=parse_date("2020-07-01"), payment_request_id="abcde"
     )
     user_card_id = uc.id
     _, writeoff_amount = get_account_balance_from_str(
@@ -1339,7 +1339,7 @@ def test_writeoff_recovery_one(session: Session) -> None:
     )
     assert bad_amount == Decimal("0")
     _, pg_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
-    assert pg_amount == Decimal("3809.55")
+    assert pg_amount == Decimal("3798.59")
 
 
 def test_writeoff_recovery_two(session: Session) -> None:
@@ -1353,10 +1353,10 @@ def test_writeoff_recovery_two(session: Session) -> None:
     _, writeoff_amount = get_account_balance_from_str(
         session, book_string=f"{user_card_id}/card/writeoff_expenses/e"
     )
-    assert writeoff_amount == Decimal("800")
+    assert writeoff_amount == Decimal("789.04")
     _, bad_amount = get_account_balance_from_str(
         session, book_string=f"{user_card_id}/card/bad_debt_allowance/ca"
     )
-    assert bad_amount == Decimal("800")
+    assert bad_amount == Decimal("789.04")
     _, pg_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert pg_amount == Decimal("3009.55")
