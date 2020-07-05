@@ -25,7 +25,11 @@ from rush.models import (
     LoanData,
     UserCard,
 )
-from rush.utils import div, mul, round_up_decimal
+from rush.utils import (
+    div,
+    mul,
+    round_up_decimal,
+)
 
 
 def lender_disbursal_event(session: Session, event: LedgerTriggerEvent) -> None:
