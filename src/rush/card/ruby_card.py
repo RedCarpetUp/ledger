@@ -5,7 +5,11 @@ from rush.card.base_card import (
     BaseCard,
 )
 from rush.models import CardTransaction
-from rush.utils import div, mul, round_up_decimal
+from rush.utils import (
+    div,
+    mul,
+    round_up_decimal,
+)
 
 
 class RubyCard(BaseCard):
