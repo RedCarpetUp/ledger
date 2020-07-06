@@ -1146,3 +1146,59 @@ def test_prepayment(session: Session) -> None:
     assert first_payment_mapping.emi_number == 1
     assert first_payment_mapping.interest_received == Decimal("30.67")
     assert first_payment_mapping.principal_received == Decimal("1969.33")
+
+
+def test_generate_bill_1_flipkart_card(session: Session) -> None:
+    a = User(id=1337, performed_by=123, name="Raghav", fullname="Raghav", nickname="dfdd", email="asas",)
+    session.add(a)
+    session.flush()
+
+    # assign card
+    uc = create_user_card(
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02"),
+        card_type="flipkart",
+    )
+
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-04-08 19:23:11"),
+        amount=Decimal(1000),
+        description="BigBasket.com",
+    )
+
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-04-08 19:23:11"),
+        amount=Decimal(1000),
+        description="Flipkart",
+    )
+
+    bill_id = swipe.loan_id
+
+    _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
+    assert unbilled_amount == 2000
+
+    bill = bill_generate(session=session, user_card=uc)
+
+    assert bill.table.is_generated is True
+    assert bill.table.principal == 2000
+    _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
+    # Should be 0 because it has moved to billed account.
+    assert unbilled_amount == 0
+
+    _, billed_amount = get_account_balance_from_str(
+        session, book_string=f"{bill_id}/bill/principal_receivable/a"
+    )
+    assert billed_amount == 2000
+
+    _, min_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/min/a")
+    assert min_amount == 197
+
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_id}/bill/interest_receivable/a"
+    )
+    assert interest_due == Decimal("30.33")  # principal is 2k but interest is charged on 1k
