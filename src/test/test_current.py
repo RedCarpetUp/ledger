@@ -115,7 +115,7 @@ def test_card_swipe(session: Session) -> None:
     _, card_balance = get_account_balance_from_str(session, f"{user_card_id}/card/available_limit/l")
     assert card_balance == -900
 
-    _, lender_payable = get_account_balance_from_str(session, f"{user_card_id}/lender/lender_payable/l")
+    _, lender_payable = get_account_balance_from_str(session, f"{user_card_id}/card/lender_payable/l")
     assert lender_payable == 900
 
 
@@ -1163,7 +1163,7 @@ def test_lender_incur(session: Session) -> None:
     assert bill.table.is_generated is True
     status = lender_interest_incur(session, parse_date("2020-06-27 00:00:00"))
     uc = get_user_card(session, 99)
-    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/lender/lender_payable/l")
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
     assert amount == Decimal("1009.41")  # on date 2020-06-27
     _, amount = get_account_balance_from_str(
         session, book_string=f"{uc.id}/redcarpet/redcarpet_expenses/e"
@@ -1181,7 +1181,7 @@ def test_lender_incur(session: Session) -> None:
     # interest on 1015.35 for 2 days and then 2515.35 for 3 days
     status = lender_interest_incur(session, parse_date("2020-07-01 00:00:00"))
     uc = get_user_card(session, 99)
-    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/lender/lender_payable/l")
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
     assert amount == Decimal("2514.54")  # on date 2020-07-01
 
 
@@ -1212,7 +1212,7 @@ def test_lender_incur_two(session: Session) -> None:
     assert bill.table.is_generated is True
     # interest on 1015.35 for 2 days and then 2515.35 for 3 days
     status = lender_interest_incur(session, parse_date("2020-08-01 00:00:00"))
-    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/lender/lender_payable/l")
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
     assert amount == Decimal("1001.48")  # on date 2020-07-01
 
 
@@ -1306,7 +1306,7 @@ def test_writeoff(session: Session) -> None:
     assert status == True
 
     _, lender_payable_amount = get_account_balance_from_str(
-        session, book_string=f"{user_card_id}/lender/lender_payable/l"
+        session, book_string=f"{user_card_id}/card/lender_payable/l"
     )
     assert lender_payable_amount == Decimal("0")
     _, redcarpet_amount = get_account_balance_from_str(

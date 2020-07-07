@@ -78,7 +78,7 @@ def card_transaction_event(session: Session, user_card: BaseCard, event: LedgerT
         session,
         event_id=event.id,
         debit_book_str=f"{lender_id}/lender/lender_capital/l",
-        credit_book_str=f"{user_card.id}/lender/lender_payable/l",
+        credit_book_str=f"{user_card.id}/card/lender_payable/l",
         amount=amount,
     )
 
@@ -177,25 +177,25 @@ def payment_received_event(
         else:
             # Lender has received money, so we reduce our liability now.
             _, lender_payable_balance = get_account_balance_from_str(
-                session, book_string=f"{user_card.id}/lender/lender_payable/l"
+                session, book_string=f"{user_card.id}/card/lender_payable/l"
             )
             amount = min(lender_payable_balance, event.amount)
             create_ledger_entry_from_str(
                 session,
                 event_id=event.id,
-                debit_book_str=f"{user_card.id}/lender/lender_payable/l",
+                debit_book_str=f"{user_card.id}/card/lender_payable/l",
                 credit_book_str=f"{unpaid_bills[0].lender_id}/lender/pg_account/a",
                 amount=Decimal(amount),
             )
     else:
         _, lender_payable_balance = get_account_balance_from_str(
-            session, book_string=f"{user_card.id}/lender/lender_payable/l"
+            session, book_string=f"{user_card.id}/card/lender_payable/l"
         )
         amount = min(lender_payable_balance, event.amount)
         create_ledger_entry_from_str(
             session,
             event_id=event.id,
-            debit_book_str=f"{user_card.id}/lender/lender_payable/l",
+            debit_book_str=f"{user_card.id}/card/lender_payable/l",
             credit_book_str=f"{lender_id}/lender/merchant_refund/a",
             amount=Decimal(amount),
         )
@@ -354,7 +354,7 @@ def refund_event(
         create_ledger_entry_from_str(
             session,
             event_id=event.id,
-            debit_book_str=f"{user_card.id}/lender/lender_payable/l",
+            debit_book_str=f"{user_card.id}/card/lender_payable/l",
             credit_book_str=f"{bill.lender_id}/lender/merchant_refund/a",
             amount=event.amount,
         )
@@ -389,7 +389,7 @@ def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> 
         # can't use div since interest is 1.00047
         lender_interest_rate = (36500 + lender_interest_rate) / 36500
         book_account = get_book_account_by_string(
-            session, book_string=f"{card.id}/lender/lender_payable/l"
+            session, book_string=f"{card.id}/card/lender_payable/l"
         )
 
         # credit interest for payable
@@ -573,7 +573,7 @@ def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> 
                 session,
                 event_id=event.id,
                 debit_book_str=f"{card.id}/redcarpet/redcarpet_expenses/e",
-                credit_book_str=f"{card.id}/lender/lender_payable/l",
+                credit_book_str=f"{card.id}/card/lender_payable/l",
                 amount=round(total_amount, 2),
             )
 
@@ -582,7 +582,7 @@ def writeoff_event(session: Session, user_card: UserCard, event: LedgerTriggerEv
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
-        debit_book_str=f"{user_card.id}/lender/lender_payable/l",
+        debit_book_str=f"{user_card.id}/card/lender_payable/l",
         credit_book_str=f"{user_card.id}/card/bad_debt_allowance/ca",
         amount=event.amount,
     )

@@ -72,7 +72,7 @@ def writeoff_payment(session: Session, user_id: int) -> bool:
     usercard = get_user_card(session, 99)
     if _check_writeoff(session, user_id, usercard):
         _, balance = get_account_balance_from_str(
-            session, book_string=f"{usercard.id}/lender/lender_payable/l"
+            session, book_string=f"{usercard.id}/card/lender_payable/l"
         )
         lt = LedgerTriggerEvent(
             name="writeoff_payment", amount=balance, post_date=get_current_ist_time()
