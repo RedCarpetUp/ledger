@@ -1,8 +1,8 @@
 from sqlalchemy.orm import Session
 
 from rush.card.base_card import BaseCard
+from rush.card.flipkart_card import FlipkartBill, FlipkartCard
 from rush.card.ruby_card import (
-    FlipkartBill,
     RubyBill,
     RubyCard,
 )
@@ -19,7 +19,7 @@ def get_user_card(session: Session, user_id: int, card_type: str = "ruby") -> Ba
     if user_card.card_type == "ruby":
         return RubyCard(session, RubyBill, user_card)
     elif user_card.card_type == "flipkart":
-        return RubyCard(session, FlipkartBill, user_card)
+        return FlipkartCard(session, FlipkartBill, user_card)
 
 
 def create_user_card(session: Session, **kwargs) -> BaseCard:
@@ -30,5 +30,5 @@ def create_user_card(session: Session, **kwargs) -> BaseCard:
     if uc.card_type == "ruby":
         return RubyCard(session, RubyBill, uc)
     elif uc.card_type == "flipkart":
-        return RubyCard(session, FlipkartBill, uc)
+        return FlipkartCard(session, FlipkartBill, uc)
     return uc

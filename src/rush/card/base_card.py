@@ -1,10 +1,10 @@
 from datetime import timedelta
 from decimal import Decimal
 from typing import (
-    List,
+    Callable, List,
     Optional,
     Type,
-    TypeVar,
+    TypeVar, Union,
 )
 
 from pendulum import (
@@ -34,7 +34,7 @@ class BaseBill:
         self.table = loan_data
         self.__dict__.update(loan_data.__dict__)
 
-    def get_interest_to_charge(self):
+    def get_interest_to_charge(self) -> Decimal:
         # TODO get tenure from table.
         interest_on_principal = mul(
             self.table.principal, div(div(self.rc_rate_of_interest_annual, 12), 100)
@@ -47,7 +47,7 @@ class BaseBill:
         new_interest = interest_on_principal + rounding_difference
         return new_interest
 
-    def get_min_per_month(self):
+    def get_min_per_month(self) -> Decimal:
         return self.table.principal_instalment + self.table.interest_to_charge
 
     def get_minimum_amount_to_pay(self, to_date: Optional[DateTime] = None) -> Decimal:
@@ -87,7 +87,7 @@ B = TypeVar("B", bound=BaseBill)
 
 class BaseCard:
     session: Session = None
-    table: UserCard = None
+    table: Union[None, UserCard] = None
 
     def __init__(self, session: Session, bill_class: Type[B], user_card: UserCard):
         self.session = session
@@ -95,9 +95,9 @@ class BaseCard:
         self.table = user_card
         self.__dict__.update(user_card.__dict__)
 
-    def _convert_to_bill_class_decorator(func) -> BaseBill:
-        def f(self):
-            bills = func(self)
+    def _convert_to_bill_class_decorator(func) ->  Callable[['BaseCard'], Union[BaseBill, None,List[Optional[BaseBill]]]]:
+        def f(self: 'BaseCard') -> Union[BaseBill, None, List[Optional[BaseBill]]]:
+            bills = func(self)  # type: ignore
             if not bills:
                 return None
             if type(bills) is List:
@@ -106,7 +106,7 @@ class BaseCard:
 
         return f
 
-    def convert_to_bill_class(self, bill: LoanData):
+    def convert_to_bill_class(self, bill: LoanData) -> Union[BaseBill, None]:
         if not bill:
             return None
         return self.bill_class(self.session, bill)
@@ -118,7 +118,7 @@ class BaseCard:
         rc_rate_of_interest_annual: Decimal,
         lender_rate_of_interest_annual: Decimal,
         is_generated: bool,
-    ) -> BaseBill:
+    ) -> Optional[BaseBill]:
         new_bill = LoanData(
             user_id=self.user_id,
             card_id=self.id,
@@ -143,7 +143,7 @@ class BaseCard:
         unpaid_bills = [bill for bill in all_bills if not bill.is_bill_closed()]
         return unpaid_bills
 
-    @_convert_to_bill_class_decorator
+    @_convert_to_bill_class_decorator  # type: ignore
     def get_latest_generated_bill(self) -> BaseBill:
         latest_bill = (
             self.session.query(LoanData)
@@ -153,7 +153,7 @@ class BaseCard:
         )
         return latest_bill
 
-    @_convert_to_bill_class_decorator
+    @_convert_to_bill_class_decorator  # type: ignore
     def get_latest_bill_to_generate(self) -> BaseBill:
         loan_data = (
             self.session.query(LoanData)
