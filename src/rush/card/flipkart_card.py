@@ -1,12 +1,23 @@
 from decimal import Decimal
+
 from sqlalchemy import func
-from rush.card.base_card import BaseBill, BaseCard
+
+from rush.card.base_card import (
+    BaseBill,
+    BaseCard,
+)
 from rush.models import CardTransaction
-from rush.utils import div, mul, round_up_decimal
+from rush.utils import (
+    div,
+    mul,
+    round_up_decimal,
+)
+
 
 class FlipkartCard(BaseCard):
     def accure_interest_from_flipkart(self) -> None:
         pass
+
 
 class FlipkartBill(BaseBill):
     def get_interest_to_charge(self) -> Decimal:

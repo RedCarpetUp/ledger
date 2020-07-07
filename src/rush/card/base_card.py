@@ -1,10 +1,12 @@
 from datetime import timedelta
 from decimal import Decimal
 from typing import (
-    Callable, List,
+    Callable,
+    List,
     Optional,
     Type,
-    TypeVar, Union,
+    TypeVar,
+    Union,
 )
 
 from pendulum import (
@@ -95,8 +97,10 @@ class BaseCard:
         self.table = user_card
         self.__dict__.update(user_card.__dict__)
 
-    def _convert_to_bill_class_decorator(func) ->  Callable[['BaseCard'], Union[BaseBill, None,List[Optional[BaseBill]]]]:
-        def f(self: 'BaseCard') -> Union[BaseBill, None, List[Optional[BaseBill]]]:
+    def _convert_to_bill_class_decorator(
+        func,
+    ) -> Callable[["BaseCard"], Union[BaseBill, None, List[Optional[BaseBill]]]]:
+        def f(self: "BaseCard") -> Union[BaseBill, None, List[Optional[BaseBill]]]:
             bills = func(self)  # type: ignore
             if not bills:
                 return None

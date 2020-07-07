@@ -1,7 +1,10 @@
 from sqlalchemy.orm import Session
 
 from rush.card.base_card import BaseCard
-from rush.card.flipkart_card import FlipkartBill, FlipkartCard
+from rush.card.flipkart_card import (
+    FlipkartBill,
+    FlipkartCard,
+)
 from rush.card.ruby_card import (
     RubyBill,
     RubyCard,
