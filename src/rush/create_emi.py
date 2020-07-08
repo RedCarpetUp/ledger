@@ -27,9 +27,6 @@ def create_emis_for_card(session: Session, user_card: UserCard, last_bill: LoanD
     _, principal_due = get_account_balance_from_str(
         session, book_string=f"{last_bill.id}/bill/principal_receivable/a"
     )
-    _, late_fine_due = get_account_balance_from_str(
-        session, book_string=f"{last_bill.id}/bill/late_fine_receivable/a"
-    )
     due_amount = div(principal_due, 12)
     due_date = new_emi = None
     # We will firstly create only 12 emis
@@ -39,7 +36,6 @@ def create_emis_for_card(session: Session, user_card: UserCard, last_bill: LoanD
             if i == 1
             else due_date + timedelta(days=user_card.statement_period_in_days + 1)
         )
-        late_fee = late_fine_due if i == 1 else Decimal(0)
         new_emi = CardEmis(
             card_id=user_card.id,
             emi_number=i,
@@ -48,7 +44,6 @@ def create_emis_for_card(session: Session, user_card: UserCard, last_bill: LoanD
             due_amount=due_amount,
             total_due_amount=due_amount,
             due_date=due_date,
-            late_fee=late_fee,
         )
         session.add(new_emi)
     session.flush()
@@ -61,9 +56,6 @@ def add_emi_on_new_bill(
     new_end_emi_number = last_emi_number + 1
     _, principal_due = get_account_balance_from_str(
         session, book_string=f"{last_bill.id}/bill/principal_receivable/a"
-    )
-    _, late_fine_due = get_account_balance_from_str(
-        session, book_string=f"{last_bill.id}/bill/late_fine_receivable/a"
     )
     due_amount = div(principal_due, 12)
     all_emis = (
@@ -78,8 +70,6 @@ def add_emi_on_new_bill(
         if emi_dict["emi_number"] <= new_end_emi_number - 12:
             new_emi_list.append(emi_dict)
             continue
-        elif emi_dict["emi_number"] == ((new_end_emi_number - 12) + 1):
-            emi_dict["late_fee"] += late_fine_due
         emi_dict["due_amount"] += due_amount
         emi_dict["total_due_amount"] += due_amount
         emi_dict["total_closing_balance"] += principal_due - (
@@ -94,7 +84,6 @@ def add_emi_on_new_bill(
     # Get the second last emi for calculating values of the last emi
     second_last_emi = all_emis[last_emi_number - 1]
     last_emi_due_date = second_last_emi.due_date + timedelta(days=user_card.statement_period_in_days + 1)
-    late_fee = 0
     new_emi = CardEmis(
         card_id=user_card.id,
         emi_number=new_end_emi_number,
@@ -103,7 +92,6 @@ def add_emi_on_new_bill(
         total_closing_balance=(principal_due - mul(due_amount, (new_end_emi_number - 1))),
         total_closing_balance_post_due_date=(principal_due - mul(due_amount, (new_end_emi_number - 1))),
         due_date=last_emi_due_date,
-        late_fee=late_fee,
     )
     session.add(new_emi)
     session.flush()
@@ -252,12 +240,16 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
                 payment_received_and_adjusted = abs(diff)
 
     user_card = session.query(UserCard).filter(UserCard.user_id == user_id).first()
-    all_emis_query = (
+    all_emis = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == user_card.id)
         .order_by(CardEmis.due_date.asc())
+        .all()
     )
-    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    if not all_emis:
+        # Success and Error handling later
+        return
+    emis_dict = [u.__dict__ for u in all_emis]
     # To run test, remove later
     # first_emi = emis_dict[0]
     # return first_emi
@@ -398,20 +390,27 @@ def add_moratorium_to_loan_emi(loan_emis, start_date, months_to_be_inserted: int
             if emi["emi_number"] == emi_number_to_begin_insertion_from:
                 for i in range(months_to_be_inserted + 1):
                     insert_emi = temp_emi
+                    # Need to just update emi related fields because
+                    # late fine and interest will be handled through events
                     if i != months_to_be_inserted:
                         insert_emi["extra_details"] = {"moratorium": True}
-                        insert_emi["due_amount"] = Decimal(0)
-                    else:
-                        moratorium_months_interest = 0
-                        for int_key in range(
-                            emi_number_to_begin_insertion_from,
-                            emi_number_to_begin_insertion_from + months_to_be_inserted,
-                        ):
-                            moratorium_months_interest += final_emi_list[int_key - 1][
-                                "moratorium_interest"
-                            ]
-                        # Confirm whether to do this or not
-                        # update_emis_interest(insert_emi, moratorium_months_interest)
+                        insert_emi["payment_status"] - "Paid"
+                        insert_emi.update(
+                            insert_emi.fromkeys(
+                                [
+                                    "due_amount",
+                                    "total_due_amount",
+                                    "interest_current_month",
+                                    "interest_next_month",
+                                    "interest",
+                                    "late_fee",
+                                    "late_fee_received",
+                                    "interest_received",
+                                    "principal_received",
+                                ],
+                                Decimal(0),
+                            )
+                        )
                     insert_emi["emi_number"] += i
                     insert_emi["due_date"] += relativedelta(months=+i)
                     final_emi_list.append(insert_emi)
@@ -422,17 +421,14 @@ def add_moratorium_to_loan_emi(loan_emis, start_date, months_to_be_inserted: int
                 final_emi_list.append(temp_emi)
     else:
         final_emi_list = loan_emis
-        last_emi = loan_emis[len(loan_emis) - 1]
         for i in range(months_to_be_inserted):
+            # Need to just update emi related fields because
+            # late fine and interest will be handled through events
             emi_data = {key: val for key, val in EMI_FORMULA_DICT.items()}
             emi_data["emi_number"] = emi_number_to_begin_insertion_from + i + 1
             emi_data["due_date"] = loan_emis[len(loan_emis) - 1]["due_date"] + relativedelta(
                 months=+months_to_be_inserted
             )
             emi_data["extra_details"] = {"moratorium": True}
-            emi_data["interest"] = last_emi["accrued_interest"]
-            # if i == months_to_be_inserted - 1:
-            # Confirm whether to do this or not
-            # update_emis_interest(emi_data, (last_emi['accrued_interest'] * months_to_be_inserted))
             final_emi_list.append(emi_data)
     return {"result": "success", "data": final_emi_list}

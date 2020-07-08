@@ -1103,6 +1103,14 @@ def test_prepayment(session: Session) -> None:
     uc = get_user_card(session, 99)
     user_card_id = uc.id
 
+    # Check if amount is adjusted correctly in schedule
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.due_date.asc())
+    )
+    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+
     # prepayment of rs 2000 done
     payment_date = parse_date("2020-05-03")
     amount = Decimal(2000)
@@ -1113,6 +1121,14 @@ def test_prepayment(session: Session) -> None:
         payment_date=payment_date,
         payment_request_id="a123",
     )
+
+    # Check if amount is adjusted correctly in schedule
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.due_date.asc())
+    )
+    emis_dict = [u.__dict__ for u in all_emis_query.all()]
 
     swipe = create_card_swipe(
         session=session,
@@ -1145,7 +1161,7 @@ def test_prepayment(session: Session) -> None:
     first_payment_mapping = emi_payment_mapping[0]
     assert first_payment_mapping.emi_number == 1
     assert first_payment_mapping.interest_received == Decimal("30.67")
-    assert first_payment_mapping.principal_received == Decimal("1969.33")
+    assert first_payment_mapping.principal_received == Decimal("83.33")
 
     # Check if amount is adjusted correctly in schedule
     all_emis_query = (
