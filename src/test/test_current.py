@@ -29,9 +29,13 @@ from rush.models import (
     LedgerTriggerEvent,
     LoanData,
     User,
+    UserCard,
     UserPy,
 )
-from rush.payments import payment_received
+from rush.payments import (
+    payment_received,
+    refund_payment,
+)
 from rush.views import (
     bill_view,
     user_view,
@@ -317,7 +321,8 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
         session=session,
         user_card=user_card,
         payment_amount=Decimal("114"),
-        payment_date=parse_date("2020-06-14"),  # Payment came before the due date.
+        # Payment came before the due date.
+        payment_date=parse_date("2020-06-14"),
         payment_request_id="a123",
     )
     bill = unpaid_bills[0]
@@ -987,7 +992,8 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
     _, interest_earned = get_account_balance_from_str(
         session, book_string=f"{first_bill.id}/bill/interest_earned/r"
     )
-    assert interest_earned == Decimal("61.34")  # 30 Interest got removed from first bill.
+    # 30 Interest got removed from first bill.
+    assert interest_earned == Decimal("61.34")
 
     _, interest_earned = get_account_balance_from_str(
         session, book_string=f"{second_bill.id}/bill/interest_earned/r"
@@ -995,7 +1001,8 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
     assert interest_earned == Decimal("60.33")
 
     assert is_bill_closed(session, first_bill) is True
-    assert is_bill_closed(session, second_bill) is True  # 90 got settled in new bill.
+    # 90 got settled in new bill.
+    assert is_bill_closed(session, second_bill) is True
 
 
 def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
@@ -1025,7 +1032,8 @@ def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
     _, interest_earned = get_account_balance_from_str(
         session, book_string=f"{first_bill.id}/bill/interest_earned/r"
     )
-    assert interest_earned == Decimal("61.34")  # 30 Interest did not get removed.
+    # 30 Interest did not get removed.
+    assert interest_earned == Decimal("61.34")
 
     _, interest_earned = get_account_balance_from_str(
         session, book_string=f"{second_bill.id}/bill/interest_earned/r"
@@ -1077,25 +1085,57 @@ def test_view(session: Session) -> None:
     # assert transactions[0]["amount"] == Decimal(1500)
 
 
-#
-# def test_refund_1(session: Session) -> None:
-#     test_generate_bill_1(session)
-#     _generate_bill_3(session)
-#     user_card = get_user_card(session, 99)
-#     unpaid_bills = user_card.get_unpaid_bills()
-#
-#     status = refund_payment(session, 99, unpaid_bills[0].id)
-#     assert status == True
-#     _, amount = get_account_balance_from_str(session, book_string=f"62311/lender/merchant_refund/a")
-#     assert amount == Decimal("1061.34")  # 1000 refunded with interest 60
-
-
-# def test_lender_incur(session: Session) -> None:
-#     test_refund_1(session)
-#     status = lender_interest_incur(session)
-#     uc = get_user_card(session, 99)
-#     _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
-#     assert amount == Decimal("2054.74")  # on date 2020-06-28
+def test_refund_1(session: Session) -> None:
+    test_generate_bill_1(session)
+    _generate_bill_3(session)
+    user = session.query(User).filter(User.id == 99).one()
+    user_card = get_user_card(session, 99)
+    unpaid_bills = user_card.get_unpaid_bills()
+    _, min_balance = get_account_balance_from_str(
+        session, book_string=f"{unpaid_bills[0].id}/bill/min/a"
+    )
+    assert min_balance == Decimal("228.00")  # min before refund
+    status = refund_payment(session, 99, unpaid_bills[0].id, "abcd")
+    assert status == True
+    _, amount = get_account_balance_from_str(
+        session, book_string=f"{unpaid_bills[0].lender_id}/lender/merchant_refund/a"
+    )
+    assert amount == Decimal("0")
+    _, principal_amount = get_account_balance_from_str(
+        session, book_string=f"{unpaid_bills[0].id}/bill/principal_receivable/a"
+    )
+    # refund of 1000 did not cover the whole interest and principal
+    assert principal_amount == Decimal("175.34")
+    _, interest_amount = get_account_balance_from_str(
+        session, book_string=f"{unpaid_bills[0].id}/bill/interest_receivable/a"
+    )
+    assert interest_amount == Decimal("0")
+    _, late_fine_amount = get_account_balance_from_str(
+        session, book_string=f"{unpaid_bills[0].id}/bill/late_fine_receivable/a"
+    )
+    assert late_fine_amount == Decimal("0")
+    _, min_balance = get_account_balance_from_str(
+        session, book_string=f"{unpaid_bills[0].id}/bill/min/a"
+    )
+    assert min_balance == Decimal("0")
+    uc = get_user_card(session, 99)
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-06-08 10:23:11"),
+        amount=Decimal(900),
+        description="BigBasket.com",
+    )
+    bill_id = swipe.loan_id
+    lender_id = session.query(LoanData.lender_id).filter(LoanData.id == bill_id).limit(1).scalar()
+    _, unbilled = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
+    assert unbilled == Decimal("900")
+    status = refund_payment(session, 99, bill_id, "abcde")
+    assert status == True
+    _, unbilled = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
+    assert unbilled == Decimal("0")
+    _, amount = get_account_balance_from_str(session, book_string=f"62311/lender/merchant_refund/a")
+    assert amount == Decimal("0")
 
 
 def test_prepayment(session: Session) -> None:
@@ -1113,7 +1153,10 @@ def test_prepayment(session: Session) -> None:
         payment_date=payment_date,
         payment_request_id="a123",
     )
-
+    _, prepayment_amount = get_account_balance_from_str(
+        session, book_string=f"{user_card_id}/card/pre_payment/l"
+    )
+    assert prepayment_amount == Decimal("969.33")
     swipe = create_card_swipe(
         session=session,
         user_card=uc,
@@ -1130,6 +1173,11 @@ def test_prepayment(session: Session) -> None:
 
     assert bill.table.is_generated is True
 
+    _, prepayment_amount = get_account_balance_from_str(
+        session, book_string=f"{user_card_id}/card/pre_payment/l"
+    )
+    assert prepayment_amount == Decimal("0")
+
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     # Should be 0 because it has moved to billed account.
     assert unbilled_amount == 0
@@ -1139,10 +1187,38 @@ def test_prepayment(session: Session) -> None:
     )
     assert billed_amount == Decimal("30.67")
 
-    emi_payment_mapping = (
-        session.query(EmiPaymentMapping).filter(EmiPaymentMapping.card_id == user_card_id).all()
+    amount = Decimal(1000)
+    payment_received(
+        session=session,
+        user_card=uc,
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id="a123",
     )
-    first_payment_mapping = emi_payment_mapping[0]
-    assert first_payment_mapping.emi_number == 1
-    assert first_payment_mapping.interest_received == Decimal("30.67")
-    assert first_payment_mapping.principal_received == Decimal("1969.33")
+
+    _, prepayment_amount = get_account_balance_from_str(
+        session, book_string=f"{user_card_id}/card/pre_payment/l"
+    )
+    # left amount deducted from the payment
+    assert prepayment_amount == Decimal("967.89")
+
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-06-08 19:23:11"),
+        amount=Decimal(800),
+        description="Myntra.com",
+    )
+    bill_id = swipe.loan_id
+
+    _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
+    assert unbilled_amount == 800
+
+    bill = bill_generate(session=session, user_card=uc)
+
+    assert bill.is_generated is False
+
+    _, prepayment_amount = get_account_balance_from_str(
+        session, book_string=f"{user_card_id}/card/pre_payment/l"
+    )
+    assert prepayment_amount == Decimal("167.89")  # 800 deducted from 967.89
