@@ -1275,5 +1275,3 @@ def test_moratorium(session: Session) -> None:
 
     last_emi = emis_dict[-1]
     assert last_emi["emi_number"] == 15
-
-
