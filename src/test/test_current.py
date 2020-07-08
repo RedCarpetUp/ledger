@@ -15,6 +15,7 @@ from rush.card import (
 )
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
+from rush.create_emi import check_moratorium_eligibility
 from rush.ledger_utils import (
     get_account_balance_from_str,
     is_bill_closed,
@@ -40,7 +41,6 @@ from rush.views import (
     bill_view,
     user_view,
 )
-from rush.create_emi import check_moratorium_eligibility
 
 
 def test_current(get_alembic: alembic.config.Config) -> None:
