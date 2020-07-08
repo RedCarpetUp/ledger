@@ -1086,7 +1086,6 @@ def test_view(session: Session) -> None:
     # assert transactions[0]["amount"] == Decimal(1500)
 
 
-<<<<<<< HEAD
 # def test_refund_1(session: Session) -> None:
 #     test_generate_bill_1(session)
 #     _generate_bill_3(session)
@@ -1105,59 +1104,6 @@ def test_view(session: Session) -> None:
 #     uc = get_user_card(session, 99)
 #     _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
 #     assert amount == Decimal("2054.74")  # on date 2020-06-28
-=======
-def test_refund_1(session: Session) -> None:
-    test_generate_bill_1(session)
-    _generate_bill_3(session)
-    user = session.query(User).filter(User.id == 99).one()
-    user_card = get_user_card(session, 99)
-    unpaid_bills = user_card.get_unpaid_bills()
-    _, min_balance = get_account_balance_from_str(
-        session, book_string=f"{unpaid_bills[0].id}/bill/min/a"
-    )
-    assert min_balance == Decimal("228.00")  # min before refund
-    status = refund_payment(session, 99, unpaid_bills[0].id, "abcd")
-    assert status == True
-    _, amount = get_account_balance_from_str(
-        session, book_string=f"{unpaid_bills[0].lender_id}/lender/merchant_refund/a"
-    )
-    assert amount == Decimal("0")
-    _, principal_amount = get_account_balance_from_str(
-        session, book_string=f"{unpaid_bills[0].id}/bill/principal_receivable/a"
-    )
-    # refund of 1000 did not cover the whole interest and principal
-    assert principal_amount == Decimal("175.34")
-    _, interest_amount = get_account_balance_from_str(
-        session, book_string=f"{unpaid_bills[0].id}/bill/interest_receivable/a"
-    )
-    assert interest_amount == Decimal("0")
-    _, late_fine_amount = get_account_balance_from_str(
-        session, book_string=f"{unpaid_bills[0].id}/bill/late_fine_receivable/a"
-    )
-    assert late_fine_amount == Decimal("0")
-    _, min_balance = get_account_balance_from_str(
-        session, book_string=f"{unpaid_bills[0].id}/bill/min/a"
-    )
-    assert min_balance == Decimal("0")
-    uc = get_user_card(session, 99)
-    swipe = create_card_swipe(
-        session=session,
-        user_card=uc,
-        txn_time=parse_date("2020-06-08 10:23:11"),
-        amount=Decimal(900),
-        description="BigBasket.com",
-    )
-    bill_id = swipe.loan_id
-    lender_id = session.query(LoanData.lender_id).filter(LoanData.id == bill_id).limit(1).scalar()
-    _, unbilled = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
-    assert unbilled == Decimal("900")
-    status = refund_payment(session, 99, bill_id, "abcde")
-    assert status == True
-    _, unbilled = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
-    assert unbilled == Decimal("0")
-    _, amount = get_account_balance_from_str(session, book_string=f"62311/lender/merchant_refund/a")
-    assert amount == Decimal("0")
->>>>>>> bfef266d9c62f3c4640e3854ab46d6539cc2c3e5
 
 
 def test_prepayment(session: Session) -> None:
@@ -1196,7 +1142,7 @@ def test_prepayment(session: Session) -> None:
         session, book_string=f"{user_card_id}/card/pre_payment/l"
     )
     assert prepayment_amount == Decimal("969.33")
-    
+
     swipe = create_card_swipe(
         session=session,
         user_card=uc,
