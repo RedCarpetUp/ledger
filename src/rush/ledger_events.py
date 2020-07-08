@@ -28,7 +28,6 @@ from rush.models import (
 from rush.utils import (
     div,
     mul,
-    round_up_decimal,
 )
 
 
@@ -176,19 +175,19 @@ def _adjust_for_recovery(session: Session, user_card_id: int, event_id: int, amo
         event_id=event.id,
         debit_book_str=f"{user_card_id}/card/bad_debt_allowance/ca",
         credit_book_str=f"{user_card_id}/card/writeoff_expenses/e",
-        amount=round(amount, 2),
+        amount=Decimal(amount),
     )
 
 
 def _adjust_lender_payable(
-    session: Session, user_card_id: int, debit_book_str: str, event: LedgerTriggerEvent
+    session: Session, user_card_id: int, credit_book_str: str, event: LedgerTriggerEvent
 ) -> None:
     # Lender has received money, so we reduce our liability now.
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
         debit_book_str=f"{user_card_id}/card/lender_payable/l",
-        credit_book_str=debit_book_str,
+        credit_book_str=credit_book_str,
         amount=Decimal(event.amount),
     )
 
@@ -211,7 +210,7 @@ def _adjust_bill(
                 event_id=event_id,
                 debit_book_str=to_acc,
                 credit_book_str=from_acc,
-                amount=round(balance_to_adjust, 2),
+                amount=Decimal(balance_to_adjust),
             )
             payment_to_adjust_from -= balance_to_adjust
         return payment_to_adjust_from
@@ -556,7 +555,7 @@ def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> 
                 event_id=event.id,
                 debit_book_str=f"{card.id}/card/redcarpet_expenses/e",
                 credit_book_str=f"{card.id}/card/lender_payable/l",
-                amount=round(total_amount, 2),
+                amount=Decimal(total_amount),
             )
 
 
