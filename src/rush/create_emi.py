@@ -5,8 +5,11 @@ from dateutil.relativedelta import relativedelta
 from pendulum import (
     Date,
     DateTime,
+    parse as parse_date,
 )
+
 from sqlalchemy.orm import Session
+from sqlalchemy.orm import session
 
 from rush.anomaly_detection import get_affected_events
 from rush.ledger_utils import get_account_balance_from_str
@@ -308,7 +311,7 @@ def adjust_interest_in_emis(session: Session, user_id: int, post_date: DateTime)
         .order_by(LoanData.agreement_date.desc())
         .first()
     )
-    user_card = session.query(UserCard).filter(UserCard.user_id == user_id).first()
+    user_card = get_user_card(session, user_id)
     emis_for_this_bill = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == user_card.id, CardEmis.due_date >= post_date)
@@ -318,13 +321,18 @@ def adjust_interest_in_emis(session: Session, user_id: int, post_date: DateTime)
     _, interest_due = get_account_balance_from_str(
         session=session, book_string=f"{latest_bill.id}/bill/interest_receivable/a"
     )
+    min_due = user_card.get_min_for_schedule()
+    emi_count = 0
     if interest_due > 0:
         for emi in emis_dict:
             emi["total_closing_balance_post_due_date"] += interest_due
-            emi["total_due_amount"] += interest_due
+            emi["total_due_amount"] = (
+                min_due if emi_count == 0 else emi["total_due_amount"] + interest_due
+            )
             emi["interest_current_month"] += div(mul(interest_due, (30 - emi["due_date"].day)), 30)
             emi["interest_next_month"] += interest_due - emi["interest_current_month"]
             emi["interest"] += emi["interest_current_month"] + emi["interest_next_month"]
+            emi_count += 1
         session.bulk_update_mappings(CardEmis, emis_dict)
 
 
@@ -398,15 +406,15 @@ def add_moratorium_to_loan_emi(loan_emis, start_date, months_to_be_inserted: int
     final_emi_list = []
     if not is_insertion_happening_in_the_end:
         for emi in loan_emis:
-            temp_emi = emi
+            temp_emi = emi.copy()
             if emi["emi_number"] == emi_number_to_begin_insertion_from:
                 for i in range(months_to_be_inserted + 1):
-                    insert_emi = temp_emi
+                    insert_emi = temp_emi.copy()
                     # Need to just update emi related fields because
                     # late fine and interest will be handled through events
                     if i != months_to_be_inserted:
                         insert_emi["extra_details"] = {"moratorium": True}
-                        insert_emi["payment_status"] - "Paid"
+                        insert_emi["payment_status"] = "Paid"
                         insert_emi.update(
                             insert_emi.fromkeys(
                                 [
@@ -444,3 +452,45 @@ def add_moratorium_to_loan_emi(loan_emis, start_date, months_to_be_inserted: int
             emi_data["extra_details"] = {"moratorium": True}
             final_emi_list.append(emi_data)
     return {"result": "success", "data": final_emi_list}
+
+
+def check_moratorium_eligibility(session: Session, data):
+    # required_fields = ["loan_id", "start_date", "months_to_be_inserted"]
+    # resp = check_for_mandatory_fields(data, required_fields)
+    # if resp.get('result') != 'success':
+    #     return resp
+    user_id = int(data["user_id"])
+    start_date = parse_date(data["start_date"]).date()
+    months_to_be_inserted = int(data["months_to_be_inserted"])
+    user_card = get_user_card(session, user_id)
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.due_date.asc())
+    )
+    emis = [u.__dict__ for u in all_emis_query.all()]
+    try:
+        moratorium_start_emi = next(emi for emi in emis if emi["due_date"] >= start_date)
+    except:
+        moratorium_start_emi = None
+    if not moratorium_start_emi:
+        return {"result": "error", "message": "Not eligible for moratorium"}
+
+    # if is_any_payment_on_emi(moratorium_start_emi):
+    #     resp = remove_payment_from_emis(emis, moratorium_start_emi['emi_number'])
+    #     if resp.get('result') == 'error':
+    #         return resp
+    #     data = resp['data']
+    #     loan_data['emis'] = data['emis']
+    #     old_payment_emis_mappings = data['old_payment_emis_mapping']
+    #     payment_requests_to_adjust = data['payment_requests_to_adjust']
+
+    resp = add_moratorium_to_loan_emi(emis, start_date, months_to_be_inserted)
+    if resp["result"] == "error":
+        return resp
+
+    # if payment_requests_to_adjust:
+    #     add_payment_on_emis(payment_requests_to_adjust,
+    #                         loan_data, new_payment_emi_mapping)
+
+    session.bulk_update_mappings(CardEmis, resp["data"])

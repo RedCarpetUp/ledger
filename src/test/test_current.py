@@ -40,6 +40,7 @@ from rush.views import (
     bill_view,
     user_view,
 )
+from rush.create_emi import check_moratorium_eligibility
 
 
 def test_current(get_alembic: alembic.config.Config) -> None:
@@ -1216,3 +1217,63 @@ def test_prepayment(session: Session) -> None:
         session, book_string=f"{user_card_id}/card/pre_payment/l"
     )
     assert prepayment_amount == Decimal("167.89")  # 800 deducted from 967.89
+
+
+def test_moratorium(session: Session) -> None:
+    a = User(
+        id=38612,
+        performed_by=123,
+        name="Ananth",
+        fullname="Ananth Venkatesh",
+        nickname="Ananth",
+        email="ananth@redcarpetup.com",
+    )
+    session.add(a)
+    session.flush()
+
+    # assign card
+    # 25 days to enforce 15th june as first due date
+    uc = create_user_card(
+        session=session,
+        card_type="ruby",
+        user_id=a.id,
+        card_activation_date=parse_date("2020-01-20"),
+        interest_free_period_in_days=25,
+    )
+
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-01-24 16:29:25"),
+        amount=Decimal(2500),
+        description="WWW YESBANK IN         GURGAON       IND",
+    )
+
+    # Generate bill
+    generate_date = parse_date("2020-02-01").date()
+    bill_may = bill_generate(session=session, user_card=uc)
+
+    # Check if amount is adjusted correctly in schedule
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.due_date.asc())
+    )
+    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+
+    check_moratorium_eligibility(
+        session, {"user_id": a.id, "start_date": "2020-03-01", "months_to_be_inserted": 3}
+    )
+
+    # Check if amount is adjusted correctly in schedule
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.due_date.asc())
+    )
+    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+
+    last_emi = emis_dict[-1]
+    assert last_emi["emi_number"] == 15
+
+
