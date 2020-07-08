@@ -68,6 +68,7 @@ def add_emi_on_new_bill(
         .filter(CardEmis.card_id == user_card.id)
         .order_by(CardEmis.due_date.asc())
     )
+    min_due = user_card.get_min_for_schedule()
     new_emi_list = []
     for emi in all_emis:
         emi_dict = emi.as_dict_for_json()
@@ -76,7 +77,8 @@ def add_emi_on_new_bill(
             new_emi_list.append(emi_dict)
             continue
         emi_dict["due_amount"] += due_amount
-        emi_dict["total_due_amount"] += due_amount
+        emi_dict["total_due_amount"] = min_due if emi_dict['emi_number'] == ((new_end_emi_number - 12) + 1)\
+            else emi_dict["total_due_amount"] + due_amount
         emi_dict["total_closing_balance"] += principal_due - (
             mul(due_amount, (emi_dict["emi_number"] - (new_end_emi_number - 12) - 1))
         )
@@ -336,6 +338,7 @@ def adjust_late_fee_in_emis(session: Session, user_id: int, post_date: DateTime)
         .order_by(CardEmis.due_date.desc())
         .first()
     )
+    min_due = user_card.get_min_for_schedule()
     if not emi:
         emi = session.query(CardEmis).order_by(CardEmis.due_date.asc()).first()
     emi_dict = emi.as_dict_for_json()
@@ -344,7 +347,7 @@ def adjust_late_fee_in_emis(session: Session, user_id: int, post_date: DateTime)
     )
     if late_fee > 0:
         emi_dict["total_closing_balance_post_due_date"] += late_fee
-        emi_dict["total_due_amount"] += late_fee
+        emi_dict["total_due_amount"] = min_due
         emi_dict["late_fee"] += late_fee
         session.bulk_update_mappings(CardEmis, [emi_dict])
 
