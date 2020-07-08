@@ -23,6 +23,7 @@ from rush.utils import (
     get_current_ist_time,
     mul,
 )
+from rush.card import get_user_card
 
 
 def create_emis_for_card(session: Session, user_card: UserCard, last_bill: LoanData) -> CardEmis:
@@ -77,8 +78,11 @@ def add_emi_on_new_bill(
             new_emi_list.append(emi_dict)
             continue
         emi_dict["due_amount"] += due_amount
-        emi_dict["total_due_amount"] = min_due if emi_dict['emi_number'] == ((new_end_emi_number - 12) + 1)\
+        emi_dict["total_due_amount"] = (
+            min_due
+            if emi_dict["emi_number"] == ((new_end_emi_number - 12) + 1)
             else emi_dict["total_due_amount"] + due_amount
+        )
         emi_dict["total_closing_balance"] += principal_due - (
             mul(due_amount, (emi_dict["emi_number"] - (new_end_emi_number - 12) - 1))
         )
@@ -331,7 +335,7 @@ def adjust_late_fee_in_emis(session: Session, user_id: int, post_date: DateTime)
         .order_by(LoanData.agreement_date.desc())
         .first()
     )
-    user_card = session.query(UserCard).filter(UserCard.user_id == user_id).first()
+    user_card = get_user_card(session, user_id)
     emi = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == user_card.id, CardEmis.due_date < post_date)
