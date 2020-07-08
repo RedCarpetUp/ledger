@@ -70,8 +70,7 @@ def can_remove_interest(
     this_month_interest = interest_event.amount  # The total interest amount which we last accrued.
     total_outstanding = _get_total_outstanding(session, user_card)  # TODO outstanding as of due_date.
 
-    # the amount has been paid sans interest.
-    if total_outstanding <= this_month_interest:
+    if total_outstanding <= this_month_interest:  # the amount has been paid sans interest.
         return True
     return False
 
@@ -179,8 +178,7 @@ def reverse_interest_charges(
         # We need to remove the amount that got adjusted in interest. interest_earned account needs
         # to be removed by the interest_that_was_added amount.
         d = {"acc_to_remove_from": f"{bill.id}/bill/interest_earned/r", "amount": settled_amount}
-        # Move amount from this bill to some other bill.
-        inter_bill_movement_entries.append(d)
+        inter_bill_movement_entries.append(d)  # Move amount from this bill to some other bill.
 
         if not is_bill_closed(
             session, bill
