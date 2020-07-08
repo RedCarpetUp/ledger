@@ -67,10 +67,8 @@ def can_remove_interest(
     if payment_came_after_due_date:
         return False
 
-    # The total interest amount which we last accrued.
-    this_month_interest = interest_event.amount
-    # TODO outstanding as of due_date.
-    total_outstanding = _get_total_outstanding(session, user_card)
+    this_month_interest = interest_event.amount  # The total interest amount which we last accrued.
+    total_outstanding = _get_total_outstanding(session, user_card)  # TODO outstanding as of due_date.
 
     # the amount has been paid sans interest.
     if total_outstanding <= this_month_interest:
