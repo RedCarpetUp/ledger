@@ -1165,9 +1165,7 @@ def test_lender_incur(session: Session) -> None:
     uc = get_user_card(session, 99)
     _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
     assert amount == Decimal("1009.41")  # on date 2020-06-27
-    _, amount = get_account_balance_from_str(
-        session, book_string=f"{uc.id}/redcarpet/redcarpet_expenses/e"
-    )
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/redcarpet_expenses/e")
     assert amount == Decimal("9.41")  # on date 2020-06-27
     swipe = create_card_swipe(
         session=session,

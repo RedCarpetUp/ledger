@@ -26,7 +26,7 @@ from rush.utils import get_current_ist_time
 
 def payment_received(
     session: Session,
-    user_card: UserCard,
+    user_card: BaseCard,
     payment_amount: Decimal,
     payment_date: DateTime,
     payment_request_id: str,
@@ -40,7 +40,10 @@ def payment_received(
     )
     session.add(lt)
     session.flush()
-    payment_received_event(session, user_card, "lender/pg_account/a", lt)
+    lender_id = (
+        session.query(LoanData.lender_id).filter(LoanData.card_id == user_card.id).limit(1).scalar() or 0
+    )
+    payment_received_event(session, user_card, f"{lender_id}/lender/pg_account/a", lt)
     run_anomaly(session, user_card, payment_date)
 
 
