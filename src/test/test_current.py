@@ -126,7 +126,11 @@ def test_generate_bill_1(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02"),
+        lender_id=62311,
+        card_type="ruby",
     )
 
     swipe = create_card_swipe(
@@ -523,7 +527,11 @@ def test_generate_bill_3(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02"),
+        lender_id=62311,
+        card_type="ruby",
     )
 
     create_card_swipe(
@@ -558,7 +566,11 @@ def test_emi_creation(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, card_type="ruby", user_id=a.id, card_activation_date=parse_date("2020-04-02")
+        session=session,
+        card_type="ruby",
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02"),
+        lender_id=62311,
     )
 
     create_card_swipe(
@@ -590,7 +602,11 @@ def test_subsequent_emi_creation(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, card_type="ruby", user_id=a.id, card_activation_date=parse_date("2020-04-02")
+        session=session,
+        card_type="ruby",
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02"),
+        lender_id=62311,
     )
 
     create_card_swipe(
@@ -639,7 +655,11 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, card_type="ruby", user_id=a.id, card_activation_date=parse_date("2020-05-01")
+        session=session,
+        card_type="ruby",
+        user_id=a.id,
+        card_activation_date=parse_date("2020-05-01"),
+        lender_id=62311,
     )
 
     create_card_swipe(
@@ -715,6 +735,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-05-20"),
         interest_free_period_in_days=25,
+        lender_id=62311,
     )
 
     # Card transactions
@@ -1147,7 +1168,11 @@ def test_lender_incur(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02"),
+        card_type="ruby",
+        lender_id=62311,
     )
     swipe = create_card_swipe(
         session=session,
@@ -1190,7 +1215,11 @@ def test_lender_incur_two(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02"),
+        card_type="ruby",
+        lender_id=62311,
     )
     swipe = create_card_swipe(
         session=session,
@@ -1259,7 +1288,11 @@ def test_writeoff(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02"),
+        lender_id=62311,
+        card_type="ruby",
     )
 
     user_card_id = uc.id
