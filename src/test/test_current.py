@@ -1152,6 +1152,14 @@ def test_prepayment(session: Session) -> None:
     )
     bill_id = swipe.loan_id
 
+    emi_payment_mapping = (
+        session.query(EmiPaymentMapping).filter(EmiPaymentMapping.card_id == user_card_id).all()
+    )
+    first_payment_mapping = emi_payment_mapping[0]
+    assert first_payment_mapping.emi_number == 1
+    assert first_payment_mapping.interest_received == Decimal("30.67")
+    assert first_payment_mapping.principal_received == Decimal("83.33")
+
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 1000
 
