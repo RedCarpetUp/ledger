@@ -41,9 +41,11 @@ def payment_received(
     session.add(lt)
     session.flush()
     lender_id = (
-        session.query(LoanData.lender_id).filter(LoanData.card_id == user_card.id).limit(1).scalar() or 0
+        session.query(LoanData.lender_id).filter(
+            LoanData.card_id == user_card.id).limit(1).scalar() or 0
     )
-    payment_received_event(session, user_card, f"{lender_id}/lender/pg_account/a", lt)
+    payment_received_event(
+        session, user_card, f"{lender_id}/lender/pg_account/a", lt)
     run_anomaly(session, user_card, payment_date)
 
 
@@ -92,9 +94,24 @@ def _check_writeoff(session, user_id: int, user_card: BaseCard) -> bool:
 
     unpaid_bills = user_card.get_unpaid_bills()
     if len(unpaid_bills) >= 1:
-        relative = relativedelta.relativedelta(get_current_ist_time(), unpaid_bills[0].agreement_date)
+        relative = relativedelta.relativedelta(
+            get_current_ist_time(), unpaid_bills[0].agreement_date)
         months = relative.months + (12 * relative.years)
         if months >= 3:
             return True
         else:
             return False
+
+
+def customer_refund(session: Session, user_id: int) -> bool
+
+
+amount = Decimal("10000")
+card_id = None  # Down for now
+lender_id = None  # calculate
+lt = LedgerTriggerEvent(name="customer_refund",
+                        amount=amount, post_date=get_current_ist_time())
+session.add(lt)
+session.flush()
+customer_refund_event(session, card_id, lender_id, lt)
+return True

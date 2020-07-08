@@ -98,7 +98,8 @@ def bill_generate_event(
     bill_id = bill.id
 
     # Move all unbilled book amount to billed account
-    _, unbilled_balance = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
+    _, unbilled_balance = get_account_balance_from_str(
+        session, book_string=f"{bill_id}/bill/unbilled/a")
 
     create_ledger_entry_from_str(
         session,
@@ -202,7 +203,8 @@ def _adjust_bill(
     def adjust(payment_to_adjust_from: Decimal, to_acc: str, from_acc: str) -> Decimal:
         if payment_to_adjust_from <= 0:
             return payment_to_adjust_from
-        _, book_balance = get_account_balance_from_str(session, book_string=from_acc)
+        _, book_balance = get_account_balance_from_str(
+            session, book_string=from_acc)
         if book_balance > 0:
             balance_to_adjust = min(payment_to_adjust_from, book_balance)
             create_ledger_entry_from_str(
@@ -340,7 +342,8 @@ def refund_event(
             amount=event.amount,
         )
     else:
-        payment_received_event(session, user_card, f"{bill.lender_id}/lender/merchant_refund/a", event)
+        payment_received_event(
+            session, user_card, f"{bill.lender_id}/lender/merchant_refund/a", event)
 
 
 def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> None:
@@ -353,7 +356,8 @@ def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> 
         .first()
     )
     if last_trigger == None:
-        last_lender_incur_trigger = event.post_date + dateutil.relativedelta.relativedelta(months=-1)
+        last_lender_incur_trigger = event.post_date + \
+            dateutil.relativedelta.relativedelta(months=-1)
     else:
         last_lender_incur_trigger = last_trigger.post_date
 
@@ -405,7 +409,8 @@ def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> 
                 (
                     func.pow(
                         lender_interest_rate,
-                        extract("day", (event.post_date - credit_balance.c.post_date)),
+                        extract("day", (event.post_date -
+                                        credit_balance.c.post_date)),
                     )
                     * credit_balance.c.amount
                 )
@@ -417,7 +422,8 @@ def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> 
         )
 
         remaining_credit_balance = session.query(
-            extract("day", (credit_balance.c.post_date - last_lender_incur_trigger)).label("days"),
+            extract("day", (credit_balance.c.post_date -
+                            last_lender_incur_trigger)).label("days"),
             credit_balance.c.amount,
         ).subquery("remaining_credit_balance")
 
@@ -474,7 +480,8 @@ def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> 
                 (
                     func.pow(
                         lender_interest_rate,
-                        extract("day", (event.post_date - debit_balance.c.post_date)),
+                        extract("day", (event.post_date -
+                                        debit_balance.c.post_date)),
                     )
                     * debit_balance.c.amount
                 )
@@ -485,7 +492,8 @@ def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> 
             or 0
         )
         remaining_debit_balance = session.query(
-            extract("day", (debit_balance.c.post_date - last_lender_incur_trigger)).label("days"),
+            extract("day", (debit_balance.c.post_date -
+                            last_lender_incur_trigger)).label("days"),
             debit_balance.c.amount,
         ).subquery("remaining_debit_balance")
 
@@ -515,7 +523,8 @@ def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> 
                     (
                         func.pow(
                             lender_interest_rate,
-                            extract("day", (debit_balance.c.post_date - last_lender_incur_trigger)),
+                            extract("day", (debit_balance.c.post_date -
+                                            last_lender_incur_trigger)),
                         )
                         * debit_balance.c.amount
                     )
@@ -530,7 +539,8 @@ def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> 
                     (
                         func.pow(
                             lender_interest_rate,
-                            extract("day", (credit_balance.c.post_date - last_lender_incur_trigger)),
+                            extract(
+                                "day", (credit_balance.c.post_date - last_lender_incur_trigger)),
                         )
                         * credit_balance.c.amount
                     )
@@ -541,7 +551,8 @@ def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> 
                 or 0
             )
         total_amount = (
-            Decimal(session.query(func.sum(remaining_credit.c.amount)).scalar() or 0)
+            Decimal(session.query(
+                func.sum(remaining_credit.c.amount)).scalar() or 0)
             - Decimal(session.query(func.sum(remaining_credit_balance.c.amount)).scalar() or 0)
             + last_credit_balance
             - Decimal(session.query(func.sum(remaining_debit.c.amount)).scalar() or 0)
@@ -573,4 +584,24 @@ def writeoff_event(session: Session, user_card: UserCard, event: LedgerTriggerEv
         debit_book_str=f"{user_card.id}/card/writeoff_expenses/e",
         credit_book_str=f"{user_card.id}/redcarpet/redcarpet_account/a",
         amount=event.amount,
+    )
+
+
+def customer_refund_event(session: Session, card_id: int, lender_id: int, event: LedgerTriggerEvent) -> None:
+    create_ledger_entry_from_str(
+        session,
+        event_id=event.id,
+        debit_book_str=f"{card_id}/card/pre_payment/l",
+        credit_book_str=f"{lender_id}/lender/pg_account/a",
+        amount=Decimal(event.amount),
+    )
+
+
+def limit_assignment_event(session: Session, card_id: int, event: LedgerTriggerEvent) -> None:
+    create_ledger_entry_from_str(
+        session,
+        event_id=event.id,
+        debit_book_str=f"{card_id}/card/available_limit/a",
+        credit_book_str=f"{card_id}/card/available_limit/l",
+        amount=Decimal(event.amount),
     )
