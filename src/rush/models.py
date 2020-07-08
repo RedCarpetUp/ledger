@@ -198,6 +198,7 @@ class CardEmis(AuditMixin):
     interest_received = Column(Numeric, nullable=False, default=Decimal(0))
     payment_received = Column(Numeric, nullable=False, default=Decimal(0))
     payment_status = Column(String(length=10), nullable=False, default="UnPaid")
+    extra_details = Column(JSON, default="{}")
 
 
 class EmiPaymentMapping(AuditMixin):

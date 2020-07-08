@@ -1078,7 +1078,6 @@ def test_view(session: Session) -> None:
     # assert transactions[0]["amount"] == Decimal(1500)
 
 
-#
 # def test_refund_1(session: Session) -> None:
 #     test_generate_bill_1(session)
 #     _generate_bill_3(session)

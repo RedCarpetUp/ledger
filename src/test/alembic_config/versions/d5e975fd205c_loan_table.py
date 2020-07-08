@@ -100,6 +100,7 @@ def upgrade() -> None:
         sa.Column("total_closing_balance", sa.DECIMAL(), nullable=False),
         sa.Column("dpd", sa.Integer(), nullable=True),
         sa.Column("card_id", sa.Integer(), nullable=False),
+        sa.Column("extra_details", sa.JSON(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["card_id"], ["user_card.id"], name="fk_card_emis_card_id"),
     )

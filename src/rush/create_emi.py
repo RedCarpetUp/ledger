@@ -1,4 +1,5 @@
 from datetime import timedelta
+from dateutil.relativedelta import relativedelta
 from decimal import Decimal
 
 from pendulum import (
@@ -20,6 +21,7 @@ from rush.utils import (
     div,
     get_current_ist_time,
     mul,
+    EMI_FORMULA_DICT
 )
 
 
@@ -34,6 +36,7 @@ def create_emis_for_card(session: Session, user_card: UserCard, last_bill: LoanD
         session, book_string=f"{last_bill.id}/bill/late_fine_receivable/a"
     )
     due_amount = div(principal_due, 12)
+    due_date = new_emi = None
     # We will firstly create only 12 emis
     for i in range(1, 13):
         due_date = (
@@ -41,7 +44,7 @@ def create_emis_for_card(session: Session, user_card: UserCard, last_bill: LoanD
             if i == 1
             else due_date + timedelta(days=user_card.statement_period_in_days + 1)
         )
-        late_fee = late_fine_due if i == 1 else 0
+        late_fee = late_fine_due if i == 1 else Decimal(0)
         new_emi = CardEmis(
             card_id=user_card.id,
             emi_number=i,
@@ -50,7 +53,7 @@ def create_emis_for_card(session: Session, user_card: UserCard, last_bill: LoanD
             due_amount=due_amount,
             total_due_amount=due_amount,
             due_date=due_date,
-            late_fee=late_fine_due,
+            late_fee=late_fee,
         )
         session.add(new_emi)
     session.flush()
@@ -378,3 +381,57 @@ def create_emi_payment_mapping(
     session.add(new_payment_mapping)
     session.flush()
     return new_payment_mapping
+
+
+def add_moratorium_to_loan_emi(loan_emis, start_date, months_to_be_inserted:int):
+    if not loan_emis:
+        return {'result': 'error', 'message': 'loan emis required'}
+    dict_to_be_shifted_from = next((d for d in loan_emis if d['due_date'] >= start_date), False)
+    final_emi_due_date_difference_with_start = (start_date - loan_emis[len(loan_emis)-1]['due_date']).days
+    if final_emi_due_date_difference_with_start > 90:
+        return {'result': 'error', 'message': 'incorrect start date given'}
+    is_insertion_happening_in_the_end = False
+    if dict_to_be_shifted_from:
+        emi_number_to_begin_insertion_from = dict_to_be_shifted_from['emi_number']
+    else:
+        is_insertion_happening_in_the_end = True
+        emi_number_to_begin_insertion_from = loan_emis[len(loan_emis)-1]['emi_number']
+    final_emi_list = []
+    if not is_insertion_happening_in_the_end:
+        for emi in loan_emis:
+            temp_emi = emi
+            if emi['emi_number'] == emi_number_to_begin_insertion_from:
+                for i in range(months_to_be_inserted+1):
+                    insert_emi = temp_emi
+                    if i != months_to_be_inserted:
+                        insert_emi['extra_details'] = {'moratorium': True}
+                        insert_emi['due_amount'] = Decimal(0)
+                    else:
+                        moratorium_months_interest = 0
+                        for int_key in range(emi_number_to_begin_insertion_from,\
+                            emi_number_to_begin_insertion_from+months_to_be_inserted):
+                            moratorium_months_interest += final_emi_list[int_key-1]['moratorium_interest']
+                        # Confirm whether to do this or not
+                        # update_emis_interest(insert_emi, moratorium_months_interest)
+                    insert_emi['emi_number'] += i
+                    insert_emi['due_date'] += relativedelta(months=+i)
+                    final_emi_list.append(insert_emi)
+            elif emi['emi_number'] > emi_number_to_begin_insertion_from:
+                temp_emi['emi_number'] += months_to_be_inserted
+                temp_emi['due_date'] += relativedelta(months=+months_to_be_inserted)
+            if emi['emi_number'] != emi_number_to_begin_insertion_from:
+                final_emi_list.append(temp_emi)
+    else:
+        final_emi_list = loan_emis
+        last_emi = loan_emis[len(loan_emis)-1]
+        for i in range(months_to_be_inserted):
+            emi_data = {key: val for key, val in EMI_FORMULA_DICT.items()}
+            emi_data['emi_number'] = emi_number_to_begin_insertion_from + i + 1
+            emi_data['due_date'] = loan_emis[len(loan_emis)-1]['due_date'] + relativedelta(months=+months_to_be_inserted)
+            emi_data['extra_details'] = {'moratorium': True}
+            emi_data['interest'] = last_emi['accrued_interest']
+            # if i == months_to_be_inserted - 1:
+                # Confirm whether to do this or not
+                # update_emis_interest(emi_data, (last_emi['accrued_interest'] * months_to_be_inserted))
+            final_emi_list.append(emi_data)
+    return {'result': 'success', 'data': final_emi_list}
