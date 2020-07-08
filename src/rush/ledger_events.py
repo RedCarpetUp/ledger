@@ -208,7 +208,7 @@ def _adjust_for_min(
     debit_book_str: str,
 ) -> Decimal:
     for bill in bills:
-        min_due = bill.get_minimum_amount_to_pay()
+        min_due = bill.get_remaining_min()
         amount_to_adjust_in_this_bill = min(min_due, payment_received)
         # Remove amount from the original variable.
         payment_received -= amount_to_adjust_in_this_bill

@@ -182,7 +182,7 @@ def _partial_payment_bill_1(session: Session) -> None:
     assert principal_due == Decimal("930.67")
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
-    min_due = bill.get_minimum_amount_to_pay()
+    min_due = bill.get_remaining_min()
     assert min_due == 14
 
 
@@ -205,7 +205,7 @@ def _partial_payment_bill_2(session: Session) -> None:
     )
     assert principal_due == 2000 - amount
 
-    min_due = bill.get_minimum_amount_to_pay()
+    min_due = bill.get_remaining_min()
     assert min_due == Decimal("0")
 
 
@@ -242,7 +242,7 @@ def _accrue_late_fine_bill_1(session: Session) -> None:
     _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_receivable/a")
     assert late_fine_due == Decimal(100)
 
-    min_due = bill.get_minimum_amount_to_pay()
+    min_due = bill.get_remaining_min()
     assert min_due == 114
 
 
@@ -255,7 +255,7 @@ def _accrue_late_fine_bill_2(session: Session) -> None:
     _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_receivable/a")
     assert late_fine_due == Decimal(100)
 
-    min_due = bill.get_minimum_amount_to_pay()
+    min_due = bill.get_remaining_min()
     assert min_due == Decimal("270")
 
 
@@ -281,7 +281,7 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
     )
     bill = unpaid_bills[0]
     # assert is_min_paid(session, bill) is True
-    min_due = bill.get_minimum_amount_to_pay()
+    min_due = bill.get_remaining_min()
     assert min_due == Decimal(0)
 
     _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_receivable/a")
@@ -323,7 +323,7 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
     )
     bill = unpaid_bills[0]
     # assert is_min_paid(session, bill) is True
-    min_due = bill.get_minimum_amount_to_pay()
+    min_due = bill.get_remaining_min()
     assert min_due == Decimal(0)
 
     _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_receivable/a")
@@ -408,7 +408,7 @@ def _generate_bill_2(session: Session) -> None:
     )
     assert principal_due == Decimal(2000)
 
-    min_due = bill_2.get_minimum_amount_to_pay()
+    min_due = bill_2.get_remaining_min()
     assert min_due == Decimal("227")
 
     _, interest_due = get_account_balance_from_str(
@@ -417,7 +417,7 @@ def _generate_bill_2(session: Session) -> None:
     assert interest_due == Decimal("60.33")
 
     first_bill = unpaid_bills[0]
-    first_bill_min_due = first_bill.get_minimum_amount_to_pay()
+    first_bill_min_due = first_bill.get_remaining_min()
     assert first_bill_min_due == Decimal("114")
 
     _, interest_due = get_account_balance_from_str(
@@ -464,7 +464,7 @@ def _generate_bill_3(session: Session) -> None:
     )
     assert principal_due == Decimal(1000)
 
-    min_due = bill.get_minimum_amount_to_pay()
+    min_due = bill.get_remaining_min()
     assert min_due == Decimal("114")
 
 

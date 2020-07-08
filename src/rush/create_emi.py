@@ -1,7 +1,7 @@
 from datetime import timedelta
-from dateutil.relativedelta import relativedelta
 from decimal import Decimal
 
+from dateutil.relativedelta import relativedelta
 from pendulum import (
     Date,
     DateTime,
@@ -17,7 +17,12 @@ from rush.models import (
     LoanData,
     UserCard,
 )
-from rush.utils import div, get_current_ist_time, mul, EMI_FORMULA_DICT
+from rush.utils import (
+    EMI_FORMULA_DICT,
+    div,
+    get_current_ist_time,
+    mul,
+)
 
 
 def create_emis_for_card(session: Session, user_card: UserCard, last_bill: LoanData) -> CardEmis:

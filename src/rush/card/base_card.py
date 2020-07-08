@@ -47,10 +47,10 @@ class BaseBill:
         new_interest = interest_on_principal + rounding_difference
         return new_interest
 
-    def get_min_per_month(self):
+    def get_min_for_schedule(self) -> Decimal:
         return self.table.principal_instalment + self.table.interest_to_charge
 
-    def get_minimum_amount_to_pay(self, to_date: Optional[DateTime] = None) -> Decimal:
+    def get_remaining_min(self, to_date: Optional[DateTime] = None) -> Decimal:
         from rush.ledger_utils import get_account_balance_from_str
 
         _, min_due = get_account_balance_from_str(
@@ -162,3 +162,13 @@ class BaseCard:
             .first()
         )
         return loan_data
+
+    def get_min_for_schedule(self) -> Decimal:
+        unpaid_bills = self.get_unpaid_bills()
+        min_of_all_bills = sum(bill.get_min_for_schedule() for bill in unpaid_bills)
+        return min_of_all_bills
+
+    def get_remaining_min(self) -> Decimal:
+        unpaid_bills = self.get_unpaid_bills()
+        remaining_min_of_all_bills = sum(bill.get_remaining_min() for bill in unpaid_bills)
+        return remaining_min_of_all_bills

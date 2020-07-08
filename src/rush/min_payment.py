@@ -14,6 +14,6 @@ def add_min_to_all_bills(session: Session, post_date: DateTime, user_card: BaseC
     session.add(min_event)
     session.flush()
     for bill in unpaid_bills:
-        min_amount = bill.get_min_per_month()
+        min_amount = bill.get_min_for_schedule()
         add_min_amount_event(session, bill, min_event, min_amount)
         min_event.amount += min_amount
