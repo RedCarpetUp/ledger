@@ -15,7 +15,10 @@ from rush.card import (
 )
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
-from rush.create_emi import check_moratorium_eligibility
+from rush.create_emi import (
+    check_moratorium_eligibility,
+    refresh_schedule,
+)
 from rush.ledger_utils import (
     get_account_balance_from_str,
     is_bill_closed,
@@ -1275,3 +1278,69 @@ def test_moratorium(session: Session) -> None:
 
     last_emi = emis_dict[-1]
     assert last_emi["emi_number"] == 15
+
+
+def test_refresh_schedule(session: Session) -> None:
+    a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    session.add(a)
+    session.flush()
+
+    # assign card
+    uc = create_user_card(
+        session=session, card_type="ruby", user_id=a.id, card_activation_date=parse_date("2020-04-02")
+    )
+
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-04-08 19:23:11"),
+        amount=Decimal(6000),
+        description="BigBasket.com",
+    )
+
+    generate_date = parse_date("2020-05-01").date()
+    bill_april = bill_generate(session=session, user_card=uc)
+
+    payment_date = parse_date("2020-05-03")
+    amount = Decimal(2000)
+    payment_received(
+        session=session,
+        user_card=uc,
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id="a123",
+    )
+
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-08 19:23:11"),
+        amount=Decimal(6000),
+        description="BigBasket.com",
+    )
+
+    generate_date = parse_date("2020-06-01").date()
+    bill_may = bill_generate(session=session, user_card=uc)
+
+    # Get emi list post few bill creations
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.due_date.asc())
+    )
+    pre_emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    print(pre_emis_dict)
+
+    # Refresh schedule
+    refresh_schedule(session, a.id)
+
+    # Get list post refresh
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.due_date.asc())
+    )
+    post_emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    print(post_emis_dict)
+
+    assert a.id == 160

@@ -75,7 +75,7 @@ def bill_generate(session: Session, user_card: BaseCard) -> BaseBill:
     # If last emi does not exist then we can consider to be first set of emi creation
     last_emi = (
         session.query(CardEmis)
-        .filter(CardEmis.card_id == user_card.id)
+        .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
         .order_by(CardEmis.due_date.desc())
         .first()
     )

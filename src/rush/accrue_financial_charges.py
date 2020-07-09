@@ -63,7 +63,7 @@ def can_remove_interest(
         return False  # Nothing to remove.
 
     due_date = latest_bill.agreement_date + timedelta(days=user_card.interest_free_period_in_days)
-    payment_came_after_due_date = event_date.date() > due_date
+    payment_came_after_due_date = event_date.date() > due_date.date()
     if payment_came_after_due_date:
         return False
 
