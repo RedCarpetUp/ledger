@@ -13,6 +13,10 @@ from rush.card import (
     create_user_card,
     get_user_card,
 )
+from rush.card_assignment_reload import (
+    card_assignment,
+    card_reload,
+)
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import (
@@ -89,7 +93,11 @@ def test_m2p_transfer(session: Session) -> None:
 
 def test_card_swipe(session: Session) -> None:
     uc = create_user_card(
-        session=session, user_id=2, card_activation_date=parse_date("2020-05-01"), card_type="ruby"
+        session=session,
+        user_id=2,
+        card_activation_date=parse_date("2020-05-01"),
+        lender_id=62311,
+        card_type="ruby",
     )
     user_card_id = uc.id
 
@@ -127,7 +135,11 @@ def test_generate_bill_1(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02"),
+        lender_id=62311,
+        card_type="ruby",
     )
 
     swipe = create_card_swipe(
@@ -524,7 +536,11 @@ def test_generate_bill_3(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02"),
+        lender_id=62311,
+        card_type="ruby",
     )
 
     create_card_swipe(
@@ -559,7 +575,11 @@ def test_emi_creation(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, card_type="ruby", user_id=a.id, card_activation_date=parse_date("2020-04-02")
+        session=session,
+        card_type="ruby",
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02"),
+        lender_id=62311,
     )
 
     create_card_swipe(
@@ -591,7 +611,11 @@ def test_subsequent_emi_creation(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, card_type="ruby", user_id=a.id, card_activation_date=parse_date("2020-04-02")
+        session=session,
+        card_type="ruby",
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02"),
+        lender_id=62311,
     )
 
     create_card_swipe(
@@ -640,7 +664,11 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, card_type="ruby", user_id=a.id, card_activation_date=parse_date("2020-05-01")
+        session=session,
+        card_type="ruby",
+        user_id=a.id,
+        card_activation_date=parse_date("2020-05-01"),
+        lender_id=62311,
     )
 
     create_card_swipe(
@@ -715,6 +743,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         card_type="ruby",
         user_id=a.id,
         card_activation_date=parse_date("2020-05-20"),
+        lender_id=62311,
         interest_free_period_in_days=25,
     )
 
@@ -1148,7 +1177,11 @@ def test_lender_incur(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02"),
+        lender_id=62311,
+        card_type="ruby",
     )
     swipe = create_card_swipe(
         session=session,
@@ -1191,7 +1224,11 @@ def test_lender_incur_two(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02"),
+        lender_id=62311,
+        card_type="ruby",
     )
     swipe = create_card_swipe(
         session=session,
@@ -1260,7 +1297,11 @@ def test_writeoff(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02"),
+        lender_id=62311,
+        card_type="ruby",
     )
 
     user_card_id = uc.id
@@ -1362,7 +1403,47 @@ def test_writeoff_recovery_two(session: Session) -> None:
 
 
 def test_limit_assign(session: Session) -> None:
-    pass
+    a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    session.add(a)
+    session.flush()
+    card_assignment(session, 99, 62311, 10000, 100)
+    user_card = get_user_card(session, 99)
+    _, card_balance = get_account_balance_from_str(
+        session, book_string=f"{user_card.id}/card/available_limit/l"
+    )
+    assert card_balance == Decimal("10000")
+    _, card_balance = get_account_balance_from_str(
+        session, book_string=f"{user_card.id}/card/available_limit/a"
+    )
+    assert card_balance == Decimal("10000")
+    _, fee_balance = get_account_balance_from_str(
+        session, book_string=f"{user_card.id}/card/revenue_by_fee/e"
+    )
+    assert fee_balance == Decimal("100")
+    _, pg_balance = get_account_balance_from_str(session, book_string="62311/lender/pg_account/a")
+    assert pg_balance == Decimal("-100")
+    swipe = create_card_swipe(
+        session=session,
+        user_card=user_card,
+        txn_time=parse_date("2020-05-08 19:23:11"),
+        amount=Decimal(2000),
+        description="BigBasket.com",
+    )
+    card_reload(session, 99, 2000, 200)
+    _, card_balance = get_account_balance_from_str(
+        session, book_string=f"{user_card.id}/card/available_limit/l"
+    )
+    assert card_balance == Decimal("10000")
+    _, card_balance = get_account_balance_from_str(
+        session, book_string=f"{user_card.id}/card/available_limit/a"
+    )
+    assert card_balance == Decimal("10000")
+    _, fee_balance = get_account_balance_from_str(
+        session, book_string=f"{user_card.id}/card/revenue_by_fee/e"
+    )
+    assert fee_balance == Decimal("300")
+    _, pg_balance = get_account_balance_from_str(session, book_string="62311/lender/pg_account/a")
+    assert pg_balance == Decimal("-300")
 
 
 def test_customer_refund(session: Session) -> None:
@@ -1372,7 +1453,11 @@ def test_customer_refund(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02"),
+        lender_id=62311,
+        card_type="ruby",
     )
     user_card_id = uc.id
     swipe = create_card_swipe(

@@ -101,11 +101,12 @@ def _check_writeoff(session, user_id: int, user_card: BaseCard) -> bool:
             return False
 
 
-def customer_refund(session: Session, user_id: int) -> bool:
+def customer_refund(session: Session, user_id: int, amount: Decimal = None) -> bool:
     # Ask if it is on prepayment or something else too.
     user_card = get_user_card(session, user_id)
     card_id = user_card.id
-    _, amount = get_account_balance_from_str(session, book_string=f"{card_id}/card/pre_payment/l")
+    if amount == None:
+        _, amount = get_account_balance_from_str(session, book_string=f"{card_id}/card/pre_payment/l")
 
     lender_id = (
         session.query(LoanData.lender_id).filter(LoanData.user_id == user_id).limit(1).scalar() or 0

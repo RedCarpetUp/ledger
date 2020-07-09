@@ -596,3 +596,13 @@ def limit_assignment_event(session: Session, card_id: int, event: LedgerTriggerE
         credit_book_str=f"{card_id}/card/available_limit/l",
         amount=Decimal(event.amount),
     )
+
+
+def charge_fee_event(session: Session, card_id: int, lender_id: int, event: LedgerTriggerEvent) -> None:
+    create_ledger_entry_from_str(
+        session,
+        event_id=event.id,
+        debit_book_str=f"{card_id}/card/revenue_by_fee/e",  # problem since asset is to be decreased and revenue to be increased
+        credit_book_str=f"{lender_id}/lender/pg_account/a",
+        amount=Decimal(event.amount),
+    )

@@ -127,6 +127,7 @@ class UserCard(AuditMixin):
     user_id = Column(Integer, ForeignKey(User.id), nullable=False)
     card_type = Column(String, nullable=False)
     card_activation_date = Column(Date, nullable=True)
+    lender_id = Column(Integer, nullable=False)
     statement_period_in_days = Column(Integer, default=30, nullable=False)  # 30 days
     interest_free_period_in_days = Column(Integer, default=45, nullable=False)
 

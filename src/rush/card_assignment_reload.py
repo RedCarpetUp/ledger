@@ -1,18 +1,41 @@
 from decimal import Decimal
 
 from pendulum import DateTime
+from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
-from models import LedgerTriggerEvent
-from rush.card import get_user_card
-from rush.ledger_events import limit_assignment_event
+from rush.card import (
+    create_user_card,
+    get_user_card,
+)
+from rush.ledger_events import (
+    charge_fee_event,
+    limit_assignment_event,
+)
+from rush.models import LedgerTriggerEvent
 from rush.utils import get_current_ist_time
 
 
-def card_assignment(session: Session, user_id: int, amount: Decimal) -> bool:
-    # amount = Decimal("10000")
-    user_card = get_user_card(session, user_id)
+def card_assignment(
+    session: Session, user_id: int, lender_id: int, amount: Decimal, fee_amount: Decimal
+) -> bool:
+    # assign card
+    user_card = create_user_card(
+        session=session,
+        user_id=user_id,
+        card_activation_date=parse_date("2020-04-02"),
+        card_type="ruby",
+        lender_id=lender_id,
+    )
     card_id = user_card.id
+
+    lt1 = LedgerTriggerEvent(
+        name="card_processing_fee", amount=fee_amount, post_date=get_current_ist_time()
+    )
+    session.add(lt1)
+    session.flush()
+    charge_fee_event(session, card_id, lender_id, lt1)
+
     lt = LedgerTriggerEvent(name="limit_assignment", amount=amount, post_date=get_current_ist_time())
     session.add(lt)
     session.flush()
@@ -20,9 +43,17 @@ def card_assignment(session: Session, user_id: int, amount: Decimal) -> bool:
     return True
 
 
-def card_reload(session: Session, user_id: int) -> bool:
-    amount = Decimal("10000")
-    card_id = None  # Down for now
+def card_reload(session: Session, user_id: int, amount: Decimal, fee_amount: Decimal) -> bool:
+    user_card = get_user_card(session, user_id)
+    card_id = user_card.id
+    lender_id = user_card.lender_id
+    lt = LedgerTriggerEvent(
+        name="reload_processing_fee", amount=fee_amount, post_date=get_current_ist_time()
+    )
+    session.add(lt)
+    session.flush()
+    charge_fee_event(session, card_id, lender_id, lt)
+
     lt = LedgerTriggerEvent(name="limit_reload", amount=amount, post_date=get_current_ist_time())
     session.add(lt)
     session.flush()
