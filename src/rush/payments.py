@@ -13,6 +13,7 @@ from rush.ledger_events import (
     payment_received_event,
     refund_event,
     writeoff_event,
+    customer_refund_event,
 )
 from rush.ledger_utils import get_account_balance_from_str
 from rush.models import (
@@ -101,10 +102,14 @@ def _check_writeoff(session, user_id: int, user_card: BaseCard) -> bool:
 
 
 def customer_refund(session: Session, user_id: int) -> bool:
-    amount = Decimal("10000")
+    # Ask if it is on prepayment or something else too.
     user_card = get_user_card(session, user_id)
     card_id = user_card.id
-    lender_id = user_card.lender_id
+    _, amount = get_account_balance_from_str(session, book_string=f"{card_id}/card/pre_payment/l")
+
+    lender_id = (
+        session.query(LoanData.lender_id).filter(LoanData.user_id == user_id).limit(1).scalar() or 0
+    )
     lt = LedgerTriggerEvent(name="customer_refund", amount=amount, post_date=get_current_ist_time())
     session.add(lt)
     session.flush()
