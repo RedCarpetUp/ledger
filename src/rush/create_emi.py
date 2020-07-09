@@ -29,7 +29,13 @@ from rush.utils import (
 from rush.card import get_user_card
 
 
-def create_emis_for_card(session: Session, user_card: UserCard, last_bill: LoanData) -> CardEmis:
+def create_emis_for_card(
+    session: Session,
+    user_card: UserCard,
+    last_bill: LoanData,
+    late_fee: Decimal = None,
+    interest: Decimal = None,
+) -> CardEmis:
     first_emi_due_date = user_card.card_activation_date + timedelta(
         days=user_card.interest_free_period_in_days + 1
     )
@@ -38,6 +44,7 @@ def create_emis_for_card(session: Session, user_card: UserCard, last_bill: LoanD
     )
     due_amount = div(principal_due, 12)
     due_date = new_emi = None
+    late_fine = total_interest = current_interest = next_interest = Decimal(0)
     # We will firstly create only 12 emis
     for i in range(1, 13):
         due_date = (
@@ -45,12 +52,21 @@ def create_emis_for_card(session: Session, user_card: UserCard, last_bill: LoanD
             if i == 1
             else due_date + timedelta(days=user_card.statement_period_in_days + 1)
         )
+        late_fine = late_fee if late_fee and i == 1 else Decimal(0)
+        if interest:
+            total_interest = interest
+            current_interest += div(mul(total_interest, (30 - due_date.day)), 30)
+            next_interest += total_interest - current_interest
         new_emi = CardEmis(
             card_id=user_card.id,
             emi_number=i,
             total_closing_balance=(principal_due - mul(due_amount, (i - 1))),
             total_closing_balance_post_due_date=(principal_due - mul(due_amount, (i - 1))),
             due_amount=due_amount,
+            late_fee=late_fine,
+            interest=total_interest,
+            interest_current_month=current_interest,
+            interest_next_month=next_interest,
             total_due_amount=due_amount,
             due_date=due_date,
         )
@@ -60,7 +76,12 @@ def create_emis_for_card(session: Session, user_card: UserCard, last_bill: LoanD
 
 
 def add_emi_on_new_bill(
-    session: Session, user_card: UserCard, last_bill: LoanData, last_emi_number: int
+    session: Session,
+    user_card: UserCard,
+    last_bill: LoanData,
+    last_emi_number: int,
+    late_fee: Decimal = None,
+    interest: Decimal = None,
 ) -> CardEmis:
     new_end_emi_number = last_emi_number + 1
     _, principal_due = get_account_balance_from_str(
@@ -72,6 +93,7 @@ def add_emi_on_new_bill(
         .filter(CardEmis.card_id == user_card.id)
         .order_by(CardEmis.due_date.asc())
     )
+    total_interest = current_interest = next_interest = Decimal(0)
     min_due = user_card.get_min_for_schedule()
     new_emi_list = []
     for emi in all_emis:
@@ -80,6 +102,8 @@ def add_emi_on_new_bill(
         if emi_dict["emi_number"] <= new_end_emi_number - 12:
             new_emi_list.append(emi_dict)
             continue
+        elif late_fee and emi_dict["emi_number"] == ((new_end_emi_number - 12) + 1):
+            emi_dict["late_fee"] += late_fee
         emi_dict["due_amount"] += due_amount
         emi_dict["total_due_amount"] = (
             min_due
@@ -93,15 +117,26 @@ def add_emi_on_new_bill(
             mul(due_amount, (emi_dict["emi_number"] - (new_end_emi_number - 12) - 1))
         )
         emi_dict["payment_status"] = "UnPaid"
+        if interest:
+            emi_dict["interest"] = interest
+            emi_dict["interest_current_month"] += div(mul(interest, (30 - emi_dict["due_date"].day)), 30)
+            emi_dict["interest_next_month"] += interest - current_interest
         new_emi_list.append(emi_dict)
     session.bulk_update_mappings(CardEmis, new_emi_list)
     # Get the second last emi for calculating values of the last emi
     second_last_emi = all_emis[last_emi_number - 1]
     last_emi_due_date = second_last_emi.due_date + timedelta(days=user_card.statement_period_in_days + 1)
+    if interest:
+        total_interest = interest
+        current_interest += div(mul(total_interest, (30 - last_emi_due_date.day)), 30)
+        next_interest += total_interest - current_interest
     new_emi = CardEmis(
         card_id=user_card.id,
         emi_number=new_end_emi_number,
         due_amount=due_amount,
+        interest=total_interest,
+        interest_current_month=current_interest,
+        interest_next_month=next_interest,
         total_due_amount=due_amount,
         total_closing_balance=(principal_due - mul(due_amount, (new_end_emi_number - 1))),
         total_closing_balance_post_due_date=(principal_due - mul(due_amount, (new_end_emi_number - 1))),
@@ -122,7 +157,7 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
         all_paid=False,
     ) -> None:
         for emi in emis_dict:
-            if emi["emi_number"] <= last_paid_emi_number:
+            if emi["emi_number"] <= last_paid_emi_number or emi["total_due_amount"] <= Decimal(0):
                 continue
             if last_payment_date:
                 emi["last_payment_date"] = last_payment_date
@@ -494,3 +529,51 @@ def check_moratorium_eligibility(session: Session, data):
     #                         loan_data, new_payment_emi_mapping)
 
     session.bulk_update_mappings(CardEmis, resp["data"])
+
+
+def refresh_schedule(session: Session, user_id: int):
+    # Get user card
+    user_card = get_user_card(session, user_id)
+
+    # Get all generated bills of the user
+    all_bills = (
+        session.query(LoanData)
+        .filter(LoanData.card_id == user_card.table.id, LoanData.is_generated.is_(True))
+        .all()
+    )
+
+    # Set all previous emis as inactive
+    all_emis = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == user_card.table.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.due_date.asc())
+        .all()
+    )
+    for emi in all_emis:
+        emi.row_status = "inactive"
+        session.flush()
+
+    # Re-Create schedule from all the bills
+    bill_count = 0
+    for bill in all_bills:
+        _, late_fine_due = get_account_balance_from_str(
+            session, f"{bill.id}/bill/late_fine_receivable/a"
+        )
+        _, interest_due = get_account_balance_from_str(session, f"{bill.id}/bill/interest_receivable/a")
+        last_emi = (
+            session.query(CardEmis)
+            .filter(CardEmis.card_id == user_card.id)
+            .order_by(CardEmis.due_date.desc())
+            .first()
+        )
+        if not last_emi:
+            create_emis_for_card(session, user_card.table, bill, late_fine_due, interest_due)
+        else:
+            add_emi_on_new_bill(
+                session, user_card.table.bill, last_emi.emi_number, late_fine_due, interest_due
+            )
+
+    # Check if user has opted for moratorium and adjust that in schedule
+
+    # Slide all payments
+    slide_payments(session, user_id)
