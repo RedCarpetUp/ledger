@@ -494,7 +494,7 @@ def check_moratorium_eligibility(session: Session, data):
     # resp = check_for_mandatory_fields(data, required_fields)
     # if resp.get('result') != 'success':
     #     return resp
-    
+
     user_id = int(data["user_id"])
     start_date = parse_date(data["start_date"]).date()
     months_to_be_inserted = int(data["months_to_be_inserted"])
