@@ -54,8 +54,8 @@ def create_emis_for_card(
         )
         late_fine = late_fee if late_fee and i == 1 else Decimal(0)
         if interest:
-            current_interest += div(mul(total_interest, (30 - due_date.day)), 30)
-            next_interest += total_interest - current_interest
+            current_interest += div(mul(interest, (30 - due_date.day)), 30)
+            next_interest += interest - current_interest
             total_interest = current_interest + next_interest
         new_emi = CardEmis(
             card_id=user_card.id,
