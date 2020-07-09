@@ -41,9 +41,7 @@ def payment_received(
     )
     session.add(lt)
     session.flush()
-    lender_id = (
-        session.query(LoanData.lender_id).filter(LoanData.card_id == user_card.id).limit(1).scalar() or 0
-    )
+    lender_id = user_card.lender_id
     payment_received_event(session, user_card, f"{lender_id}/lender/pg_account/a", lt)
     run_anomaly(session, user_card, payment_date)
 
@@ -101,16 +99,12 @@ def _check_writeoff(session, user_id: int, user_card: BaseCard) -> bool:
             return False
 
 
-def customer_refund(session: Session, user_id: int, amount: Decimal = None) -> bool:
-    # Ask if it is on prepayment or something else too.
-    user_card = get_user_card(session, user_id)
+def customer_refund(session: Session, user_card: BaseCard, amount: Decimal = None) -> bool:
     card_id = user_card.id
     if amount == None:
         _, amount = get_account_balance_from_str(session, book_string=f"{card_id}/card/pre_payment/l")
 
-    lender_id = (
-        session.query(LoanData.lender_id).filter(LoanData.user_id == user_id).limit(1).scalar() or 0
-    )
+    lender_id = user_card.lender_id
     lt = LedgerTriggerEvent(name="customer_refund", amount=amount, post_date=get_current_ist_time())
     session.add(lt)
     session.flush()

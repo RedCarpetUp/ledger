@@ -17,14 +17,14 @@ from rush.utils import get_current_ist_time
 
 
 def card_assignment(
-    session: Session, user_id: int, lender_id: int, amount: Decimal, fee_amount: Decimal
-) -> bool:
+    session: Session, user_id: int, lender_id: int, amount: Decimal, fee_amount: Decimal, card_type: str
+) -> None:
     # assign card
     user_card = create_user_card(
         session=session,
         user_id=user_id,
-        card_activation_date=parse_date("2020-04-02"),
-        card_type="ruby",
+        card_activation_date=get_current_ist_time(),
+        card_type=card_type,
         lender_id=lender_id,
     )
     card_id = user_card.id
@@ -40,10 +40,9 @@ def card_assignment(
     session.add(lt)
     session.flush()
     limit_assignment_event(session, card_id, lt)
-    return True
 
 
-def card_reload(session: Session, user_id: int, amount: Decimal, fee_amount: Decimal) -> bool:
+def card_reload(session: Session, user_id: int, amount: Decimal, fee_amount: Decimal) -> None:
     user_card = get_user_card(session, user_id)
     card_id = user_card.id
     lender_id = user_card.lender_id
@@ -54,8 +53,7 @@ def card_reload(session: Session, user_id: int, amount: Decimal, fee_amount: Dec
     session.flush()
     charge_fee_event(session, card_id, lender_id, lt)
 
-    lt = LedgerTriggerEvent(name="limit_reload", amount=amount, post_date=get_current_ist_time())
+    lt = LedgerTriggerEvent(name="limit_assignment", amount=amount, post_date=get_current_ist_time())
     session.add(lt)
     session.flush()
     limit_assignment_event(session, card_id, lt)
-    return True

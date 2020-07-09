@@ -1367,7 +1367,11 @@ def test_writeoff_recovery_one(session: Session) -> None:
     test_writeoff(session)
     uc = get_user_card(session, 99)
     payment_received(
-        session, uc, Decimal(3798.59), payment_date=parse_date("2020-07-01"), payment_request_id="abcde"
+        session,
+        uc,
+        Decimal("3798.59"),
+        payment_date=parse_date("2020-07-01"),
+        payment_request_id="abcde",
     )
     user_card_id = uc.id
     _, writeoff_amount = get_account_balance_from_str(
@@ -1388,7 +1392,11 @@ def test_writeoff_recovery_two(session: Session) -> None:
     user_card_id = uc.id
 
     payment_received(
-        session, uc, Decimal(3009.55), payment_date=parse_date("2020-07-01"), payment_request_id="abcde"
+        session,
+        uc,
+        Decimal("3009.55"),
+        payment_date=parse_date("2020-07-01"),
+        payment_request_id="abcde",
     )
     _, writeoff_amount = get_account_balance_from_str(
         session, book_string=f"{user_card_id}/card/writeoff_expenses/e"
@@ -1406,7 +1414,7 @@ def test_limit_assign(session: Session) -> None:
     a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(a)
     session.flush()
-    card_assignment(session, 99, 62311, 10000, 100)
+    card_assignment(session, 99, 62311, 10000, 100, "ruby")
     user_card = get_user_card(session, 99)
     _, card_balance = get_account_balance_from_str(
         session, book_string=f"{user_card.id}/card/available_limit/l"
@@ -1417,11 +1425,11 @@ def test_limit_assign(session: Session) -> None:
     )
     assert card_balance == Decimal("10000")
     _, fee_balance = get_account_balance_from_str(
-        session, book_string=f"{user_card.id}/card/revenue_by_fee/e"
+        session, book_string=f"{user_card.id}/card/revenue_by_fee/r"
     )
     assert fee_balance == Decimal("100")
     _, pg_balance = get_account_balance_from_str(session, book_string="62311/lender/pg_account/a")
-    assert pg_balance == Decimal("-100")
+    assert pg_balance == Decimal("0")
     swipe = create_card_swipe(
         session=session,
         user_card=user_card,
@@ -1439,11 +1447,11 @@ def test_limit_assign(session: Session) -> None:
     )
     assert card_balance == Decimal("10000")
     _, fee_balance = get_account_balance_from_str(
-        session, book_string=f"{user_card.id}/card/revenue_by_fee/e"
+        session, book_string=f"{user_card.id}/card/revenue_by_fee/r"
     )
     assert fee_balance == Decimal("300")
     _, pg_balance = get_account_balance_from_str(session, book_string="62311/lender/pg_account/a")
-    assert pg_balance == Decimal("-300")
+    assert pg_balance == Decimal("0")
 
 
 def test_customer_refund(session: Session) -> None:
@@ -1484,11 +1492,11 @@ def test_customer_refund(session: Session) -> None:
         session, book_string=f"{user_card_id}/card/pre_payment/l"
     )
     assert prepayment_balance == Decimal("969.33")
-    status = customer_refund(session, 99)
+    status = customer_refund(session, uc)
     assert status == True
     _, prepayment_balance = get_account_balance_from_str(
         session, book_string=f"{user_card_id}/card/pre_payment/l"
     )
     assert prepayment_balance == Decimal("0")
     _, pg_balance = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
-    assert pg_balance == Decimal("-969.33")
+    assert pg_balance == Decimal("0")
