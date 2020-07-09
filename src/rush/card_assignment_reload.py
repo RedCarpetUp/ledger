@@ -4,9 +4,9 @@ from pendulum import DateTime
 from sqlalchemy.orm import Session
 
 from models import LedgerTriggerEvent
+from rush.card import get_user_card
 from rush.ledger_events import limit_assignment_event
 from rush.utils import get_current_ist_time
-from rush.card import get_user_card
 
 
 def card_assignment(session: Session, user_id: int, amount: Decimal) -> bool:

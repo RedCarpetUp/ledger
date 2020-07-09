@@ -1407,4 +1407,3 @@ def test_customer_refund(session: Session) -> None:
     assert prepayment_balance == Decimal("0")
     _, pg_balance = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert pg_balance == Decimal("-969.33")
-
