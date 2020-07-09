@@ -28,7 +28,6 @@ from rush.models import (
 from rush.utils import (
     div,
     mul,
-    round_up_decimal,
 )
 
 
@@ -154,42 +153,43 @@ def payment_received_event(
             session, user_card.id, event.id, payment_received, debit_book_str=debit_book_str
         )
 
-    if "pg_account" in debit_book_str:
+    _, writeoff_balance = get_account_balance_from_str(
+        session, book_string=f"{user_card.id}/card/writeoff_expenses/e"
+    )
+    if writeoff_balance > 0:
+        amount = min(writeoff_balance, event.amount)
+        _adjust_for_recovery(session, user_card.id, event.id, amount)
 
-        _, writeoff_balance = get_account_balance_from_str(
-            session, book_string=f"{user_card.id}/card/writeoff_expenses/e"
-        )
-        if writeoff_balance > 0:
-            amount = min(writeoff_balance, event.amount)
-            create_ledger_entry_from_str(
-                session,
-                event_id=event.id,
-                debit_book_str=f"{user_card.id}/card/bad_debt_allowance/ca",
-                credit_book_str=f"{user_card.id}/card/writeoff_expenses/e",
-                amount=round(amount, 2),
-            )
-        else:
-            # Lender has received money, so we reduce our liability now.
-            create_ledger_entry_from_str(
-                session,
-                event_id=event.id,
-                debit_book_str=f"{user_card.id}/card/lender_payable/l",
-                credit_book_str=debit_book_str,
-                amount=Decimal(event.amount),
-            )
     else:
-        create_ledger_entry_from_str(
-            session,
-            event_id=event.id,
-            debit_book_str=f"{user_card.id}/card/lender_payable/l",
-            credit_book_str=debit_book_str,
-            amount=Decimal(event.amount),
-        )
+        _adjust_lender_payable(session, user_card.id, debit_book_str, event)
 
     # Slide payment in emi
     from rush.create_emi import slide_payments
 
     slide_payments(session, user_card.user_id, payment_event=event)
+
+
+def _adjust_for_recovery(session: Session, user_card_id: int, event_id: int, amount: Decimal) -> None:
+    create_ledger_entry_from_str(
+        session,
+        event_id=event_id,
+        debit_book_str=f"{user_card_id}/card/bad_debt_allowance/ca",
+        credit_book_str=f"{user_card_id}/card/writeoff_expenses/e",
+        amount=Decimal(amount),
+    )
+
+
+def _adjust_lender_payable(
+    session: Session, user_card_id: int, credit_book_str: str, event: LedgerTriggerEvent
+) -> None:
+    # Lender has received money, so we reduce our liability now.
+    create_ledger_entry_from_str(
+        session,
+        event_id=event.id,
+        debit_book_str=f"{user_card_id}/card/lender_payable/l",
+        credit_book_str=credit_book_str,
+        amount=Decimal(event.amount),
+    )
 
 
 def _adjust_bill(
@@ -210,7 +210,7 @@ def _adjust_bill(
                 event_id=event_id,
                 debit_book_str=to_acc,
                 credit_book_str=from_acc,
-                amount=round(balance_to_adjust, 2),
+                amount=Decimal(balance_to_adjust),
             )
             payment_to_adjust_from -= balance_to_adjust
         return payment_to_adjust_from
@@ -573,4 +573,26 @@ def writeoff_event(session: Session, user_card: UserCard, event: LedgerTriggerEv
         debit_book_str=f"{user_card.id}/card/writeoff_expenses/e",
         credit_book_str=f"{user_card.id}/redcarpet/redcarpet_account/a",
         amount=event.amount,
+    )
+
+
+def customer_refund_event(
+    session: Session, card_id: int, lender_id: int, event: LedgerTriggerEvent
+) -> None:
+    create_ledger_entry_from_str(
+        session,
+        event_id=event.id,
+        debit_book_str=f"{card_id}/card/pre_payment/l",
+        credit_book_str=f"{lender_id}/lender/pg_account/a",
+        amount=Decimal(event.amount),
+    )
+
+
+def limit_assignment_event(session: Session, card_id: int, event: LedgerTriggerEvent) -> None:
+    create_ledger_entry_from_str(
+        session,
+        event_id=event.id,
+        debit_book_str=f"{card_id}/card/available_limit/a",
+        credit_book_str=f"{card_id}/card/available_limit/l",
+        amount=Decimal(event.amount),
     )

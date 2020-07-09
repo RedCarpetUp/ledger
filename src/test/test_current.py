@@ -30,6 +30,7 @@ from rush.models import (
     LedgerTriggerEvent,
     LoanData,
     User,
+    UserCard,
     UserPy,
 )
 from rush.payments import (
@@ -1229,7 +1230,10 @@ def test_prepayment(session: Session) -> None:
         payment_date=payment_date,
         payment_request_id="a123",
     )
-
+    _, prepayment_amount = get_account_balance_from_str(
+        session, book_string=f"{user_card_id}/card/pre_payment/l"
+    )
+    assert prepayment_amount == Decimal("969.33")
     swipe = create_card_swipe(
         session=session,
         user_card=uc,
@@ -1242,6 +1246,12 @@ def test_prepayment(session: Session) -> None:
     assert unbilled_amount == 1000
     bill = bill_generate(session=session, user_card=uc)
     assert bill.table.is_generated is True
+
+    _, prepayment_amount = get_account_balance_from_str(
+        session, book_string=f"{user_card_id}/card/pre_payment/l"
+    )
+    assert prepayment_amount == Decimal("0")
+
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     # Should be 0 because it has moved to billed account.
     assert unbilled_amount == 0
@@ -1259,7 +1269,7 @@ def test_writeoff(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby",
     )
 
     user_card_id = uc.id
@@ -1325,7 +1335,11 @@ def test_writeoff_recovery_one(session: Session) -> None:
     test_writeoff(session)
     uc = get_user_card(session, 99)
     payment_received(
-        session, uc, Decimal(3798.59), payment_date=parse_date("2020-07-01"), payment_request_id="abcde"
+        session,
+        uc,
+        Decimal("3798.59"),
+        payment_date=parse_date("2020-07-01"),
+        payment_request_id="abcde",
     )
     user_card_id = uc.id
     _, writeoff_amount = get_account_balance_from_str(
@@ -1346,7 +1360,11 @@ def test_writeoff_recovery_two(session: Session) -> None:
     user_card_id = uc.id
 
     payment_received(
-        session, uc, Decimal(3009.55), payment_date=parse_date("2020-07-01"), payment_request_id="abcde"
+        session,
+        uc,
+        Decimal("3009.55"),
+        payment_date=parse_date("2020-07-01"),
+        payment_request_id="abcde",
     )
     _, writeoff_amount = get_account_balance_from_str(
         session, book_string=f"{user_card_id}/card/writeoff_expenses/e"
