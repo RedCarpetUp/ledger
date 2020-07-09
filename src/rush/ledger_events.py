@@ -28,7 +28,6 @@ from rush.models import (
 from rush.utils import (
     div,
     mul,
-    round_up_decimal,
 )
 
 
@@ -211,7 +210,7 @@ def _adjust_bill(
                 event_id=event_id,
                 debit_book_str=to_acc,
                 credit_book_str=from_acc,
-                amount=balance_to_adjust,
+                amount=Decimal(balance_to_adjust),
             )
             payment_to_adjust_from -= balance_to_adjust
         return payment_to_adjust_from

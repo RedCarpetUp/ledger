@@ -34,6 +34,7 @@ from rush.models import (
     LedgerTriggerEvent,
     LoanData,
     User,
+    UserCard,
     UserPy,
 )
 from rush.payments import (
@@ -1267,7 +1268,10 @@ def test_prepayment(session: Session) -> None:
         payment_date=payment_date,
         payment_request_id="a123",
     )
-
+    _, prepayment_amount = get_account_balance_from_str(
+        session, book_string=f"{user_card_id}/card/pre_payment/l"
+    )
+    assert prepayment_amount == Decimal("969.33")
     swipe = create_card_swipe(
         session=session,
         user_card=uc,
@@ -1280,6 +1284,12 @@ def test_prepayment(session: Session) -> None:
     assert unbilled_amount == 1000
     bill = bill_generate(session=session, user_card=uc)
     assert bill.table.is_generated is True
+
+    _, prepayment_amount = get_account_balance_from_str(
+        session, book_string=f"{user_card_id}/card/pre_payment/l"
+    )
+    assert prepayment_amount == Decimal("0")
+
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     # Should be 0 because it has moved to billed account.
     assert unbilled_amount == 0
@@ -1478,13 +1488,12 @@ def test_customer_refund(session: Session) -> None:
     bill = bill_generate(session=session, user_card=uc)
     assert bill.table.is_generated is True
     # prepayment of rs 2000 done
-    payment_date = parse_date("2020-05-03")
     amount = Decimal(2000)
     payment_received(
         session=session,
         user_card=uc,
         payment_amount=amount,
-        payment_date=payment_date,
+        payment_date=parse_date("2020-05-03"),
         payment_request_id="a123",
     )
     # prepayment balance is 969.33 after all the payment

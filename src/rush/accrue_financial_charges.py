@@ -25,7 +25,11 @@ from rush.models import (
     LoanData,
     UserCard,
 )
-from rush.utils import get_current_ist_time
+from rush.utils import (
+    div,
+    get_current_ist_time,
+    mul,
+)
 
 
 def _get_total_outstanding(session, user_card):
