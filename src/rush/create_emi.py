@@ -54,8 +54,8 @@ def create_emis_for_card(
         )
         late_fine = late_fee if late_fee and i == 1 else Decimal(0)
         total_due_amount = due_amount
-        total_closing_balance = (principal_due - mul(due_amount, (i - 1)))
-        total_closing_balance_post_due_date = (principal_due - mul(due_amount, (i - 1)))
+        total_closing_balance = principal_due - mul(due_amount, (i - 1))
+        total_closing_balance_post_due_date = principal_due - mul(due_amount, (i - 1))
         if interest:
             current_interest += div(mul(interest, (30 - due_date.day)), 30)
             next_interest += interest - current_interest
