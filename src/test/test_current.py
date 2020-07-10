@@ -422,7 +422,7 @@ def _generate_bill_2(session: Session) -> None:
     assert user_card_balance == Decimal(-3000)
 
     bill_2 = bill_generate(session=session, user_card=uc)
-    assert bill_2.agreement_date == parse_date("2020-04-02").date()
+    assert bill_2.agreement_date == parse_date("2020-05-02").date()
 
     unpaid_bills = uc.get_unpaid_bills()
     assert len(unpaid_bills) == 2
@@ -1041,14 +1041,12 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
         session, book_string=f"{first_bill.id}/bill/interest_earned/r"
     )
     # 30.67 Interest got removed from first bill.
-    # Raghav, I don't know what's wrong here, pass it for now.
-    assert interest_earned == Decimal("61.34")
+    assert interest_earned == Decimal("30.67")
 
     _, interest_earned = get_account_balance_from_str(
         session, book_string=f"{second_bill.id}/bill/interest_earned/r"
     )
-    # Raghav, I don't know what's wrong here, pass it for now.
-    assert interest_earned == Decimal("60.33")
+    assert interest_earned == Decimal(0)
 
     assert is_bill_closed(session, first_bill) is True
     # 90 got settled in new bill.

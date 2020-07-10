@@ -28,14 +28,14 @@ from rush.utils import div
 
 def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -> BaseBill:
     # Get the most recent bill
-    last_bill = user_card.get_latest_bill_to_generate()
+    last_bill = user_card.get_latest_bill()
     if last_bill:
         last_bill_date = last_bill.agreement_date
         last_valid_statement_date = last_bill_date + timedelta(days=user_card.statement_period_in_days)
-        does_swipe_belong_to_current_bill = txn_time.date() <= last_valid_statement_date
+        does_swipe_belong_to_current_bill = txn_time.date() < last_valid_statement_date
         if does_swipe_belong_to_current_bill:
             return last_bill
-        new_bill_date = last_valid_statement_date + timedelta(days=1)
+        new_bill_date = last_valid_statement_date
     else:
         new_bill_date = user_card.card_activation_date
     new_bill = user_card.create_bill(
