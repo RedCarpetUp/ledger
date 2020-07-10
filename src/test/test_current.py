@@ -15,6 +15,7 @@ from rush.card import (
 )
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
+from rush.invoice_generation import invoice_generation
 from rush.ledger_utils import (
     get_account_balance_from_str,
     is_bill_closed,
@@ -1222,3 +1223,17 @@ def test_prepayment(session: Session) -> None:
         session, book_string=f"{user_card_id}/card/pre_payment/l"
     )
     assert prepayment_amount == Decimal("167.89")  # 800 deducted from 967.89
+
+
+def test_invoice_generation(session: Session) -> None:
+    test_generate_bill_1(session)
+    user_card = get_user_card(session, 99)
+    invoice_generation(session, user_card)
+    _, interest_revenue = get_account_balance_from_str(
+        session, book_string=f"12345/redcarpet/redcarpet_revenue/r"
+    )
+    assert interest_revenue == Decimal("30.67")
+    _, interest_revenue = get_account_balance_from_str(
+        session, book_string=f"12345/redcarpet/redcarpet_account/a"
+    )
+    assert interest_revenue == Decimal("30.67")

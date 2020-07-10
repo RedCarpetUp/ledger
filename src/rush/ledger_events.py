@@ -571,7 +571,7 @@ def writeoff_event(session: Session, user_card: UserCard, event: LedgerTriggerEv
         session,
         event_id=event.id,
         debit_book_str=f"{user_card.id}/card/writeoff_expenses/e",
-        credit_book_str=f"{user_card.id}/redcarpet/redcarpet_account/a",
+        credit_book_str="12345/redcarpet/redcarpet_account/a",
         amount=event.amount,
     )
 
@@ -594,5 +594,15 @@ def limit_assignment_event(session: Session, card_id: int, event: LedgerTriggerE
         event_id=event.id,
         debit_book_str=f"{card_id}/card/available_limit/a",
         credit_book_str=f"{card_id}/card/available_limit/l",
+        amount=Decimal(event.amount),
+    )
+
+
+def generate_invoice_event(session: Session, redcarpet_id: int, event: LedgerTriggerEvent) -> None:
+    create_ledger_entry_from_str(
+        session,
+        event_id=event.id,
+        debit_book_str=f"{redcarpet_id}/redcarpet/redcarpet_account/a",
+        credit_book_str=f"{redcarpet_id}/redcarpet/redcarpet_revenue/r",
         amount=Decimal(event.amount),
     )
