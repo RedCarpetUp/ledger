@@ -145,6 +145,16 @@ class BaseCard:
         unpaid_bills = [bill for bill in all_bills if not bill.is_bill_closed()]
         return unpaid_bills
 
+    def get_all_bills(self) -> List[BaseBill]:
+        all_bills = (
+            self.session.query(LoanData)
+            .filter(LoanData.user_id == self.user_id, LoanData.is_generated.is_(True))
+            .order_by(LoanData.agreement_date)
+            .all()
+        )
+        all_bills = [self.convert_to_bill_class(bill) for bill in all_bills]
+        return all_bills
+
     @_convert_to_bill_class_decorator
     def get_latest_generated_bill(self) -> BaseBill:
         latest_bill = (

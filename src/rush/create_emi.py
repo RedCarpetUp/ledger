@@ -14,6 +14,7 @@ from sqlalchemy.orm import (
 
 from rush.anomaly_detection import get_affected_events
 from rush.card import get_user_card
+from rush.card.base_card import BaseBill
 from rush.ledger_utils import get_account_balance_from_str
 from rush.models import (
     CardEmis,
@@ -33,14 +34,14 @@ from rush.utils import (
 def create_emis_for_card(
     session: Session,
     user_card: UserCard,
-    last_bill: LoanData,
+    last_bill: BaseBill,
     late_fee: Decimal = None,
     interest: Decimal = None,
 ) -> CardEmis:
     first_emi_due_date = user_card.card_activation_date + timedelta(
         days=user_card.interest_free_period_in_days + 1
     )
-    principal_due = Decimal(last_bill.principal)
+    principal_due = Decimal(last_bill.table.principal)
     due_amount = div(principal_due, 12)
     due_date = new_emi = None
     late_fine = total_interest = current_interest = next_interest = Decimal(0)
@@ -82,13 +83,13 @@ def create_emis_for_card(
 def add_emi_on_new_bill(
     session: Session,
     user_card: UserCard,
-    last_bill: LoanData,
+    last_bill: BaseBill,
     last_emi_number: int,
     late_fee: Decimal = None,
     interest: Decimal = None,
 ) -> CardEmis:
     new_end_emi_number = last_emi_number + 1
-    principal_due = Decimal(last_bill.principal)
+    principal_due = Decimal(last_bill.table.principal)
     due_amount = div(principal_due, 12)
     all_emis = (
         session.query(CardEmis)
@@ -546,11 +547,7 @@ def refresh_schedule(session: Session, user_id: int):
     user_card = get_user_card(session, user_id)
 
     # Get all generated bills of the user
-    all_bills = (
-        session.query(LoanData)
-        .filter(LoanData.card_id == user_card.table.id, LoanData.is_generated.is_(True))
-        .all()
-    )
+    all_bills = user_card.get_all_bills()
 
     # Set all previous emis as inactive
     all_emis = (
@@ -565,8 +562,8 @@ def refresh_schedule(session: Session, user_id: int):
 
     # Re-Create schedule from all the bills
     for bill in all_bills:
-        _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine/r")
-        interest_due = Decimal(bill.interest_to_charge)
+        _, late_fine_due = get_account_balance_from_str(session, f"{bill.table.id}/bill/late_fine/r")
+        interest_due = Decimal(bill.table.interest_to_charge)
         last_emi = (
             session.query(CardEmis)
             .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
