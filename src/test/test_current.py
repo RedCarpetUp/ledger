@@ -1373,7 +1373,10 @@ def test_refresh_schedule(session: Session) -> None:
     )
     post_emis_dict = [u.__dict__ for u in all_emis_query.all()]
 
-    assert a.id == 160
+    second_emi_pre_dict = pre_emis_dict[1]
+    second_emi_post_dict = post_emis_dict[1]
+    assert second_emi_pre_dict["interest_received"] == Decimal(180)
+    assert second_emi_post_dict["interest_received"] == Decimal(360)
 
 
 def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
