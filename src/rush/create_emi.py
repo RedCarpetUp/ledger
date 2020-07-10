@@ -129,7 +129,7 @@ def add_emi_on_new_bill(
                 else min_due
             )
             emi_dict["interest_current_month"] += div(mul(interest, (30 - emi_dict["due_date"].day)), 30)
-            emi_dict["interest_next_month"] += (interest + emi_dict["interest"]) - emi_dict[
+            emi_dict["interest_next_month"] = (interest + emi_dict["interest"]) - emi_dict[
                 "interest_current_month"
             ]
             emi_dict["interest"] = emi_dict["interest_current_month"] + emi_dict["interest_next_month"]
@@ -303,7 +303,7 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
     user_card = session.query(UserCard).filter(UserCard.user_id == user_id).first()
     all_emis = (
         session.query(CardEmis)
-        .filter(CardEmis.card_id == user_card.id)
+        .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
         .order_by(CardEmis.due_date.asc())
         .all()
     )
@@ -360,7 +360,11 @@ def adjust_interest_in_emis(session: Session, user_id: int, post_date: DateTime)
     user_card = get_user_card(session, user_id)
     emis_for_this_bill = (
         session.query(CardEmis)
-        .filter(CardEmis.card_id == user_card.id, CardEmis.due_date >= post_date)
+        .filter(
+            CardEmis.card_id == user_card.id,
+            CardEmis.due_date >= post_date,
+            CardEmis.row_status == "active",
+        )
         .order_by(CardEmis.due_date.asc())
     )
     emis_dict = [u.__dict__ for u in emis_for_this_bill.all()]
@@ -374,9 +378,7 @@ def adjust_interest_in_emis(session: Session, user_id: int, post_date: DateTime)
                 min_due if emi_count == 0 else emi["total_due_amount"] + interest_due
             )
             emi["interest_current_month"] += div(mul(interest_due, (30 - emi["due_date"].day)), 30)
-            emi["interest_next_month"] += (interest_due + emi["interest"]) - emi[
-                "interest_current_month"
-            ]
+            emi["interest_next_month"] = (interest_due + emi["interest"]) - emi["interest_current_month"]
             emi["interest"] = emi["interest_current_month"] + emi["interest_next_month"]
             emi_count += 1
         session.bulk_update_mappings(CardEmis, emis_dict)
@@ -392,13 +394,22 @@ def adjust_late_fee_in_emis(session: Session, user_id: int, post_date: DateTime)
     user_card = get_user_card(session, user_id)
     emi = (
         session.query(CardEmis)
-        .filter(CardEmis.card_id == user_card.id, CardEmis.due_date < post_date)
+        .filter(
+            CardEmis.card_id == user_card.id,
+            CardEmis.due_date < post_date,
+            CardEmis.row_status == "active",
+        )
         .order_by(CardEmis.due_date.desc())
         .first()
     )
     min_due = user_card.get_min_for_schedule()
     if not emi:
-        emi = session.query(CardEmis).order_by(CardEmis.due_date.asc()).first()
+        emi = (
+            session.query(CardEmis)
+            .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
+            .order_by(CardEmis.due_date.asc())
+            .first()
+        )
     emi_dict = emi.as_dict_for_json()
     _, late_fee = get_account_balance_from_str(session, f"{latest_bill.id}/bill/late_fine/r")
     if late_fee > 0:

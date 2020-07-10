@@ -1361,7 +1361,6 @@ def test_refresh_schedule(session: Session) -> None:
         .order_by(CardEmis.due_date.asc())
     )
     pre_emis_dict = [u.__dict__ for u in all_emis_query.all()]
-    print(pre_emis_dict)
 
     # Refresh schedule
     refresh_schedule(session, a.id)
@@ -1373,7 +1372,6 @@ def test_refresh_schedule(session: Session) -> None:
         .order_by(CardEmis.due_date.asc())
     )
     post_emis_dict = [u.__dict__ for u in all_emis_query.all()]
-    print(post_emis_dict)
 
     assert a.id == 160
 

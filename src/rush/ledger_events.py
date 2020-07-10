@@ -295,10 +295,6 @@ def accrue_interest_event(
         credit_book_str=f"{bill.id}/bill/interest_earned/r",
         amount=amount,
     )
-    # adjust the given interest in schedule
-    from rush.create_emi import adjust_interest_in_emis
-
-    adjust_interest_in_emis(session, bill.user_id, event.post_date)
 
 
 def accrue_late_fine_event(session: Session, bill: LoanData, event: LedgerTriggerEvent) -> None:

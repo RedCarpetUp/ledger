@@ -82,4 +82,9 @@ def bill_generate(session: Session, user_card: BaseCard) -> BaseBill:
 
     # Accrue interest on all bills. Before the actual date, yes.
     accrue_interest_on_all_bills(session, bill_closing_date, user_card)
+
+    # adjust the given interest in schedule
+    from rush.create_emi import adjust_interest_in_emis
+
+    adjust_interest_in_emis(session, bill.user_id, bill_closing_date)
     return bill
