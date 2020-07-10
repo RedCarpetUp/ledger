@@ -5,13 +5,15 @@ from dateutil.relativedelta import relativedelta
 from pendulum import (
     Date,
     DateTime,
-    parse as parse_date,
+)
+from pendulum import parse as parse_date
+from sqlalchemy.orm import (
+    Session,
+    session,
 )
 
-from sqlalchemy.orm import Session
-from sqlalchemy.orm import session
-
 from rush.anomaly_detection import get_affected_events
+from rush.card import get_user_card
 from rush.ledger_utils import get_account_balance_from_str
 from rush.models import (
     CardEmis,
@@ -26,7 +28,6 @@ from rush.utils import (
     get_current_ist_time,
     mul,
 )
-from rush.card import get_user_card
 
 
 def create_emis_for_card(
