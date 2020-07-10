@@ -732,13 +732,11 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     session.flush()
 
     # assign card
-    # 25 days to enforce 15th june as first due date
     uc = create_user_card(
         session=session,
         card_type="ruby",
         user_id=a.id,
-        card_activation_date=parse_date("2020-05-20").date(),
-        interest_free_period_in_days=25,
+        card_activation_date=parse_date("2020-05-01").date(),
     )
 
     # Card transactions
