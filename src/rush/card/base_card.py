@@ -165,6 +165,16 @@ class BaseCard:
         )
         return loan_data
 
+    @_convert_to_bill_class_decorator
+    def get_latest_bill(self) -> BaseBill:
+        loan_data = (
+            self.session.query(LoanData)
+            .filter(LoanData.card_id == self.id)
+            .order_by(LoanData.agreement_date)
+            .first()
+        )
+        return loan_data
+
     def get_min_for_schedule(self) -> Decimal:
         # if user is in moratorium then return 0
         if LoanMoratorium.is_in_moratorium(self.session, self.id, get_current_ist_time().date()):

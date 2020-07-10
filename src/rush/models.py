@@ -153,7 +153,7 @@ class LoanData(AuditMixin):
     __tablename__ = "loan_data"
     user_id = Column(Integer, ForeignKey(User.id))
     lender_id = Column(Integer, nullable=False)
-    agreement_date = Column(TIMESTAMP, nullable=False)
+    agreement_date = Column(Date, nullable=False)
     card_id = Column(Integer, ForeignKey(UserCard.id))
     is_generated = Column(Boolean, nullable=False, server_default="false")
     rc_rate_of_interest_annual = Column(Numeric, nullable=False)  # Make this monthly only

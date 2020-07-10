@@ -92,7 +92,10 @@ def test_m2p_transfer(session: Session) -> None:
 
 def test_card_swipe(session: Session) -> None:
     uc = create_user_card(
-        session=session, user_id=2, card_activation_date=parse_date("2020-05-01"), card_type="ruby"
+        session=session,
+        user_id=2,
+        card_activation_date=parse_date("2020-05-01").date(),
+        card_type="ruby",
     )
     user_card_id = uc.id
 
@@ -130,7 +133,10 @@ def test_generate_bill_1(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02").date(),
+        card_type="ruby",
     )
 
     swipe = create_card_swipe(
@@ -147,6 +153,7 @@ def test_generate_bill_1(session: Session) -> None:
 
     bill = bill_generate(session=session, user_card=uc)
 
+    assert bill.agreement_date == parse_date("2020-04-02").date()
     assert bill.table.is_generated is True
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
@@ -163,6 +170,11 @@ def test_generate_bill_1(session: Session) -> None:
 
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_id}/bill/interest_receivable/a"
+    )
+    assert interest_due == Decimal("30.67")
+
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_id}/bill/interest_earned/r"
     )
     assert interest_due == Decimal("30.67")
 
@@ -410,6 +422,7 @@ def _generate_bill_2(session: Session) -> None:
     assert user_card_balance == Decimal(-3000)
 
     bill_2 = bill_generate(session=session, user_card=uc)
+    assert bill_2.agreement_date == parse_date("2020-05-02").date()
 
     unpaid_bills = uc.get_unpaid_bills()
     assert len(unpaid_bills) == 2
@@ -435,6 +448,11 @@ def _generate_bill_2(session: Session) -> None:
         session, book_string=f"{first_bill.id}/bill/interest_receivable/a"
     )
     assert interest_due == Decimal("30.67")
+
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{first_bill.id}/bill/interest_earned/r"
+    )
+    assert interest_due == Decimal("61.34")
 
 
 def _generate_bill_3(session: Session) -> None:
@@ -467,6 +485,7 @@ def _generate_bill_3(session: Session) -> None:
 
     bill = bill_generate(session=session, user_card=uc)
 
+    assert bill.agreement_date == parse_date("2020-06-02").date()
     unpaid_bills = uc.get_unpaid_bills()
     assert len(unpaid_bills) == 2
 
@@ -528,7 +547,10 @@ def test_generate_bill_3(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02").date(),
+        card_type="ruby",
     )
 
     create_card_swipe(
@@ -563,7 +585,10 @@ def test_emi_creation(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, card_type="ruby", user_id=a.id, card_activation_date=parse_date("2020-04-02")
+        session=session,
+        card_type="ruby",
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02").date(),
     )
 
     create_card_swipe(
@@ -595,7 +620,10 @@ def test_subsequent_emi_creation(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, card_type="ruby", user_id=a.id, card_activation_date=parse_date("2020-04-02")
+        session=session,
+        card_type="ruby",
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02").date(),
     )
 
     create_card_swipe(
@@ -644,7 +672,10 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, card_type="ruby", user_id=a.id, card_activation_date=parse_date("2020-05-01")
+        session=session,
+        card_type="ruby",
+        user_id=a.id,
+        card_activation_date=parse_date("2020-05-01").date(),
     )
 
     create_card_swipe(
@@ -718,7 +749,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         session=session,
         card_type="ruby",
         user_id=a.id,
-        card_activation_date=parse_date("2020-05-20"),
+        card_activation_date=parse_date("2020-05-20").date(),
         interest_free_period_in_days=25,
     )
 
@@ -985,6 +1016,19 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
     payment_date = parse_date("2020-06-14 19:23:11")
     amount = Decimal("3008.34")
     unpaid_bills = user_card.get_unpaid_bills()
+    first_bill = unpaid_bills[0]
+    second_bill = unpaid_bills[1]
+
+    _, interest_earned = get_account_balance_from_str(
+        session, book_string=f"{first_bill.id}/bill/interest_earned/r"
+    )
+    assert interest_earned == Decimal("61.34")
+
+    _, interest_earned = get_account_balance_from_str(
+        session, book_string=f"{second_bill.id}/bill/interest_earned/r"
+    )
+    assert interest_earned == Decimal("60.33")
+
     payment_received(
         session=session,
         user_card=user_card,
@@ -993,19 +1037,16 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
         payment_request_id="a123",
     )
 
-    first_bill = unpaid_bills[0]
-    second_bill = unpaid_bills[1]
-
     _, interest_earned = get_account_balance_from_str(
         session, book_string=f"{first_bill.id}/bill/interest_earned/r"
     )
-    # 30 Interest got removed from first bill.
-    assert interest_earned == Decimal("61.34")
+    # 30.67 Interest got removed from first bill.
+    assert interest_earned == Decimal("30.67")
 
     _, interest_earned = get_account_balance_from_str(
         session, book_string=f"{second_bill.id}/bill/interest_earned/r"
     )
-    assert interest_earned == Decimal("60.33")
+    assert interest_earned == Decimal(0)
 
     assert is_bill_closed(session, first_bill) is True
     # 90 got settled in new bill.
@@ -1242,7 +1283,7 @@ def test_moratorium(session: Session) -> None:
         session=session,
         card_type="ruby",
         user_id=a.id,
-        card_activation_date=parse_date("2020-01-20"),
+        card_activation_date=parse_date("2020-01-20").date(),
         interest_free_period_in_days=25,
     )
 
@@ -1289,7 +1330,10 @@ def test_refresh_schedule(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, card_type="ruby", user_id=a.id, card_activation_date=parse_date("2020-04-02")
+        session=session,
+        card_type="ruby",
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02").date(),
     )
 
     create_card_swipe(
@@ -1364,7 +1408,7 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
         session,
         user_id=a.id,
         card_type="ruby",
-        card_activation_date=parse_date("2020-01-20"),
+        card_activation_date=parse_date("2020-01-20").date(),
         interest_free_period_in_days=25,
     )
 
