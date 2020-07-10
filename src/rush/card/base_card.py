@@ -16,10 +16,12 @@ from sqlalchemy.orm import Session
 from rush.ledger_utils import get_account_balance_from_str
 from rush.models import (
     LoanData,
+    LoanMoratorium,
     UserCard,
 )
 from rush.utils import (
     div,
+    get_current_ist_time,
     mul,
     round_up_decimal,
 )
@@ -164,11 +166,17 @@ class BaseCard:
         return loan_data
 
     def get_min_for_schedule(self) -> Decimal:
+        # if user is in moratorium then return 0
+        if LoanMoratorium.is_in_moratorium(self.session, self.id, get_current_ist_time().date()):
+            return 0
         unpaid_bills = self.get_unpaid_bills()
         min_of_all_bills = sum(bill.get_min_for_schedule() for bill in unpaid_bills)
         return min_of_all_bills
 
     def get_remaining_min(self) -> Decimal:
+        # if user is in moratorium then return 0
+        if LoanMoratorium.is_in_moratorium(self.session, self.id, get_current_ist_time().date()):
+            return 0
         unpaid_bills = self.get_unpaid_bills()
         remaining_min_of_all_bills = sum(bill.get_remaining_min() for bill in unpaid_bills)
         return remaining_min_of_all_bills

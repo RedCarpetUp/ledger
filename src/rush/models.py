@@ -7,6 +7,7 @@ from typing import (
     Tuple,
 )
 
+from pendulum import Date as PythonDate
 from pendulum import DateTime
 from pydantic.dataclasses import dataclass as py_dataclass
 from sqlalchemy import (
@@ -132,7 +133,6 @@ class UserCard(AuditMixin):
 
 
 class LedgerTriggerEvent(AuditMixin):
-
     __tablename__ = "ledger_trigger_event"
     name = Column(String(50))
     card_id = Column(Integer, ForeignKey(UserCard.id))
@@ -210,3 +210,24 @@ class EmiPaymentMapping(AuditMixin):
     interest_received = Column(Numeric, nullable=True, default=Decimal(0))
     late_fee_received = Column(Numeric, nullable=True, default=Decimal(0))
     principal_received = Column(Numeric, nullable=True, default=Decimal(0))
+
+
+class LoanMoratorium(AuditMixin):
+    __tablename__ = "loan_moratorium"
+
+    card_id = Column(Integer, ForeignKey(UserCard.id), nullable=False)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+
+    @classmethod
+    def is_in_moratorium(cls, session: Session, card_id: int, date_to_check_against: PythonDate) -> bool:
+        v = (
+            session.query(cls)
+            .filter(
+                cls.card_id == card_id,
+                date_to_check_against >= cls.start_date,
+                date_to_check_against <= cls.end_date,
+            )
+            .one_or_none()
+        )
+        return v is not None

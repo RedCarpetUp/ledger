@@ -3,6 +3,7 @@ from decimal import Decimal
 from io import StringIO
 
 import alembic
+from _pytest.monkeypatch import MonkeyPatch
 from alembic.command import current as alembic_current
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
@@ -32,6 +33,7 @@ from rush.models import (
     EmiPaymentMapping,
     LedgerTriggerEvent,
     LoanData,
+    LoanMoratorium,
     User,
     UserCard,
     UserPy,
@@ -1344,3 +1346,71 @@ def test_refresh_schedule(session: Session) -> None:
     print(post_emis_dict)
 
     assert a.id == 160
+
+
+def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
+    a = User(
+        id=38612,
+        performed_by=123,
+        name="Ananth",
+        fullname="Ananth Venkatesh",
+        nickname="Ananth",
+        email="ananth@redcarpetup.com",
+    )
+    session.add(a)
+    session.flush()
+
+    user_card = create_user_card(
+        session,
+        user_id=a.id,
+        card_type="ruby",
+        card_activation_date=parse_date("2020-01-20"),
+        interest_free_period_in_days=25,
+    )
+
+    create_card_swipe(
+        session=session,
+        user_card=user_card,
+        txn_time=parse_date("2020-01-24 16:29:25"),
+        amount=Decimal(2500),
+        description="WWW YESBANK IN         GURGAON       IND",
+    )
+
+    # Generate bill
+    bill_generate(session=session, user_card=user_card)
+
+    assert (
+        LoanMoratorium.is_in_moratorium(
+            session, card_id=user_card.id, date_to_check_against=parse_date("2020-02-21")
+        )
+        is False
+    )
+
+    assert user_card.get_min_for_schedule() == 284
+
+    # Give moratorium
+    m = LoanMoratorium.new(
+        session,
+        card_id=user_card.id,
+        start_date=parse_date("2020-01-20"),
+        end_date=parse_date("2020-03-20"),
+    )
+
+    assert (
+        LoanMoratorium.is_in_moratorium(
+            session, card_id=user_card.id, date_to_check_against=parse_date("2020-02-21")
+        )
+        is True
+    )
+
+    # Date is outside the moratorium period
+    assert (
+        LoanMoratorium.is_in_moratorium(
+            session, card_id=user_card.id, date_to_check_against=parse_date("2020-03-21")
+        )
+        is False
+    )
+    monkeypatch.setattr(
+        "rush.card.base_card.get_current_ist_time", lambda: parse_date("2020-02-01 00:00:00")
+    )
+    assert user_card.get_min_for_schedule() == 0  # 0 after moratorium
