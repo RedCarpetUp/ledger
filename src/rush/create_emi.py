@@ -57,8 +57,8 @@ def create_emis_for_card(
         total_closing_balance = principal_due - mul(due_amount, (i - 1))
         total_closing_balance_post_due_date = principal_due - mul(due_amount, (i - 1))
         if interest:
-            current_interest += div(mul(interest, (30 - due_date.day)), 30)
-            next_interest += interest - current_interest
+            current_interest = div(mul(interest, (30 - due_date.day)), 30)
+            next_interest = interest - current_interest
             total_interest = current_interest + next_interest
             total_due_amount += interest
             total_closing_balance_post_due_date += interest
@@ -124,7 +124,7 @@ def add_emi_on_new_bill(
         if interest:
             emi_dict["total_closing_balance_post_due_date"] += interest
             emi_dict["total_due_amount"] = (
-                emi_dict["total_due_amount"] + due_amount
+                emi_dict["total_due_amount"] + interest
                 if emi_dict["total_due_amount"] != min_due
                 else min_due
             )
