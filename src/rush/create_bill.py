@@ -1,10 +1,7 @@
-from datetime import timedelta
 from decimal import Decimal
 
-from pendulum import (
-    Date,
-    DateTime,
-)
+from dateutil.relativedelta import relativedelta
+from pendulum import DateTime
 from sqlalchemy.orm import Session
 
 from rush.accrue_financial_charges import accrue_interest_on_all_bills
@@ -20,8 +17,6 @@ from rush.min_payment import add_min_to_all_bills
 from rush.models import (
     CardEmis,
     LedgerTriggerEvent,
-    LoanData,
-    UserCard,
 )
 from rush.utils import div
 
@@ -31,7 +26,7 @@ def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -
     last_bill = user_card.get_latest_bill()
     if last_bill:
         last_bill_date = last_bill.agreement_date
-        last_valid_statement_date = last_bill_date + timedelta(days=user_card.statement_period_in_days)
+        last_valid_statement_date = last_bill_date + relativedelta(months=+1)
         does_swipe_belong_to_current_bill = txn_time.date() < last_valid_statement_date
         if does_swipe_belong_to_current_bill:
             return last_bill
@@ -68,8 +63,9 @@ def bill_generate(session: Session, user_card: BaseCard) -> BaseBill:
     bill.table.principal_instalment = principal_instalment
     bill.table.interest_to_charge = bill.get_interest_to_charge()
 
+    bill_closing_date = bill.agreement_date + relativedelta(months=+1)
     # After the bill has generated. Call the min generation event on all unpaid bills.
-    add_min_to_all_bills(session, bill.agreement_date, user_card)
+    add_min_to_all_bills(session, bill_closing_date, user_card)
 
     # TODO move this to a function.
     # If last emi does not exist then we can consider to be first set of emi creation
@@ -85,5 +81,5 @@ def bill_generate(session: Session, user_card: BaseCard) -> BaseBill:
         add_emi_on_new_bill(session, user_card, bill, last_emi.emi_number)
 
     # Accrue interest on all bills. Before the actual date, yes.
-    accrue_interest_on_all_bills(session, bill.agreement_date, user_card)
+    accrue_interest_on_all_bills(session, bill_closing_date, user_card)
     return bill

@@ -178,6 +178,14 @@ def test_generate_bill_1(session: Session) -> None:
     )
     assert interest_due == Decimal("30.67")
 
+    interest_event = (
+        session.query(LedgerTriggerEvent)
+        .filter_by(card_id=uc.id, name="accrue_interest")
+        .order_by(LedgerTriggerEvent.post_date.desc())
+        .first()
+    )
+    assert interest_event.post_date.date() == parse_date("2020-05-02").date()
+
 
 def _partial_payment_bill_1(session: Session) -> None:
     user_card = get_user_card(session, 99)
@@ -229,26 +237,6 @@ def _partial_payment_bill_2(session: Session) -> None:
 
     min_due = bill.get_remaining_min()
     assert min_due == Decimal("0")
-
-
-def _min_payment_delayed_bill_1(session: Session) -> None:
-    user = session.query(User).filter(User.id == 99).one()
-    user_card = get_user_card(session, user.id)
-    payment_date = parse_date("2020-05-03")
-    amount = Decimal(130)
-    bill = payment_received(
-        session=session,
-        user_card=user_card,
-        payment_amount=amount,
-        payment_date=payment_date,
-        payment_request_id="a123",
-    )
-
-    _, principal_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/principal_receivable/a"
-    )
-    # payment got late and 100 rupees got settled in late fine.
-    assert principal_due == 970
 
 
 def test_partial_payment_bill_1(session: Session) -> None:
@@ -939,7 +927,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     # Do Partial Payment
     payment_date = parse_date("2020-06-18 06:55:00")
     amount = Decimal(324)
-    bill = payment_received(
+    payment_received(
         session=session,
         user_card=uc,
         payment_amount=amount,
