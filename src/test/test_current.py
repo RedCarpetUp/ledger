@@ -1343,4 +1343,4 @@ def test_refresh_schedule(session: Session) -> None:
     post_emis_dict = [u.__dict__ for u in all_emis_query.all()]
     print(post_emis_dict)
 
-    assert a.id == 160
+    assert a.id == 1600

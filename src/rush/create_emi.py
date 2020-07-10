@@ -39,9 +39,7 @@ def create_emis_for_card(
     first_emi_due_date = user_card.card_activation_date + timedelta(
         days=user_card.interest_free_period_in_days + 1
     )
-    _, principal_due = get_account_balance_from_str(
-        session, book_string=f"{last_bill.id}/bill/principal_receivable/a"
-    )
+    principal_due = Decimal(last_bill.principal)
     due_amount = div(principal_due, 12)
     due_date = new_emi = None
     late_fine = total_interest = current_interest = next_interest = Decimal(0)
@@ -53,21 +51,26 @@ def create_emis_for_card(
             else due_date + timedelta(days=user_card.statement_period_in_days + 1)
         )
         late_fine = late_fee if late_fee and i == 1 else Decimal(0)
+        total_due_amount = due_amount
+        total_closing_balance = (principal_due - mul(due_amount, (i - 1)))
+        total_closing_balance_post_due_date = (principal_due - mul(due_amount, (i - 1)))
         if interest:
             current_interest += div(mul(interest, (30 - due_date.day)), 30)
             next_interest += interest - current_interest
             total_interest = current_interest + next_interest
+            total_due_amount += interest
+            total_closing_balance_post_due_date += interest
         new_emi = CardEmis(
             card_id=user_card.id,
             emi_number=i,
-            total_closing_balance=(principal_due - mul(due_amount, (i - 1))),
-            total_closing_balance_post_due_date=(principal_due - mul(due_amount, (i - 1))),
+            total_closing_balance=total_closing_balance,
+            total_closing_balance_post_due_date=total_closing_balance_post_due_date,
             due_amount=due_amount,
             late_fee=late_fine,
             interest=total_interest,
             interest_current_month=current_interest,
             interest_next_month=next_interest,
-            total_due_amount=due_amount,
+            total_due_amount=total_due_amount,
             due_date=due_date,
         )
         session.add(new_emi)
@@ -84,9 +87,7 @@ def add_emi_on_new_bill(
     interest: Decimal = None,
 ) -> CardEmis:
     new_end_emi_number = last_emi_number + 1
-    _, principal_due = get_account_balance_from_str(
-        session, book_string=f"{last_bill.id}/bill/principal_receivable/a"
-    )
+    principal_due = Decimal(last_bill.principal)
     due_amount = div(principal_due, 12)
     all_emis = (
         session.query(CardEmis)
@@ -362,9 +363,7 @@ def adjust_interest_in_emis(session: Session, user_id: int, post_date: DateTime)
         .order_by(CardEmis.due_date.asc())
     )
     emis_dict = [u.__dict__ for u in emis_for_this_bill.all()]
-    _, interest_due = get_account_balance_from_str(
-        session=session, book_string=f"{latest_bill.id}/bill/interest_receivable/a"
-    )
+    interest_due = Decimal(latest_bill.interest_to_charge)
     min_due = user_card.get_min_for_schedule()
     emi_count = 0
     if interest_due > 0:
@@ -400,9 +399,7 @@ def adjust_late_fee_in_emis(session: Session, user_id: int, post_date: DateTime)
     if not emi:
         emi = session.query(CardEmis).order_by(CardEmis.due_date.asc()).first()
     emi_dict = emi.as_dict_for_json()
-    _, late_fee = get_account_balance_from_str(
-        session=session, book_string=f"{latest_bill.id}/bill/late_fine_receivable/a"
-    )
+    _, late_fee = get_account_balance_from_str(session, f"{latest_bill.id}/bill/late_fine/r")
     if late_fee > 0:
         emi_dict["total_closing_balance_post_due_date"] += late_fee
         emi_dict["total_due_amount"] = min_due
@@ -567,10 +564,8 @@ def refresh_schedule(session: Session, user_id: int):
 
     # Re-Create schedule from all the bills
     for bill in all_bills:
-        _, late_fine_due = get_account_balance_from_str(
-            session, f"{bill.id}/bill/late_fine_receivable/a"
-        )
-        _, interest_due = get_account_balance_from_str(session, f"{bill.id}/bill/interest_receivable/a")
+        _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine/r")
+        interest_due = Decimal(bill.interest_to_charge)
         last_emi = (
             session.query(CardEmis)
             .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
