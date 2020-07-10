@@ -598,11 +598,13 @@ def limit_assignment_event(session: Session, card_id: int, event: LedgerTriggerE
     )
 
 
-def generate_invoice_event(session: Session, redcarpet_id: int, event: LedgerTriggerEvent) -> None:
+def generate_invoice_event(
+    session: Session, redcarpet_id: int, lender_id: int, event: LedgerTriggerEvent
+) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
         debit_book_str=f"{redcarpet_id}/redcarpet/redcarpet_account/a",
-        credit_book_str=f"{redcarpet_id}/redcarpet/redcarpet_revenue/r",
+        credit_book_str=f"{lender_id}/lender/pg_account/a",
         amount=Decimal(event.amount),
     )

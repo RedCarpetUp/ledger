@@ -25,4 +25,4 @@ def invoice_generation(session: Session, user_card: BaseCard) -> None:
     lt = LedgerTriggerEvent(name="invoice_generation", amount=amount, post_date=get_current_ist_time())
     session.add(lt)
     session.flush()
-    generate_invoice_event(session, 12345, lt)
+    generate_invoice_event(session, 12345, all_bills[0].lender_id, lt)

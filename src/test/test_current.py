@@ -1229,10 +1229,8 @@ def test_invoice_generation(session: Session) -> None:
     test_generate_bill_1(session)
     user_card = get_user_card(session, 99)
     invoice_generation(session, user_card)
-    _, interest_revenue = get_account_balance_from_str(
-        session, book_string=f"12345/redcarpet/redcarpet_revenue/r"
-    )
-    assert interest_revenue == Decimal("30.67")
+    _, interest_revenue = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+    assert interest_revenue == Decimal("-30.67")
     _, interest_revenue = get_account_balance_from_str(
         session, book_string=f"12345/redcarpet/redcarpet_account/a"
     )
