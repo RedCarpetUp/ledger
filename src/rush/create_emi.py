@@ -12,7 +12,7 @@ from sqlalchemy.orm import (
     session,
 )
 
-from rush.anomaly_detection import get_affected_events
+from rush.anomaly_detection import get_payment_events
 from rush.card import get_user_card
 from rush.card.base_card import BaseBill
 from rush.ledger_utils import get_account_balance_from_str
@@ -318,22 +318,21 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
     last_paid_emi_number = 0
     last_payment_date = None
     all_paid = False
-    events = get_affected_events(session, user_card)
+    events = get_payment_events(session, user_card)
     if not payment_event:
         for event in events:
-            if event.name == "payment_received":
-                payment_received_and_adjusted = Decimal(0)
-                payment_received_and_adjusted += event.amount
-                payment_request_id = event.extra_details.get("payment_request_id")
-                last_payment_date = event.post_date
-                slide_payments_repeated_logic(
-                    emis_dict,
-                    payment_received_and_adjusted,
-                    payment_request_id,
-                    last_payment_date,
-                    last_paid_emi_number,
-                    all_paid=all_paid,
-                )
+            payment_received_and_adjusted = Decimal(0)
+            payment_received_and_adjusted += event.amount
+            payment_request_id = event.extra_details.get("payment_request_id")
+            last_payment_date = event.post_date
+            slide_payments_repeated_logic(
+                emis_dict,
+                payment_received_and_adjusted,
+                payment_request_id,
+                last_payment_date,
+                last_paid_emi_number,
+                all_paid=all_paid,
+            )
     else:
         payment_received_and_adjusted = Decimal(0)
         payment_received_and_adjusted += payment_event.amount
