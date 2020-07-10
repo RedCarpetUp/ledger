@@ -422,7 +422,7 @@ def _generate_bill_2(session: Session) -> None:
     assert user_card_balance == Decimal(-3000)
 
     bill_2 = bill_generate(session=session, user_card=uc)
-    assert bill_2.agreement_date == parse_date("2020-05-02").date()
+    assert bill_2.agreement_date == parse_date("2020-04-02").date()
 
     unpaid_bills = uc.get_unpaid_bills()
     assert len(unpaid_bills) == 2
