@@ -1430,10 +1430,7 @@ def test_moratorium_schedule(session: Session) -> None:
 
     # Give moratorium to user
     m = LoanMoratorium.new(
-        session,
-        card_id=uc.id,
-        start_date=parse_date("2020-09-01"),
-        end_date=parse_date("2020-12-01"),
+        session, card_id=uc.id, start_date=parse_date("2020-09-01"), end_date=parse_date("2020-12-01"),
     )
 
     # Refresh schedule

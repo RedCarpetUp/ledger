@@ -21,8 +21,8 @@ from rush.models import (
     EmiPaymentMapping,
     LedgerTriggerEvent,
     LoanData,
-    UserCard,
     LoanMoratorium,
+    UserCard,
 )
 from rush.utils import (
     EMI_FORMULA_DICT,
@@ -572,9 +572,7 @@ def refresh_schedule(session: Session, user_id: int):
 
     # Check if user has opted for moratorium and adjust that in schedule
     moratorium = (
-        session.query(LoanMoratorium)
-        .filter(LoanMoratorium.card_id == user_card.table.id)
-        .first()
+        session.query(LoanMoratorium).filter(LoanMoratorium.card_id == user_card.table.id).first()
     )
     if moratorium:
         all_emis_query = (
@@ -584,9 +582,18 @@ def refresh_schedule(session: Session, user_id: int):
         )
         all_emis = [u.__dict__ for u in all_emis_query.all()]
         start_date = moratorium.start_date
-        months_to_be_inserted = (moratorium.end_date.year - moratorium.start_date.year) * 12 + moratorium.end_date.month - moratorium.start_date.month
+        months_to_be_inserted = (
+            (moratorium.end_date.year - moratorium.start_date.year) * 12
+            + moratorium.end_date.month
+            - moratorium.start_date.month
+        )
         check_moratorium_eligibility(
-            session, {"user_id": user_id, "start_date": start_date.strftime('%Y-%m-%d'), "months_to_be_inserted": months_to_be_inserted}
+            session,
+            {
+                "user_id": user_id,
+                "start_date": start_date.strftime("%Y-%m-%d"),
+                "months_to_be_inserted": months_to_be_inserted,
+            },
         )
 
     # Slide all payments
