@@ -13,7 +13,10 @@ from pendulum import (
 )
 from sqlalchemy.orm import Session
 
-from rush.ledger_utils import get_account_balance_from_str
+from rush.ledger_utils import (
+    get_account_balance_from_str,
+    get_remaining_bill_balance,
+)
 from rush.models import (
     LoanData,
     LoanMoratorium,
@@ -50,7 +53,9 @@ class BaseBill:
         return new_interest
 
     def get_min_for_schedule(self) -> Decimal:
-        return self.table.principal_instalment + self.table.interest_to_charge
+        min_scheduled = self.table.principal_instalment + self.table.interest_to_charge
+        total_due = get_remaining_bill_balance(self.session, self.table)["total_due"]
+        return min(min_scheduled, total_due)
 
     def get_remaining_min(self, to_date: Optional[DateTime] = None) -> Decimal:
         from rush.ledger_utils import get_account_balance_from_str
