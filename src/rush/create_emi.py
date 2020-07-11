@@ -353,8 +353,8 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
 def adjust_interest_in_emis(session: Session, user_id: int, post_date: DateTime) -> None:
     latest_bill = (
         session.query(LoanData)
-        .filter(LoanData.user_id == user_id, LoanData.agreement_date <= post_date)
-        .order_by(LoanData.agreement_date.desc())
+        .filter(LoanData.user_id == user_id, LoanData.bill_start_date <= post_date)
+        .order_by(LoanData.bill_start_date.desc())
         .first()
     )
     user_card = get_user_card(session, user_id)
@@ -387,8 +387,8 @@ def adjust_interest_in_emis(session: Session, user_id: int, post_date: DateTime)
 def adjust_late_fee_in_emis(session: Session, user_id: int, post_date: DateTime) -> None:
     latest_bill = (
         session.query(LoanData)
-        .filter(LoanData.user_id == user_id, LoanData.agreement_date < post_date)
-        .order_by(LoanData.agreement_date.desc())
+        .filter(LoanData.user_id == user_id, LoanData.bill_start_date < post_date)
+        .order_by(LoanData.bill_start_date.desc())
         .first()
     )
     user_card = get_user_card(session, user_id)

@@ -62,7 +62,7 @@ def can_remove_interest(
     if interest_accrued == 0:
         return False  # Nothing to remove.
 
-    due_date = latest_bill.agreement_date + timedelta(days=user_card.interest_free_period_in_days)
+    due_date = latest_bill.bill_start_date + timedelta(days=user_card.interest_free_period_in_days)
     payment_came_after_due_date = event_date.date() > due_date
     if payment_came_after_due_date:
         return False
@@ -100,7 +100,7 @@ def is_late_fee_valid(session: Session, user_card: BaseCard) -> bool:
     if late_fee_accrued == 0:
         return False  # Nothing to remove.
 
-    due_date = latest_bill.agreement_date + timedelta(days=user_card.interest_free_period_in_days)
+    due_date = latest_bill.bill_start_date + timedelta(days=user_card.interest_free_period_in_days)
     min_balance_as_of_due_date = latest_bill.get_remaining_min(due_date)
     if (
         min_balance_as_of_due_date > 0

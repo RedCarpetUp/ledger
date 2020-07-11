@@ -35,13 +35,9 @@ from rush.models import (
     LoanData,
     LoanMoratorium,
     User,
-    UserCard,
     UserPy,
 )
-from rush.payments import (
-    payment_received,
-    refund_payment,
-)
+from rush.payments import payment_received
 from rush.views import (
     bill_view,
     user_view,
@@ -153,7 +149,7 @@ def test_generate_bill_1(session: Session) -> None:
 
     bill = bill_generate(session=session, user_card=uc)
 
-    assert bill.agreement_date == parse_date("2020-04-02").date()
+    assert bill.bill_start_date == parse_date("2020-04-02").date()
     assert bill.table.is_generated is True
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
@@ -362,7 +358,7 @@ def test_is_bill_paid_bill_1(session: Session) -> None:
     bill = (
         session.query(LoanData)
         .filter(LoanData.user_id == user_card.user_id)
-        .order_by(LoanData.agreement_date.desc())
+        .order_by(LoanData.bill_start_date.desc())
         .first()
     )
     # Should be false because min is 130 and payment made is 120
@@ -389,7 +385,7 @@ def _generate_bill_2(session: Session) -> None:
     previous_bill = (  # get last generated bill.
         session.query(LoanData)
         .filter(LoanData.user_id == user.id, LoanData.is_generated.is_(True))
-        .order_by(LoanData.agreement_date.desc())
+        .order_by(LoanData.bill_start_date.desc())
         .first()
     )
     # Bill shouldn't be closed.
@@ -410,7 +406,7 @@ def _generate_bill_2(session: Session) -> None:
     assert user_card_balance == Decimal(-3000)
 
     bill_2 = bill_generate(session=session, user_card=uc)
-    assert bill_2.agreement_date == parse_date("2020-05-02").date()
+    assert bill_2.bill_start_date == parse_date("2020-05-02").date()
 
     unpaid_bills = uc.get_unpaid_bills()
     assert len(unpaid_bills) == 2
@@ -450,7 +446,7 @@ def _generate_bill_3(session: Session) -> None:
     previous_bill = (  # new bill isn't generated yet so get latest.
         session.query(LoanData)
         .filter(LoanData.user_id == user.id)
-        .order_by(LoanData.agreement_date.desc())
+        .order_by(LoanData.bill_start_date.desc())
         .first()
     )
     # Bill shouldn't be closed.
@@ -473,7 +469,7 @@ def _generate_bill_3(session: Session) -> None:
 
     bill = bill_generate(session=session, user_card=uc)
 
-    assert bill.agreement_date == parse_date("2020-06-02").date()
+    assert bill.bill_start_date == parse_date("2020-06-02").date()
     unpaid_bills = uc.get_unpaid_bills()
     assert len(unpaid_bills) == 2
 
@@ -492,7 +488,7 @@ def _run_anomaly_bill_1(session: Session) -> None:
     bill = (
         session.query(LoanData)
         .filter(LoanData.user_id == user.id)
-        .order_by(LoanData.agreement_date.desc())
+        .order_by(LoanData.bill_start_date.desc())
         .first()
     )
     run_anomaly(session, bill)
@@ -1417,7 +1413,7 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
         is False
     )
 
-    assert user_card.get_min_for_schedule() == 284
+    assert user_card.get_min_for_schedule(parse_date("2020-02-01")) == 284
 
     # Give moratorium
     m = LoanMoratorium.new(
@@ -1441,7 +1437,4 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
         )
         is False
     )
-    monkeypatch.setattr(
-        "rush.card.base_card.get_current_ist_time", lambda: parse_date("2020-02-01 00:00:00")
-    )
-    assert user_card.get_min_for_schedule() == 0  # 0 after moratorium
+    assert user_card.get_min_for_schedule(parse_date("2020-02-01")) == 0  # 0 after moratorium

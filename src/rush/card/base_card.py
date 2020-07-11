@@ -115,7 +115,8 @@ class BaseCard:
 
     def create_bill(
         self,
-        new_bill_date: Date,
+        bill_start_date: Date,
+        bill_close_date: Date,
         lender_id: int,
         rc_rate_of_interest_annual: Decimal,
         lender_rate_of_interest_annual: Decimal,
@@ -125,7 +126,8 @@ class BaseCard:
             user_id=self.user_id,
             card_id=self.id,
             lender_id=lender_id,
-            agreement_date=new_bill_date,
+            bill_start_date=bill_start_date,
+            bill_close_date=bill_close_date,
             rc_rate_of_interest_annual=rc_rate_of_interest_annual,
             lender_rate_of_interest_annual=lender_rate_of_interest_annual,
             is_generated=is_generated,
@@ -138,7 +140,7 @@ class BaseCard:
         all_bills = (
             self.session.query(LoanData)
             .filter(LoanData.user_id == self.user_id, LoanData.is_generated.is_(True))
-            .order_by(LoanData.agreement_date)
+            .order_by(LoanData.bill_start_date)
             .all()
         )
         all_bills = [self.convert_to_bill_class(bill) for bill in all_bills]
@@ -149,7 +151,7 @@ class BaseCard:
         all_bills = (
             self.session.query(LoanData)
             .filter(LoanData.user_id == self.user_id, LoanData.is_generated.is_(True))
-            .order_by(LoanData.agreement_date)
+            .order_by(LoanData.bill_start_date)
             .all()
         )
         all_bills = [self.convert_to_bill_class(bill) for bill in all_bills]
@@ -160,7 +162,7 @@ class BaseCard:
         latest_bill = (
             self.session.query(LoanData)
             .filter(LoanData.card_id == self.id, LoanData.is_generated.is_(True))
-            .order_by(LoanData.agreement_date.desc())
+            .order_by(LoanData.bill_start_date.desc())
             .first()
         )
         return latest_bill
@@ -170,7 +172,7 @@ class BaseCard:
         loan_data = (
             self.session.query(LoanData)
             .filter(LoanData.card_id == self.id, LoanData.is_generated.is_(False))
-            .order_by(LoanData.agreement_date)
+            .order_by(LoanData.bill_start_date)
             .first()
         )
         return loan_data
@@ -180,12 +182,14 @@ class BaseCard:
         loan_data = (
             self.session.query(LoanData)
             .filter(LoanData.card_id == self.id)
-            .order_by(LoanData.agreement_date)
+            .order_by(LoanData.bill_start_date)
             .first()
         )
         return loan_data
 
-    def get_min_for_schedule(self, date_to_check_against: DateTime = get_current_ist_time().date()) -> Decimal:
+    def get_min_for_schedule(
+        self, date_to_check_against: DateTime = get_current_ist_time().date()
+    ) -> Decimal:
         # if user is in moratorium then return 0
         if LoanMoratorium.is_in_moratorium(self.session, self.id, date_to_check_against):
             return Decimal(0)
