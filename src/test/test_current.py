@@ -1375,6 +1375,84 @@ def test_refresh_schedule(session: Session) -> None:
     assert second_emi_post_dict["interest_received"] == Decimal(360)
 
 
+def test_moratorium_schedule(session: Session) -> None:
+    a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    session.add(a)
+    session.flush()
+
+    # assign card
+    uc = create_user_card(
+        session=session,
+        card_type="ruby",
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02").date(),
+    )
+
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-04-08 19:23:11"),
+        amount=Decimal(6000),
+        description="BigBasket.com",
+    )
+
+    generate_date = parse_date("2020-05-01").date()
+    bill_april = bill_generate(session=session, user_card=uc)
+
+    payment_date = parse_date("2020-05-03")
+    amount = Decimal(2000)
+    payment_received(
+        session=session,
+        user_card=uc,
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id="a123",
+    )
+
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-08 19:23:11"),
+        amount=Decimal(6000),
+        description="BigBasket.com",
+    )
+
+    generate_date = parse_date("2020-06-01").date()
+    bill_may = bill_generate(session=session, user_card=uc)
+
+    # Get emi list post few bill creations
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.due_date.asc())
+    )
+    pre_emis_dict = [u.__dict__ for u in all_emis_query.all()]
+
+    # Give moratorium to user
+    m = LoanMoratorium.new(
+        session,
+        card_id=uc.id,
+        start_date=parse_date("2020-09-01"),
+        end_date=parse_date("2020-12-01"),
+    )
+
+    # Refresh schedule
+    refresh_schedule(session, a.id)
+
+    # Get list post refresh
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.due_date.asc())
+    )
+    post_emis_dict = [u.__dict__ for u in all_emis_query.all()]
+
+    second_emi_pre_dict = pre_emis_dict[1]
+    second_emi_post_dict = post_emis_dict[1]
+    assert second_emi_pre_dict["interest_received"] == Decimal(180)
+    assert second_emi_post_dict["interest_received"] == Decimal(360)
+
+
 def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
     a = User(
         id=38612,

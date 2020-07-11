@@ -22,6 +22,7 @@ from rush.models import (
     LedgerTriggerEvent,
     LoanData,
     UserCard,
+    LoanMoratorium,
 )
 from rush.utils import (
     EMI_FORMULA_DICT,
@@ -510,11 +511,6 @@ def add_moratorium_to_loan_emi(loan_emis, start_date, months_to_be_inserted: int
 
 
 def check_moratorium_eligibility(session: Session, data):
-    # required_fields = ["loan_id", "start_date", "months_to_be_inserted"]
-    # resp = check_for_mandatory_fields(data, required_fields)
-    # if resp.get('result') != 'success':
-    #     return resp
-
     user_id = int(data["user_id"])
     start_date = parse_date(data["start_date"]).date()
     months_to_be_inserted = int(data["months_to_be_inserted"])
@@ -532,22 +528,9 @@ def check_moratorium_eligibility(session: Session, data):
     if not moratorium_start_emi:
         return {"result": "error", "message": "Not eligible for moratorium"}
 
-    # if is_any_payment_on_emi(moratorium_start_emi):
-    #     resp = remove_payment_from_emis(emis, moratorium_start_emi['emi_number'])
-    #     if resp.get('result') == 'error':
-    #         return resp
-    #     data = resp['data']
-    #     loan_data['emis'] = data['emis']
-    #     old_payment_emis_mappings = data['old_payment_emis_mapping']
-    #     payment_requests_to_adjust = data['payment_requests_to_adjust']
-
     resp = add_moratorium_to_loan_emi(emis, start_date, months_to_be_inserted)
     if resp["result"] == "error":
         return resp
-
-    # if payment_requests_to_adjust:
-    #     add_payment_on_emis(payment_requests_to_adjust,
-    #                         loan_data, new_payment_emi_mapping)
 
     session.bulk_update_mappings(CardEmis, resp["data"])
 
@@ -588,6 +571,23 @@ def refresh_schedule(session: Session, user_id: int):
             )
 
     # Check if user has opted for moratorium and adjust that in schedule
+    moratorium = (
+        session.query(LoanMoratorium)
+        .filter(LoanMoratorium.card_id == user_card.table.id)
+        .first()
+    )
+    if moratorium:
+        all_emis_query = (
+            session.query(CardEmis)
+            .filter(CardEmis.card_id == user_card.table.id, CardEmis.row_status == "active")
+            .order_by(CardEmis.due_date.asc())
+        )
+        all_emis = [u.__dict__ for u in all_emis_query.all()]
+        start_date = moratorium.start_date
+        months_to_be_inserted = (moratorium.end_date.year - moratorium.start_date.year) * 12 + moratorium.end_date.month - moratorium.start_date.month
+        check_moratorium_eligibility(
+            session, {"user_id": user_id, "start_date": start_date.strftime('%Y-%m-%d'), "months_to_be_inserted": months_to_be_inserted}
+        )
 
     # Slide all payments
     slide_payments(session, user_id)
