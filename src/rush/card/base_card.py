@@ -185,10 +185,10 @@ class BaseCard:
         )
         return loan_data
 
-    def get_min_for_schedule(self) -> Decimal:
+    def get_min_for_schedule(self, date_to_check_against: DateTime = get_current_ist_time().date()) -> Decimal:
         # if user is in moratorium then return 0
-        if LoanMoratorium.is_in_moratorium(self.session, self.id, get_current_ist_time().date()):
-            return 0
+        if LoanMoratorium.is_in_moratorium(self.session, self.id, date_to_check_against):
+            return Decimal(0)
         unpaid_bills = self.get_unpaid_bills()
         min_of_all_bills = sum(bill.get_min_for_schedule() for bill in unpaid_bills)
         return min_of_all_bills
