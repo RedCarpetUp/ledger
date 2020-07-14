@@ -532,6 +532,25 @@ def check_moratorium_eligibility(session: Session, data):
     if resp["result"] == "error":
         return resp
 
+    # Updation of emis in schedule
+    for emi in resp["data"]:
+        if emi["extra_details"].get("moratorium"):
+            new_emi = CardEmis(
+                card_id=user_card.table.id,
+                emi_number=emi["emi_number"],
+                total_closing_balance=emi["total_closing_balance"],
+                total_closing_balance_post_due_date=emi["total_closing_balance_post_due_date"],
+                due_amount=emi["due_amount"],
+                late_fee=emi["late_fee"],
+                interest=emi["interest"],
+                interest_current_month=emi["interest_current_month"],
+                interest_next_month=emi["interest_next_month"],
+                total_due_amount=emi["total_due_amount"],
+                due_date=emi["due_date"],
+                extra_details=emi["extra_details"],
+            )
+            session.add(new_emi)
+    session.flush()
     session.bulk_update_mappings(CardEmis, resp["data"])
 
 

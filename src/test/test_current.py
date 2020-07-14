@@ -1293,7 +1293,7 @@ def test_moratorium(session: Session) -> None:
         session, {"user_id": a.id, "start_date": "2020-03-01", "months_to_be_inserted": 3}
     )
 
-    # Check if amount is adjusted correctly in schedule
+    # Check if scehdule has been updated according to moratorium
     all_emis_query = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
