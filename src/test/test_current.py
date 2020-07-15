@@ -1513,3 +1513,68 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
         is False
     )
     assert user_card.get_min_for_schedule(parse_date("2020-02-01")) == 0  # 0 after moratorium
+
+
+def moratorium_test_live_user_1836540(session: Session) -> None:
+    a = User(id=1836540, performed_by=123, name="Mohammad Shahbaz Mohammad Shafi Qureshi", fullname="Mohammad Shahbaz Mohammad Shafi Qureshi", nickname="Mohammad Shahbaz Mohammad Shafi Qureshi", email="shahbazq797@gmail.com",)
+    session.add(a)
+    session.flush()
+
+    # assign card
+    uc = create_user_card(
+        session=session,
+        card_type="ruby",
+        user_id=a.id,
+        # 16th March actual
+        card_activation_date=parse_date("2020-03-01").date(),
+    )
+
+    create_card_swipe(
+        session=session,
+        user_card=user_card,
+        txn_time=parse_date("2020-03-19 21:33:53"),
+        amount=Decimal(10),
+        description="TRUEBALANCE IO         GURGAON       IND",
+    )
+
+    create_card_swipe(
+        session=session,
+        user_card=user_card,
+        txn_time=parse_date("2020-03-24 14:01:35"),
+        amount=Decimal(100),
+        description="PAY*TRUEBALANCE IO     GURGAON       IND",
+    )
+
+    bill_april = bill_generate(session=session, user_card=uc)
+
+    create_card_swipe(
+        session=session,
+        user_card=user_card,
+        txn_time=parse_date("2020-04-03 17:41:43"),
+        amount=Decimal(4),
+        description="TRUEBALANCE IO         GURGAON       IND",
+    )
+
+    create_card_swipe(
+        session=session,
+        user_card=user_card,
+        txn_time=parse_date("2020-04-12 22:02:47"),
+        amount=Decimal(52),
+        description="PAYU PAYMENTS PVT LTD  0001243054000 IND",
+    )
+
+    bill_may = bill_generate(session=session, user_card=uc)
+
+    bill_june = bill_generate(session=session, user_card=uc)
+
+    # Get emi list post few bill creations
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.due_date.asc())
+    )
+    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+
+    assert a.id == 1836540
+
+
