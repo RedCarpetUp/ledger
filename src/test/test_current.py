@@ -1582,4 +1582,23 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
     )
     emis_dict = [u.__dict__ for u in all_emis_query.all()]
 
+    # Give moratorium
+    m = LoanMoratorium.new(
+        session,
+        card_id=user_card.id,
+        start_date=parse_date("2020-04-01"),
+        end_date=parse_date("2020-06-01"),
+    )
+
+    # Refresh schedule
+    refresh_schedule(session, a.id)
+
+    # Get list post refresh
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.due_date.asc())
+    )
+    post_emis_dict = [u.__dict__ for u in all_emis_query.all()]
+
     assert a.id == 1836540

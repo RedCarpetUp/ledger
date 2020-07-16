@@ -147,10 +147,6 @@ def add_emi_on_new_bill(
     # Get the second last emi for calculating values of the last emi
     second_last_emi = all_emis[last_emi_number - 1]
     last_emi_due_date = second_last_emi.due_date + timedelta(days=user_card.statement_period_in_days + 1)
-    if interest:
-        current_interest += div(mul(interest, (30 - last_emi_due_date.day)), 30)
-        next_interest += interest - current_interest
-        total_interest = current_interest + next_interest
     total_closing_balance = (
         (principal_due - mul(due_amount, (new_end_emi_number - 1)))
         if (principal_due - mul(due_amount, (new_end_emi_number - 1))) > 0
@@ -161,6 +157,13 @@ def add_emi_on_new_bill(
         if (principal_due - mul(due_amount, (new_end_emi_number - 1))) > 0
         else Decimal(0)
     )
+    total_due_amount = due_amount
+    if interest:
+        current_interest += div(mul(interest, (30 - last_emi_due_date.day)), 30)
+        next_interest += interest - current_interest
+        total_interest = current_interest + next_interest
+        total_due_amount += interest
+        total_closing_balance_post_due_date += interest
     new_emi = CardEmis(
         card_id=user_card.id,
         emi_number=new_end_emi_number,
@@ -168,7 +171,7 @@ def add_emi_on_new_bill(
         interest=total_interest,
         interest_current_month=current_interest,
         interest_next_month=next_interest,
-        total_due_amount=due_amount,
+        total_due_amount=total_due_amount,
         total_closing_balance=total_closing_balance,
         total_closing_balance_post_due_date=total_closing_balance_post_due_date,
         due_date=last_emi_due_date,
