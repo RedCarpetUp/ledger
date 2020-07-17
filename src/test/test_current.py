@@ -589,7 +589,7 @@ def test_emi_creation(session: Session) -> None:
     all_emis = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
-        .order_by(CardEmis.due_date.asc())
+        .order_by(CardEmis.emi_number.asc())
         .all()
     )  # Get the latest emi of that user.
 
@@ -635,7 +635,7 @@ def test_subsequent_emi_creation(session: Session) -> None:
     all_emis = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
-        .order_by(CardEmis.due_date.asc())
+        .order_by(CardEmis.emi_number.asc())
         .all()
     )  # Get the latest emi of that user.
 
@@ -683,9 +683,9 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     all_emis_query = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
-        .order_by(CardEmis.due_date.asc())
+        .order_by(CardEmis.emi_number.asc())
     )
-    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    emis_dict = [u.as_dict() for u in all_emis_query.all()]
     first_emi = emis_dict[0]
     assert first_emi["interest_current_month"] == 84
     assert first_emi["interest_next_month"] == 96
@@ -708,9 +708,9 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     all_emis_query = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
-        .order_by(CardEmis.due_date.asc())
+        .order_by(CardEmis.emi_number.asc())
     )
-    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    emis_dict = [u.as_dict() for u in all_emis_query.all()]
     second_emi = emis_dict[1]
     assert second_emi["total_due_amount"] == 0
 
@@ -914,9 +914,9 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     all_emis_query = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
-        .order_by(CardEmis.due_date.asc())
+        .order_by(CardEmis.emi_number.asc())
     )
-    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    emis_dict = [u.as_dict() for u in all_emis_query.all()]
 
     # Do Partial Payment
     payment_date = parse_date("2020-06-18 06:55:00")
@@ -936,9 +936,9 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     all_emis_query = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
-        .order_by(CardEmis.due_date.asc())
+        .order_by(CardEmis.emi_number.asc())
     )
-    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    emis_dict = [u.as_dict() for u in all_emis_query.all()]
     first_emi = emis_dict[0]
     second_emi = emis_dict[1]
 
@@ -1144,9 +1144,9 @@ def test_prepayment(session: Session) -> None:
     all_emis_query = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
-        .order_by(CardEmis.due_date.asc())
+        .order_by(CardEmis.emi_number.asc())
     )
-    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    emis_dict = [u.as_dict() for u in all_emis_query.all()]
 
     # prepayment of rs 2000 done
     payment_date = parse_date("2020-05-03")
@@ -1163,9 +1163,9 @@ def test_prepayment(session: Session) -> None:
     all_emis_query = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
-        .order_by(CardEmis.due_date.asc())
+        .order_by(CardEmis.emi_number.asc())
     )
-    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    emis_dict = [u.as_dict() for u in all_emis_query.all()]
 
     _, prepayment_amount = get_account_balance_from_str(
         session, book_string=f"{user_card_id}/card/pre_payment/l"
@@ -1285,9 +1285,9 @@ def test_moratorium(session: Session) -> None:
     all_emis_query = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
-        .order_by(CardEmis.due_date.asc())
+        .order_by(CardEmis.emi_number.asc())
     )
-    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    emis_dict = [u.as_dict() for u in all_emis_query.all()]
 
     check_moratorium_eligibility(
         session, {"user_id": a.id, "start_date": "2020-03-01", "months_to_be_inserted": 3}
@@ -1297,9 +1297,9 @@ def test_moratorium(session: Session) -> None:
     all_emis_query = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
-        .order_by(CardEmis.due_date.asc())
+        .order_by(CardEmis.emi_number.asc())
     )
-    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    emis_dict = [u.as_dict() for u in all_emis_query.all()]
 
     last_emi = emis_dict[-1]
     assert last_emi["emi_number"] == 15
@@ -1354,9 +1354,9 @@ def test_refresh_schedule(session: Session) -> None:
     all_emis_query = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
-        .order_by(CardEmis.due_date.asc())
+        .order_by(CardEmis.emi_number.asc())
     )
-    pre_emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    pre_emis_dict = [u.as_dict() for u in all_emis_query.all()]
 
     # Refresh schedule
     refresh_schedule(session, a.id)
@@ -1365,9 +1365,9 @@ def test_refresh_schedule(session: Session) -> None:
     all_emis_query = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
-        .order_by(CardEmis.due_date.asc())
+        .order_by(CardEmis.emi_number.asc())
     )
-    post_emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    post_emis_dict = [u.as_dict() for u in all_emis_query.all()]
 
     second_emi_pre_dict = pre_emis_dict[1]
     second_emi_post_dict = post_emis_dict[1]
@@ -1424,9 +1424,9 @@ def test_moratorium_schedule(session: Session) -> None:
     all_emis_query = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
-        .order_by(CardEmis.due_date.asc())
+        .order_by(CardEmis.emi_number.asc())
     )
-    pre_emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    pre_emis_dict = [u.as_dict() for u in all_emis_query.all()]
 
     # Give moratorium to user
     m = LoanMoratorium.new(
@@ -1440,9 +1440,9 @@ def test_moratorium_schedule(session: Session) -> None:
     all_emis_query = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
-        .order_by(CardEmis.due_date.asc())
+        .order_by(CardEmis.emi_number.asc())
     )
-    post_emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    post_emis_dict = [u.as_dict() for u in all_emis_query.all()]
 
     second_emi_pre_dict = pre_emis_dict[1]
     second_emi_post_dict = post_emis_dict[1]
@@ -1578,9 +1578,9 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
     all_emis_query = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
-        .order_by(CardEmis.due_date.asc())
+        .order_by(CardEmis.emi_number.asc())
     )
-    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    emis_dict = [u.as_dict() for u in all_emis_query.all()]
 
     # Give moratorium
     m = LoanMoratorium.new(
@@ -1597,8 +1597,8 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
     all_emis_query = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
-        .order_by(CardEmis.due_date.asc())
+        .order_by(CardEmis.emi_number.asc())
     )
-    post_emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    post_emis_dict = [u.as_dict() for u in all_emis_query.all()]
 
     assert a.id == 1836540
