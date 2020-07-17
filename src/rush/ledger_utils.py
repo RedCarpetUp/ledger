@@ -38,35 +38,6 @@ def create_ledger_entry_from_str(
     return create_ledger_entry(session, event_id, debit_account.id, credit_account.id, amount)
 
 
-def get_account_balance(
-    session: sqlalchemy.orm.session.Session, book_account: BookAccount, to_date: Optional[DateTime]
-) -> Decimal:
-    debit_balance = session.query(func.sum(LedgerEntry.amount)).filter(
-        LedgerEntry.debit_account == book_account.id,
-    )
-    if to_date:
-        debit_balance = debit_balance.filter(
-            LedgerEntry.event_id == LedgerTriggerEvent.id, LedgerTriggerEvent.post_date < to_date,
-        )
-    debit_balance = debit_balance.scalar() or 0
-
-    credit_balance = session.query(func.sum(LedgerEntry.amount)).filter(
-        LedgerEntry.credit_account == book_account.id,
-    )
-    if to_date:
-        credit_balance = credit_balance.filter(
-            LedgerEntry.event_id == LedgerTriggerEvent.id, LedgerTriggerEvent.post_date < to_date,
-        )
-    credit_balance = credit_balance.scalar() or 0
-
-    if book_account.account_type in ("a", "e"):
-        final_balance = debit_balance - credit_balance
-    elif book_account.account_type in ("l", "r"):
-        final_balance = credit_balance - debit_balance
-
-    return final_balance
-
-
 def get_account_balance_from_str(
     session: Session, book_string: str, to_date: Optional[DateTime] = None
 ) -> Tuple[int, Decimal]:
