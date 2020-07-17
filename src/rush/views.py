@@ -55,7 +55,7 @@ def bill_view(session: Session, user_card: BaseCard) -> list:
     all_bills = (
         session.query(LoanData)
         .filter(LoanData.user_id == user_card.user_id)
-        .order_by(LoanData.agreement_date.desc())
+        .order_by(LoanData.bill_start_date.desc())
         .all()
     )
     for bill in all_bills:

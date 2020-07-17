@@ -1,5 +1,6 @@
 from decimal import Decimal
 from typing import (
+    Dict,
     Optional,
     Tuple,
 )
@@ -160,7 +161,7 @@ def is_bill_closed(session: Session, bill: LoanData, to_date: Optional[DateTime]
     return True
 
 
-def get_remaining_bill_balance(session: Session, bill: LoanData) -> dict:
+def get_remaining_bill_balance(session: Session, bill: LoanData) -> Dict[str, Decimal]:
     _, principal_due = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/principal_receivable/a"
     )

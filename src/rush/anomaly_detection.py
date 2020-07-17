@@ -36,6 +36,18 @@ def get_affected_events(session: Session, user_card: UserCard) -> List[LedgerTri
     return events
 
 
+def get_payment_events(session: Session, user_card: UserCard) -> List[LedgerTriggerEvent]:
+    events = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.card_id == user_card.id,
+            LedgerTriggerEvent.name.in_(["payment_received"]),
+        )
+        .all()
+    )
+    return events
+
+
 def run_anomaly(session: Session, user_card: UserCard, event_date: DateTime) -> None:
     """
     This checks for any anomalies after we have received the payment. If the interest needs to be

@@ -238,7 +238,7 @@ def _adjust_for_min(
     debit_book_str: str,
 ) -> Decimal:
     for bill in bills:
-        min_due = bill.get_minimum_amount_to_pay()
+        min_due = bill.get_remaining_min()
         amount_to_adjust_in_this_bill = min(min_due, payment_received)
         # Remove amount from the original variable.
         payment_received -= amount_to_adjust_in_this_bill
@@ -295,10 +295,6 @@ def accrue_interest_event(
         credit_book_str=f"{bill.id}/bill/interest_earned/r",
         amount=amount,
     )
-    # adjust the given interest in schedule
-    from rush.create_emi import adjust_interest_in_emis
-
-    adjust_interest_in_emis(session, bill.user_id, event.post_date)
 
 
 def accrue_late_fine_event(session: Session, bill: LoanData, event: LedgerTriggerEvent) -> None:
