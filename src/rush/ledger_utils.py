@@ -68,24 +68,48 @@ def get_account_balance(
 
 def get_account_balance_from_str(
     session: Session, book_string: str, to_date: Optional[DateTime] = None
-) -> Tuple[BookAccount, Decimal]:
-    book_account = get_book_account_by_string(session, book_string)
-    account_balance = get_account_balance(session, book_account, to_date=to_date)
-    return book_account, account_balance
+) -> Tuple[int, Decimal]:
+    book_variables = breakdown_account_variables_from_str(book_string)
+    if to_date:
+        f = func.get_account_balance(
+            book_variables["identifier"],
+            book_variables["identifier_type"],
+            book_variables["name"],
+            book_variables["account_type"],
+            to_date,
+        )
+    else:
+        f = func.get_account_balance(
+            book_variables["identifier"],
+            book_variables["identifier_type"],
+            book_variables["name"],
+            book_variables["account_type"],
+        )
+    account_balance = session.query(f).scalar() or 0
+    return 0, Decimal(account_balance)
 
 
-def get_book_account_by_string(session: Session, book_string) -> BookAccount:
+def breakdown_account_variables_from_str(book_string: str) -> dict:
     identifier, identifier_type, name, account_type = book_string.split("/")
     assert account_type in ("a", "l", "r", "e")
     assert identifier_type in ("user", "lender", "bill", "redcarpet", "card")
+    return {
+        "identifier": identifier,
+        "identifier_type": identifier_type,
+        "name": name,
+        "account_type": account_type,
+    }
 
+
+def get_book_account_by_string(session: Session, book_string: str) -> BookAccount:
+    book_variables = breakdown_account_variables_from_str(book_string)
     book_account = get_or_create(
         session=session,
         model=BookAccount,
-        identifier=identifier,
-        identifier_type=identifier_type,
-        book_name=name,
-        account_type=account_type,
+        identifier=book_variables["identifier"],
+        identifier_type=book_variables["identifier_type"],
+        book_name=book_variables["name"],
+        account_type=book_variables["account_type"],
     )
     return book_account
 
