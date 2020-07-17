@@ -136,7 +136,7 @@ def add_emi_on_new_bill(
             emi.interest_current_month += div(mul(interest, (30 - emi.due_date.day)), 30)
             emi.interest_next_month = (interest + emi.interest) - emi.interest_current_month
             emi.interest = emi.interest_current_month + emi.interest_next_month
-    session.commit()
+    session.flush()
     # Get the second last emi for calculating values of the last emi
     second_last_emi = all_emis[-1]
     last_emi_due_date = second_last_emi.due_date + timedelta(days=user_card.statement_period_in_days + 1)
@@ -359,7 +359,7 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
             all_paid=all_paid,
         )
 
-    session.commit()
+    session.flush()
 
 
 def adjust_interest_in_emis(session: Session, user_id: int, post_date: DateTime) -> None:
@@ -392,7 +392,7 @@ def adjust_interest_in_emis(session: Session, user_id: int, post_date: DateTime)
                 emi.interest_next_month = (interest_due + emi.interest) - emi.interest_current_month
                 emi.interest = emi.interest_current_month + emi.interest_next_month
                 emi_count += 1
-            session.commit()
+            session.flush()
             # session.bulk_update_mappings(CardEmis, emis_dict)
 
 
@@ -427,7 +427,7 @@ def adjust_late_fee_in_emis(session: Session, user_id: int, post_date: DateTime)
         emi.total_closing_balance_post_due_date += late_fee
         emi.total_due_amount = min_due if min_due else emi.total_due_amount + late_fee
         emi.late_fee += late_fee
-        session.commit()
+        session.flush()
         # session.bulk_update_mappings(CardEmis, [emi_dict])
 
 
