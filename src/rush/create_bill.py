@@ -10,6 +10,7 @@ from rush.card.base_card import BaseBill
 from rush.create_emi import (
     add_emi_on_new_bill,
     create_emis_for_card,
+    refresh_schedule,
 )
 from rush.ledger_events import bill_generate_event
 from rush.ledger_utils import get_account_balance_from_str
@@ -69,24 +70,10 @@ def bill_generate(session: Session, user_card: BaseCard) -> BaseBill:
         # After the bill has generated. Call the min generation event on all unpaid bills.
         add_min_to_all_bills(session, bill_closing_date, user_card)
 
-    # TODO move this to a function.
-    # If last emi does not exist then we can consider to be first set of emi creation
-    last_emi = (
-        session.query(CardEmis)
-        .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
-        .order_by(CardEmis.due_date.desc())
-        .first()
-    )
-    if not last_emi:
-        create_emis_for_card(session, user_card, bill)
-    else:
-        add_emi_on_new_bill(session, user_card, bill, last_emi.emi_number)
-
     # Accrue interest on all bills. Before the actual date, yes.
     accrue_interest_on_all_bills(session, bill_closing_date, user_card)
 
-    # adjust the given interest in schedule
-    from rush.create_emi import adjust_interest_in_emis
+    # Refresh the schedule
+    refresh_schedule(session, user_card.table.user_id)
 
-    adjust_interest_in_emis(session, bill.user_id, bill_closing_date)
     return bill
