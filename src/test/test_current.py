@@ -1558,17 +1558,17 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
         session=session,
         user_card=user_card,
         txn_time=parse_date("2020-04-03 17:41:43"),
-        amount=Decimal(56),
+        amount=Decimal(4),
         description="TRUEBALANCE IO         GURGAON       IND",
     )
 
-    # create_card_swipe(
-    #     session=session,
-    #     user_card=user_card,
-    #     txn_time=parse_date("2020-04-12 22:02:47"),
-    #     amount=Decimal(52),
-    #     description="PAYU PAYMENTS PVT LTD  0001243054000 IND",
-    # )
+    create_card_swipe(
+        session=session,
+        user_card=user_card,
+        txn_time=parse_date("2020-04-12 22:02:47"),
+        amount=Decimal(52),
+        description="PAYU PAYMENTS PVT LTD  0001243054000 IND",
+    )
 
     bill_may = bill_generate(session=session, user_card=user_card)
 
