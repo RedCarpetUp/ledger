@@ -193,7 +193,7 @@ class BaseCard:
         loan_data = (
             self.session.query(LoanData)
             .filter(LoanData.card_id == self.id)
-            .order_by(LoanData.bill_start_date)
+            .order_by(LoanData.bill_start_date.desc())
             .first()
         )
         return loan_data
