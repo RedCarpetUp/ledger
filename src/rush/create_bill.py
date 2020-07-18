@@ -64,8 +64,10 @@ def bill_generate(session: Session, user_card: BaseCard) -> BaseBill:
     bill.table.interest_to_charge = bill.get_interest_to_charge()
 
     bill_closing_date = bill.bill_start_date + relativedelta(months=+1)
-    # After the bill has generated. Call the min generation event on all unpaid bills.
-    add_min_to_all_bills(session, bill_closing_date, user_card)
+    # Don't add in min if user is in moratorium.
+    if not LoanMoratorium.is_in_moratorium(session, user_card.id, bill_closing_date):
+        # After the bill has generated. Call the min generation event on all unpaid bills.
+        add_min_to_all_bills(session, bill_closing_date, user_card)
 
     # TODO move this to a function.
     # If last emi does not exist then we can consider to be first set of emi creation
