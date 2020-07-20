@@ -733,8 +733,8 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     assert emis_dict[1]["interest_current_month"] == 78
     assert emis_dict[1]["interest_next_month"] == 102
     assert emis_dict[2]["due_date"] == parse_date("2020-08-17").date()
-    assert emis_dict[2]["total_due_amount"] == 680
-    assert emis_dict[2]["due_amount"] == 500
+    assert emis_dict[2]["total_due_amount"] == 5000
+    assert emis_dict[2]["due_amount"] == 5000
     assert emis_dict[2]["total_closing_balance"] == 0
     assert emis_dict[2]["total_closing_balance_post_due_date"] == 0
     assert emis_dict[2]["interest_received"] == 0
