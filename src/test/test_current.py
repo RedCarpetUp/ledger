@@ -711,10 +711,10 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
         .order_by(CardEmis.emi_number.asc())
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
-    second_emi = emis_dict[1]
+    fourth_emi = emis_dict[3]
     third_emi = emis_dict[2]
-    assert second_emi["total_due_amount"] == Decimal(680)
-    assert third_emi["total_due_amount"] == 0
+    assert fourth_emi["total_due_amount"] == 0
+    assert third_emi["total_due_amount"] == Decimal(680)
 
 
 def test_with_live_user_loan_id_4134872(session: Session) -> None:
@@ -1189,7 +1189,7 @@ def test_prepayment(session: Session) -> None:
     first_payment_mapping = emi_payment_mapping[0]
     assert first_payment_mapping.emi_number == 1
     assert first_payment_mapping.interest_received == Decimal("30.67")
-    assert first_payment_mapping.principal_received == Decimal("83.33")
+    assert first_payment_mapping.principal_received == Decimal("1969.33")
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 1000
