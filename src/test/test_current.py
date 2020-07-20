@@ -739,9 +739,9 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     assert emis_dict[2]["total_closing_balance_post_due_date"] == 0
     assert emis_dict[2]["interest_received"] == 0
     assert emis_dict[2]["payment_received"] == 5000
-    assert emis_dict[2]["interest"] == 180
-    assert emis_dict[2]["interest_current_month"] == 78
-    assert emis_dict[2]["interest_next_month"] == 102
+    assert emis_dict[2]["interest"] == 0
+    assert emis_dict[2]["interest_current_month"] == 0
+    assert emis_dict[2]["interest_next_month"] == 0
     assert emis_dict[3]["due_date"] == parse_date("2020-09-17").date()
     assert emis_dict[3]["total_due_amount"] == 0
     assert emis_dict[3]["due_amount"] == 0
@@ -1226,7 +1226,7 @@ def test_prepayment(session: Session) -> None:
     first_payment_mapping = emi_payment_mapping[0]
     assert first_payment_mapping.emi_number == 1
     assert first_payment_mapping.interest_received == Decimal(0)
-    assert first_payment_mapping.principal_received == Decimal(2000)
+    assert first_payment_mapping.principal_received == Decimal(1000)
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 1000
