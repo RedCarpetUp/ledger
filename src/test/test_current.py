@@ -711,10 +711,47 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
         .order_by(CardEmis.emi_number.asc())
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
-    fourth_emi = emis_dict[3]
-    third_emi = emis_dict[2]
-    assert fourth_emi["total_due_amount"] == 0
-    assert third_emi["total_due_amount"] == Decimal(680)
+
+    assert emis_dict[0]["due_date"] == parse_date("2020-06-16").date()
+    assert emis_dict[0]["total_due_amount"] == 680
+    assert emis_dict[0]["due_amount"] == 500
+    assert emis_dict[0]["total_closing_balance"] == 6000
+    assert emis_dict[0]["total_closing_balance_post_due_date"] == 6180
+    assert emis_dict[0]["interest_received"] == 180
+    assert emis_dict[0]["payment_received"] == 500
+    assert emis_dict[0]["interest"] == 180
+    assert emis_dict[0]["interest_current_month"] == 84
+    assert emis_dict[0]["interest_next_month"] == 96
+    assert emis_dict[1]["due_date"] == parse_date("2020-07-17").date()
+    assert emis_dict[1]["total_due_amount"] == 680
+    assert emis_dict[1]["due_amount"] == 500
+    assert emis_dict[1]["total_closing_balance"] == 5500
+    assert emis_dict[1]["total_closing_balance_post_due_date"] == 5680
+    assert emis_dict[1]["interest_received"] == 180
+    assert emis_dict[1]["payment_received"] == 500
+    assert emis_dict[1]["interest"] == 180
+    assert emis_dict[1]["interest_current_month"] == 78
+    assert emis_dict[1]["interest_next_month"] == 102
+    assert emis_dict[2]["due_date"] == parse_date("2020-08-17").date()
+    assert emis_dict[2]["total_due_amount"] == 680
+    assert emis_dict[2]["due_amount"] == 500
+    assert emis_dict[2]["total_closing_balance"] == 0
+    assert emis_dict[2]["total_closing_balance_post_due_date"] == 0
+    assert emis_dict[2]["interest_received"] == 0
+    assert emis_dict[2]["payment_received"] == 5000
+    assert emis_dict[2]["interest"] == 180
+    assert emis_dict[2]["interest_current_month"] == 78
+    assert emis_dict[2]["interest_next_month"] == 102
+    assert emis_dict[3]["due_date"] == parse_date("2020-09-17").date()
+    assert emis_dict[3]["total_due_amount"] == 0
+    assert emis_dict[3]["due_amount"] == 0
+    assert emis_dict[3]["total_closing_balance"] == 0
+    assert emis_dict[3]["total_closing_balance_post_due_date"] == 0
+    assert emis_dict[3]["interest_received"] == 0
+    assert emis_dict[3]["payment_received"] == 0
+    assert emis_dict[3]["interest"] == 0
+    assert emis_dict[3]["interest_current_month"] == 0
+    assert emis_dict[3]["interest_next_month"] == 0
 
 
 def test_with_live_user_loan_id_4134872(session: Session) -> None:
@@ -1188,8 +1225,8 @@ def test_prepayment(session: Session) -> None:
     )
     first_payment_mapping = emi_payment_mapping[0]
     assert first_payment_mapping.emi_number == 1
-    assert first_payment_mapping.interest_received == Decimal("30.67")
-    assert first_payment_mapping.principal_received == Decimal("1969.33")
+    assert first_payment_mapping.interest_received == Decimal(0)
+    assert first_payment_mapping.principal_received == Decimal(2000)
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 1000
