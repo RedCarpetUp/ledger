@@ -212,12 +212,13 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
                     actual_closing_balance = emi.total_closing_balance
                 if (
                     payment_received_and_adjusted >= actual_closing_balance
-                    and actual_closing_balance > 0
+                    and actual_closing_balance > 0 and (last_payment_date.date() >= emi.due_date 
+                    and last_payment_date.date() < (emi.due_date + relativedelta(months=+1)))
                 ):
                     all_paid = True
                     emi.late_fee_received = emi.late_fee
                     emi.interest_received = emi.interest
-                    emi.payment_received = emi.due_amount
+                    emi.payment_received = (payment_received_and_adjusted - (emi.late_fee + emi.interest))
                     emi.total_closing_balance = 0
                     emi.total_closing_balance_post_due_date = 0
                     last_paid_emi_number = emi.emi_number

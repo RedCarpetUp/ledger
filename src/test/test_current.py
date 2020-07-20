@@ -691,8 +691,8 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     assert first_emi["interest_next_month"] == 96
 
     # Do Full Payment
-    payment_date = parse_date("2020-06-30")
-    amount = Decimal(6180)
+    payment_date = parse_date("2020-07-30")
+    amount = Decimal(6360)
     bill = payment_received(
         session=session,
         user_card=uc,
@@ -712,7 +712,9 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
     second_emi = emis_dict[1]
-    assert second_emi["total_due_amount"] == 0
+    third_emi = emis_dict[2]
+    assert second_emi["total_due_amount"] == Decimal(680)
+    assert third_emi["total_due_amount"] == 0
 
 
 def test_with_live_user_loan_id_4134872(session: Session) -> None:
