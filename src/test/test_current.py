@@ -1578,6 +1578,14 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
         card_activation_date=parse_date("2020-03-01").date(),
     )
 
+    # Give moratorium
+    m = LoanMoratorium.new(
+        session,
+        card_id=user_card.id,
+        start_date=parse_date("2020-04-01"),
+        end_date=parse_date("2020-06-01"),
+    )
+
     create_card_swipe(
         session=session,
         user_card=user_card,
@@ -1621,26 +1629,10 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
         session.query(CardEmis)
         .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
-    )
-    emis_dict = [u.as_dict() for u in all_emis_query.all()]
-
-    # Give moratorium
-    m = LoanMoratorium.new(
-        session,
-        card_id=user_card.id,
-        start_date=parse_date("2020-04-01"),
-        end_date=parse_date("2020-06-01"),
+        .all()
     )
 
-    # Refresh schedule
-    refresh_schedule(session, a.id)
-
-    # Get list post refresh
-    all_emis_query = (
-        session.query(CardEmis)
-        .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
-        .order_by(CardEmis.emi_number.asc())
-    )
-    post_emis_dict = [u.as_dict() for u in all_emis_query.all()]
-
-    assert a.id == 1836540
+    last_emi = all_emis_query[-1]
+    out_of_moratorium_emi = all_emis_query[2]
+    assert last_emi.emi_number == 15
+    assert out_of_moratorium_emi.total_due_amount == Decimal("22.99")
