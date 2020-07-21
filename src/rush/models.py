@@ -132,7 +132,6 @@ class UserCard(AuditMixin):
 
 
 class LedgerTriggerEvent(AuditMixin):
-
     __tablename__ = "ledger_trigger_event"
     name = Column(String(50))
     card_id = Column(Integer, ForeignKey(UserCard.id))
