@@ -190,6 +190,7 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
         last_paid_emi_number,
         all_paid=False,
     ) -> None:
+        last_emi_number = all_emis[-1].emi_number
         for emi in all_emis:
             if emi.emi_number <= last_paid_emi_number or emi.total_due_amount <= Decimal(0):
                 continue
@@ -222,17 +223,26 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
                     payment_received_and_adjusted >= actual_closing_balance
                     and actual_closing_balance > 0
                     and (
-                        last_payment_date.date() <= emi.due_date
-                        and last_payment_date.date() > (emi.due_date + relativedelta(months=-1))
+                        (
+                            last_payment_date.date() <= emi.due_date
+                            and last_payment_date.date() > (emi.due_date + relativedelta(months=-1))
+                        )
+                        or emi.emi_number == last_emi_number
                     )
                 ):
                     all_paid = True
                     emi.late_fee_received = emi.late_fee
-                    emi.payment_received = actual_closing_balance - emi.late_fee
+                    # Edge case of last emi
+                    if emi.emi_number == last_emi_number and last_payment_date.date() > emi.due_date:
+                        emi.interest_received = emi.interest
+                        emi.payment_received = actual_closing_balance - emi.late_fee - emi.interest
+                        emi.total_closing_balance = emi.total_closing_balance_post_due_date = 0
+                    else:
+                        emi.payment_received = actual_closing_balance - emi.late_fee
+                        emi.total_closing_balance = (
+                            emi.total_closing_balance_post_due_date
+                        ) = emi.interest = emi.interest_current_month = emi.interest_next_month = 0
                     emi.due_amount = emi.total_due_amount = actual_closing_balance
-                    emi.total_closing_balance = (
-                        emi.total_closing_balance_post_due_date
-                    ) = emi.interest = emi.interest_current_month = emi.interest_next_month = 0
                     last_paid_emi_number = emi.emi_number
                     emi.payment_status = "Paid"
                     # Create payment mapping
