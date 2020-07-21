@@ -58,7 +58,9 @@ def can_remove_interest(
     """
     latest_bill = user_card.get_latest_generated_bill()
     # First check if there is even interest accrued in the latest bill.
-    interest_accrued = get_account_balance_from_str(session, f"{latest_bill.id}/bill/interest_earned/r")
+    _, interest_accrued = get_account_balance_from_str(
+        session, f"{latest_bill.id}/bill/interest_earned/r"
+    )
     if interest_accrued == 0:
         return False  # Nothing to remove.
 
@@ -96,7 +98,7 @@ def is_late_fee_valid(session: Session, user_card: BaseCard) -> bool:
     # TODO get bill from event?
 
     # First check if there is even late fee accrued in the latest bill.
-    late_fee_accrued = get_account_balance_from_str(session, f"{latest_bill.id}/bill/late_fine/r")
+    _, late_fee_accrued = get_account_balance_from_str(session, f"{latest_bill.id}/bill/late_fine/r")
     if late_fee_accrued == 0:
         return False  # Nothing to remove.
 

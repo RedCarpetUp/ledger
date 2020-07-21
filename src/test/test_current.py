@@ -248,6 +248,9 @@ def _accrue_late_fine_bill_1(session: Session) -> None:
     _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_receivable/a")
     assert late_fine_due == Decimal(100)
 
+    _, late_fine_earned = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine/r")
+    assert late_fine_earned == Decimal(100)
+
     min_due = bill.get_remaining_min()
     assert min_due == 114
 
@@ -293,8 +296,8 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
     _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_receivable/a")
     assert late_fine_due == Decimal(0)
 
-    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine/r")
-    assert late_fine_due == Decimal(100)
+    _, late_fine_earned = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine/r")
+    assert late_fine_earned == Decimal(100)
 
     _, principal_due = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/principal_receivable/a"
