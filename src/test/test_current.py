@@ -197,6 +197,11 @@ def _partial_payment_bill_1(session: Session) -> None:
     )
 
     bill = unpaid_bills[0]
+    _, gateway_expenses = get_account_balance_from_str(
+        session, book_string="12345/redcarpet/gateway_expenses/e"
+    )
+    assert gateway_expenses == 0.5
+
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/interest_receivable/a"
     )

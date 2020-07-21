@@ -139,6 +139,7 @@ def payment_received_event(
     session: Session, user_card: BaseCard, debit_book_str: str, event: LedgerTriggerEvent,
 ) -> None:
     payment_received = Decimal(event.amount)
+    gateway_charges = event.extra_details.get("gateway_charges")
     unpaid_bills = user_card.get_unpaid_bills()
 
     payment_received = _adjust_for_min(
@@ -148,10 +149,13 @@ def payment_received_event(
         session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str,
     )
 
-    if payment_received > 0:
+    if payment_received > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
             session, user_card.id, event.id, payment_received, debit_book_str=debit_book_str
         )
+
+    if gateway_charges > 0:  # Adjust for gateway expenses.
+        _adjust_for_gateway_expenses(session, event, debit_book_str)
 
     _, writeoff_balance = get_account_balance_from_str(
         session, book_string=f"{user_card.id}/card/writeoff_expenses/e"
@@ -169,10 +173,20 @@ def payment_received_event(
     slide_payments(session, user_card.user_id, payment_event=event)
 
 
-def _adjust_for_recovery(session: Session, user_card_id: int, event_id: int, amount: Decimal) -> None:
+def _adjust_for_gateway_expenses(session: Session, event: LedgerTriggerEvent, credit_book_str: str):
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
+        debit_book_str="12345/redcarpet/gateway_expenses/e",
+        credit_book_str=credit_book_str,
+        amount=event.extra_details["gateway_charges"],
+    )
+
+
+def _adjust_for_recovery(session: Session, user_card_id: int, event_id: int, amount: Decimal) -> None:
+    create_ledger_entry_from_str(
+        session,
+        event_id=event_id,
         debit_book_str=f"{user_card_id}/card/bad_debt_allowance/ca",
         credit_book_str=f"{user_card_id}/card/writeoff_expenses/e",
         amount=Decimal(amount),
