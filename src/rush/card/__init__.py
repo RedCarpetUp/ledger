@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from sqlalchemy.orm import Session
 
 from rush.card.base_card import BaseCard
@@ -20,7 +22,9 @@ def get_user_card(session: Session, user_id: int, card_type: str = "ruby") -> Ba
 
 
 def create_user_card(session: Session, **kwargs) -> BaseCard:
-    uc = UserCard(**kwargs)
+    uc = UserCard(
+        rc_rate_of_interest_monthly=Decimal(3), lender_rate_of_interest_annual=Decimal(18), **kwargs
+    )
     session.add(uc)
     session.flush()
 

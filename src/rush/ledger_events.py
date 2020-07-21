@@ -370,15 +370,8 @@ def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> 
     all_user_cards = session.query(UserCard).all()
 
     for card in all_user_cards:
-        lender_interest_rate = (
-            session.query(LoanData.lender_rate_of_interest_annual)
-            .filter(LoanData.card_id == card.id)
-            .limit(1)
-            .scalar()
-            or 0
-        )
         # can't use div since interest is 1.00047
-        lender_interest_rate = (36500 + lender_interest_rate) / 36500
+        lender_interest_rate = (36500 + card.lender_rate_of_interest_annual) / 36500
         book_account = get_book_account_by_string(
             session, book_string=f"{card.id}/card/lender_payable/l"
         )
