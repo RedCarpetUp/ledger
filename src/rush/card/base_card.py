@@ -52,8 +52,14 @@ class BaseBill:
         new_interest = interest_on_principal + rounding_difference
         return new_interest
 
-    def get_min_for_schedule(self) -> Decimal:
-        min_scheduled = self.table.principal_instalment + self.table.interest_to_charge
+    def get_min_for_schedule(
+        self, date_to_check_against: DateTime = get_current_ist_time().date()
+    ) -> Decimal:
+        # Don't add in min if user is in moratorium.
+        if LoanMoratorium.is_in_moratorium(self.session, self.card_id, date_to_check_against):
+            min_scheduled = self.table.interest_to_charge  # only charge interest if in moratorium.
+        else:
+            min_scheduled = self.table.principal_instalment + self.table.interest_to_charge
         total_due = get_remaining_bill_balance(self.session, self.table)["total_due"]
         return min(min_scheduled, total_due)
 
@@ -187,7 +193,7 @@ class BaseCard:
         loan_data = (
             self.session.query(LoanData)
             .filter(LoanData.card_id == self.id)
-            .order_by(LoanData.bill_start_date)
+            .order_by(LoanData.bill_start_date.desc())
             .first()
         )
         return loan_data
