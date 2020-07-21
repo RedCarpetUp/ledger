@@ -548,6 +548,15 @@ def add_moratorium_to_loan_emi(
                 payment_status="Paid",
             )
             session.add(new_emi)
+    # Total due amount adjustment
+    total_due_amount_addition_interest = 0
+    for i in range(
+        emi_number_to_begin_insertion_from, emi_number_to_begin_insertion_from + months_to_be_inserted
+    ):
+        total_due_amount_addition_interest += loan_emis[i - 1].interest
+    loan_emis[
+        emi_number_to_begin_insertion_from - 1
+    ].total_due_amount += total_due_amount_addition_interest
     session.commit()
     return {"result": "success"}
 
