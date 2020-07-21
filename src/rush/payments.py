@@ -92,7 +92,7 @@ def _check_writeoff(session, user_id: int, user_card: BaseCard) -> bool:
 
     unpaid_bills = user_card.get_unpaid_bills()
     if len(unpaid_bills) >= 1:
-        relative = relativedelta.relativedelta(get_current_ist_time(), unpaid_bills[0].agreement_date)
+        relative = relativedelta.relativedelta(get_current_ist_time(), unpaid_bills[0].bill_start_date)
         months = relative.months + (12 * relative.years)
         if months >= 3:
             return True
