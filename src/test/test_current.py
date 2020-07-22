@@ -14,7 +14,10 @@ from rush.card import (
     create_user_card,
     get_user_card,
 )
-from rush.create_bill import bill_generate
+from rush.create_bill import (
+    bill_generate,
+    extend_tenure,
+)
 from rush.create_card_swipe import create_card_swipe
 from rush.create_emi import (
     check_moratorium_eligibility,
@@ -1636,3 +1639,21 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
     out_of_moratorium_emi = all_emis_query[2]
     assert last_emi.emi_number == 15
     assert out_of_moratorium_emi.total_due_amount == Decimal("22.99")
+
+
+def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
+    test_moratorium_live_user_1836540(session)
+    user_card = get_user_card(session, 1836540)
+    # Extend tenure to 18 months
+    extend_tenure(session, user_card, 18)
+
+    # Get emi list post tenure extension
+    all_emis = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.emi_number.asc())
+        .all()
+    )
+
+    last_emi = all_emis[-1]
+    assert last_emi.emi_number == 21

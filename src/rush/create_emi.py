@@ -557,7 +557,7 @@ def add_moratorium_to_loan_emi(
     loan_emis[
         emi_number_to_begin_insertion_from - 1
     ].total_due_amount += total_due_amount_addition_interest
-    session.commit()
+    session.flush()
     return {"result": "success"}
 
 
@@ -637,7 +637,7 @@ def refresh_schedule(session: Session, user_id: int):
             .first()
         )
         if not last_emi:
-            create_emis_for_card(session, user_card.table, bill, late_fine_due, interest_due)
+            create_emis_for_card(session, user_card.table, bill, late_fine_due, interest_due, bill.table.bill_tenure)
         else:
             add_emi_on_new_bill(
                 session,
@@ -647,6 +647,7 @@ def refresh_schedule(session: Session, user_id: int):
                 bill_number,
                 late_fine_due,
                 interest_due,
+                bill.table.bill_tenure
             )
         bill_number += 1
 

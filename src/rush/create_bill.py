@@ -52,7 +52,7 @@ def bill_generate(session: Session, user_card: BaseCard) -> BaseBill:
     _, billed_amount = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/principal_receivable/a"
     )
-    principal_instalment = div(billed_amount, 12)  # TODO get tenure from table.
+    principal_instalment = div(billed_amount, bill.table.bill_tenure)
 
     # Update the bill row here.
     bill.table.principal = billed_amount
@@ -72,3 +72,19 @@ def bill_generate(session: Session, user_card: BaseCard) -> BaseBill:
     refresh_schedule(session, user_card.table.user_id)
 
     return bill
+
+
+def extend_tenure(session: Session, user_card: BaseCard, new_tenure: int) -> None:
+    unpaid_bills = user_card.get_unpaid_bills()
+    for bill in unpaid_bills:
+        _, billed_amount = get_account_balance_from_str(
+            session, book_string=f"{bill.id}/bill/principal_receivable/a"
+        )
+        bill.table.bill_tenure = new_tenure
+        principal_instalment = div(billed_amount, bill.table.bill_tenure)
+        # Update the bill rows here
+        bill.table.principal_instalment = principal_instalment
+        bill.table.interest_to_charge = bill.get_interest_to_charge()
+    session.flush()
+    # Refresh the schedule
+    refresh_schedule(session, user_card.table.user_id)

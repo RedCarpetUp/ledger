@@ -155,6 +155,7 @@ class LoanData(AuditMixin):
     lender_id = Column(Integer, nullable=False)
     bill_start_date = Column(Date, nullable=False)
     bill_close_date = Column(Date, nullable=False)
+    bill_tenure = Column(Integer, nullable=False, default=12)
     card_id = Column(Integer, ForeignKey(UserCard.id))
     is_generated = Column(Boolean, nullable=False, server_default="false")
     rc_rate_of_interest_annual = Column(Numeric, nullable=False)  # Make this monthly only

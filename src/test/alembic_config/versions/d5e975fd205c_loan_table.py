@@ -39,6 +39,7 @@ def upgrade() -> None:
         sa.Column("user_id", sa.Integer(), nullable=False),
         sa.Column("bill_start_date", sa.Date(), nullable=False),
         sa.Column("bill_close_date", sa.Date(), nullable=False),
+        sa.Column("bill_tenure", sa.Integer(), nullable=False),
         sa.Column("card_id", sa.Integer(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["card_id"], ["user_card.id"], name="fk_loan_data_card_id"),
