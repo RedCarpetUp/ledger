@@ -88,7 +88,9 @@ def extend_tenure(session: Session, user_card: BaseCard, new_tenure: int) -> Non
         principal_instalment = div(bill.table.principal, bill.table.bill_tenure)
         # Update the bill rows here
         bill.table.principal_instalment = principal_instalment
-        bill.table.interest_to_charge = bill.get_interest_to_charge()
+        bill.table.interest_to_charge = bill.get_interest_to_charge(
+            user_card.table.rc_rate_of_interest_monthly
+        )
     session.flush()
     # Refresh the schedule
     refresh_schedule(session, user_card.table.user_id)
