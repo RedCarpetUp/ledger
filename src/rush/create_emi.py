@@ -637,7 +637,9 @@ def refresh_schedule(session: Session, user_id: int):
             .first()
         )
         if not last_emi:
-            create_emis_for_card(session, user_card.table, bill, late_fine_due, interest_due, bill.table.bill_tenure)
+            create_emis_for_card(
+                session, user_card.table, bill, late_fine_due, interest_due, bill.table.bill_tenure
+            )
         else:
             add_emi_on_new_bill(
                 session,
@@ -647,7 +649,7 @@ def refresh_schedule(session: Session, user_id: int):
                 bill_number,
                 late_fine_due,
                 interest_due,
-                bill.table.bill_tenure
+                bill.table.bill_tenure,
             )
         bill_number += 1
 
