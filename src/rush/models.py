@@ -130,6 +130,8 @@ class UserCard(AuditMixin):
     card_activation_date = Column(Date, nullable=True)
     statement_period_in_days = Column(Integer, default=30, nullable=False)  # 30 days
     interest_free_period_in_days = Column(Integer, default=45, nullable=False)
+    rc_rate_of_interest_monthly = Column(Numeric, nullable=False)
+    lender_rate_of_interest_annual = Column(Numeric, nullable=False)
 
 
 class LedgerTriggerEvent(AuditMixin):
@@ -158,8 +160,6 @@ class LoanData(AuditMixin):
     bill_tenure = Column(Integer, nullable=False, default=12)
     card_id = Column(Integer, ForeignKey(UserCard.id))
     is_generated = Column(Boolean, nullable=False, server_default="false")
-    rc_rate_of_interest_annual = Column(Numeric, nullable=False)  # Make this monthly only
-    lender_rate_of_interest_annual = Column(Numeric, nullable=False)
     principal = Column(Numeric, nullable=True)
     principal_instalment = Column(Numeric, nullable=True)
     interest_to_charge = Column(Numeric, nullable=True)
