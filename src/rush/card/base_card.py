@@ -39,11 +39,9 @@ class BaseBill:
         self.table = loan_data
         self.__dict__.update(loan_data.__dict__)
 
-    def get_interest_to_charge(self):
+    def get_interest_to_charge(self, rate_of_interest: Decimal):
         # TODO get tenure from table.
-        interest_on_principal = mul(
-            self.table.principal, div(div(self.rc_rate_of_interest_annual, 12), 100)
-        )
+        interest_on_principal = mul(self.table.principal, div(rate_of_interest, 100))
         not_rounded_emi = self.table.principal_instalment + interest_on_principal
         rounded_emi = round_up_decimal(not_rounded_emi)
 
@@ -125,13 +123,7 @@ class BaseCard:
         return self.bill_class(self.session, bill)
 
     def create_bill(
-        self,
-        bill_start_date: Date,
-        bill_close_date: Date,
-        lender_id: int,
-        rc_rate_of_interest_annual: Decimal,
-        lender_rate_of_interest_annual: Decimal,
-        is_generated: bool,
+        self, bill_start_date: Date, bill_close_date: Date, lender_id: int, is_generated: bool,
     ) -> BaseBill:
         new_bill = LoanData(
             user_id=self.user_id,
@@ -139,8 +131,6 @@ class BaseCard:
             lender_id=lender_id,
             bill_start_date=bill_start_date,
             bill_close_date=bill_close_date,
-            rc_rate_of_interest_annual=rc_rate_of_interest_annual,
-            lender_rate_of_interest_annual=lender_rate_of_interest_annual,
             is_generated=is_generated,
         )
         self.session.add(new_bill)
