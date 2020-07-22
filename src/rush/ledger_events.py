@@ -165,7 +165,7 @@ def payment_received_event(
         _adjust_for_recovery(session, user_card.id, event.id, amount)
 
     else:
-        _adjust_lender_payable(session, user_card.id, debit_book_str, event)
+        _adjust_lender_payable(session, user_card.id, debit_book_str, gateway_charges, event)
 
     # Slide payment in emi
     from rush.create_emi import slide_payments
@@ -194,7 +194,11 @@ def _adjust_for_recovery(session: Session, user_card_id: int, event_id: int, amo
 
 
 def _adjust_lender_payable(
-    session: Session, user_card_id: int, credit_book_str: str, event: LedgerTriggerEvent
+    session: Session,
+    user_card_id: int,
+    credit_book_str: str,
+    gateway_charges: Decimal,
+    event: LedgerTriggerEvent,
 ) -> None:
     # Lender has received money, so we reduce our liability now.
     create_ledger_entry_from_str(
@@ -202,7 +206,7 @@ def _adjust_lender_payable(
         event_id=event.id,
         debit_book_str=f"{user_card_id}/card/lender_payable/l",
         credit_book_str=credit_book_str,
-        amount=Decimal(event.amount),
+        amount=Decimal(event.amount) - Decimal(gateway_charges),
     )
 
 

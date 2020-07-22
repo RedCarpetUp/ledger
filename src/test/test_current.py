@@ -216,11 +216,11 @@ def _partial_payment_bill_1(session: Session) -> None:
     assert min_due == 14
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
-    assert lender_amount == Decimal("-0.50")
+    assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{user_card.id}/card/lender_payable/l"
     )
-    assert lender_payable == Decimal("900")
+    assert lender_payable == Decimal("900.5")
 
 
 def _partial_payment_bill_2(session: Session) -> None:
@@ -246,7 +246,7 @@ def _partial_payment_bill_2(session: Session) -> None:
     assert min_due == Decimal("0")
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
-    assert lender_amount == Decimal("-0.50")
+    assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{user_card.id}/card/lender_payable/l"
     )
@@ -324,11 +324,11 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
     assert principal_due == Decimal("916.67")
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
-    assert lender_amount == Decimal("-1.00")
+    assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{user_card.id}/card/lender_payable/l"
     )
-    assert lender_payable == Decimal("786")
+    assert lender_payable == Decimal("787.0")
 
 
 def test_accrue_interest_bill_1(session: Session) -> None:
@@ -375,11 +375,11 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
     assert principal_due == Decimal("916.67")
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
-    assert lender_amount == Decimal("-1.00")
+    assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{user_card.id}/card/lender_payable/l"
     )
-    assert lender_payable == Decimal("786")
+    assert lender_payable == Decimal("787.0")
 
 
 def test_is_bill_paid_bill_1(session: Session) -> None:
@@ -413,11 +413,11 @@ def test_is_bill_paid_bill_1(session: Session) -> None:
     assert is_it_paid_now is True
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
-    assert lender_amount == Decimal("-1.50")
+    assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{user_card.id}/card/lender_payable/l"
     )
-    assert lender_payable == Decimal("-130.67")  # negative that implies prepaid
+    assert lender_payable == Decimal("-129.17")  # negative that implies prepaid
 
 
 def _generate_bill_2(session: Session) -> None:
@@ -744,11 +744,11 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     )
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
-    assert lender_amount == Decimal("-0.50")
+    assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{uc.id}/card/lender_payable/l"
     )
-    assert lender_payable == Decimal("-180")
+    assert lender_payable == Decimal("-179.5")
 
     # Refresh Schedule
     # slide_payments(session, a.id)
@@ -979,11 +979,11 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     )
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
-    assert lender_amount == Decimal("-0.50")
+    assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{uc.id}/card/lender_payable/l"
     )
-    assert lender_payable == Decimal("12590")
+    assert lender_payable == Decimal("12590.5")
 
     # Refresh Schedule
     # slide_payments(session, a.id)
@@ -1022,11 +1022,11 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
     )
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
-    assert lender_amount == Decimal("-1.50")
+    assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{user_card.id}/card/lender_payable/l"
     )
-    assert lender_payable == Decimal("-100")
+    assert lender_payable == Decimal("-98.5")
 
     bill = unpaid_bills[0]
 
@@ -1083,11 +1083,11 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
     )
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
-    assert lender_amount == Decimal("-1.50")
+    assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{user_card.id}/card/lender_payable/l"
     )
-    assert lender_payable == Decimal("-222.34")
+    assert lender_payable == Decimal("-220.84")
 
     _, interest_earned = get_account_balance_from_str(
         session, book_string=f"{first_bill.id}/bill/interest_earned/r"
@@ -1127,11 +1127,11 @@ def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
     )
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
-    assert lender_amount == Decimal("-1.50")
+    assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{user_card.id}/card/lender_payable/l"
     )
-    assert lender_payable == Decimal("-130.67")
+    assert lender_payable == Decimal("-129.17")
 
     first_bill = unpaid_bills[0]
     second_bill = unpaid_bills[1]
@@ -1163,11 +1163,11 @@ def _pay_minimum_amount_bill_2(session: Session) -> None:
     )
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
-    assert lender_amount == Decimal("-0.50")
+    assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{user_card.id}/card/lender_payable/l"
     )
-    assert lender_payable == Decimal("1390")
+    assert lender_payable == Decimal("1390.5")
 
     balance_paid = (
         session.query(LedgerTriggerEvent)
@@ -1245,11 +1245,11 @@ def test_prepayment(session: Session) -> None:
     )
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
-    assert lender_amount == Decimal("-0.50")
+    assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{uc.id}/card/lender_payable/l"
     )
-    assert lender_payable == Decimal("-1000")
+    assert lender_payable == Decimal("-999.5")
 
     # Check if amount is adjusted correctly in schedule
     all_emis_query = (
@@ -1312,11 +1312,11 @@ def test_prepayment(session: Session) -> None:
     )
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
-    assert lender_amount == Decimal("-1.00")
+    assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{user_card_id}/card/lender_payable/l"
     )
-    assert lender_payable == Decimal("-1000")
+    assert lender_payable == Decimal("-999")
 
     _, prepayment_amount = get_account_balance_from_str(
         session, book_string=f"{user_card_id}/card/pre_payment/l"
@@ -1439,11 +1439,11 @@ def test_refresh_schedule(session: Session) -> None:
     )
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
-    assert lender_amount == Decimal("-0.50")
+    assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{uc.id}/card/lender_payable/l"
     )
-    assert lender_payable == Decimal("4000")
+    assert lender_payable == Decimal("4000.5")
 
     create_card_swipe(
         session=session,
@@ -1516,11 +1516,11 @@ def test_moratorium_schedule(session: Session) -> None:
     )
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
-    assert lender_amount == Decimal("-0.50")
+    assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{uc.id}/card/lender_payable/l"
     )
-    assert lender_payable == Decimal("4000")
+    assert lender_payable == Decimal("4000.5")
 
     create_card_swipe(
         session=session,
