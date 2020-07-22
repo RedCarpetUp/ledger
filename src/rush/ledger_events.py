@@ -369,7 +369,7 @@ def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> 
             or 0
         )
         # sample = session.query()
-        # can't use div since interest is 1.00047
+        # can't use div since interest is 1.00047 because div consumes the decimal.
         lender_interest_rate = (36500 + lender_interest_rate) / 36500
         book_account = get_book_account_by_string(
             session, book_string=f"{card.id}/card/lender_payable/l"

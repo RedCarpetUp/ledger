@@ -1330,7 +1330,7 @@ def test_writeoff(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby",
+        session=session, user_id=a.id, card_activation_date=parse_date("2020-03-02"), card_type="ruby",
     )
 
     user_card_id = uc.id
@@ -1349,15 +1349,15 @@ def test_writeoff(session: Session) -> None:
     assert bill.table.is_generated is True
 
     # getting a strange error, check it
-    # swipe = create_card_swipe(
-    #     session=session,
-    #     user_card=uc,
-    #     txn_time=parse_date("2020-04-08 19:23:11"),
-    #     amount=Decimal(1500),
-    #     description="BigBasket.com",
-    # )
-    # bill = bill_generate(session=session, user_card=uc)
-    # assert bill.table.is_generated is True
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-04-08 19:23:11"),
+        amount=Decimal(1500),
+        description="BigBasket.com",
+    )
+    bill = bill_generate(session=session, user_card=uc)
+    assert bill.table.is_generated is True
 
     swipe = create_card_swipe(
         session=session,
@@ -1382,15 +1382,15 @@ def test_writeoff(session: Session) -> None:
     _, redcarpet_amount = get_account_balance_from_str(
         session, book_string=f"{user_card_id}/redcarpet/redcarpet_account/a"
     )
-    assert redcarpet_amount == Decimal("-2318.90")
+    assert redcarpet_amount == Decimal("-3995.78")
     _, writeoff_amount = get_account_balance_from_str(
         session, book_string=f"{user_card_id}/card/writeoff_expenses/e"
     )
-    assert writeoff_amount == Decimal("2318.90")
+    assert writeoff_amount == Decimal("3995.78")
     _, bad_amount = get_account_balance_from_str(
         session, book_string=f"{user_card_id}/card/bad_debt_allowance/ca"
     )
-    assert bad_amount == Decimal("2318.90")
+    assert bad_amount == Decimal("3995.78")
 
 
 def test_writeoff_recovery_one(session: Session) -> None:
@@ -1399,7 +1399,7 @@ def test_writeoff_recovery_one(session: Session) -> None:
     payment_received(
         session,
         uc,
-        Decimal("3798.59"),
+        Decimal("3995.78"),
         payment_date=parse_date("2020-07-01"),
         payment_request_id="abcde",
     )
@@ -1413,7 +1413,7 @@ def test_writeoff_recovery_one(session: Session) -> None:
     )
     assert bad_amount == Decimal("0")
     _, pg_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
-    assert pg_amount == Decimal("3798.59")
+    assert pg_amount == Decimal("3995.78")
 
 
 def test_writeoff_recovery_two(session: Session) -> None:
@@ -1422,23 +1422,18 @@ def test_writeoff_recovery_two(session: Session) -> None:
     user_card_id = uc.id
 
     payment_received(
-        session,
-        uc,
-        Decimal("3009.55"),
-        payment_date=parse_date("2020-07-01"),
-        payment_request_id="abcde",
+        session, uc, Decimal("3000"), payment_date=parse_date("2020-07-01"), payment_request_id="abcde",
     )
     _, writeoff_amount = get_account_balance_from_str(
         session, book_string=f"{user_card_id}/card/writeoff_expenses/e"
     )
-    assert writeoff_amount == Decimal("789.04")
+    assert writeoff_amount == Decimal("995.78")
     _, bad_amount = get_account_balance_from_str(
         session, book_string=f"{user_card_id}/card/bad_debt_allowance/ca"
     )
-    assert bad_amount == Decimal("789.04")
+    assert bad_amount == Decimal("995.78")
     _, pg_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
-    assert pg_amount == Decimal("3009.55")
-    # assert prepayment_amount == Decimal("167.89")  # 800 deducted from 967.89
+    assert pg_amount == Decimal("3000")
 
 
 def test_moratorium(session: Session) -> None:
