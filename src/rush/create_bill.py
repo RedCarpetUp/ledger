@@ -15,7 +15,10 @@ from rush.models import (
     LedgerTriggerEvent,
     LoanMoratorium,
 )
-from rush.utils import div
+from rush.utils import (
+    div,
+    get_current_ist_time,
+)
 
 
 def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -> BaseBill:
@@ -41,6 +44,10 @@ def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -
 
 def bill_generate(session: Session, user_card: BaseCard) -> BaseBill:
     bill = user_card.get_latest_bill_to_generate()  # Get the first bill which is not generated.
+    if not bill:
+        bill = get_or_create_bill_for_card_swipe(
+            user_card, get_current_ist_time()
+        )  # TODO not sure about this
     lt = LedgerTriggerEvent(name="bill_generate", card_id=user_card.id, post_date=bill.bill_start_date)
     session.add(lt)
     session.flush()
