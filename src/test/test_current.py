@@ -741,7 +741,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{uc.id}/card/lender_payable/l"
     )
-    assert lender_payable == Decimal("-179.5")
+    assert lender_payable == Decimal("-359.5")
 
     # Refresh Schedule
     # slide_payments(session, a.id)
