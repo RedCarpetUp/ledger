@@ -1215,7 +1215,7 @@ def test_lender_incur(session: Session) -> None:
     status = lender_interest_incur(session, parse_date("2020-07-01 00:00:00"))
     uc = get_user_card(session, 99)
     _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
-    assert amount == Decimal("2547.73")  # on date 2020-07-01
+    assert amount == Decimal("2512.88")  # on date 2020-07-01
 
 
 def test_lender_incur_two(session: Session) -> None:
@@ -1246,7 +1246,7 @@ def test_lender_incur_two(session: Session) -> None:
     # interest on 1015.35 for 2 days and then 2515.35 for 3 days
     status = lender_interest_incur(session, parse_date("2020-08-01 00:00:00"))
     _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
-    assert amount == Decimal("1002.96")  # on date 2020-07-01
+    assert amount == Decimal("1001.48")  # on date 2020-07-01
 
 
 def test_prepayment(session: Session) -> None:
@@ -1382,15 +1382,15 @@ def test_writeoff(session: Session) -> None:
     _, redcarpet_amount = get_account_balance_from_str(
         session, book_string=f"{user_card_id}/redcarpet/redcarpet_account/a"
     )
-    assert redcarpet_amount == Decimal("-3995.78")
+    assert redcarpet_amount == Decimal("-3782.29")
     _, writeoff_amount = get_account_balance_from_str(
         session, book_string=f"{user_card_id}/card/writeoff_expenses/e"
     )
-    assert writeoff_amount == Decimal("3995.78")
+    assert writeoff_amount == Decimal("3782.29")
     _, bad_amount = get_account_balance_from_str(
         session, book_string=f"{user_card_id}/card/bad_debt_allowance/ca"
     )
-    assert bad_amount == Decimal("3995.78")
+    assert bad_amount == Decimal("3782.29")
 
 
 def test_writeoff_recovery_one(session: Session) -> None:
@@ -1399,7 +1399,7 @@ def test_writeoff_recovery_one(session: Session) -> None:
     payment_received(
         session,
         uc,
-        Decimal("3995.78"),
+        Decimal("3782.29"),
         payment_date=parse_date("2020-07-01"),
         payment_request_id="abcde",
     )
@@ -1413,7 +1413,7 @@ def test_writeoff_recovery_one(session: Session) -> None:
     )
     assert bad_amount == Decimal("0")
     _, pg_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
-    assert pg_amount == Decimal("3995.78")
+    assert pg_amount == Decimal("3782.29")
 
 
 def test_writeoff_recovery_two(session: Session) -> None:
@@ -1427,11 +1427,11 @@ def test_writeoff_recovery_two(session: Session) -> None:
     _, writeoff_amount = get_account_balance_from_str(
         session, book_string=f"{user_card_id}/card/writeoff_expenses/e"
     )
-    assert writeoff_amount == Decimal("995.78")
+    assert writeoff_amount == Decimal("782.29")
     _, bad_amount = get_account_balance_from_str(
         session, book_string=f"{user_card_id}/card/bad_debt_allowance/ca"
     )
-    assert bad_amount == Decimal("995.78")
+    assert bad_amount == Decimal("782.29")
     _, pg_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert pg_amount == Decimal("3000")
 
