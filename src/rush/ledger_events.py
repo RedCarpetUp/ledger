@@ -404,13 +404,13 @@ def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> 
                         GROUP BY DATE(ledger_trigger_event.post_date) ORDER BY DATE(ledger_trigger_event.post_date) DESC
                     ),
                     day_wise_lender_payable_balance AS (
-                        SELECT (post_date - CAST(:last_lender_incur_trigger AS DATE)) AS days, amount FROM date_wise_lender_payable_balance
+                        SELECT (post_date - CAST(:last_lender_incur_trigger AS DATE)) AS days, amount FROM date_wise_lender_payable_balance WHERE amount > 0
                     ),
                     interest_on_lender_payable_balance AS (
                         SELECT (POW(:lender_interest_rate, (days - COALESCE(LAG(days) OVER(ORDER BY days), 0))) * amount - amount) AS amount FROM day_wise_lender_payable_balance
                     )
                     SELECT ROUND((
-                    (SELECT POW(:lender_interest_rate, CAST(:event_post_date AS DATE) - post_date) * amount - amount FROM date_wise_lender_payable_balance LIMIT 1)
+                    (SELECT POW(:lender_interest_rate, CAST(:event_post_date AS DATE) - post_date) * amount - amount FROM date_wise_lender_payable_balance WHERE amount > 0 LIMIT 1)
                     + (SELECT SUM(amount) FROM interest_on_lender_payable_balance)
                     ), 2) AS Sum""",
                 params,
