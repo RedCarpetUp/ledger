@@ -236,6 +236,151 @@ def test_generate_bill_1(session: Session) -> None:
     assert interest_event.post_date.date() == parse_date("2020-05-02").date()
 
 
+def test_generate_bill_1_lovejeet(session: Session) -> None:
+    a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    session.add(a)
+    session.flush()
+
+    # assign card
+    uc = create_user_card(
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02").date(),
+        card_type="ruby",
+    )
+
+    swipe_0 = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-03-08 19:23:11"),
+        amount=Decimal(1000),
+        description="BigBasket.com",
+    )
+
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-04-08 19:23:11"),
+        amount=Decimal(1000),
+        description="BigBasket.com",
+    )
+
+    bill0_id = swipe_0.loan_id
+    bill_id = swipe.loan_id
+    assert bill0_id == bill_id
+    _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill0_id}/bill/unbilled/a")
+    assert unbilled_amount == 1000
+
+
+def test_generate_bill_2_lovejeet(session: Session) -> None:
+    a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    session.add(a)
+    session.flush()
+
+    # assign card
+    uc = create_user_card(
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02").date(),
+        card_type="ruby",
+    )
+
+    swipe_0 = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-03-08 19:23:11"),
+        amount=Decimal(1000),
+        description="BigBasket.com",
+    )
+
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-04-08 19:23:11"),
+        amount=Decimal(1000),
+        description="BigBasket.com",
+    )
+
+    bill0_id = swipe_0.loan_id
+    bill = session.query(LoanData).filter(LoanData.id == bill0_id).all()
+    assert str(bill[0].bill_start_date) == "2020-03-02"
+
+
+def test_generate_bill_3_lovejeet(session: Session) -> None:
+    a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    session.add(a)
+    session.flush()
+
+    # assign card
+    uc = create_user_card(
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02").date(),
+        card_type="ruby",
+    )
+
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-04-08 19:23:11"),
+        amount=Decimal(1000),
+        description="BigBasket.com",
+    )
+
+    bill_id = swipe.loan_id
+
+    _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
+    assert unbilled_amount == 1000
+
+    bill = bill_generate(session=session, user_card=uc)
+    bill2 = bill_generate(session=session, user_card=uc)
+    bill3 = bill_generate(session=session, user_card=uc)
+    bill4 = bill_generate(session=session, user_card=uc)
+
+    assert bill.bill_start_date == parse_date("2020-04-02").date()
+    assert bill.table.is_generated is True
+
+    assert bill2.bill_start_date == parse_date("2020-05-02").date()
+    assert bill2.table.is_generated is True
+
+    assert bill3.bill_start_date == parse_date("2020-06-02").date()
+    assert bill3.table.is_generated is True
+
+    assert bill4.bill_start_date == parse_date("2020-07-02").date()
+    assert bill4.bill_close_date == parse_date("2020-08-02").date()
+    assert bill4.table.is_generated is True
+
+    _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
+    # Should be 0 because it has moved to billed account.
+    assert unbilled_amount == 0
+
+    _, billed_amount = get_account_balance_from_str(
+        session, book_string=f"{bill_id}/bill/principal_receivable/a"
+    )
+    assert billed_amount == 1000
+
+    _, min_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/min/a")
+    assert min_amount == 114
+
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_id}/bill/interest_receivable/a"
+    )
+    assert interest_due == Decimal("30.67")
+
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_id}/bill/interest_earned/r"
+    )
+    assert interest_due == Decimal("30.67")
+
+    interest_event = (
+        session.query(LedgerTriggerEvent)
+        .filter_by(card_id=uc.id, name="accrue_interest")
+        .order_by(LedgerTriggerEvent.post_date.desc())
+        .first()
+    )
+    assert interest_event.post_date.date() == parse_date("2020-05-02").date()
+
+
 def _partial_payment_bill_1(session: Session) -> None:
     user_card = get_user_card(session, 99)
     payment_date = parse_date("2020-05-03")
