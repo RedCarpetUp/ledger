@@ -398,13 +398,20 @@ def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> 
         }
         total_amount = (
             session.execute(
-                """WITH amount_data AS (SELECT DATE(ledger_trigger_event.post_date) AS post_date, COALESCE(get_account_balance(:card_id,'card', 'lender_payable', 'l', DATE(ledger_trigger_event.post_date)), 0) AS amount FROM ledger_trigger_event
-                    WHERE ledger_trigger_event.post_date > CAST(:last_lender_incur_trigger AS DATE) AND ledger_trigger_event.post_date <= CAST(:event_post_date AS DATE)
-                    GROUP BY DATE(ledger_trigger_event.post_date) ORDER BY DATE(ledger_trigger_event.post_date) DESC)
+                """WITH date_wise_lender_payable_balance AS (
+                        SELECT DATE(ledger_trigger_event.post_date) AS post_date, COALESCE(get_account_balance(:card_id,'card', 'lender_payable', 'l', DATE(ledger_trigger_event.post_date)), 0) AS amount FROM ledger_trigger_event
+                        WHERE ledger_trigger_event.post_date > CAST(:last_lender_incur_trigger AS DATE) AND ledger_trigger_event.post_date <= CAST(:event_post_date AS DATE)
+                        GROUP BY DATE(ledger_trigger_event.post_date) ORDER BY DATE(ledger_trigger_event.post_date) DESC
+                    ),
+                    day_wise_lender_payable_balance AS (
+                        SELECT (post_date - CAST(:last_lender_incur_trigger AS DATE)) AS days, amount FROM date_wise_lender_payable_balance
+                    ),
+                    interest_on_lender_payable_balance AS (
+                        SELECT (POW(:lender_interest_rate, (days - COALESCE(LAG(days) OVER(ORDER BY days), 0))) * amount - amount) AS amount FROM day_wise_lender_payable_balance
+                    )
                     SELECT ROUND((
-                    (SELECT POW(:lender_interest_rate, CAST(:event_post_date AS DATE) - post_date) * amount - amount FROM amount_data LIMIT 1)
-                    + (SELECT SUM(amount) FROM (SELECT (POW(:lender_interest_rate, (days - COALESCE(LAG(days) OVER(ORDER BY days), 0))) * amount - amount) AS amount FROM (
-                     (SELECT (post_date - CAST(:last_lender_incur_trigger AS DATE)) AS days, amount FROM amount_data)) AS amount_sum) AS amount_interest)
+                    (SELECT POW(:lender_interest_rate, CAST(:event_post_date AS DATE) - post_date) * amount - amount FROM date_wise_lender_payable_balance LIMIT 1)
+                    + (SELECT SUM(amount) FROM interest_on_lender_payable_balance)
                     ), 2) AS Sum""",
                 params,
             ).scalar()
