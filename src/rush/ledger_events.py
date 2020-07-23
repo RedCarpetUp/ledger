@@ -141,6 +141,7 @@ def payment_received_event(
     session: Session, user_card: BaseCard, debit_book_str: str, event: LedgerTriggerEvent,
 ) -> None:
     payment_received = Decimal(event.amount)
+    gateway_charges = event.extra_details.get("gateway_charges")
     unpaid_bills = user_card.get_unpaid_bills()
 
     payment_received = _adjust_for_min(
@@ -150,10 +151,13 @@ def payment_received_event(
         session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str,
     )
 
-    if payment_received > 0:
+    if payment_received > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
             session, user_card.id, event.id, payment_received, debit_book_str=debit_book_str
         )
+
+    if gateway_charges > 0:  # Adjust for gateway expenses.
+        _adjust_for_gateway_expenses(session, event, debit_book_str)
 
     _, writeoff_balance = get_account_balance_from_str(
         session, book_string=f"{user_card.id}/card/writeoff_expenses/e"
@@ -163,12 +167,22 @@ def payment_received_event(
         _adjust_for_recovery(session, user_card.id, event.id, amount)
 
     else:
-        _adjust_lender_payable(session, user_card.id, debit_book_str, event)
+        _adjust_lender_payable(session, user_card.id, debit_book_str, gateway_charges, event)
 
     # Slide payment in emi
     from rush.create_emi import slide_payments
 
     slide_payments(session, user_card.user_id, payment_event=event)
+
+
+def _adjust_for_gateway_expenses(session: Session, event: LedgerTriggerEvent, credit_book_str: str):
+    create_ledger_entry_from_str(
+        session,
+        event_id=event.id,
+        debit_book_str="12345/redcarpet/gateway_expenses/e",
+        credit_book_str=credit_book_str,
+        amount=event.extra_details["gateway_charges"],
+    )
 
 
 def _adjust_for_recovery(session: Session, user_card_id: int, event_id: int, amount: Decimal) -> None:
@@ -182,7 +196,11 @@ def _adjust_for_recovery(session: Session, user_card_id: int, event_id: int, amo
 
 
 def _adjust_lender_payable(
-    session: Session, user_card_id: int, credit_book_str: str, event: LedgerTriggerEvent
+    session: Session,
+    user_card_id: int,
+    credit_book_str: str,
+    gateway_charges: Decimal,
+    event: LedgerTriggerEvent,
 ) -> None:
     # Lender has received money, so we reduce our liability now.
     create_ledger_entry_from_str(
@@ -190,7 +208,7 @@ def _adjust_lender_payable(
         event_id=event.id,
         debit_book_str=f"{user_card_id}/card/lender_payable/l",
         credit_book_str=credit_book_str,
-        amount=Decimal(event.amount),
+        amount=Decimal(event.amount) - Decimal(gateway_charges),
     )
 
 
@@ -367,27 +385,28 @@ def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> 
     all_user_cards = session.query(UserCard).all()
 
     for card in all_user_cards:
-        lender_interest_rate = (
-            session.query(LoanData.lender_rate_of_interest_annual)
-            .filter(LoanData.card_id == card.id)
-            .limit(1)
-            .scalar()
-            or 0
-        )
+        lender_interest_rate = card.lender_rate_of_interest_annual
 
         # can't use div since interest is 1.00047 because div consumes the decimal.
         lender_interest_rate = (36500 + lender_interest_rate) / 36500
 
+        params = {
+            "card_id": card.id,
+            "lender_interest_rate": lender_interest_rate,
+            "event_post_date": event.post_date,
+            "last_lender_incur_trigger": last_lender_incur_trigger,
+        }
         total_amount = (
             session.execute(
-                f"WITH amount_data AS (SELECT DATE(ledger_trigger_event.post_date) AS post_date, COALESCE(get_account_balance({card.id},'card', 'lender_payable', 'l', DATE(ledger_trigger_event.post_date)), 0) AS amount FROM ledger_trigger_event"
-                + f" WHERE ledger_trigger_event.post_date > CAST('{last_lender_incur_trigger}' AS DATE) AND ledger_trigger_event.post_date <= CAST('{event.post_date}' AS DATE)"
-                + " GROUP BY DATE(ledger_trigger_event.post_date) ORDER BY DATE(ledger_trigger_event.post_date) DESC)"
-                + "SELECT ("
-                + f" (SELECT POW({lender_interest_rate}, CAST('{event.post_date}' AS DATE) - post_date) * amount - amount FROM amount_data LIMIT 1)"
-                + f" + (SELECT SUM(amount) FROM (SELECT (POW({lender_interest_rate}, (days - COALESCE(LAG(days) OVER(ORDER BY days), 0))) * amount - amount) AS amount FROM ("
-                + f" (SELECT (post_date - CAST('{last_lender_incur_trigger}' AS DATE)) AS days, amount FROM amount_data)) AS amount_sum) AS amount_interest)"
-                + ") AS Sum"
+                """WITH amount_data AS (SELECT DATE(ledger_trigger_event.post_date) AS post_date, COALESCE(get_account_balance(:card_id,'card', 'lender_payable', 'l', DATE(ledger_trigger_event.post_date)), 0) AS amount FROM ledger_trigger_event
+                    WHERE ledger_trigger_event.post_date > CAST(:last_lender_incur_trigger AS DATE) AND ledger_trigger_event.post_date <= CAST(:event_post_date AS DATE)
+                    GROUP BY DATE(ledger_trigger_event.post_date) ORDER BY DATE(ledger_trigger_event.post_date) DESC)
+                    SELECT ROUND((
+                    (SELECT POW(:lender_interest_rate, CAST(:event_post_date AS DATE) - post_date) * amount - amount FROM amount_data LIMIT 1)
+                    + (SELECT SUM(amount) FROM (SELECT (POW(:lender_interest_rate, (days - COALESCE(LAG(days) OVER(ORDER BY days), 0))) * amount - amount) AS amount FROM (
+                     (SELECT (post_date - CAST(:last_lender_incur_trigger AS DATE)) AS days, amount FROM amount_data)) AS amount_sum) AS amount_interest)
+                    ), 2) AS Sum""",
+                params,
             ).scalar()
             or 0
         )
@@ -398,7 +417,7 @@ def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> 
                 event_id=event.id,
                 debit_book_str=f"{card.id}/card/redcarpet_expenses/e",
                 credit_book_str=f"{card.id}/card/lender_payable/l",
-                amount=round(total_amount, 2),
+                amount=total_amount,
             )
 
 

@@ -36,7 +36,7 @@ def payment_received(
         card_id=user_card.id,
         amount=payment_amount,
         post_date=payment_date,
-        extra_details={"payment_request_id": payment_request_id},
+        extra_details={"payment_request_id": payment_request_id, "gateway_charges": 0.5},
     )
     session.add(lt)
     session.flush()

@@ -15,7 +15,10 @@ from rush.models import (
     LedgerTriggerEvent,
     LoanMoratorium,
 )
-from rush.utils import div
+from rush.utils import (
+    div,
+    get_current_ist_time,
+)
 
 
 def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -> BaseBill:
@@ -32,8 +35,6 @@ def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -
         bill_start_date=new_bill_date,
         bill_close_date=new_bill_date + relativedelta(months=1),
         lender_id=62311,
-        rc_rate_of_interest_annual=Decimal(36),
-        lender_rate_of_interest_annual=Decimal(18),
         is_generated=False,
     )
     return new_bill
@@ -41,6 +42,10 @@ def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -
 
 def bill_generate(session: Session, user_card: BaseCard) -> BaseBill:
     bill = user_card.get_latest_bill_to_generate()  # Get the first bill which is not generated.
+    if not bill:
+        bill = get_or_create_bill_for_card_swipe(
+            user_card, get_current_ist_time()
+        )  # TODO not sure about this
     lt = LedgerTriggerEvent(name="bill_generate", card_id=user_card.id, post_date=bill.bill_start_date)
     session.add(lt)
     session.flush()
@@ -57,7 +62,9 @@ def bill_generate(session: Session, user_card: BaseCard) -> BaseBill:
     # Update the bill row here.
     bill.table.principal = billed_amount
     bill.table.principal_instalment = principal_instalment
-    bill.table.interest_to_charge = bill.get_interest_to_charge()
+    bill.table.interest_to_charge = bill.get_interest_to_charge(
+        user_card.table.rc_rate_of_interest_monthly
+    )
 
     bill_closing_date = bill.bill_start_date + relativedelta(months=+1)
     # Don't add in min if user is in moratorium.
