@@ -122,6 +122,58 @@ def test_card_swipe(session: Session) -> None:
     assert lender_payable == 900
 
 
+def test_card_swipe_2(session: Session) -> None:
+    uc = create_user_card(
+        session=session,
+        user_id=2,
+        card_activation_date=parse_date("2020-05-01").date(),
+        card_type="ruby",
+    )
+    user_card_id = uc.id
+
+    swipe1 = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-01 14:23:11"),
+        amount=Decimal(700),
+        description="Amazon.com",
+    )
+
+    swipe2 = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-10-02 11:22:11"),
+        amount=Decimal(200),
+        description="Flipkart.com",
+    )
+
+    bill_id = swipe2.loan_id
+    bill = session.query(LoanData).filter(LoanData.id == bill_id).all()
+    assert str(bill[0].bill_start_date) == "2020-10-01"
+    assert str(bill[0].bill_close_date) == "2020-11-01"
+
+
+def test_card_swipe_3(session: Session) -> None:
+    uc = create_user_card(
+        session=session,
+        user_id=2,
+        card_activation_date=parse_date("2020-05-01").date(),
+        statement_period_in_days=15,
+        card_type="ruby",
+    )
+    swipe2 = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-01 11:22:11"),
+        amount=Decimal(200),
+        description="Flipkart.com",
+    )
+
+    bill_id = swipe2.loan_id
+    bill = session.query(LoanData).filter(LoanData.id == bill_id).all()
+    assert str(bill[0].bill_close_date) == "2020-05-15"
+
+
 def test_generate_bill_1(session: Session) -> None:
     a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(a)
@@ -142,6 +194,7 @@ def test_generate_bill_1(session: Session) -> None:
         amount=Decimal(1000),
         description="BigBasket.com",
     )
+
     bill_id = swipe.loan_id
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
