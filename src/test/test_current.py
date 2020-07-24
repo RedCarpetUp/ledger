@@ -14,7 +14,10 @@ from rush.card import (
     create_user_card,
     get_user_card,
 )
-from rush.create_bill import bill_generate
+from rush.create_bill import (
+    bill_generate,
+    extend_tenure,
+)
 from rush.create_card_swipe import create_card_swipe
 from rush.create_emi import (
     check_moratorium_eligibility,
@@ -741,7 +744,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{uc.id}/card/lender_payable/l"
     )
-    assert lender_payable == Decimal("-179.5")
+    assert lender_payable == Decimal("-359.5")
 
     # Refresh Schedule
     # slide_payments(session, a.id)
@@ -1781,3 +1784,27 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
     out_of_moratorium_emi = all_emis_query[2]
     assert last_emi.emi_number == 15
     assert out_of_moratorium_emi.total_due_amount == Decimal("22.99")
+
+
+def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
+    test_moratorium_live_user_1836540(session)
+    user_card = get_user_card(session, 1836540)
+    # Extend tenure to 18 months
+    extend_tenure(session, user_card, 18)
+
+    # Get emi list post tenure extension
+    all_emis = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.emi_number.asc())
+        .all()
+    )
+
+    last_emi = all_emis[-1]
+    second_last_emi = all_emis[-2]
+    # 110/18 = 6.11 + 56/18 = 3.11 == 9.22
+    assert second_last_emi.due_amount == Decimal("9.22")
+    # 56/18 = 3.11
+    assert last_emi.due_amount == Decimal("3.11")
+    # First cycle 18 emis, next bill 19 emis, 2 because of moratorium == 21
+    assert last_emi.emi_number == 21
