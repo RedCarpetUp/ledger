@@ -27,10 +27,12 @@ def get_or_create_bill_for_card_swipe(
     # Get the most recent bill
     last_bill = user_card.get_latest_bill()
     txn_date = txn_time.date()
+    if not hasattr(user_card, "card_activation_date") or txn_date < user_card.card_activation_date:
+        return {"result": "error", "message": "Transaction cannot occur before card activation"}
     if last_bill:
         does_swipe_belong_to_current_bill = txn_date < last_bill.bill_close_date
         if does_swipe_belong_to_current_bill:
-            return last_bill
+            return {"result": "success", "data": last_bill}
         new_bill_date = last_bill.bill_close_date
     else:
         new_bill_date = user_card.card_activation_date
@@ -54,7 +56,7 @@ def get_or_create_bill_for_card_swipe(
         lender_id=62311,
         is_generated=False,
     )
-    return new_bill
+    return {"result": "success", "data": new_bill}
 
 
 def bill_generate(session: Session, user_card: BaseCard) -> BaseBill:
@@ -63,6 +65,9 @@ def bill_generate(session: Session, user_card: BaseCard) -> BaseBill:
         bill = get_or_create_bill_for_card_swipe(
             session, user_card, get_current_ist_time()
         )  # TODO not sure about this
+        if bill["result"] == "error":
+            return bill
+        bill = bill["data"]
     lt = LedgerTriggerEvent(name="bill_generate", card_id=user_card.id, post_date=bill.bill_start_date)
     session.add(lt)
     session.flush()

@@ -121,6 +121,7 @@ def test_card_swipe(session: Session) -> None:
         amount=Decimal(700),
         description="Amazon.com",
     )
+    swipe1 = swipe1["data"]
 
     swipe2 = create_card_swipe(
         session=session,
@@ -129,6 +130,7 @@ def test_card_swipe(session: Session) -> None:
         amount=Decimal(200),
         description="Flipkart.com",
     )
+    swipe2 = swipe2["data"]
 
     assert swipe1.loan_id == swipe2.loan_id
     bill_id = swipe1.loan_id
@@ -163,7 +165,7 @@ def test_generate_bill_1(session: Session) -> None:
         amount=Decimal(1000),
         description="BigBasket.com",
     )
-    bill_id = swipe.loan_id
+    bill_id = swipe["data"].loan_id
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 1000
@@ -1351,7 +1353,7 @@ def test_prepayment(session: Session) -> None:
         amount=Decimal(1000),
         description="BigBasket.com",
     )
-    bill_id = swipe.loan_id
+    bill_id = swipe["data"].loan_id
 
     emi_payment_mapping = (
         session.query(EmiPaymentMapping).filter(EmiPaymentMapping.card_id == user_card_id).all()
@@ -1416,7 +1418,7 @@ def test_prepayment(session: Session) -> None:
         amount=Decimal(800),
         description="Myntra.com",
     )
-    bill_id = swipe.loan_id
+    bill_id = swipe["data"].loan_id
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 800
@@ -1833,7 +1835,7 @@ def test_intermediate_bill_generation(session: Session) -> None:
     user_card = get_user_card(session, 2)
     bill_generate(session, user_card)
 
-    # We not create a swipe after 5 months
+    # We now create a swipe after 5 months
     swipe3 = create_card_swipe(
         session=session,
         user_card=user_card,
@@ -1849,3 +1851,30 @@ def test_intermediate_bill_generation(session: Session) -> None:
         .filter(LoanData.card_id == user_card.id, LoanData.is_generated.is_(True))
         .count()
     ) == 6
+
+
+def test_transaction_before_activation(session: Session) -> None:
+    a = User(
+        id=1836540,
+        performed_by=123,
+        name="Mohammad Shahbaz Mohammad Shafi Qureshi",
+        fullname="Mohammad Shahbaz Mohammad Shafi Qureshi",
+        nickname="Mohammad Shahbaz Mohammad Shafi Qureshi",
+        email="shahbazq797@gmail.com",
+    )
+    session.add(a)
+    session.flush()
+
+    # assign card
+    user_card = create_user_card(session=session, card_type="ruby", user_id=a.id,)
+
+    # Swipe before activation
+    swipe = create_card_swipe(
+        session=session,
+        user_card=user_card,
+        txn_time=parse_date("2020-05-02 11:22:11"),
+        amount=Decimal(200),
+        description="Flipkart.com",
+    )
+
+    assert swipe["result"] == "error"
