@@ -15,22 +15,32 @@ from rush.utils import get_current_ist_time
 
 def lender_disbursal(session: Session, amount: Decimal, lender_id: int) -> Decimal:
     if verify_lender(session, lender_id):
-        lt = LedgerTriggerEvent(name="lender_disbursal", amount=amount, post_date=get_current_ist_time())
+        lt = LedgerTriggerEvent(
+            name="lender_disbursal",
+            amount=amount,
+            post_date=get_current_ist_time(),
+            extra_details={"lender_id": lender_id},
+        )
         session.add(lt)
         session.flush()
         lender_disbursal_event(session, lt)
-        _, lender_capital = get_account_balance_from_str(session, "62311/lender/lender_capital/l")
+        _, lender_capital = get_account_balance_from_str(session, f"{lender_id}/lender/lender_capital/l")
         return lender_capital
     return {"result": "error", "message": "Invalid lender"}
 
 
 def m2p_transfer(session: Session, amount: Decimal, lender_id: int) -> Decimal:
     if verify_lender(session, lender_id):
-        lt = LedgerTriggerEvent(name="m2p_transfer", amount=amount, post_date=get_current_ist_time())
+        lt = LedgerTriggerEvent(
+            name="m2p_transfer",
+            amount=amount,
+            post_date=get_current_ist_time(),
+            extra_details={"lender_id": lender_id},
+        )
         session.add(lt)
         session.flush()
         m2p_transfer_event(session, lt)
-        _, lender_pool = get_account_balance_from_str(session, "62311/lender/pool_balance/a")
+        _, lender_pool = get_account_balance_from_str(session, f"{lender_id}/lender/pool_balance/a")
         return lender_pool
     return {"result": "error", "message": "Invalid lender"}
 
