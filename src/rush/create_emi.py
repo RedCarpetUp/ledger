@@ -190,6 +190,7 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
         last_paid_emi_number,
         all_paid=False,
     ) -> None:
+        current_date = get_current_ist_time().date()
         last_emi_number = all_emis[-1].emi_number
         for emi in all_emis:
             if emi.emi_number <= last_paid_emi_number or emi.total_due_amount <= Decimal(0):
@@ -211,11 +212,10 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
                     emi.total_closing_balance_post_due_date
                 ) = emi.interest_current_month = emi.interest_next_month = emi.interest = Decimal(0)
                 emi.payment_status = "Paid"
+                emi.dpd = (last_payment_date.date() - emi.due_date).days
                 last_paid_emi_number = emi.emi_number
                 continue
             if payment_received_and_adjusted:
-                # Why did I get current date here? For dpd? Can't remember.
-                current_date = get_current_ist_time().date()
                 actual_closing_balance = emi.total_closing_balance_post_due_date
                 if last_payment_date.date() <= emi.due_date:
                     actual_closing_balance = emi.total_closing_balance
@@ -245,6 +245,7 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
                     emi.due_amount = emi.total_due_amount = actual_closing_balance
                     last_paid_emi_number = emi.emi_number
                     emi.payment_status = "Paid"
+                    emi.dpd = (last_payment_date.date() - emi.due_date).days
                     # Create payment mapping
                     create_emi_payment_mapping(
                         session,
@@ -258,9 +259,6 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
                     )
                     continue
                 diff = emi.total_due_amount - payment_received_and_adjusted
-                # -99 dpd if you can't figure out
-                # I don't need to calculate this anyways here
-                emi.dpd = -99 if diff == 0 else (last_payment_date.date() - emi.due_date).days
                 if diff >= 0:
                     if diff == 0:
                         last_paid_emi_number = emi.emi_number
@@ -269,6 +267,7 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
                         emi.late_fee_received = payment_received_and_adjusted
                         emi.total_closing_balance -= payment_received_and_adjusted
                         emi.total_closing_balance_post_due_date -= payment_received_and_adjusted
+                        emi.dpd = (current_date - emi.due_date).days
                         # Create payment mapping
                         create_emi_payment_mapping(
                             session,
@@ -288,6 +287,7 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
                             emi.interest_received = payment_received_and_adjusted
                             emi.total_closing_balance -= payment_received_and_adjusted
                             emi.total_closing_balance_post_due_date -= payment_received_and_adjusted
+                            emi.dpd = (current_date - emi.due_date).days
                             # Create payment mapping
                             create_emi_payment_mapping(
                                 session,
@@ -307,6 +307,7 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
                                 emi.payment_received = payment_received_and_adjusted
                                 emi.total_closing_balance -= payment_received_and_adjusted
                                 emi.total_closing_balance_post_due_date -= payment_received_and_adjusted
+                                emi.dpd = (current_date - emi.due_date).days
                                 # Create payment mapping
                                 create_emi_payment_mapping(
                                     session,
@@ -323,6 +324,7 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
                 emi.interest_received = emi.interest
                 emi.payment_received = emi.due_amount
                 emi.payment_status = "Paid"
+                emi.dpd = (last_payment_date.date() - emi.due_date).days
                 last_paid_emi_number = emi.emi_number
                 # Create payment mapping
                 create_emi_payment_mapping(
@@ -623,6 +625,15 @@ def refresh_schedule(session: Session, user_id: int):
     )
     for emi in all_emis:
         emi.row_status = "inactive"
+        session.flush()
+
+    all_payment_mappings = (
+        session.query(EmiPaymentMapping)
+        .filter(EmiPaymentMapping.card_id == user_card.table.id, EmiPaymentMapping.row_status == "active")
+        .all()
+    )
+    for mapping in all_payment_mappings:
+        mapping.row_status = "inactive"
         session.flush()
 
     # Re-Create schedule from all the bills

@@ -211,6 +211,7 @@ class EmiPaymentMapping(AuditMixin):
     interest_received = Column(Numeric, nullable=True, default=Decimal(0))
     late_fee_received = Column(Numeric, nullable=True, default=Decimal(0))
     principal_received = Column(Numeric, nullable=True, default=Decimal(0))
+    row_status = Column(String(length=10), nullable=False, default="active")
 
 
 class LoanMoratorium(AuditMixin):
