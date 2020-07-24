@@ -234,3 +234,17 @@ class LoanMoratorium(AuditMixin):
             .one_or_none()
         )
         return v is not None
+
+
+class Lenders(AuditMixin):
+    __tablename__ = "rc_lenders"
+    lender_id = Column(Integer, nullable=False)
+    lender_name = Column(String(), nullable=False)
+    row_status = Column(String(length=10), nullable=False, default="active")
+
+
+@py_dataclass
+class LenderPy(AuditMixinPy):
+    lender_id: int
+    lender_name: str
+    row_status: str

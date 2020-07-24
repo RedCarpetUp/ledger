@@ -35,6 +35,8 @@ from rush.models import (
     CardEmis,
     EmiPaymentMapping,
     LedgerTriggerEvent,
+    LenderPy,
+    Lenders,
     LoanData,
     LoanMoratorium,
     User,
@@ -77,15 +79,29 @@ def test_user(session: Session) -> None:
     u = UserPy(id=a.id, performed_by=123, email="sss", name="dfd", fullname="dfdf", nickname="dfdd",)
 
 
+def test_lenders(session: Session) -> None:
+    l1 = Lenders(id=1, performed_by=123, lender_id=62311, lender_name="DMI")
+    session.add(l1)
+    l2 = Lenders(id=2, performed_by=123, lender_id=1756833, lender_name="Redux")
+    session.add(l2)
+    session.flush()
+    a = session.query(Lenders).first()
+    u = LenderPy(id=a.id, performed_by=123, lender_id=62311, lender_name="DMI", row_status="active")
+
+
 def test_lender_disbursal(session: Session) -> None:
+    test_lenders(session)
     amount = 100000
-    val = lender_disbursal(session, amount)
+    lender_id = 62311
+    val = lender_disbursal(session, amount, lender_id)
     assert val == Decimal(100000)
 
 
 def test_m2p_transfer(session: Session) -> None:
+    test_lenders(session)
     amount = 50000
-    val = m2p_transfer(session, amount)
+    lender_id = 62311
+    val = m2p_transfer(session, amount, lender_id)
     assert val == Decimal(50000)
 
 

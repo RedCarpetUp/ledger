@@ -153,6 +153,18 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["card_id"], ["user_card.id"], name="fk_loan_moratorium_card_id"),
     )
 
+    op.create_table(
+        "rc_lenders",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.Column("lender_id", sa.Integer(), nullable=False),
+        sa.Column("lender_name", sa.String(50), nullable=False),
+        sa.Column("row_status", sa.String(50), nullable=False),
+        sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
+        sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
+        sa.PrimaryKeyConstraint("id"),
+    )
+
 
 def downgrade() -> None:
     pass
