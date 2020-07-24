@@ -133,6 +133,7 @@ def upgrade() -> None:
         sa.Column("interest_received", sa.DECIMAL(), nullable=True),
         sa.Column("late_fee_received", sa.DECIMAL(), nullable=True),
         sa.Column("principal_received", sa.DECIMAL(), nullable=True),
+        sa.Column("row_status", sa.String(50), nullable=False),
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.PrimaryKeyConstraint("id"),

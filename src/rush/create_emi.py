@@ -629,7 +629,9 @@ def refresh_schedule(session: Session, user_id: int):
 
     all_payment_mappings = (
         session.query(EmiPaymentMapping)
-        .filter(EmiPaymentMapping.card_id == user_card.table.id, EmiPaymentMapping.row_status == "active")
+        .filter(
+            EmiPaymentMapping.card_id == user_card.table.id, EmiPaymentMapping.row_status == "active"
+        )
         .all()
     )
     for mapping in all_payment_mappings:
