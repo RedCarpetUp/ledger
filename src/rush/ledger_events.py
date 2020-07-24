@@ -31,21 +31,21 @@ from rush.utils import (
 )
 
 
-def lender_disbursal_event(session: Session, event: LedgerTriggerEvent) -> None:
+def lender_disbursal_event(session: Session, event: LedgerTriggerEvent, lender_id: int) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
         debit_book_str=f"12345/redcarpet/rc_cash/a",
-        credit_book_str=f"62311/lender/lender_capital/l",
+        credit_book_str=f"{lender_id}/lender/lender_capital/l",
         amount=event.amount,
     )
 
 
-def m2p_transfer_event(session: Session, event: LedgerTriggerEvent) -> None:
+def m2p_transfer_event(session: Session, event: LedgerTriggerEvent, lender_id: int) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
-        debit_book_str=f"62311/lender/pool_balance/a",
+        debit_book_str=f"{lender_id}/lender/pool_balance/a",
         credit_book_str=f"12345/redcarpet/rc_cash/a",
         amount=event.amount,
     )

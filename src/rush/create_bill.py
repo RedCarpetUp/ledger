@@ -21,16 +21,29 @@ from rush.utils import (
 )
 
 
-def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -> BaseBill:
+def get_or_create_bill_for_card_swipe(
+    session: Session, user_card: BaseCard, txn_time: DateTime
+) -> BaseBill:
     # Get the most recent bill
     last_bill = user_card.get_latest_bill()
+    txn_date = txn_time.date()
     if last_bill:
-        does_swipe_belong_to_current_bill = txn_time.date() < last_bill.bill_close_date
+        does_swipe_belong_to_current_bill = txn_date < last_bill.bill_close_date
         if does_swipe_belong_to_current_bill:
             return last_bill
         new_bill_date = last_bill.bill_close_date
     else:
         new_bill_date = user_card.card_activation_date
+    # Check if some months of bill generation were skipped and if they were then generate their bills
+    tentative_close_date = new_bill_date + relativedelta(months=1)
+    months_diff = (
+        (txn_date.year - tentative_close_date.year) * 12 + txn_date.month - tentative_close_date.month
+    )
+    if months_diff > 0:
+        for i in range(months_diff):
+            bill_generate(session, user_card)
+        last_bill = user_card.get_latest_bill()
+        new_bill_date = last_bill.bill_close_date
     new_bill = user_card.create_bill(
         bill_start_date=new_bill_date,
         bill_close_date=new_bill_date + relativedelta(months=1),
@@ -44,7 +57,7 @@ def bill_generate(session: Session, user_card: BaseCard) -> BaseBill:
     bill = user_card.get_latest_bill_to_generate()  # Get the first bill which is not generated.
     if not bill:
         bill = get_or_create_bill_for_card_swipe(
-            user_card, get_current_ist_time()
+            session, user_card, get_current_ist_time()
         )  # TODO not sure about this
     lt = LedgerTriggerEvent(name="bill_generate", card_id=user_card.id, post_date=bill.bill_start_date)
     session.add(lt)
