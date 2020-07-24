@@ -34,13 +34,17 @@ def get_or_create_bill_for_card_swipe(
         new_bill_date = last_bill.bill_close_date
     else:
         new_bill_date = user_card.card_activation_date
+    new_closing_date = new_bill_date + relativedelta(months=1)
     # Check if some months of bill generation were skipped and if they were then generate their bills
-    tentative_close_date = new_bill_date + relativedelta(months=1)
-    months_diff = (
-        (txn_date.year - tentative_close_date.year) * 12 + txn_date.month - tentative_close_date.month
-    )
+    months_diff = (txn_date.year - new_closing_date.year) * 12 + txn_date.month - new_closing_date.month
     if months_diff > 0:
-        for i in range(months_diff):
+        for i in range(months_diff + 1):
+            new_bill = user_card.create_bill(
+                bill_start_date=new_bill_date + relativedelta(months=i),
+                bill_close_date=new_bill_date + relativedelta(months=i + 1),
+                lender_id=62311,
+                is_generated=False,
+            )
             bill_generate(session, user_card)
         last_bill = user_card.get_latest_bill()
         new_bill_date = last_bill.bill_close_date

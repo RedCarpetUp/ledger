@@ -121,6 +121,7 @@ def test_card_swipe(session: Session) -> None:
         amount=Decimal(700),
         description="Amazon.com",
     )
+
     swipe2 = create_card_swipe(
         session=session,
         user_card=uc,
@@ -128,6 +129,7 @@ def test_card_swipe(session: Session) -> None:
         amount=Decimal(200),
         description="Flipkart.com",
     )
+
     assert swipe1.loan_id == swipe2.loan_id
     bill_id = swipe1.loan_id
 
@@ -1824,3 +1826,26 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
     assert last_emi.due_amount == Decimal("3.11")
     # First cycle 18 emis, next bill 19 emis, 2 because of moratorium == 21
     assert last_emi.emi_number == 21
+
+
+def test_intermediate_bill_generation(session: Session) -> None:
+    test_card_swipe(session)
+    user_card = get_user_card(session, 2)
+    bill_generate(session, user_card)
+
+    # We not create a swipe after 5 months
+    swipe3 = create_card_swipe(
+        session=session,
+        user_card=user_card,
+        txn_time=parse_date("2020-10-02 11:22:11"),
+        amount=Decimal(200),
+        description="Flipkart.com",
+    )
+
+    bill_generate(session, user_card)
+
+    assert (
+        session.query(LoanData)
+        .filter(LoanData.card_id == user_card.id, LoanData.is_generated.is_(True))
+        .count()
+    ) == 6
