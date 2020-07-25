@@ -132,6 +132,7 @@ class UserCard(AuditMixin):
     interest_free_period_in_days = Column(Integer, default=45, nullable=False)
     rc_rate_of_interest_monthly = Column(Numeric, nullable=False)
     lender_rate_of_interest_annual = Column(Numeric, nullable=False)
+    dpd = Column(Integer, nullable=True)
 
 
 class LedgerTriggerEvent(AuditMixin):

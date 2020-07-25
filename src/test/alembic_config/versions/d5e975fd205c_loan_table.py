@@ -26,6 +26,7 @@ def upgrade() -> None:
         sa.Column("interest_free_period_in_days", sa.Integer, nullable=True),
         sa.Column("rc_rate_of_interest_monthly", sa.Numeric(), nullable=False),
         sa.Column("lender_rate_of_interest_annual", sa.Numeric(), nullable=False),
+        sa.Column("dpd", sa.Integer, nullable=True),
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("performed_by", sa.Integer(), nullable=False),

@@ -13,7 +13,10 @@ from sqlalchemy.orm import (
 )
 
 from rush.anomaly_detection import get_payment_events
-from rush.card import get_user_card
+from rush.card import (
+    get_user_card,
+    BaseCard,
+)
 from rush.card.base_card import BaseBill
 from rush.ledger_utils import get_account_balance_from_str
 from rush.models import (
@@ -25,7 +28,6 @@ from rush.models import (
     UserCard,
 )
 from rush.utils import (
-    EMI_FORMULA_DICT,
     div,
     get_current_ist_time,
     mul,
@@ -190,7 +192,6 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
         last_paid_emi_number,
         all_paid=False,
     ) -> None:
-        current_date = get_current_ist_time().date()
         last_emi_number = all_emis[-1].emi_number
         for emi in all_emis:
             if emi.emi_number <= last_paid_emi_number or emi.total_due_amount <= Decimal(0):
@@ -263,11 +264,11 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
                     if diff == 0:
                         last_paid_emi_number = emi.emi_number
                         emi.payment_status = "Paid"
+                        emi.dpd = (last_payment_date.date() - emi.due_date).days
                     if payment_received_and_adjusted <= emi.late_fee:
                         emi.late_fee_received = payment_received_and_adjusted
                         emi.total_closing_balance -= payment_received_and_adjusted
                         emi.total_closing_balance_post_due_date -= payment_received_and_adjusted
-                        emi.dpd = (current_date - emi.due_date).days
                         # Create payment mapping
                         create_emi_payment_mapping(
                             session,
@@ -287,7 +288,6 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
                             emi.interest_received = payment_received_and_adjusted
                             emi.total_closing_balance -= payment_received_and_adjusted
                             emi.total_closing_balance_post_due_date -= payment_received_and_adjusted
-                            emi.dpd = (current_date - emi.due_date).days
                             # Create payment mapping
                             create_emi_payment_mapping(
                                 session,
@@ -307,7 +307,6 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
                                 emi.payment_received = payment_received_and_adjusted
                                 emi.total_closing_balance -= payment_received_and_adjusted
                                 emi.total_closing_balance_post_due_date -= payment_received_and_adjusted
-                                emi.dpd = (current_date - emi.due_date).days
                                 # Create payment mapping
                                 create_emi_payment_mapping(
                                     session,
@@ -339,7 +338,7 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
                 )
                 payment_received_and_adjusted = abs(diff)
 
-    user_card = session.query(UserCard).filter(UserCard.user_id == user_id).first()
+    user_card = get_user_card(session, user_id)
     all_emis = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
@@ -356,7 +355,7 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
     last_paid_emi_number = 0
     last_payment_date = None
     all_paid = False
-    events = get_payment_events(session, user_card)
+    events = get_payment_events(session, user_card.table)
     if not payment_event:
         for event in events:
             payment_received_and_adjusted = Decimal(0)
@@ -384,8 +383,9 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
             last_paid_emi_number,
             all_paid=all_paid,
         )
-
     session.flush()
+    # Update card level dpd
+    store_and_get_card_level_dpd(session, user_card)
 
 
 def adjust_interest_in_emis(session: Session, user_id: int, post_date: DateTime) -> None:
@@ -688,3 +688,22 @@ def refresh_schedule(session: Session, user_id: int):
 
     # Slide all payments
     slide_payments(session, user_id)
+
+
+def store_and_get_card_level_dpd(session: Session, user_card: BaseCard) -> int:
+    latest_unpaid_emi = (
+        session.query(CardEmis)
+        .filter(
+            CardEmis.card_id == user_card.id,
+            CardEmis.row_status == "active",
+            CardEmis.payment_status == "UnPaid",
+        )
+        .order_by(CardEmis.emi_number.asc())
+        .first()
+    )
+    if not latest_unpaid_emi:
+        return -99
+    dpd = (get_current_ist_time().date() - latest_unpaid_emi.due_date).days
+    user_card.table.dpd = dpd
+    session.flush()
+    return dpd
