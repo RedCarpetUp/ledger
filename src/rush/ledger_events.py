@@ -1,36 +1,24 @@
 from decimal import Decimal
 from typing import List
 
-import dateutil.relativedelta
 from sqlalchemy import (
     Date,
-    cast,
-    extract,
-    func,
 )
 from sqlalchemy.orm import Session
-from sqlalchemy.sql import text
 
 from rush.card import BaseCard
 from rush.card.base_card import BaseBill
 from rush.ledger_utils import (
-    breakdown_account_variables_from_str,
     create_ledger_entry_from_str,
     get_account_balance_from_str,
-    get_book_account_by_string,
 )
-from rush.lender_interest import lender_interest
 from rush.models import (
     CardTransaction,
-    LedgerEntry,
     LedgerTriggerEvent,
     LoanData,
     UserCard,
 )
-from rush.utils import (
-    div,
-    mul,
-)
+from rush.recon.dmi_interest_on_portfolio import interest_on_dmi_portfolio
 
 
 def lender_disbursal_event(session: Session, event: LedgerTriggerEvent) -> None:
@@ -363,81 +351,21 @@ def refund_event(
         payment_received_event(session, user_card, f"{bill.lender_id}/lender/merchant_refund/a", event)
 
 
-def lender_interest_incur_event(session: Session, event: LedgerTriggerEvent) -> None:
-    last_trigger = (
-        session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.name.in_(["lender_interest_incur"]),)
-        .order_by(LedgerTriggerEvent.post_date.desc())
-        .offset(1)
-        .first()
+def lender_interest_incur_event(
+    session: Session, from_date: Date, to_date: Date, event: LedgerTriggerEvent
+) -> None:
+    interest_on_each_card = session.execute(
+        interest_on_dmi_portfolio, params={"from_date": from_date, "to_date": to_date}
     )
-    if last_trigger == None:
-        earliest_payable_change = (
-            session.query(LedgerTriggerEvent)
-            .filter(LedgerTriggerEvent.name.in_(["card_transaction"]),)
-            .order_by(LedgerTriggerEvent.post_date)
-            .first()
+    for card_id, interest_to_incur in interest_on_each_card:
+        create_ledger_entry_from_str(
+            session,
+            event_id=event.id,
+            debit_book_str=f"{card_id}/card/lender_interest/e",
+            credit_book_str=f"{card_id}/card/lender_payable/l",
+            amount=interest_to_incur,
         )
-        last_lender_incur_trigger = earliest_payable_change.post_date
-    else:
-        last_lender_incur_trigger = last_trigger.post_date
-
-    all_user_cards = session.query(UserCard).all()
-
-    for card in all_user_cards:
-        lender_interest_rate = card.lender_rate_of_interest_annual
-
-        # can't use div since interest is 1.00047 because div consumes the decimal.
-        lender_interest_rate = (36500 + lender_interest_rate) / 36500
-
-        params = {
-            "card_id": card.id,
-            "lender_interest_rate": lender_interest_rate,
-            "event_post_date": event.post_date,
-            "last_lender_incur_trigger": last_lender_incur_trigger,
-        }
-        total_amount = (
-            session.execute(
-                """   
-                    WITH RECURSIVE date_wise_lender_payable_balance AS (
-                        SELECT DATE(ledger_trigger_event.post_date) AS post_date, COALESCE(get_account_balance(:card_id,'card', 'lender_payable', 'l', DATE(ledger_trigger_event.post_date)), 0) AS amount FROM ledger_trigger_event
-                        WHERE ledger_trigger_event.post_date > CAST(:last_lender_incur_trigger AS DATE) AND ledger_trigger_event.post_date <= CAST(:event_post_date AS DATE)
-                        GROUP BY DATE(ledger_trigger_event.post_date) ORDER BY DATE(ledger_trigger_event.post_date) DESC
-                    ),
-                    day_wise_lender_payable_balance AS (
-                        SELECT (post_date - CAST(:last_lender_incur_trigger AS DATE) -1 ) AS days, amount FROM date_wise_lender_payable_balance WHERE amount > 0
-                    ),
-                    interest_on_lender_payable_balance AS (
-                        SELECT (days - 1- COALESCE(LAG(days) OVER(ORDER BY days), 0)) AS daily, amount FROM day_wise_lender_payable_balance
-                    ),
-                    reccruring_interest_on_lender_payable_balance_view AS (
-                        SELECT *, POW(:lender_interest_rate, daily)* amount - amount as interest_amount, row_number() over(order by amount) as rn FROM interest_on_lender_payable_balance order by daily desc 
-                    ),
-                    rec_query(rn, days, amount, amount_interest) as 
-                    (
-                        select rn, CAST(daily AS NUMERIC), amount, interest_amount
-                        from reccruring_interest_on_lender_payable_balance_view
-                        where rn = 1
-                        union all   
-                        select 
-                        t.rn, t.daily, t.amount, POW(:lender_interest_rate, t.daily)*(t.amount + p.amount_interest) - t.amount - p.amount_interest
-                        from rec_query p
-                        join reccruring_interest_on_lender_payable_balance_view t on t.rn = p.rn + 1
-                    )
-                    SELECT ROUND(SUM(amount_interest), 2) FROM rec_query;   
-                """,
-                params,
-            ).scalar()
-            or 0
-        )
-        if total_amount > 0:
-            create_ledger_entry_from_str(
-                session,
-                event_id=event.id,
-                debit_book_str=f"{card.id}/card/redcarpet_expenses/e",
-                credit_book_str=f"{card.id}/card/lender_payable/l",
-                amount=total_amount,
-            )
+        event.amount += interest_to_incur
 
 
 def writeoff_event(session: Session, user_card: UserCard, event: LedgerTriggerEvent) -> None:

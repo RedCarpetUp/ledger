@@ -1293,11 +1293,7 @@ def test_lender_incur(session: Session) -> None:
     assert unbilled_amount == 1000
     bill = bill_generate(session=session, user_card=uc)
     assert bill.table.is_generated is True
-    # status = lender_interest_incur(session, parse_date("2020-06-27 00:00:00"))
-    # _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
-    # assert amount == Decimal("1008.91")  # on date 2020-06-27
-    # _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/redcarpet_expenses/e")
-    # assert amount == Decimal("8.91")  # on date 2020-06-27
+
     swipe = create_card_swipe(
         session=session,
         user_card=uc,
@@ -1307,11 +1303,31 @@ def test_lender_incur(session: Session) -> None:
     )
     bill = bill_generate(session=session, user_card=uc)
     assert bill.table.is_generated is True
-    # interest on 1015.35 for 2 days and then 2515.35 for 3 days
-    status = lender_interest_incur(session, parse_date("2020-07-01 00:00:00"))
+
+    lender_interest_incur(
+        session, from_date=parse_date("2020-06-01").date(), to_date=parse_date("2020-06-30").date()
+    )
     uc = get_user_card(session, 99)
     _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
-    assert amount == Decimal("2510.65")  # on date 2020-07-01
+    assert amount == Decimal("2511.65")
+
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_interest/e")
+    assert amount == Decimal("11.65")
+
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-07-29 19:23:11"),
+        amount=Decimal(1500),
+        description="Flipkart.com",
+    )
+    lender_interest_incur(
+        session, from_date=parse_date("2020-07-01").date(), to_date=parse_date("2020-07-31").date()
+    )
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_interest/e")
+    assert amount == Decimal("51.81")
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
+    assert amount == Decimal("4051.81")
 
 
 def test_lender_incur_two(session: Session) -> None:
@@ -1340,9 +1356,14 @@ def test_lender_incur_two(session: Session) -> None:
     bill = bill_generate(session=session, user_card=uc)
     assert bill.table.is_generated is True
 
-    status = lender_interest_incur(session, parse_date("2020-08-01 00:00:00"))
+    lender_interest_incur(
+        session, from_date=parse_date("2020-07-01").date(), to_date=parse_date("2020-07-31").date()
+    )
     _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
-    assert amount == Decimal("1000.49")  # on date 2020-07-01
+    assert amount == Decimal("1000.99")
+
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_interest/e")
+    assert amount == Decimal("0.99")
 
 
 def test_prepayment(session: Session) -> None:
