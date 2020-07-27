@@ -58,7 +58,7 @@ def refund_payment(session, user_id: int, bill_id: int, refund_request_id: str) 
     user_card = get_user_card(session, user_id)
     amount = Decimal(bill.amount)
     lt = LedgerTriggerEvent(
-        name="refund_bill",
+        name="merchant_refund",
         amount=amount,
         post_date=get_current_ist_time(),
         extra_details={"payment_request_id": refund_request_id},
