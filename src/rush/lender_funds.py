@@ -1,6 +1,9 @@
 from decimal import Decimal
 
-from pendulum import DateTime
+from pendulum import (
+    Date,
+    DateTime,
+)
 from sqlalchemy.orm.session import Session
 
 from rush.ledger_events import (
@@ -45,11 +48,11 @@ def m2p_transfer(session: Session, amount: Decimal, lender_id: int) -> Decimal:
     return {"result": "error", "message": "Invalid lender"}
 
 
-def lender_interest_incur(session: Session) -> bool:
-    lt = LedgerTriggerEvent(name="lender_interest_incur", post_date=DateTime(2020, 6, 27))
+def lender_interest_incur(session: Session, from_date: Date, to_date: Date) -> bool:
+    lt = LedgerTriggerEvent(name="incur_lender_interest", post_date=to_date, amount=0)
     session.add(lt)
     session.flush()
-    lender_interest_incur_event(session, lt)
+    lender_interest_incur_event(session, from_date, to_date, lt)
     return True
 
 

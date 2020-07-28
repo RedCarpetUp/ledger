@@ -91,7 +91,7 @@ def upgrade() -> None:
       where 
         (l.debit_account = b.id 
         or l.credit_account = b.id) and lte.id = l.event_id
-        and lte.post_date < $5 
+        and lte.post_date <= $5 
       group by 
         1
     ) 
