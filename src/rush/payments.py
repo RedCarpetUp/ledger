@@ -1,6 +1,5 @@
 from decimal import Decimal
 
-from dateutil import relativedelta
 from pendulum import DateTime
 from sqlalchemy.orm import Session
 
@@ -12,14 +11,11 @@ from rush.card import (
 from rush.ledger_events import (
     payment_received_event,
     refund_event,
-    writeoff_event,
 )
-from rush.ledger_utils import get_account_balance_from_str
 from rush.models import (
     CardTransaction,
     LedgerTriggerEvent,
     LoanData,
-    UserCard,
 )
 from rush.utils import get_current_ist_time
 
@@ -68,33 +64,3 @@ def refund_payment(session, user_id: int, bill_id: int, refund_request_id: str) 
     current_bill = session.query(LoanData).filter(LoanData.id == bill_id).one()
     refund_event(session, current_bill, user_card, lt)
     return True
-
-
-def writeoff_payment(session: Session, user_id: int) -> bool:
-
-    usercard = get_user_card(session, 99)
-    if _check_writeoff(session, user_id, usercard):
-        _, balance = get_account_balance_from_str(
-            session, book_string=f"{usercard.id}/card/lender_payable/l"
-        )
-        lt = LedgerTriggerEvent(
-            name="writeoff_payment", amount=balance, post_date=get_current_ist_time()
-        )
-        session.add(lt)
-        session.flush()
-        writeoff_event(session, usercard, lt)
-        return True
-    else:
-        return False
-
-
-def _check_writeoff(session, user_id: int, user_card: BaseCard) -> bool:
-
-    unpaid_bills = user_card.get_unpaid_bills()
-    if len(unpaid_bills) >= 1:
-        relative = relativedelta.relativedelta(get_current_ist_time(), unpaid_bills[0].bill_start_date)
-        months = relative.months + (12 * relative.years)
-        if months >= 3:
-            return True
-        else:
-            return False

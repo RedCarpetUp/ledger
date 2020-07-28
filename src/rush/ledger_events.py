@@ -1,9 +1,7 @@
 from decimal import Decimal
 from typing import List
 
-from sqlalchemy import (
-    Date,
-)
+from sqlalchemy import Date
 from sqlalchemy.orm import Session
 
 from rush.card import BaseCard
