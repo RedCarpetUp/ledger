@@ -29,6 +29,7 @@ from rush.ledger_utils import (
 )
 from rush.lender_funds import (
     lender_disbursal,
+    lender_interest_incur,
     m2p_transfer,
 )
 from rush.models import (
@@ -1269,12 +1270,98 @@ def test_view(session: Session) -> None:
 #     assert amount == Decimal("1061.34")  # 1000 refunded with interest 60
 
 
-# def test_lender_incur(session: Session) -> None:
-#     test_refund_1(session)
-#     status = lender_interest_incur(session)
-#     uc = get_user_card(session, 99)
-#     _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
-#     assert amount == Decimal("2054.74")  # on date 2020-06-28
+def test_lender_incur(session: Session) -> None:
+    a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas")
+    session.add(a)
+    session.flush()
+
+    # assign card
+    uc = create_user_card(
+        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+    )
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-06-08 19:23:11"),
+        amount=Decimal(1000),
+        description="BigBasket.com",
+    )
+    bill_id = swipe.loan_id
+    _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
+    assert unbilled_amount == 1000
+    bill = bill_generate(session=session, user_card=uc)
+    assert bill.table.is_generated is True
+
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-06-29 19:23:11"),
+        amount=Decimal(1500),
+        description="BigBasket.com",
+    )
+    bill = bill_generate(session=session, user_card=uc)
+    assert bill.table.is_generated is True
+
+    lender_interest_incur(
+        session, from_date=parse_date("2020-06-01").date(), to_date=parse_date("2020-06-30").date()
+    )
+    uc = get_user_card(session, 99)
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
+    assert amount == Decimal("2511.65")
+
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_interest/e")
+    assert amount == Decimal("11.65")
+
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-07-29 19:23:11"),
+        amount=Decimal(1500),
+        description="Flipkart.com",
+    )
+    lender_interest_incur(
+        session, from_date=parse_date("2020-07-01").date(), to_date=parse_date("2020-07-31").date()
+    )
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_interest/e")
+    assert amount == Decimal("51.81")
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
+    assert amount == Decimal("4051.81")
+
+
+def test_lender_incur_two(session: Session) -> None:
+    a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas")
+    session.add(a)
+    session.flush()
+
+    # assign card
+    uc = create_user_card(
+        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+    )
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-07-29 19:23:11"),
+        amount=Decimal(500),
+        description="BigBasket.com",
+    )
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-07-29 10:23:11"),
+        amount=Decimal(500),
+        description="BigBasket.com",
+    )
+    bill = bill_generate(session=session, user_card=uc)
+    assert bill.table.is_generated is True
+
+    lender_interest_incur(
+        session, from_date=parse_date("2020-07-01").date(), to_date=parse_date("2020-07-31").date()
+    )
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
+    assert amount == Decimal("1000.99")
+
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_interest/e")
+    assert amount == Decimal("0.99")
 
 
 def test_prepayment(session: Session) -> None:
@@ -1345,9 +1432,7 @@ def test_prepayment(session: Session) -> None:
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 1000
-
     bill = bill_generate(session=session, user_card=uc)
-
     assert bill.table.is_generated is True
 
     _, prepayment_amount = get_account_balance_from_str(
@@ -1364,53 +1449,119 @@ def test_prepayment(session: Session) -> None:
     )
     assert billed_amount == Decimal("30.67")
 
-    _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{uc.id}/card/lender_payable/l"
-    )
-    assert lender_payable == Decimal("0.5")
 
-    amount = Decimal(1000)
-    payment_received(
-        session=session,
-        user_card=uc,
-        payment_amount=amount,
-        payment_date=payment_date,
-        payment_request_id="a123",
-    )
-
-    _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
-    assert lender_amount == Decimal("0")
-    _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card_id}/card/lender_payable/l"
-    )
-    assert lender_payable == Decimal("-999")
-
-    _, prepayment_amount = get_account_balance_from_str(
-        session, book_string=f"{user_card_id}/card/pre_payment/l"
-    )
-    # left amount deducted from the payment
-    assert prepayment_amount == Decimal("967.89")
-
-    swipe = create_card_swipe(
-        session=session,
-        user_card=uc,
-        txn_time=parse_date("2020-06-08 19:23:11"),
-        amount=Decimal(800),
-        description="Myntra.com",
-    )
-    bill_id = swipe.loan_id
-
-    _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
-    assert unbilled_amount == 800
-
-    bill = bill_generate(session=session, user_card=uc)
-
-    assert bill.is_generated is False
-
-    _, prepayment_amount = get_account_balance_from_str(
-        session, book_string=f"{user_card_id}/card/pre_payment/l"
-    )
-    assert prepayment_amount == Decimal("167.89")  # 800 deducted from 967.89
+#
+# def test_writeoff(session: Session) -> None:
+#     a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+#     session.add(a)
+#     session.flush()
+#
+#     # assign card
+#     uc = create_user_card(
+#         session=session, user_id=a.id, card_activation_date=parse_date("2020-03-02"), card_type="ruby",
+#     )
+#
+#     user_card_id = uc.id
+#
+#     swipe = create_card_swipe(
+#         session=session,
+#         user_card=uc,
+#         txn_time=parse_date("2020-03-08 19:23:11"),
+#         amount=Decimal(1000),
+#         description="BigBasket.com",
+#     )
+#     bill = bill_generate(session=session, user_card=uc)
+#     assert bill.table.is_generated is True
+#
+#     swipe = create_card_swipe(
+#         session=session,
+#         user_card=uc,
+#         txn_time=parse_date("2020-04-08 19:23:11"),
+#         amount=Decimal(1500),
+#         description="BigBasket.com",
+#     )
+#
+#     _, prepayment_amount = get_account_balance_from_str(
+#         session, book_string=f"{user_card_id}/card/pre_payment/l"
+#     )
+#     bill = bill_generate(session=session, user_card=uc)
+#     assert bill.table.is_generated is True
+#
+#     swipe = create_card_swipe(
+#         session=session,
+#         user_card=uc,
+#         txn_time=parse_date("2020-05-08 19:23:11"),
+#         amount=Decimal(1200),
+#         description="BigBasket.com",
+#     )
+#     bill = bill_generate(session=session, user_card=uc)
+#     assert bill.table.is_generated is True
+#     unpaid_bills = uc.get_unpaid_bills()
+#     bill = unpaid_bills[0]
+#
+#     lender_interest_incur(session, parse_date("2020-06-01 19:00:00"))
+#     write_off_payment(session, uc)
+#
+#     _, lender_payable_amount = get_account_balance_from_str(
+#         session, book_string=f"{user_card_id}/card/lender_payable/l"
+#     )
+#     assert lender_payable_amount == Decimal("0")
+#     _, redcarpet_amount = get_account_balance_from_str(
+#         session, book_string=f"{user_card_id}/redcarpet/redcarpet_account/a"
+#     )
+#     assert redcarpet_amount == Decimal("-3748.68")
+#     _, writeoff_amount = get_account_balance_from_str(
+#         session, book_string=f"{user_card_id}/card/writeoff_expenses/e"
+#     )
+#     assert writeoff_amount == Decimal("3748.68")
+#     _, bad_amount = get_account_balance_from_str(
+#         session, book_string=f"{user_card_id}/card/bad_debt_allowance/ca"
+#     )
+#     assert bad_amount == Decimal("3748.68")
+#
+#
+# def test_writeoff_recovery_one(session: Session) -> None:
+#     test_writeoff(session)
+#     uc = get_user_card(session, 99)
+#     payment_received(
+#         session,
+#         uc,
+#         Decimal("3748.68"),
+#         payment_date=parse_date("2020-07-01"),
+#         payment_request_id="abcde",
+#     )
+#     user_card_id = uc.id
+#     _, writeoff_amount = get_account_balance_from_str(
+#         session, book_string=f"{user_card_id}/card/writeoff_expenses/e"
+#     )
+#     assert writeoff_amount == Decimal("0")
+#     _, bad_amount = get_account_balance_from_str(
+#         session, book_string=f"{user_card_id}/card/bad_debt_allowance/ca"
+#     )
+#     assert bad_amount == Decimal("0")
+#     _, pg_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+#     assert pg_amount == Decimal("3748.18")
+#
+#
+# def test_writeoff_recovery_two(session: Session) -> None:
+#     test_writeoff(session)
+#     uc = get_user_card(session, 99)
+#     user_card_id = uc.id
+#
+#     payment_received(
+#         session, uc, Decimal("3000"), payment_date=parse_date("2020-07-01"), payment_request_id="abcde",
+#     )
+#     _, writeoff_amount = get_account_balance_from_str(
+#         session, book_string=f"{user_card_id}/card/writeoff_expenses/e"
+#     )
+#     assert writeoff_amount == Decimal("748.68")
+#     _, bad_amount = get_account_balance_from_str(
+#         session, book_string=f"{user_card_id}/card/bad_debt_allowance/ca"
+#     )
+#     assert bad_amount == Decimal("748.68")
+#     _, pg_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+#     assert pg_amount == Decimal("2999.50")
+#
 
 
 def test_moratorium(session: Session) -> None:
