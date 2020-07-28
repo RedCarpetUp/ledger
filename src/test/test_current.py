@@ -1297,7 +1297,10 @@ def test_lender_incur(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02").date(),
+        card_type="ruby",
     )
     swipe = create_card_swipe(
         session=session,
@@ -1306,7 +1309,7 @@ def test_lender_incur(session: Session) -> None:
         amount=Decimal(1000),
         description="BigBasket.com",
     )
-    bill_id = swipe.loan_id
+    bill_id = swipe["data"].loan_id
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 1000
     bill = bill_generate(session=session, user_card=uc)
@@ -1355,7 +1358,10 @@ def test_lender_incur_two(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02").date(),
+        card_type="ruby",
     )
     swipe = create_card_swipe(
         session=session,
