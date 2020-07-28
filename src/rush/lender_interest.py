@@ -17,5 +17,5 @@ def lender_interest(session: Session, amount: Decimal, card_id: int) -> Decimal:
         .scalar()
         or 0
     )
-    amount = div(mul(18, amount), 36500)
+    amount = div(mul(lender_interest_rate, amount), 36500)
     return amount
