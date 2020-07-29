@@ -124,18 +124,27 @@ def add_min_amount_event(
 
 
 def payment_received_event(
-    session: Session, user_card: BaseCard, debit_book_str: str, event: LedgerTriggerEvent,
+    session: Session, user_card: BaseCard, debit_book_str: str, event: LedgerTriggerEvent, payment_type:str
 ) -> None:
     payment_received = Decimal(event.amount)
     gateway_charges = event.extra_details.get("gateway_charges")
     unpaid_bills = user_card.get_unpaid_bills()
-
-    payment_received = _adjust_for_min(
-        session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str,
-    )
-    payment_received = _adjust_for_complete_bill(
-        session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str,
-    )
+    if payment_type == "card_fee":
+       ledger_entry = create_ledger_entry_from_str(
+           session , user_card.id ,debit_book_str, credit_book_str="card", amount=payment_received
+       )
+    if payment_type == "reload_fee":
+       ledger_entry = create_ledger_entry_from_str(
+           session , user_cars.id ,gateway_charges,debit_book_str, amount=payment_received
+       )
+    
+    else:
+        payment_received = _adjust_for_min(
+            session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str,
+        )
+        payment_received = _adjust_for_complete_bill(
+            session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str,
+        )
 
     if payment_received > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
@@ -403,3 +412,19 @@ def limit_assignment_event(session: Session, card_id: int, event: LedgerTriggerE
         credit_book_str=f"{card_id}/card/available_limit/l",
         amount=Decimal(event.amount),
     )
+
+def charge_fee_event(session: Session, card_id: int, lender_id: int, event: LedgerTriggerEvent) -> None:
+    create_ledger_entry_from_str(
+        session,
+        event_id=event.id,
+        debit_book_str=f"{lender_id}/lender/pg_account/a",
+        credit_book_str=f"{card_id}/card/revenue_by_fee/r",
+        amount=Decimal(event.amount),
+    )
+    create_ledger_entry_from_str(
+        session,
+        event_id=event.id,
+        debit_book_str=f"{card_id}/card/lender_payable/l",
+        credit_book_str=f"{lender_id}/lender/pg_account/a",
+        amount=Decimal(event.amount),
+    )    

@@ -14,7 +14,7 @@ from rush.ledger_events import (
 )
 from rush.models import LedgerTriggerEvent
 from rush.utils import get_current_ist_time
-
+from rush.ledger_utils import get_account_balance_from_str
 
 def card_assignment(
     session: Session, user_id: int, lender_id: int, amount: Decimal, fee_amount: Decimal, card_type: str
@@ -25,7 +25,7 @@ def card_assignment(
             user_id=user_id,
             card_activation_date=get_current_ist_time(),
             card_type=card_type,
-            lender_id=lender_id,
+            lender_id = lender_id
         )
         card_id = user_card.id
 
@@ -35,12 +35,12 @@ def card_assignment(
         session.add(lt1)
         session.flush()
         charge_fee_event(session, card_id, lender_id, lt1)
-        amount_rcv = get_account_balance_from_str(session, book_string=f"{lender_id}/bill/receivable_amount/r")
-        if amount_rcv>0:
-           card_limit_assign(name ,amount , post_date)
+        amount_rcv = get_account_balance_from_str(session, book_string=f"{lender_id}/bill/receivable_amount/a")
+        if amount_rcv==0:
+           card_limit_assign(amount=amount)
        
 
-def card_reload(session: Session, user_id: int, amount: Decimal, fee_amount: Decimal) -> None:
+def card_limit_reload(session: Session, user_id: int, amount: Decimal, fee_amount: Decimal) -> None:
         user_card = get_user_card(session, user_id)
         card_id = user_card.id
         lender_id = user_card.lender_id
@@ -50,12 +50,12 @@ def card_reload(session: Session, user_id: int, amount: Decimal, fee_amount: Dec
         session.add(lt)
         session.flush()
         charge_fee_event(session, card_id, lender_id, lt)
-        amount = get_account_balance_from_str(session, book_string=f"{lender_id}/bill/receivable_amount/r")
-        if amount_rcv>0:
-           card_limit_assign(name ,amount , post_date)
+        amount = get_account_balance_from_str(session, book_string=f"{lender_id}/bill/receivable_amount/a")
+        if amount_rcv==0:
+           card_limit_assign(amount=amount)
        
 
-def card_limit_assign(name = "limit_assignment"  , amount = amount , post_date=get_current_ist_time())     
+def card_limit_assign(amount: Decimal, name ="limit_assignment" ,post_date=get_current_ist_time()):
         lt = LedgerTriggerEvent(name , amount , post_date)
         session.add(lt)
         session.flush()
