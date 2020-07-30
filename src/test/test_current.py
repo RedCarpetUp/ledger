@@ -14,10 +14,14 @@ from rush.card import (
     create_user_card,
     get_user_card,
 )
+from rush.card_assignment_reload import (
+    card_assignment,
+    card_limit_reload,
+)
 from rush.create_bill import (
     bill_generate,
     extend_tenure,
-)  
+)
 from rush.create_card_swipe import create_card_swipe
 from rush.create_emi import (
     check_moratorium_eligibility,
@@ -46,10 +50,7 @@ from rush.views import (
     bill_view,
     user_view,
 )
-from rush.card_assignment_reload import (
-    card_assignment,
-    card_limit_reload,
-)
+
 
 def test_current(get_alembic: alembic.config.Config) -> None:
     """Test that the alembic current command does not erorr"""
@@ -1963,20 +1964,17 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
     # First cycle 18 emis, next bill 19 emis, 2 because of moratorium == 21
     assert last_emi.emi_number == 21
 
+
 def test_card_assign_fee(session: Session) -> None:
     card_assign = card_assignment(
-        session = session,
-        user_id = 1,
-        lender_id = 50,
-        fee_amount = Decimal(750.00),
-        amount = Decimal(1000.00),
-        card_type = "ruby"
+        session=session,
+        user_id=1,
+        lender_id=50,
+        fee_amount=Decimal(750.00),
+        amount=Decimal(1000.00),
+        card_type="ruby",
     )
 
     card_reload_limit = card_limit_reload(
-        session = session,
-        user_id = 1,
-        fee_amount = Decimal(750.00),
-        amount = Decimal(2000.00),
-
+        session=session, user_id=1, fee_amount=Decimal(750.00), amount=Decimal(2000.00),
     )

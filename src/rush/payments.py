@@ -26,21 +26,25 @@ def payment_received(
     payment_amount: Decimal,
     payment_date: DateTime,
     payment_request_id: str,
-    payment_type:str = "loan payment"
+    payment_type: str = "loan payment",
 ) -> None:
     lt = LedgerTriggerEvent(
         name="payment_received",
         card_id=user_card.id,
         amount=payment_amount,
         post_date=payment_date,
-        extra_details={"payment_request_id": payment_request_id, "gateway_charges": 0.5 , "payment_type": payment_type },
+        extra_details={
+            "payment_request_id": payment_request_id,
+            "gateway_charges": 0.5,
+            "payment_type": payment_type,
+        },
     )
     session.add(lt)
     session.flush()
     lender_id = (
         session.query(LoanData.lender_id).filter(LoanData.card_id == user_card.id).limit(1).scalar() or 0
     )
-    payment_received_event(session, user_card, f"{lender_id}/lender/pg_account/a", lt , payment_type)
+    payment_received_event(session, user_card, f"{lender_id}/lender/pg_account/a", lt, payment_type)
     run_anomaly(session, user_card, payment_date)
 
 
