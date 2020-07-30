@@ -3,8 +3,6 @@ from decimal import Decimal
 from typing import (
     Any,
     Dict,
-    Optional,
-    Tuple,
 )
 
 from pendulum import DateTime
@@ -209,3 +207,49 @@ class EmiPaymentMapping(AuditMixin):
     interest_received = Column(Numeric, nullable=True, default=Decimal(0))
     late_fee_received = Column(Numeric, nullable=True, default=Decimal(0))
     principal_received = Column(Numeric, nullable=True, default=Decimal(0))
+
+
+class RewardsCatalog(AuditMixin):
+    __tablename__ = "rewards_catalog"
+    reward_type = Column(String(), nullable=False)
+    from_time = Column(TIMESTAMP, nullable=True)
+    to_time = Column(TIMESTAMP, nullable=True)
+    min_val = Column(Numeric, nullable=True)
+    max_val = Column(Numeric, nullable=True)
+    calc_type = Column(String(), nullable=False)
+    reward_rules = Column(JSON, default="{}")
+
+
+@py_dataclass
+class RewardsCatalogPy(AuditMixinPy):
+    reward_type: str
+    from_time: DateTime
+    to_time: DateTime
+    min_val: Decimal
+    max_val: Decimal
+    calc_type: str
+    reward_rules: Dict[str, Any]
+
+
+class Product(AuditMixin):
+    __tablename__ = "product"
+    product_name = Column(String(), nullable=False)
+
+
+@py_dataclass
+class ProductPy(AuditMixinPy):
+    product_name: str
+
+
+class RewardMaster(AuditMixin):
+    __tablename__ = "reward_master"
+    identifier_type = Column(String(), nullable=False)
+    reward_id = Column(Integer, ForeignKey(RewardsCatalog.id), nullable=False)
+    product_id = Column(Integer, ForeignKey(Product.id), nullable=False)
+
+
+@py_dataclass
+class RewardMasterPy(AuditMixinPy):
+    identifier_type: str
+    reward_id: int
+    product_id: int
