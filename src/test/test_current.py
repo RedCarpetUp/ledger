@@ -28,6 +28,10 @@ from rush.models import (
     EmiPaymentMapping,
     LedgerTriggerEvent,
     LoanData,
+    Product,
+    RewardMaster,
+    RewardsCatalog,
+    RewardsCatalogPy,
     User,
     UserPy,
 )
@@ -56,7 +60,6 @@ def test_user2(session: Session) -> None:
     session.add(u)
     session.commit()
     a = session.query(User).first()
-    print(a.id)
     u = UserPy(id=a.id, performed_by=123, email="sss", name="dfd", fullname="dfdf", nickname="dfdd",)
 
 
@@ -1202,3 +1205,31 @@ def test_generate_bill_1_flipkart_card(session: Session) -> None:
         session, book_string=f"{bill_id}/bill/interest_receivable/a"
     )
     assert interest_due == Decimal("30.33")  # principal is 2k but interest is charged on 1k
+
+
+def test_reward(session: Session) -> None:
+    r = RewardsCatalog(
+        reward_type="cashback",
+        from_time=parse_date("2020-04-08 19:23:11"),
+        to_time=parse_date("2020-04-10 19:23:11"),
+        min_val=100,
+        max_val=2000,
+        calc_type="test",
+        reward_rules={},
+        performed_by=123,
+    )
+    session.add(r)
+    session.commit()
+    a = session.query(RewardsCatalog).first()
+
+    r = RewardsCatalogPy(
+        id=a.id,
+        reward_type="cashback",
+        from_time=parse_date("2020-04-08 19:23:11"),
+        to_time=parse_date("2020-04-10 19:23:11"),
+        min_val=100,
+        max_val=2000,
+        calc_type="test",
+        reward_rules={},
+        performed_by=123,
+    )
