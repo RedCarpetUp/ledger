@@ -1,5 +1,6 @@
 from decimal import Decimal
 from typing import (
+    Dict,
     Optional,
     Tuple,
 )
@@ -37,55 +38,50 @@ def create_ledger_entry_from_str(
     return create_ledger_entry(session, event_id, debit_account.id, credit_account.id, amount)
 
 
-def get_account_balance(
-    session: sqlalchemy.orm.session.Session, book_account: BookAccount, to_date: Optional[DateTime]
-) -> Decimal:
-    debit_balance = session.query(func.sum(LedgerEntry.amount)).filter(
-        LedgerEntry.debit_account == book_account.id,
-    )
-    if to_date:
-        debit_balance = debit_balance.filter(
-            LedgerEntry.event_id == LedgerTriggerEvent.id, LedgerTriggerEvent.post_date < to_date,
-        )
-    debit_balance = debit_balance.scalar() or 0
-
-    credit_balance = session.query(func.sum(LedgerEntry.amount)).filter(
-        LedgerEntry.credit_account == book_account.id,
-    )
-    if to_date:
-        credit_balance = credit_balance.filter(
-            LedgerEntry.event_id == LedgerTriggerEvent.id, LedgerTriggerEvent.post_date < to_date,
-        )
-    credit_balance = credit_balance.scalar() or 0
-
-    if book_account.account_type in ("a", "e"):
-        final_balance = debit_balance - credit_balance
-    elif book_account.account_type in ("l", "r"):
-        final_balance = credit_balance - debit_balance
-
-    return final_balance
-
-
 def get_account_balance_from_str(
     session: Session, book_string: str, to_date: Optional[DateTime] = None
-) -> Tuple[BookAccount, Decimal]:
-    book_account = get_book_account_by_string(session, book_string)
-    account_balance = get_account_balance(session, book_account, to_date=to_date)
-    return book_account, account_balance
+) -> Tuple[int, Decimal]:
+    book_variables = breakdown_account_variables_from_str(book_string)
+    if to_date:
+        f = func.get_account_balance(
+            book_variables["identifier"],
+            book_variables["identifier_type"],
+            book_variables["name"],
+            book_variables["account_type"],
+            to_date,
+        )
+    else:
+        f = func.get_account_balance(
+            book_variables["identifier"],
+            book_variables["identifier_type"],
+            book_variables["name"],
+            book_variables["account_type"],
+        )
+    account_balance = session.query(f).scalar() or 0
+    return 0, Decimal(account_balance)
 
 
-def get_book_account_by_string(session: Session, book_string) -> BookAccount:
+def breakdown_account_variables_from_str(book_string: str) -> dict:
     identifier, identifier_type, name, account_type = book_string.split("/")
-    assert account_type in ("a", "l", "r", "e")
+    assert account_type in ("a", "l", "r", "e", "ca")
     assert identifier_type in ("user", "lender", "bill", "redcarpet", "card")
+    return {
+        "identifier": identifier,
+        "identifier_type": identifier_type,
+        "name": name,
+        "account_type": account_type,
+    }
 
+
+def get_book_account_by_string(session: Session, book_string: str) -> BookAccount:
+    book_variables = breakdown_account_variables_from_str(book_string)
     book_account = get_or_create(
         session=session,
         model=BookAccount,
-        identifier=identifier,
-        identifier_type=identifier_type,
-        book_name=name,
-        account_type=account_type,
+        identifier=book_variables["identifier"],
+        identifier_type=book_variables["identifier_type"],
+        book_name=book_variables["name"],
+        account_type=book_variables["account_type"],
     )
     return book_account
 
@@ -136,7 +132,7 @@ def is_bill_closed(session: Session, bill: LoanData, to_date: Optional[DateTime]
     return True
 
 
-def get_remaining_bill_balance(session: Session, bill: LoanData) -> dict:
+def get_remaining_bill_balance(session: Session, bill: LoanData) -> Dict[str, Decimal]:
     _, principal_due = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/principal_receivable/a"
     )

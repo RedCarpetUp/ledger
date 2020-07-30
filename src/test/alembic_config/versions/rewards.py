@@ -1,7 +1,7 @@
 """loan_table
 
 Revision ID: d5e975fd2053
-Revises: d5e975fd205c
+Revises: 8f3690240c02
 Create Date: 2020-07-30 15:32:45.585137
 
 """
@@ -10,7 +10,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "d5e975fd205r"
-down_revision = "d5e975fd205c"
+down_revision = "8f3690240c02"
 branch_labels = None
 depends_on = None
 

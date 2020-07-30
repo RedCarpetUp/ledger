@@ -1,48 +1,40 @@
-from datetime import timedelta
 from decimal import Decimal
 
-from pendulum import (
-    Date,
-    DateTime,
-)
+from dateutil.relativedelta import relativedelta
+from pendulum import DateTime
 from sqlalchemy.orm import Session
 
 from rush.accrue_financial_charges import accrue_interest_on_all_bills
 from rush.card import BaseCard
 from rush.card.base_card import BaseBill
-from rush.create_emi import (
-    add_emi_on_new_bill,
-    create_emis_for_card,
-)
+from rush.create_emi import refresh_schedule
 from rush.ledger_events import bill_generate_event
 from rush.ledger_utils import get_account_balance_from_str
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
-    CardEmis,
     LedgerTriggerEvent,
-    LoanData,
-    UserCard,
+    LoanMoratorium,
 )
-from rush.utils import div
+from rush.utils import (
+    div,
+    get_current_ist_time,
+)
 
 
 def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -> BaseBill:
     # Get the most recent bill
-    last_bill = user_card.get_latest_bill_to_generate()
+    last_bill = user_card.get_latest_bill()
     if last_bill:
-        last_bill_date = last_bill.agreement_date
-        last_valid_statement_date = last_bill_date + timedelta(days=user_card.statement_period_in_days)
-        does_swipe_belong_to_current_bill = txn_time.date() <= last_valid_statement_date
+        does_swipe_belong_to_current_bill = txn_time.date() < last_bill.bill_close_date
         if does_swipe_belong_to_current_bill:
             return last_bill
-        new_bill_date = last_valid_statement_date + timedelta(days=1)
+        new_bill_date = last_bill.bill_close_date
     else:
         new_bill_date = user_card.card_activation_date
     new_bill = user_card.create_bill(
-        new_bill_date=new_bill_date,
+        bill_start_date=new_bill_date,
+        bill_close_date=new_bill_date + relativedelta(months=1),
         lender_id=62311,
-        rc_rate_of_interest_annual=Decimal(36),
-        lender_rate_of_interest_annual=Decimal(18),
         is_generated=False,
     )
     return new_bill
@@ -50,7 +42,11 @@ def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -
 
 def bill_generate(session: Session, user_card: BaseCard) -> BaseBill:
     bill = user_card.get_latest_bill_to_generate()  # Get the first bill which is not generated.
-    lt = LedgerTriggerEvent(name="bill_generate", card_id=user_card.id, post_date=bill.agreement_date)
+    if not bill:
+        bill = get_or_create_bill_for_card_swipe(
+            user_card, get_current_ist_time()
+        )  # TODO not sure about this
+    lt = LedgerTriggerEvent(name="bill_generate", card_id=user_card.id, post_date=bill.bill_start_date)
     session.add(lt)
     session.flush()
 
@@ -61,29 +57,40 @@ def bill_generate(session: Session, user_card: BaseCard) -> BaseBill:
     _, billed_amount = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/principal_receivable/a"
     )
-    principal_instalment = div(billed_amount, 12)  # TODO get tenure from table.
+    principal_instalment = div(billed_amount, bill.table.bill_tenure)
 
     # Update the bill row here.
     bill.table.principal = billed_amount
     bill.table.principal_instalment = principal_instalment
-    bill.table.interest_to_charge = bill.get_interest_to_charge()
-
-    # After the bill has generated. Call the min generation event on all unpaid bills.
-    add_min_to_all_bills(session, bill.agreement_date, user_card)
-
-    # TODO move this to a function.
-    # If last emi does not exist then we can consider to be first set of emi creation
-    last_emi = (
-        session.query(CardEmis)
-        .filter(CardEmis.card_id == user_card.id)
-        .order_by(CardEmis.due_date.desc())
-        .first()
+    bill.table.interest_to_charge = bill.get_interest_to_charge(
+        user_card.table.rc_rate_of_interest_monthly
     )
-    if not last_emi:
-        create_emis_for_card(session, user_card, bill)
-    else:
-        add_emi_on_new_bill(session, user_card, bill, last_emi.emi_number)
+
+    bill_closing_date = bill.bill_start_date + relativedelta(months=+1)
+    # Don't add in min if user is in moratorium.
+    if not LoanMoratorium.is_in_moratorium(session, user_card.id, bill_closing_date):
+        # After the bill has generated. Call the min generation event on all unpaid bills.
+        add_min_to_all_bills(session, bill_closing_date, user_card)
 
     # Accrue interest on all bills. Before the actual date, yes.
-    accrue_interest_on_all_bills(session, bill.agreement_date, user_card)
+    accrue_interest_on_all_bills(session, bill_closing_date, user_card)
+
+    # Refresh the schedule
+    refresh_schedule(session, user_card.table.user_id)
+
     return bill
+
+
+def extend_tenure(session: Session, user_card: BaseCard, new_tenure: int) -> None:
+    unpaid_bills = user_card.get_unpaid_bills()
+    for bill in unpaid_bills:
+        bill.table.bill_tenure = new_tenure
+        principal_instalment = div(bill.table.principal, bill.table.bill_tenure)
+        # Update the bill rows here
+        bill.table.principal_instalment = principal_instalment
+        bill.table.interest_to_charge = bill.get_interest_to_charge(
+            user_card.table.rc_rate_of_interest_monthly
+        )
+    session.flush()
+    # Refresh the schedule
+    refresh_schedule(session, user_card.table.user_id)

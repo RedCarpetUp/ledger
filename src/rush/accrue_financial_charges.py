@@ -25,7 +25,11 @@ from rush.models import (
     LoanData,
     UserCard,
 )
-from rush.utils import get_current_ist_time
+from rush.utils import (
+    div,
+    get_current_ist_time,
+    mul,
+)
 
 
 def _get_total_outstanding(session, user_card):
@@ -54,11 +58,13 @@ def can_remove_interest(
     """
     latest_bill = user_card.get_latest_generated_bill()
     # First check if there is even interest accrued in the latest bill.
-    interest_accrued = get_account_balance_from_str(session, f"{latest_bill.id}/bill/interest_earned/r")
+    _, interest_accrued = get_account_balance_from_str(
+        session, f"{latest_bill.id}/bill/interest_earned/r"
+    )
     if interest_accrued == 0:
         return False  # Nothing to remove.
 
-    due_date = latest_bill.agreement_date + timedelta(days=user_card.interest_free_period_in_days)
+    due_date = latest_bill.bill_start_date + timedelta(days=user_card.interest_free_period_in_days)
     payment_came_after_due_date = event_date.date() > due_date
     if payment_came_after_due_date:
         return False
@@ -92,12 +98,12 @@ def is_late_fee_valid(session: Session, user_card: BaseCard) -> bool:
     # TODO get bill from event?
 
     # First check if there is even late fee accrued in the latest bill.
-    late_fee_accrued = get_account_balance_from_str(session, f"{latest_bill.id}/bill/late_fine/r")
+    _, late_fee_accrued = get_account_balance_from_str(session, f"{latest_bill.id}/bill/late_fine/r")
     if late_fee_accrued == 0:
         return False  # Nothing to remove.
 
-    due_date = latest_bill.agreement_date + timedelta(days=user_card.interest_free_period_in_days)
-    min_balance_as_of_due_date = latest_bill.get_minimum_amount_to_pay(due_date)
+    due_date = latest_bill.bill_start_date + timedelta(days=user_card.interest_free_period_in_days)
+    min_balance_as_of_due_date = latest_bill.get_remaining_min(due_date)
     if (
         min_balance_as_of_due_date > 0
     ):  # if there's balance pending in min then the late fee charge is valid.
@@ -107,7 +113,7 @@ def is_late_fee_valid(session: Session, user_card: BaseCard) -> bool:
 
 def accrue_late_charges(session: Session, user_card: BaseCard, post_date: DateTime) -> LoanData:
     latest_bill = user_card.get_latest_generated_bill()
-    can_charge_fee = latest_bill.get_minimum_amount_to_pay() > 0
+    can_charge_fee = latest_bill.get_remaining_min() > 0
     #  accrue_late_charges_prerequisites(session, bill)
     if can_charge_fee:  # if min isn't paid charge late fine.
         # TODO get correct date here.

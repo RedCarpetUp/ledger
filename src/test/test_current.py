@@ -3,6 +3,7 @@ from decimal import Decimal
 from io import StringIO
 
 import alembic
+from _pytest.monkeypatch import MonkeyPatch
 from alembic.command import current as alembic_current
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
@@ -13,14 +14,22 @@ from rush.card import (
     create_user_card,
     get_user_card,
 )
-from rush.create_bill import bill_generate
+from rush.create_bill import (
+    bill_generate,
+    extend_tenure,
+)
 from rush.create_card_swipe import create_card_swipe
+from rush.create_emi import (
+    check_moratorium_eligibility,
+    refresh_schedule,
+)
 from rush.ledger_utils import (
     get_account_balance_from_str,
     is_bill_closed,
 )
 from rush.lender_funds import (
     lender_disbursal,
+    lender_interest_incur,
     m2p_transfer,
 )
 from rush.models import (
@@ -28,8 +37,9 @@ from rush.models import (
     EmiPaymentMapping,
     LedgerTriggerEvent,
     LoanData,
-    Product,
+    LoanMoratorium,
     RewardMaster,
+    RewardMasterPy,
     RewardsCatalog,
     RewardsCatalogPy,
     User,
@@ -60,6 +70,7 @@ def test_user2(session: Session) -> None:
     session.add(u)
     session.commit()
     a = session.query(User).first()
+    print(a.id)
     u = UserPy(id=a.id, performed_by=123, email="sss", name="dfd", fullname="dfdf", nickname="dfdd",)
 
 
@@ -85,7 +96,10 @@ def test_m2p_transfer(session: Session) -> None:
 
 def test_card_swipe(session: Session) -> None:
     uc = create_user_card(
-        session=session, user_id=2, card_activation_date=parse_date("2020-05-01"), card_type="ruby"
+        session=session,
+        user_id=2,
+        card_activation_date=parse_date("2020-05-01").date(),
+        card_type="ruby",
     )
     user_card_id = uc.id
 
@@ -123,7 +137,10 @@ def test_generate_bill_1(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02").date(),
+        card_type="ruby",
     )
 
     swipe = create_card_swipe(
@@ -140,6 +157,7 @@ def test_generate_bill_1(session: Session) -> None:
 
     bill = bill_generate(session=session, user_card=uc)
 
+    assert bill.bill_start_date == parse_date("2020-04-02").date()
     assert bill.table.is_generated is True
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
@@ -159,12 +177,29 @@ def test_generate_bill_1(session: Session) -> None:
     )
     assert interest_due == Decimal("30.67")
 
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_id}/bill/interest_earned/r"
+    )
+    assert interest_due == Decimal("30.67")
+
+    interest_event = (
+        session.query(LedgerTriggerEvent)
+        .filter_by(card_id=uc.id, name="accrue_interest")
+        .order_by(LedgerTriggerEvent.post_date.desc())
+        .first()
+    )
+    assert interest_event.post_date.date() == parse_date("2020-05-02").date()
+
 
 def _partial_payment_bill_1(session: Session) -> None:
     user_card = get_user_card(session, 99)
     payment_date = parse_date("2020-05-03")
     amount = Decimal(100)
     unpaid_bills = user_card.get_unpaid_bills()
+    _, lender_payable = get_account_balance_from_str(
+        session, book_string=f"{user_card.id}/card/lender_payable/l"
+    )
+    assert lender_payable == Decimal("1000")
     payment_received(
         session=session,
         user_card=user_card,
@@ -174,6 +209,11 @@ def _partial_payment_bill_1(session: Session) -> None:
     )
 
     bill = unpaid_bills[0]
+    _, gateway_expenses = get_account_balance_from_str(
+        session, book_string="12345/redcarpet/gateway_expenses/e"
+    )
+    assert gateway_expenses == 0.5
+
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/interest_receivable/a"
     )
@@ -184,51 +224,15 @@ def _partial_payment_bill_1(session: Session) -> None:
     )
     assert principal_due == Decimal("930.67")
 
-    _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
-    min_due = bill.get_minimum_amount_to_pay()
+    min_due = bill.get_remaining_min()
     assert min_due == 14
 
-
-def _partial_payment_bill_2(session: Session) -> None:
-    user_card = get_user_card(session, 99)
-    payment_date = parse_date("2020-05-03")
-    amount = Decimal(2000)
-    unpaid_bills = user_card.get_unpaid_bills()
-    payment_received(
-        session=session,
-        user_card=user_card,
-        payment_amount=amount,
-        payment_date=payment_date,
-        payment_request_id="a123",
+    _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+    assert lender_amount == Decimal("0")
+    _, lender_payable = get_account_balance_from_str(
+        session, book_string=f"{user_card.id}/card/lender_payable/l"
     )
-
-    bill = unpaid_bills[0]
-    _, principal_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/principal_receivable/a"
-    )
-    assert principal_due == 2000 - amount
-
-    min_due = bill.get_minimum_amount_to_pay()
-    assert min_due == Decimal("0")
-
-
-def _min_payment_delayed_bill_1(session: Session) -> None:
-    user = session.query(User).filter(User.id == 99).one()
-    payment_date = parse_date("2020-05-03")
-    amount = Decimal(130)
-    bill = payment_received(
-        session=session,
-        user_id=user.id,
-        payment_amount=amount,
-        payment_date=payment_date,
-        payment_request_id="a123",
-    )
-
-    _, principal_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/principal_receivable/a"
-    )
-    # payment got late and 100 rupees got settled in late fine.
-    assert principal_due == 970
+    assert lender_payable == Decimal("900.5")
 
 
 def test_partial_payment_bill_1(session: Session) -> None:
@@ -244,7 +248,10 @@ def _accrue_late_fine_bill_1(session: Session) -> None:
     _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_receivable/a")
     assert late_fine_due == Decimal(100)
 
-    min_due = bill.get_minimum_amount_to_pay()
+    _, late_fine_earned = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine/r")
+    assert late_fine_earned == Decimal(100)
+
+    min_due = bill.get_remaining_min()
     assert min_due == 114
 
 
@@ -257,7 +264,7 @@ def _accrue_late_fine_bill_2(session: Session) -> None:
     _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_receivable/a")
     assert late_fine_due == Decimal(100)
 
-    min_due = bill.get_minimum_amount_to_pay()
+    min_due = bill.get_remaining_min()
     assert min_due == Decimal("270")
 
 
@@ -273,6 +280,11 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
 
     unpaid_bills = user_card.get_unpaid_bills()
 
+    _, lender_payable = get_account_balance_from_str(
+        session, book_string=f"{user_card.id}/card/lender_payable/l"
+    )
+    assert lender_payable == Decimal("900.5")
+
     # Pay 13.33 more. and 100 for late fee.
     payment_received(
         session=session,
@@ -283,20 +295,27 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
     )
     bill = unpaid_bills[0]
     # assert is_min_paid(session, bill) is True
-    min_due = bill.get_minimum_amount_to_pay()
+    min_due = bill.get_remaining_min()
     assert min_due == Decimal(0)
 
     _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_receivable/a")
     assert late_fine_due == Decimal(0)
 
-    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine/r")
-    assert late_fine_due == Decimal(100)
+    _, late_fine_earned = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine/r")
+    assert late_fine_earned == Decimal(100)
 
     _, principal_due = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/principal_receivable/a"
     )
     # payment got late and 100 rupees got settled in late fine.
     assert principal_due == Decimal("916.67")
+
+    _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+    assert lender_amount == Decimal("0")
+    _, lender_payable = get_account_balance_from_str(
+        session, book_string=f"{user_card.id}/card/lender_payable/l"
+    )
+    assert lender_payable == Decimal("787.0")
 
 
 def test_accrue_interest_bill_1(session: Session) -> None:
@@ -315,17 +334,23 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
 
     unpaid_bills = user_card.get_unpaid_bills()
 
+    _, lender_payable = get_account_balance_from_str(
+        session, book_string=f"{user_card.id}/card/lender_payable/l"
+    )
+    assert lender_payable == Decimal("900.5")
+
     # Pay 13.33 more. and 100 for late fee.
     payment_received(
         session=session,
         user_card=user_card,
         payment_amount=Decimal("114"),
-        payment_date=parse_date("2020-06-14"),  # Payment came before the due date.
+        # Payment came before the due date.
+        payment_date=parse_date("2020-06-14"),
         payment_request_id="a123",
     )
     bill = unpaid_bills[0]
     # assert is_min_paid(session, bill) is True
-    min_due = bill.get_minimum_amount_to_pay()
+    min_due = bill.get_remaining_min()
     assert min_due == Decimal(0)
 
     _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_receivable/a")
@@ -341,6 +366,13 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
     # changed from 916 to 816, the late did not get settled.
     assert principal_due == Decimal("916.67")
 
+    _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+    assert lender_amount == Decimal("0")
+    _, lender_payable = get_account_balance_from_str(
+        session, book_string=f"{user_card.id}/card/lender_payable/l"
+    )
+    assert lender_payable == Decimal("787.0")
+
 
 def test_is_bill_paid_bill_1(session: Session) -> None:
     test_generate_bill_1(session)
@@ -353,12 +385,16 @@ def test_is_bill_paid_bill_1(session: Session) -> None:
     bill = (
         session.query(LoanData)
         .filter(LoanData.user_id == user_card.user_id)
-        .order_by(LoanData.agreement_date.desc())
+        .order_by(LoanData.bill_start_date.desc())
         .first()
     )
     # Should be false because min is 130 and payment made is 120
     is_it_paid = is_bill_closed(session, bill)
     assert is_it_paid is False
+    _, lender_payable = get_account_balance_from_str(
+        session, book_string=f"{user_card.id}/card/lender_payable/l"
+    )
+    assert lender_payable == Decimal("787")
 
     # Need to pay 916.67 more to close the bill.
     remaining_principal = Decimal("916.67")
@@ -372,6 +408,13 @@ def test_is_bill_paid_bill_1(session: Session) -> None:
     is_it_paid_now = is_bill_closed(session, bill)
     assert is_it_paid_now is True
 
+    _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+    assert lender_amount == Decimal("0")
+    _, lender_payable = get_account_balance_from_str(
+        session, book_string=f"{user_card.id}/card/lender_payable/l"
+    )
+    assert lender_payable == Decimal("-129.17")  # negative that implies prepaid
+
 
 def _generate_bill_2(session: Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
@@ -380,7 +423,7 @@ def _generate_bill_2(session: Session) -> None:
     previous_bill = (  # get last generated bill.
         session.query(LoanData)
         .filter(LoanData.user_id == user.id, LoanData.is_generated.is_(True))
-        .order_by(LoanData.agreement_date.desc())
+        .order_by(LoanData.bill_start_date.desc())
         .first()
     )
     # Bill shouldn't be closed.
@@ -401,6 +444,7 @@ def _generate_bill_2(session: Session) -> None:
     assert user_card_balance == Decimal(-3000)
 
     bill_2 = bill_generate(session=session, user_card=uc)
+    assert bill_2.bill_start_date == parse_date("2020-05-02").date()
 
     unpaid_bills = uc.get_unpaid_bills()
     assert len(unpaid_bills) == 2
@@ -410,7 +454,7 @@ def _generate_bill_2(session: Session) -> None:
     )
     assert principal_due == Decimal(2000)
 
-    min_due = bill_2.get_minimum_amount_to_pay()
+    min_due = bill_2.get_remaining_min()
     assert min_due == Decimal("227")
 
     _, interest_due = get_account_balance_from_str(
@@ -419,13 +463,18 @@ def _generate_bill_2(session: Session) -> None:
     assert interest_due == Decimal("60.33")
 
     first_bill = unpaid_bills[0]
-    first_bill_min_due = first_bill.get_minimum_amount_to_pay()
+    first_bill_min_due = first_bill.get_remaining_min()
     assert first_bill_min_due == Decimal("114")
 
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{first_bill.id}/bill/interest_receivable/a"
     )
     assert interest_due == Decimal("30.67")
+
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{first_bill.id}/bill/interest_earned/r"
+    )
+    assert interest_due == Decimal("61.34")
 
 
 def _generate_bill_3(session: Session) -> None:
@@ -435,7 +484,7 @@ def _generate_bill_3(session: Session) -> None:
     previous_bill = (  # new bill isn't generated yet so get latest.
         session.query(LoanData)
         .filter(LoanData.user_id == user.id)
-        .order_by(LoanData.agreement_date.desc())
+        .order_by(LoanData.bill_start_date.desc())
         .first()
     )
     # Bill shouldn't be closed.
@@ -458,6 +507,7 @@ def _generate_bill_3(session: Session) -> None:
 
     bill = bill_generate(session=session, user_card=uc)
 
+    assert bill.bill_start_date == parse_date("2020-06-02").date()
     unpaid_bills = uc.get_unpaid_bills()
     assert len(unpaid_bills) == 2
 
@@ -466,7 +516,7 @@ def _generate_bill_3(session: Session) -> None:
     )
     assert principal_due == Decimal(1000)
 
-    min_due = bill.get_minimum_amount_to_pay()
+    min_due = bill.get_remaining_min()
     assert min_due == Decimal("114")
 
 
@@ -476,7 +526,7 @@ def _run_anomaly_bill_1(session: Session) -> None:
     bill = (
         session.query(LoanData)
         .filter(LoanData.user_id == user.id)
-        .order_by(LoanData.agreement_date.desc())
+        .order_by(LoanData.bill_start_date.desc())
         .first()
     )
     run_anomaly(session, bill)
@@ -519,7 +569,10 @@ def test_generate_bill_3(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02").date(),
+        card_type="ruby",
     )
 
     create_card_swipe(
@@ -554,7 +607,10 @@ def test_emi_creation(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, card_type="ruby", user_id=a.id, card_activation_date=parse_date("2020-04-02")
+        session=session,
+        card_type="ruby",
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02").date(),
     )
 
     create_card_swipe(
@@ -571,7 +627,7 @@ def test_emi_creation(session: Session) -> None:
     all_emis = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
-        .order_by(CardEmis.due_date.asc())
+        .order_by(CardEmis.emi_number.asc())
         .all()
     )  # Get the latest emi of that user.
 
@@ -586,7 +642,10 @@ def test_subsequent_emi_creation(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, card_type="ruby", user_id=a.id, card_activation_date=parse_date("2020-04-02")
+        session=session,
+        card_type="ruby",
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02").date(),
     )
 
     create_card_swipe(
@@ -614,7 +673,7 @@ def test_subsequent_emi_creation(session: Session) -> None:
     all_emis = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
-        .order_by(CardEmis.due_date.asc())
+        .order_by(CardEmis.emi_number.asc())
         .all()
     )  # Get the latest emi of that user.
 
@@ -635,7 +694,10 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
 
     # assign card
     uc = create_user_card(
-        session=session, card_type="ruby", user_id=a.id, card_activation_date=parse_date("2020-05-01")
+        session=session,
+        card_type="ruby",
+        user_id=a.id,
+        card_activation_date=parse_date("2020-05-01").date(),
     )
 
     create_card_swipe(
@@ -659,16 +721,21 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     all_emis_query = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
-        .order_by(CardEmis.due_date.asc())
+        .order_by(CardEmis.emi_number.asc())
     )
-    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    emis_dict = [u.as_dict() for u in all_emis_query.all()]
     first_emi = emis_dict[0]
     assert first_emi["interest_current_month"] == 84
     assert first_emi["interest_next_month"] == 96
 
+    _, lender_payable = get_account_balance_from_str(
+        session, book_string=f"{uc.id}/card/lender_payable/l"
+    )
+    assert lender_payable == Decimal("6000")
+
     # Do Full Payment
-    payment_date = parse_date("2020-06-30")
-    amount = Decimal(6180)
+    payment_date = parse_date("2020-07-30")
+    amount = Decimal(6360)
     bill = payment_received(
         session=session,
         user_card=uc,
@@ -677,6 +744,13 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
         payment_request_id="a123",
     )
 
+    _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+    assert lender_amount == Decimal("0")
+    _, lender_payable = get_account_balance_from_str(
+        session, book_string=f"{uc.id}/card/lender_payable/l"
+    )
+    assert lender_payable == Decimal("-359.5")
+
     # Refresh Schedule
     # slide_payments(session, a.id)
 
@@ -684,11 +758,50 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     all_emis_query = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
-        .order_by(CardEmis.due_date.asc())
+        .order_by(CardEmis.emi_number.asc())
     )
-    emis_dict = [u.__dict__ for u in all_emis_query.all()]
-    second_emi = emis_dict[1]
-    assert second_emi["total_due_amount"] == 0
+    emis_dict = [u.as_dict() for u in all_emis_query.all()]
+
+    assert emis_dict[0]["due_date"] == parse_date("2020-06-16").date()
+    assert emis_dict[0]["total_due_amount"] == 680
+    assert emis_dict[0]["due_amount"] == 500
+    assert emis_dict[0]["total_closing_balance"] == 6000
+    assert emis_dict[0]["total_closing_balance_post_due_date"] == 6180
+    assert emis_dict[0]["interest_received"] == 180
+    assert emis_dict[0]["payment_received"] == 500
+    assert emis_dict[0]["interest"] == 180
+    assert emis_dict[0]["interest_current_month"] == 84
+    assert emis_dict[0]["interest_next_month"] == 96
+    assert emis_dict[1]["due_date"] == parse_date("2020-07-17").date()
+    assert emis_dict[1]["total_due_amount"] == 680
+    assert emis_dict[1]["due_amount"] == 500
+    assert emis_dict[1]["total_closing_balance"] == 5500
+    assert emis_dict[1]["total_closing_balance_post_due_date"] == 5680
+    assert emis_dict[1]["interest_received"] == 180
+    assert emis_dict[1]["payment_received"] == 500
+    assert emis_dict[1]["interest"] == 180
+    assert emis_dict[1]["interest_current_month"] == 78
+    assert emis_dict[1]["interest_next_month"] == 102
+    assert emis_dict[2]["due_date"] == parse_date("2020-08-17").date()
+    assert emis_dict[2]["total_due_amount"] == 5000
+    assert emis_dict[2]["due_amount"] == 5000
+    assert emis_dict[2]["total_closing_balance"] == 0
+    assert emis_dict[2]["total_closing_balance_post_due_date"] == 0
+    assert emis_dict[2]["interest_received"] == 0
+    assert emis_dict[2]["payment_received"] == 5000
+    assert emis_dict[2]["interest"] == 0
+    assert emis_dict[2]["interest_current_month"] == 0
+    assert emis_dict[2]["interest_next_month"] == 0
+    assert emis_dict[3]["due_date"] == parse_date("2020-09-17").date()
+    assert emis_dict[3]["total_due_amount"] == 0
+    assert emis_dict[3]["due_amount"] == 0
+    assert emis_dict[3]["total_closing_balance"] == 0
+    assert emis_dict[3]["total_closing_balance_post_due_date"] == 0
+    assert emis_dict[3]["interest_received"] == 0
+    assert emis_dict[3]["payment_received"] == 0
+    assert emis_dict[3]["interest"] == 0
+    assert emis_dict[3]["interest_current_month"] == 0
+    assert emis_dict[3]["interest_next_month"] == 0
 
 
 def test_with_live_user_loan_id_4134872(session: Session) -> None:
@@ -704,13 +817,11 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     session.flush()
 
     # assign card
-    # 25 days to enforce 15th june as first due date
     uc = create_user_card(
         session=session,
         card_type="ruby",
         user_id=a.id,
-        card_activation_date=parse_date("2020-05-20"),
-        interest_free_period_in_days=25,
+        card_activation_date=parse_date("2020-05-01").date(),
     )
 
     # Card transactions
@@ -892,20 +1003,32 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     all_emis_query = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
-        .order_by(CardEmis.due_date.asc())
+        .order_by(CardEmis.emi_number.asc())
     )
-    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    emis_dict = [u.as_dict() for u in all_emis_query.all()]
+
+    _, lender_payable = get_account_balance_from_str(
+        session, book_string=f"{uc.id}/card/lender_payable/l"
+    )
+    assert lender_payable == Decimal("12914")
 
     # Do Partial Payment
     payment_date = parse_date("2020-06-18 06:55:00")
     amount = Decimal(324)
-    bill = payment_received(
+    payment_received(
         session=session,
         user_card=uc,
         payment_amount=amount,
         payment_date=payment_date,
         payment_request_id="a123",
     )
+
+    _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+    assert lender_amount == Decimal("0")
+    _, lender_payable = get_account_balance_from_str(
+        session, book_string=f"{uc.id}/card/lender_payable/l"
+    )
+    assert lender_payable == Decimal("12590.5")
 
     # Refresh Schedule
     # slide_payments(session, a.id)
@@ -914,9 +1037,9 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     all_emis_query = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
-        .order_by(CardEmis.due_date.asc())
+        .order_by(CardEmis.emi_number.asc())
     )
-    emis_dict = [u.__dict__ for u in all_emis_query.all()]
+    emis_dict = [u.as_dict() for u in all_emis_query.all()]
     first_emi = emis_dict[0]
     second_emi = emis_dict[1]
 
@@ -932,6 +1055,12 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
 
     #  Pay 500 rupees
     user_card = get_user_card(session, 99)
+
+    _, lender_payable = get_account_balance_from_str(
+        session, book_string=f"{user_card.id}/card/lender_payable/l"
+    )
+    assert lender_payable == Decimal("787")
+
     payment_date = parse_date("2020-05-14 19:23:11")
     amount = Decimal("886")
     unpaid_bills = user_card.get_unpaid_bills()
@@ -942,6 +1071,13 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
         payment_date=payment_date,
         payment_request_id="a123",
     )
+
+    _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+    assert lender_amount == Decimal("0")
+    _, lender_payable = get_account_balance_from_str(
+        session, book_string=f"{user_card.id}/card/lender_payable/l"
+    )
+    assert lender_payable == Decimal("-98.5")
 
     bill = unpaid_bills[0]
 
@@ -976,6 +1112,19 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
     payment_date = parse_date("2020-06-14 19:23:11")
     amount = Decimal("3008.34")
     unpaid_bills = user_card.get_unpaid_bills()
+    first_bill = unpaid_bills[0]
+    second_bill = unpaid_bills[1]
+
+    _, interest_earned = get_account_balance_from_str(
+        session, book_string=f"{first_bill.id}/bill/interest_earned/r"
+    )
+    assert interest_earned == Decimal("61.34")
+
+    _, interest_earned = get_account_balance_from_str(
+        session, book_string=f"{second_bill.id}/bill/interest_earned/r"
+    )
+    assert interest_earned == Decimal("60.33")
+
     payment_received(
         session=session,
         user_card=user_card,
@@ -984,21 +1133,27 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
         payment_request_id="a123",
     )
 
-    first_bill = unpaid_bills[0]
-    second_bill = unpaid_bills[1]
+    _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+    assert lender_amount == Decimal("0")
+    _, lender_payable = get_account_balance_from_str(
+        session, book_string=f"{user_card.id}/card/lender_payable/l"
+    )
+    assert lender_payable == Decimal("-220.84")
 
     _, interest_earned = get_account_balance_from_str(
         session, book_string=f"{first_bill.id}/bill/interest_earned/r"
     )
-    assert interest_earned == Decimal("61.34")  # 30 Interest got removed from first bill.
+    # 30.67 Interest got removed from first bill.
+    assert interest_earned == Decimal("30.67")
 
     _, interest_earned = get_account_balance_from_str(
         session, book_string=f"{second_bill.id}/bill/interest_earned/r"
     )
-    assert interest_earned == Decimal("60.33")
+    assert interest_earned == Decimal(0)
 
     assert is_bill_closed(session, first_bill) is True
-    assert is_bill_closed(session, second_bill) is True  # 90 got settled in new bill.
+    # 90 got settled in new bill.
+    assert is_bill_closed(session, second_bill) is True
 
 
 def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
@@ -1009,6 +1164,12 @@ def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
     _generate_bill_2(session)
 
     user_card = get_user_card(session, 99)
+
+    _, lender_payable = get_account_balance_from_str(
+        session, book_string=f"{user_card.id}/card/lender_payable/l"
+    )
+    assert lender_payable == Decimal("2787")
+
     payment_date = parse_date(
         "2020-06-18 19:23:11"
     )  # Payment came after due date. Interest won't get reversed.
@@ -1022,13 +1183,21 @@ def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
         payment_request_id="a123",
     )
 
+    _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+    assert lender_amount == Decimal("0")
+    _, lender_payable = get_account_balance_from_str(
+        session, book_string=f"{user_card.id}/card/lender_payable/l"
+    )
+    assert lender_payable == Decimal("-129.17")
+
     first_bill = unpaid_bills[0]
     second_bill = unpaid_bills[1]
 
     _, interest_earned = get_account_balance_from_str(
         session, book_string=f"{first_bill.id}/bill/interest_earned/r"
     )
-    assert interest_earned == Decimal("61.34")  # 30 Interest did not get removed.
+    # 30 Interest did not get removed.
+    assert interest_earned == Decimal("61.34")
 
     _, interest_earned = get_account_balance_from_str(
         session, book_string=f"{second_bill.id}/bill/interest_earned/r"
@@ -1041,6 +1210,11 @@ def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
 def _pay_minimum_amount_bill_2(session: Session) -> None:
     user_card = get_user_card(session, 99)
 
+    _, lender_payable = get_account_balance_from_str(
+        session, book_string=f"{user_card.id}/card/lender_payable/l"
+    )
+    assert lender_payable == Decimal("1500")
+
     # Pay 10 more. and 100 for late fee.
     payment_received(
         session=session,
@@ -1049,6 +1223,14 @@ def _pay_minimum_amount_bill_2(session: Session) -> None:
         payment_date=parse_date("2020-06-20"),
         payment_request_id="a123",
     )
+
+    _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+    assert lender_amount == Decimal("0")
+    _, lender_payable = get_account_balance_from_str(
+        session, book_string=f"{user_card.id}/card/lender_payable/l"
+    )
+    assert lender_payable == Decimal("1390.5")
+
     balance_paid = (
         session.query(LedgerTriggerEvent)
         .order_by(LedgerTriggerEvent.post_date.desc())
@@ -1080,7 +1262,6 @@ def test_view(session: Session) -> None:
     # assert transactions[0]["amount"] == Decimal(1500)
 
 
-#
 # def test_refund_1(session: Session) -> None:
 #     test_generate_bill_1(session)
 #     _generate_bill_3(session)
@@ -1093,18 +1274,117 @@ def test_view(session: Session) -> None:
 #     assert amount == Decimal("1061.34")  # 1000 refunded with interest 60
 
 
-# def test_lender_incur(session: Session) -> None:
-#     test_refund_1(session)
-#     status = lender_interest_incur(session)
-#     uc = get_user_card(session, 99)
-#     _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
-#     assert amount == Decimal("2054.74")  # on date 2020-06-28
+def test_lender_incur(session: Session) -> None:
+    a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas")
+    session.add(a)
+    session.flush()
+
+    # assign card
+    uc = create_user_card(
+        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+    )
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-06-08 19:23:11"),
+        amount=Decimal(1000),
+        description="BigBasket.com",
+    )
+    bill_id = swipe.loan_id
+    _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
+    assert unbilled_amount == 1000
+    bill = bill_generate(session=session, user_card=uc)
+    assert bill.table.is_generated is True
+
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-06-29 19:23:11"),
+        amount=Decimal(1500),
+        description="BigBasket.com",
+    )
+    bill = bill_generate(session=session, user_card=uc)
+    assert bill.table.is_generated is True
+
+    lender_interest_incur(
+        session, from_date=parse_date("2020-06-01").date(), to_date=parse_date("2020-06-30").date()
+    )
+    uc = get_user_card(session, 99)
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
+    assert amount == Decimal("2511.65")
+
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_interest/e")
+    assert amount == Decimal("11.65")
+
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-07-29 19:23:11"),
+        amount=Decimal(1500),
+        description="Flipkart.com",
+    )
+    lender_interest_incur(
+        session, from_date=parse_date("2020-07-01").date(), to_date=parse_date("2020-07-31").date()
+    )
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_interest/e")
+    assert amount == Decimal("51.81")
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
+    assert amount == Decimal("4051.81")
+
+
+def test_lender_incur_two(session: Session) -> None:
+    a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas")
+    session.add(a)
+    session.flush()
+
+    # assign card
+    uc = create_user_card(
+        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+    )
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-07-29 19:23:11"),
+        amount=Decimal(500),
+        description="BigBasket.com",
+    )
+    swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-07-29 10:23:11"),
+        amount=Decimal(500),
+        description="BigBasket.com",
+    )
+    bill = bill_generate(session=session, user_card=uc)
+    assert bill.table.is_generated is True
+
+    lender_interest_incur(
+        session, from_date=parse_date("2020-07-01").date(), to_date=parse_date("2020-07-31").date()
+    )
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
+    assert amount == Decimal("1000.99")
+
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_interest/e")
+    assert amount == Decimal("0.99")
 
 
 def test_prepayment(session: Session) -> None:
     test_generate_bill_1(session)
     uc = get_user_card(session, 99)
     user_card_id = uc.id
+
+    # Check if amount is adjusted correctly in schedule
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.emi_number.asc())
+    )
+    emis_dict = [u.as_dict() for u in all_emis_query.all()]
+
+    _, lender_payable = get_account_balance_from_str(
+        session, book_string=f"{uc.id}/card/lender_payable/l"
+    )
+    assert lender_payable == Decimal("1000")
 
     # prepayment of rs 2000 done
     payment_date = parse_date("2020-05-03")
@@ -1117,6 +1397,26 @@ def test_prepayment(session: Session) -> None:
         payment_request_id="a123",
     )
 
+    _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+    assert lender_amount == Decimal("0")
+    _, lender_payable = get_account_balance_from_str(
+        session, book_string=f"{uc.id}/card/lender_payable/l"
+    )
+    assert lender_payable == Decimal("-999.5")
+
+    # Check if amount is adjusted correctly in schedule
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.emi_number.asc())
+    )
+    emis_dict = [u.as_dict() for u in all_emis_query.all()]
+
+    _, prepayment_amount = get_account_balance_from_str(
+        session, book_string=f"{user_card_id}/card/pre_payment/l"
+    )
+    assert prepayment_amount == Decimal("969.33")
+
     swipe = create_card_swipe(
         session=session,
         user_card=uc,
@@ -1126,12 +1426,23 @@ def test_prepayment(session: Session) -> None:
     )
     bill_id = swipe.loan_id
 
+    emi_payment_mapping = (
+        session.query(EmiPaymentMapping).filter(EmiPaymentMapping.card_id == user_card_id).all()
+    )
+    first_payment_mapping = emi_payment_mapping[0]
+    assert first_payment_mapping.emi_number == 1
+    assert first_payment_mapping.interest_received == Decimal(0)
+    assert first_payment_mapping.principal_received == Decimal(1000)
+
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 1000
-
     bill = bill_generate(session=session, user_card=uc)
-
     assert bill.table.is_generated is True
+
+    _, prepayment_amount = get_account_balance_from_str(
+        session, book_string=f"{user_card_id}/card/pre_payment/l"
+    )
+    assert prepayment_amount == Decimal("0")
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     # Should be 0 because it has moved to billed account.
@@ -1142,13 +1453,516 @@ def test_prepayment(session: Session) -> None:
     )
     assert billed_amount == Decimal("30.67")
 
-    emi_payment_mapping = (
-        session.query(EmiPaymentMapping).filter(EmiPaymentMapping.card_id == user_card_id).all()
+
+#
+# def test_writeoff(session: Session) -> None:
+#     a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+#     session.add(a)
+#     session.flush()
+#
+#     # assign card
+#     uc = create_user_card(
+#         session=session, user_id=a.id, card_activation_date=parse_date("2020-03-02"), card_type="ruby",
+#     )
+#
+#     user_card_id = uc.id
+#
+#     swipe = create_card_swipe(
+#         session=session,
+#         user_card=uc,
+#         txn_time=parse_date("2020-03-08 19:23:11"),
+#         amount=Decimal(1000),
+#         description="BigBasket.com",
+#     )
+#     bill = bill_generate(session=session, user_card=uc)
+#     assert bill.table.is_generated is True
+#
+#     swipe = create_card_swipe(
+#         session=session,
+#         user_card=uc,
+#         txn_time=parse_date("2020-04-08 19:23:11"),
+#         amount=Decimal(1500),
+#         description="BigBasket.com",
+#     )
+#
+#     _, prepayment_amount = get_account_balance_from_str(
+#         session, book_string=f"{user_card_id}/card/pre_payment/l"
+#     )
+#     bill = bill_generate(session=session, user_card=uc)
+#     assert bill.table.is_generated is True
+#
+#     swipe = create_card_swipe(
+#         session=session,
+#         user_card=uc,
+#         txn_time=parse_date("2020-05-08 19:23:11"),
+#         amount=Decimal(1200),
+#         description="BigBasket.com",
+#     )
+#     bill = bill_generate(session=session, user_card=uc)
+#     assert bill.table.is_generated is True
+#     unpaid_bills = uc.get_unpaid_bills()
+#     bill = unpaid_bills[0]
+#
+#     lender_interest_incur(session, parse_date("2020-06-01 19:00:00"))
+#     write_off_payment(session, uc)
+#
+#     _, lender_payable_amount = get_account_balance_from_str(
+#         session, book_string=f"{user_card_id}/card/lender_payable/l"
+#     )
+#     assert lender_payable_amount == Decimal("0")
+#     _, redcarpet_amount = get_account_balance_from_str(
+#         session, book_string=f"{user_card_id}/redcarpet/redcarpet_account/a"
+#     )
+#     assert redcarpet_amount == Decimal("-3748.68")
+#     _, writeoff_amount = get_account_balance_from_str(
+#         session, book_string=f"{user_card_id}/card/writeoff_expenses/e"
+#     )
+#     assert writeoff_amount == Decimal("3748.68")
+#     _, bad_amount = get_account_balance_from_str(
+#         session, book_string=f"{user_card_id}/card/bad_debt_allowance/ca"
+#     )
+#     assert bad_amount == Decimal("3748.68")
+#
+#
+# def test_writeoff_recovery_one(session: Session) -> None:
+#     test_writeoff(session)
+#     uc = get_user_card(session, 99)
+#     payment_received(
+#         session,
+#         uc,
+#         Decimal("3748.68"),
+#         payment_date=parse_date("2020-07-01"),
+#         payment_request_id="abcde",
+#     )
+#     user_card_id = uc.id
+#     _, writeoff_amount = get_account_balance_from_str(
+#         session, book_string=f"{user_card_id}/card/writeoff_expenses/e"
+#     )
+#     assert writeoff_amount == Decimal("0")
+#     _, bad_amount = get_account_balance_from_str(
+#         session, book_string=f"{user_card_id}/card/bad_debt_allowance/ca"
+#     )
+#     assert bad_amount == Decimal("0")
+#     _, pg_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+#     assert pg_amount == Decimal("3748.18")
+#
+#
+# def test_writeoff_recovery_two(session: Session) -> None:
+#     test_writeoff(session)
+#     uc = get_user_card(session, 99)
+#     user_card_id = uc.id
+#
+#     payment_received(
+#         session, uc, Decimal("3000"), payment_date=parse_date("2020-07-01"), payment_request_id="abcde",
+#     )
+#     _, writeoff_amount = get_account_balance_from_str(
+#         session, book_string=f"{user_card_id}/card/writeoff_expenses/e"
+#     )
+#     assert writeoff_amount == Decimal("748.68")
+#     _, bad_amount = get_account_balance_from_str(
+#         session, book_string=f"{user_card_id}/card/bad_debt_allowance/ca"
+#     )
+#     assert bad_amount == Decimal("748.68")
+#     _, pg_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+#     assert pg_amount == Decimal("2999.50")
+#
+
+
+def test_moratorium(session: Session) -> None:
+    a = User(
+        id=38612,
+        performed_by=123,
+        name="Ananth",
+        fullname="Ananth Venkatesh",
+        nickname="Ananth",
+        email="ananth@redcarpetup.com",
     )
-    first_payment_mapping = emi_payment_mapping[0]
-    assert first_payment_mapping.emi_number == 1
-    assert first_payment_mapping.interest_received == Decimal("30.67")
-    assert first_payment_mapping.principal_received == Decimal("1969.33")
+    session.add(a)
+    session.flush()
+
+    # assign card
+    # 25 days to enforce 15th june as first due date
+    uc = create_user_card(
+        session=session,
+        card_type="ruby",
+        user_id=a.id,
+        card_activation_date=parse_date("2020-01-20").date(),
+        interest_free_period_in_days=25,
+    )
+
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-01-24 16:29:25"),
+        amount=Decimal(2500),
+        description="WWW YESBANK IN         GURGAON       IND",
+    )
+
+    # Generate bill
+    generate_date = parse_date("2020-02-01").date()
+    bill_may = bill_generate(session=session, user_card=uc)
+
+    # Check if amount is adjusted correctly in schedule
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.emi_number.asc())
+    )
+    emis_dict = [u.as_dict() for u in all_emis_query.all()]
+
+    check_moratorium_eligibility(
+        session, {"user_id": a.id, "start_date": "2020-03-01", "months_to_be_inserted": 3}
+    )
+
+    # Check if scehdule has been updated according to moratorium
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.emi_number.asc())
+    )
+    emis_dict = [u.as_dict() for u in all_emis_query.all()]
+
+    last_emi = emis_dict[-1]
+    assert last_emi["emi_number"] == 15
+
+
+def test_refresh_schedule(session: Session) -> None:
+    a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    session.add(a)
+    session.flush()
+
+    # assign card
+    uc = create_user_card(
+        session=session,
+        card_type="ruby",
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02").date(),
+    )
+
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-04-08 19:23:11"),
+        amount=Decimal(6000),
+        description="BigBasket.com",
+    )
+
+    generate_date = parse_date("2020-05-01").date()
+    bill_april = bill_generate(session=session, user_card=uc)
+
+    _, lender_payable = get_account_balance_from_str(
+        session, book_string=f"{uc.id}/card/lender_payable/l"
+    )
+    assert lender_payable == Decimal("6000")
+
+    payment_date = parse_date("2020-05-03")
+    amount = Decimal(2000)
+    payment_received(
+        session=session,
+        user_card=uc,
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id="a123",
+    )
+
+    _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+    assert lender_amount == Decimal("0")
+    _, lender_payable = get_account_balance_from_str(
+        session, book_string=f"{uc.id}/card/lender_payable/l"
+    )
+    assert lender_payable == Decimal("4000.5")
+
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-08 19:23:11"),
+        amount=Decimal(6000),
+        description="BigBasket.com",
+    )
+
+    generate_date = parse_date("2020-06-01").date()
+    bill_may = bill_generate(session=session, user_card=uc)
+
+    # Get emi list post few bill creations
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.emi_number.asc())
+    )
+    pre_emis_dict = [u.as_dict() for u in all_emis_query.all()]
+
+    # Refresh schedule
+    refresh_schedule(session, a.id)
+
+    # Get list post refresh
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.emi_number.asc())
+    )
+    post_emis_dict = [u.as_dict() for u in all_emis_query.all()]
+
+    second_emi_pre_dict = pre_emis_dict[1]
+    second_emi_post_dict = post_emis_dict[1]
+    assert second_emi_pre_dict["interest_received"] == Decimal(360)
+    assert second_emi_post_dict["interest_received"] == Decimal(360)
+
+
+def test_moratorium_schedule(session: Session) -> None:
+    a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    session.add(a)
+    session.flush()
+
+    # assign card
+    uc = create_user_card(
+        session=session,
+        card_type="ruby",
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02").date(),
+    )
+
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-04-08 19:23:11"),
+        amount=Decimal(6000),
+        description="BigBasket.com",
+    )
+
+    generate_date = parse_date("2020-05-01").date()
+    bill_april = bill_generate(session=session, user_card=uc)
+
+    _, lender_payable = get_account_balance_from_str(
+        session, book_string=f"{uc.id}/card/lender_payable/l"
+    )
+    assert lender_payable == Decimal("6000")
+
+    payment_date = parse_date("2020-05-03")
+    amount = Decimal(2000)
+    payment_received(
+        session=session,
+        user_card=uc,
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id="a123",
+    )
+
+    _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+    assert lender_amount == Decimal("0")
+    _, lender_payable = get_account_balance_from_str(
+        session, book_string=f"{uc.id}/card/lender_payable/l"
+    )
+    assert lender_payable == Decimal("4000.5")
+
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-05-08 19:23:11"),
+        amount=Decimal(6000),
+        description="BigBasket.com",
+    )
+
+    generate_date = parse_date("2020-06-01").date()
+    bill_may = bill_generate(session=session, user_card=uc)
+
+    # Get emi list post few bill creations
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.emi_number.asc())
+    )
+    pre_emis_dict = [u.as_dict() for u in all_emis_query.all()]
+
+    # Give moratorium to user
+    m = LoanMoratorium.new(
+        session, card_id=uc.id, start_date=parse_date("2020-09-01"), end_date=parse_date("2020-12-01"),
+    )
+
+    # Refresh schedule
+    refresh_schedule(session, a.id)
+
+    # Get list post refresh
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.emi_number.asc())
+    )
+    post_emis_dict = [u.as_dict() for u in all_emis_query.all()]
+
+    second_emi_pre_dict = pre_emis_dict[1]
+    second_emi_post_dict = post_emis_dict[1]
+    assert second_emi_pre_dict["interest_received"] == Decimal(360)
+    assert second_emi_post_dict["interest_received"] == Decimal(360)
+
+
+def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
+    a = User(
+        id=38613,
+        performed_by=123,
+        name="Ananth",
+        fullname="Ananth Venkatesh",
+        nickname="Ananth",
+        email="ananth@redcarpetup.com",
+    )
+    session.add(a)
+    session.flush()
+
+    user_card = create_user_card(
+        session,
+        user_id=a.id,
+        card_type="ruby",
+        card_activation_date=parse_date("2020-01-20").date(),
+        interest_free_period_in_days=25,
+    )
+
+    create_card_swipe(
+        session=session,
+        user_card=user_card,
+        txn_time=parse_date("2020-01-24 16:29:25"),
+        amount=Decimal(2500),
+        description="WWW YESBANK IN         GURGAON       IND",
+    )
+
+    # Generate bill
+    bill_generate(session=session, user_card=user_card)
+
+    assert (
+        LoanMoratorium.is_in_moratorium(
+            session, card_id=user_card.id, date_to_check_against=parse_date("2020-02-21")
+        )
+        is False
+    )
+
+    assert user_card.get_min_for_schedule(parse_date("2020-02-01")) == 284
+
+    # Give moratorium
+    m = LoanMoratorium.new(
+        session,
+        card_id=user_card.id,
+        start_date=parse_date("2020-01-20"),
+        end_date=parse_date("2020-03-20"),
+    )
+
+    assert (
+        LoanMoratorium.is_in_moratorium(
+            session, card_id=user_card.id, date_to_check_against=parse_date("2020-02-21")
+        )
+        is True
+    )
+
+    # Date is outside the moratorium period
+    assert (
+        LoanMoratorium.is_in_moratorium(
+            session, card_id=user_card.id, date_to_check_against=parse_date("2020-03-21")
+        )
+        is False
+    )
+    assert user_card.get_min_for_schedule(parse_date("2020-02-01")) == 0  # 0 after moratorium
+
+
+def test_moratorium_live_user_1836540(session: Session) -> None:
+    a = User(
+        id=1836540,
+        performed_by=123,
+        name="Mohammad Shahbaz Mohammad Shafi Qureshi",
+        fullname="Mohammad Shahbaz Mohammad Shafi Qureshi",
+        nickname="Mohammad Shahbaz Mohammad Shafi Qureshi",
+        email="shahbazq797@gmail.com",
+    )
+    session.add(a)
+    session.flush()
+
+    # assign card
+    user_card = create_user_card(
+        session=session,
+        card_type="ruby",
+        user_id=a.id,
+        # 16th March actual
+        card_activation_date=parse_date("2020-03-01").date(),
+    )
+
+    # Give moratorium
+    m = LoanMoratorium.new(
+        session,
+        card_id=user_card.id,
+        start_date=parse_date("2020-04-01"),
+        end_date=parse_date("2020-06-01"),
+    )
+
+    create_card_swipe(
+        session=session,
+        user_card=user_card,
+        txn_time=parse_date("2020-03-19 21:33:53"),
+        amount=Decimal(10),
+        description="TRUEBALANCE IO         GURGAON       IND",
+    )
+
+    create_card_swipe(
+        session=session,
+        user_card=user_card,
+        txn_time=parse_date("2020-03-24 14:01:35"),
+        amount=Decimal(100),
+        description="PAY*TRUEBALANCE IO     GURGAON       IND",
+    )
+
+    bill_april = bill_generate(session=session, user_card=user_card)
+
+    create_card_swipe(
+        session=session,
+        user_card=user_card,
+        txn_time=parse_date("2020-04-03 17:41:43"),
+        amount=Decimal(4),
+        description="TRUEBALANCE IO         GURGAON       IND",
+    )
+
+    create_card_swipe(
+        session=session,
+        user_card=user_card,
+        txn_time=parse_date("2020-04-12 22:02:47"),
+        amount=Decimal(52),
+        description="PAYU PAYMENTS PVT LTD  0001243054000 IND",
+    )
+
+    bill_may = bill_generate(session=session, user_card=user_card)
+
+    # bill_june = bill_generate(session=session, user_card=user_card)
+
+    # Get emi list post few bill creations
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.emi_number.asc())
+        .all()
+    )
+
+    last_emi = all_emis_query[-1]
+    out_of_moratorium_emi = all_emis_query[2]
+    assert last_emi.emi_number == 15
+    assert out_of_moratorium_emi.total_due_amount == Decimal("22.99")
+
+
+def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
+    test_moratorium_live_user_1836540(session)
+    user_card = get_user_card(session, 1836540)
+    # Extend tenure to 18 months
+    extend_tenure(session, user_card, 18)
+
+    # Get emi list post tenure extension
+    all_emis = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.emi_number.asc())
+        .all()
+    )
+
+    last_emi = all_emis[-1]
+    second_last_emi = all_emis[-2]
+    # 110/18 = 6.11 + 56/18 = 3.11 == 9.22
+    assert second_last_emi.due_amount == Decimal("9.22")
+    # 56/18 = 3.11
+    assert last_emi.due_amount == Decimal("3.11")
+    # First cycle 18 emis, next bill 19 emis, 2 because of moratorium == 21
+    assert last_emi.emi_number == 21
 
 
 def test_generate_bill_1_flipkart_card(session: Session) -> None:

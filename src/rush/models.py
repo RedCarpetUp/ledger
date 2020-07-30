@@ -5,6 +5,7 @@ from typing import (
     Dict,
 )
 
+from pendulum import Date as PythonDate
 from pendulum import DateTime
 from pydantic.dataclasses import dataclass as py_dataclass
 from sqlalchemy import (
@@ -127,10 +128,11 @@ class UserCard(AuditMixin):
     card_activation_date = Column(Date, nullable=True)
     statement_period_in_days = Column(Integer, default=30, nullable=False)  # 30 days
     interest_free_period_in_days = Column(Integer, default=45, nullable=False)
+    rc_rate_of_interest_monthly = Column(Numeric, nullable=False)
+    lender_rate_of_interest_annual = Column(Numeric, nullable=False)
 
 
 class LedgerTriggerEvent(AuditMixin):
-
     __tablename__ = "ledger_trigger_event"
     name = Column(String(50))
     card_id = Column(Integer, ForeignKey(UserCard.id))
@@ -151,11 +153,11 @@ class LoanData(AuditMixin):
     __tablename__ = "loan_data"
     user_id = Column(Integer, ForeignKey(User.id))
     lender_id = Column(Integer, nullable=False)
-    agreement_date = Column(TIMESTAMP, nullable=False)
+    bill_start_date = Column(Date, nullable=False)
+    bill_close_date = Column(Date, nullable=False)
+    bill_tenure = Column(Integer, nullable=False, default=12)
     card_id = Column(Integer, ForeignKey(UserCard.id))
     is_generated = Column(Boolean, nullable=False, server_default="false")
-    rc_rate_of_interest_annual = Column(Numeric, nullable=False)  # Make this monthly only
-    lender_rate_of_interest_annual = Column(Numeric, nullable=False)
     principal = Column(Numeric, nullable=True)
     principal_instalment = Column(Numeric, nullable=True)
     interest_to_charge = Column(Numeric, nullable=True)
@@ -164,7 +166,7 @@ class LoanData(AuditMixin):
 @py_dataclass
 class LoanDataPy(AuditMixinPy):
     user_id: int
-    agreement_date: DateTime
+    bill_start_date: DateTime
     bill_generation_date: DateTime
 
 
@@ -196,6 +198,7 @@ class CardEmis(AuditMixin):
     interest_received = Column(Numeric, nullable=False, default=Decimal(0))
     payment_received = Column(Numeric, nullable=False, default=Decimal(0))
     payment_status = Column(String(length=10), nullable=False, default="UnPaid")
+    extra_details = Column(JSON, default=lambda: {})
 
 
 class EmiPaymentMapping(AuditMixin):
@@ -207,6 +210,28 @@ class EmiPaymentMapping(AuditMixin):
     interest_received = Column(Numeric, nullable=True, default=Decimal(0))
     late_fee_received = Column(Numeric, nullable=True, default=Decimal(0))
     principal_received = Column(Numeric, nullable=True, default=Decimal(0))
+    row_status = Column(String(length=10), nullable=False, default="active")
+
+
+class LoanMoratorium(AuditMixin):
+    __tablename__ = "loan_moratorium"
+
+    card_id = Column(Integer, ForeignKey(UserCard.id), nullable=False)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+
+    @classmethod
+    def is_in_moratorium(cls, session: Session, card_id: int, date_to_check_against: PythonDate) -> bool:
+        v = (
+            session.query(cls)
+            .filter(
+                cls.card_id == card_id,
+                date_to_check_against >= cls.start_date,
+                date_to_check_against <= cls.end_date,
+            )
+            .one_or_none()
+        )
+        return v is not None
 
 
 class RewardsCatalog(AuditMixin):

@@ -20,7 +20,7 @@ class FlipkartCard(BaseCard):
 
 
 class FlipkartBill(BaseBill):
-    def get_interest_to_charge(self) -> Decimal:
+    def get_interest_to_charge(self, rate_of_interest: Decimal) -> Decimal:
         flipkart_transaction_amount = (
             self.session.query(func.sum(CardTransaction.amount))
             .filter(CardTransaction.loan_id == self.id, CardTransaction.description == "Flipkart")
@@ -29,7 +29,7 @@ class FlipkartBill(BaseBill):
         )
         principal_without_flipkart_txns = self.table.principal - flipkart_transaction_amount
         interest_on_new_principal = mul(
-            principal_without_flipkart_txns, div(div(self.rc_rate_of_interest_annual, 12), 100)
+            principal_without_flipkart_txns, div(div(rate_of_interest, 12), 100)
         )
 
         not_rounded_emi = self.table.principal_instalment + interest_on_new_principal
