@@ -79,15 +79,15 @@ def test_user(session: Session) -> None:
 
 
 def test_lender_disbursal(session: Session) -> None:
-    amount = 100000
-    val = lender_disbursal(session, amount)
-    assert val == Decimal(100000)
+    lender_disbursal(session, 100000)
+    _, lender_capital_balance = get_account_balance_from_str(session, "62311/lender/lender_capital/l")
+    assert lender_capital_balance == Decimal(100000)
 
 
 def test_m2p_transfer(session: Session) -> None:
-    amount = 50000
-    val = m2p_transfer(session, amount)
-    assert val == Decimal(50000)
+    m2p_transfer(session, 50000)
+    _, lender_pool_balance = get_account_balance_from_str(session, "62311/lender/pool_balance/a")
+    assert lender_pool_balance == Decimal(50000)
 
 
 def test_card_swipe(session: Session) -> None:

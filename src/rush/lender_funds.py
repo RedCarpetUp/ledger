@@ -16,22 +16,18 @@ from rush.models import LedgerTriggerEvent
 from rush.utils import get_current_ist_time
 
 
-def lender_disbursal(session: Session, amount: Decimal) -> Decimal:
+def lender_disbursal(session: Session, amount: Decimal):
     lt = LedgerTriggerEvent(name="lender_disbursal", amount=amount, post_date=get_current_ist_time())
     session.add(lt)
     session.flush()
     lender_disbursal_event(session, lt)
-    _, lender_capital = get_account_balance_from_str(session, "62311/lender/lender_capital/l")
-    return lender_capital
 
 
-def m2p_transfer(session: Session, amount: Decimal) -> Decimal:
+def m2p_transfer(session: Session, amount: Decimal):
     lt = LedgerTriggerEvent(name="m2p_transfer", amount=amount, post_date=get_current_ist_time())
     session.add(lt)
     session.flush()
     m2p_transfer_event(session, lt)
-    _, lender_pool = get_account_balance_from_str(session, "62311/lender/pool_balance/a")
-    return lender_pool
 
 
 def lender_interest_incur(session: Session, from_date: Date, to_date: Date) -> bool:
