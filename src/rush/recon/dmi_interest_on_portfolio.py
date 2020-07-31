@@ -80,7 +80,7 @@ interst_calc AS (
     card_id, 
     rn, 
     balance as balance_with_interest, 
-    (interest_multiplier * balance) - balance as interest 
+    round((interest_multiplier * balance) - balance, 2) as interest 
   from 
     days_wise_balance 
   where 
@@ -90,7 +90,7 @@ interst_calc AS (
     d.card_id, 
     d.rn, 
     d.balance + i.interest as balance_with_interest, 
-    (d.balance + i.interest) * d.interest_multiplier - (d.balance + i.interest) as interest 
+    round((d.balance + i.interest) * d.interest_multiplier - (d.balance + i.interest), 2) as interest 
   from 
     days_wise_balance d, 
     interst_calc i 
