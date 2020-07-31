@@ -42,6 +42,7 @@ from rush.models import (
     UserPy,
 )
 from rush.payments import payment_received
+from rush.recon.revenue_earned import get_revenue_earned_in_a_period
 from rush.views import (
     bill_view,
     user_view,
@@ -471,6 +472,15 @@ def _generate_bill_2(session: Session) -> None:
         session, book_string=f"{first_bill.id}/bill/interest_accrued/r"
     )
     assert interest_due == Decimal("61.34")
+
+    total_revenue_earned = get_revenue_earned_in_a_period(
+        session, parse_date("2020-05-01").date(), parse_date("2020-05-31").date()
+    )
+    assert total_revenue_earned == Decimal("130.67")
+    total_revenue_earned = get_revenue_earned_in_a_period(
+        session, parse_date("2020-06-01").date(), parse_date("2020-06-30").date()
+    )
+    assert total_revenue_earned == Decimal("0")
 
 
 def _generate_bill_3(session: Session) -> None:
