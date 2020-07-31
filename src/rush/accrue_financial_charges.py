@@ -59,7 +59,7 @@ def can_remove_interest(
     latest_bill = user_card.get_latest_generated_bill()
     # First check if there is even interest accrued in the latest bill.
     _, interest_accrued = get_account_balance_from_str(
-        session, f"{latest_bill.id}/bill/interest_earned/r"
+        session, f"{latest_bill.id}/bill/interest_accrued/r"
     )
     if interest_accrued == 0:
         return False  # Nothing to remove.
@@ -172,14 +172,14 @@ def reverse_interest_charges(
             create_ledger_entry_from_str(
                 session,
                 event_id=event.id,
-                debit_book_str=f"{bill.id}/bill/interest_earned/r",
+                debit_book_str=f"{bill.id}/bill/interest_accrued/r",
                 credit_book_str=f"{bill.id}/bill/interest_receivable/a",
                 amount=interest_due,
             )
 
         # We need to remove the amount that got adjusted in interest. interest_earned account needs
         # to be removed by the interest_that_was_added amount.
-        d = {"acc_to_remove_from": f"{bill.id}/bill/interest_earned/r", "amount": settled_amount}
+        d = {"acc_to_remove_from": f"{bill.id}/bill/interest_accrued/r", "amount": settled_amount}
         inter_bill_movement_entries.append(d)  # Move amount from this bill to some other bill.
 
         if not is_bill_closed(

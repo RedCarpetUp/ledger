@@ -174,7 +174,7 @@ def test_generate_bill_1(session: Session) -> None:
     assert interest_due == Decimal("30.67")
 
     _, interest_due = get_account_balance_from_str(
-        session, book_string=f"{bill_id}/bill/interest_earned/r"
+        session, book_string=f"{bill_id}/bill/interest_accrued/r"
     )
     assert interest_due == Decimal("30.67")
 
@@ -468,7 +468,7 @@ def _generate_bill_2(session: Session) -> None:
     assert interest_due == Decimal("30.67")
 
     _, interest_due = get_account_balance_from_str(
-        session, book_string=f"{first_bill.id}/bill/interest_earned/r"
+        session, book_string=f"{first_bill.id}/bill/interest_accrued/r"
     )
     assert interest_due == Decimal("61.34")
 
@@ -1083,7 +1083,7 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
     assert interest_due == 0
 
     _, interest_earned = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/interest_earned/r"
+        session, book_string=f"{bill.id}/bill/interest_accrued/r"
     )
     assert interest_earned == 0
 
@@ -1112,12 +1112,12 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
     second_bill = unpaid_bills[1]
 
     _, interest_earned = get_account_balance_from_str(
-        session, book_string=f"{first_bill.id}/bill/interest_earned/r"
+        session, book_string=f"{first_bill.id}/bill/interest_accrued/r"
     )
     assert interest_earned == Decimal("61.34")
 
     _, interest_earned = get_account_balance_from_str(
-        session, book_string=f"{second_bill.id}/bill/interest_earned/r"
+        session, book_string=f"{second_bill.id}/bill/interest_accrued/r"
     )
     assert interest_earned == Decimal("60.33")
 
@@ -1137,13 +1137,13 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
     assert lender_payable == Decimal("-220.84")
 
     _, interest_earned = get_account_balance_from_str(
-        session, book_string=f"{first_bill.id}/bill/interest_earned/r"
+        session, book_string=f"{first_bill.id}/bill/interest_accrued/r"
     )
     # 30.67 Interest got removed from first bill.
     assert interest_earned == Decimal("30.67")
 
     _, interest_earned = get_account_balance_from_str(
-        session, book_string=f"{second_bill.id}/bill/interest_earned/r"
+        session, book_string=f"{second_bill.id}/bill/interest_accrued/r"
     )
     assert interest_earned == Decimal(0)
 
@@ -1190,13 +1190,13 @@ def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
     second_bill = unpaid_bills[1]
 
     _, interest_earned = get_account_balance_from_str(
-        session, book_string=f"{first_bill.id}/bill/interest_earned/r"
+        session, book_string=f"{first_bill.id}/bill/interest_accrued/r"
     )
     # 30 Interest did not get removed.
     assert interest_earned == Decimal("61.34")
 
     _, interest_earned = get_account_balance_from_str(
-        session, book_string=f"{second_bill.id}/bill/interest_earned/r"
+        session, book_string=f"{second_bill.id}/bill/interest_accrued/r"
     )
     assert interest_earned == Decimal("60.33")
     assert is_bill_closed(session, first_bill) is True

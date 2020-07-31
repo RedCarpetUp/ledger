@@ -298,7 +298,7 @@ def accrue_interest_event(
         session,
         event_id=event.id,
         debit_book_str=f"{bill.id}/bill/interest_receivable/a",
-        credit_book_str=f"{bill.id}/bill/interest_earned/r",
+        credit_book_str=f"{bill.id}/bill/interest_accrued/r",
         amount=amount,
     )
     # adjust the given interest in schedule
