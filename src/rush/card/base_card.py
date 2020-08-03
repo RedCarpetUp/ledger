@@ -106,7 +106,7 @@ class BaseCard:
         self.table = user_card
         self.__dict__.update(user_card.__dict__)
 
-    def _convert_to_bill_class_decorator(self, func) -> BaseBill:
+    def _convert_to_bill_class_decorator(func) -> BaseBill:
         def f(self):
             bills = func(self)
             if not bills:
