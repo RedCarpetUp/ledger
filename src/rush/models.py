@@ -70,18 +70,30 @@ def get_or_create(session: Session, model: Any, defaults: Dict[Any, Any] = None,
         return instance
 
 
+@py_dataclass
+class AuditMixinPy:
+    id: int
+    performed_by: int
+
+
+class Lenders(AuditMixin):
+    __tablename__ = "rc_lenders"
+    lender_name = Column(String(), nullable=False)
+    row_status = Column(String(length=10), nullable=False, default="active")
+
+
+@py_dataclass
+class LenderPy(AuditMixinPy):
+    lender_name: str
+    row_status: str
+
+
 class User(AuditMixin):
     __tablename__ = "users"
     name = Column(String(50))
     email = Column(String(100))
     fullname = Column(String(50))
     nickname = Column(String(12))
-
-
-@py_dataclass
-class AuditMixinPy:
-    id: int
-    performed_by: int
 
 
 @py_dataclass
@@ -126,6 +138,7 @@ class LedgerEntryPy(AuditMixinPy):
 class UserCard(AuditMixin):
     __tablename__ = "user_card"
     user_id = Column(Integer, ForeignKey(User.id), nullable=False)
+    lender_id = Column(Integer, ForeignKey(Lenders.id), nullable=False)
     card_type = Column(String, nullable=False)
     card_activation_date = Column(Date, nullable=True)
     statement_period_in_days = Column(Integer, default=30, nullable=False)  # 30 days
@@ -155,7 +168,7 @@ class LedgerEntry(AuditMixin):
 class LoanData(AuditMixin):
     __tablename__ = "loan_data"
     user_id = Column(Integer, ForeignKey(User.id))
-    lender_id = Column(Integer, nullable=False)
+    lender_id = Column(Integer, ForeignKey(Lenders.id), nullable=False)
     bill_start_date = Column(Date, nullable=False)
     bill_close_date = Column(Date, nullable=False)
     bill_tenure = Column(Integer, nullable=False, default=12)
@@ -235,17 +248,3 @@ class LoanMoratorium(AuditMixin):
             .one_or_none()
         )
         return v is not None
-
-
-class Lenders(AuditMixin):
-    __tablename__ = "rc_lenders"
-    lender_id = Column(Integer, nullable=False)
-    lender_name = Column(String(), nullable=False)
-    row_status = Column(String(length=10), nullable=False, default="active")
-
-
-@py_dataclass
-class LenderPy(AuditMixinPy):
-    lender_id: int
-    lender_name: str
-    row_status: str

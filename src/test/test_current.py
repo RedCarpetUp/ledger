@@ -81,13 +81,13 @@ def test_user(session: Session) -> None:
 
 
 def test_lenders(session: Session) -> None:
-    l1 = Lenders(id=1, performed_by=123, lender_id=62311, lender_name="DMI")
+    l1 = Lenders(id=62311, performed_by=123, lender_name="DMI")
     session.add(l1)
-    l2 = Lenders(id=2, performed_by=123, lender_id=1756833, lender_name="Redux")
+    l2 = Lenders(id=1756833, performed_by=123, lender_name="Redux")
     session.add(l2)
     session.flush()
     a = session.query(Lenders).first()
-    u = LenderPy(id=a.id, performed_by=123, lender_id=62311, lender_name="DMI", row_status="active")
+    u = LenderPy(id=a.id, performed_by=123, lender_name="DMI", row_status="active")
 
 
 def test_lender_disbursal(session: Session) -> None:
@@ -107,11 +107,13 @@ def test_m2p_transfer(session: Session) -> None:
 
 
 def test_card_swipe(session: Session) -> None:
+    test_lenders(session)
     uc = create_user_card(
         session=session,
         user_id=2,
         card_activation_date=parse_date("2020-05-01").date(),
         card_type="ruby",
+        lender_id=62311,
     )
     user_card_id = uc.id
 
@@ -147,6 +149,7 @@ def test_card_swipe(session: Session) -> None:
 
 
 def test_generate_bill_1(session: Session) -> None:
+    test_lenders(session)
     a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(a)
     session.flush()
@@ -157,6 +160,7 @@ def test_generate_bill_1(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
         card_type="ruby",
+        lender_id=62311,
     )
 
     swipe = create_card_swipe(
@@ -579,6 +583,7 @@ def test_generate_bill_2(session: Session) -> None:
 
 
 def test_generate_bill_3(session: Session) -> None:
+    test_lenders(session)
     a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(a)
     session.flush()
@@ -589,6 +594,7 @@ def test_generate_bill_3(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
         card_type="ruby",
+        lender_id=62311,
     )
 
     create_card_swipe(
@@ -617,6 +623,7 @@ def test_generate_bill_3(session: Session) -> None:
 
 
 def test_emi_creation(session: Session) -> None:
+    test_lenders(session)
     a = User(id=108, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(a)
     session.flush()
@@ -627,6 +634,7 @@ def test_emi_creation(session: Session) -> None:
         card_type="ruby",
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
+        lender_id=62311,
     )
 
     create_card_swipe(
@@ -652,6 +660,7 @@ def test_emi_creation(session: Session) -> None:
 
 
 def test_subsequent_emi_creation(session: Session) -> None:
+    test_lenders(session)
     a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(a)
     session.flush()
@@ -662,6 +671,7 @@ def test_subsequent_emi_creation(session: Session) -> None:
         card_type="ruby",
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
+        lender_id=62311,
     )
 
     create_card_swipe(
@@ -704,6 +714,7 @@ def test_subsequent_emi_creation(session: Session) -> None:
 
 
 def test_schedule_for_interest_and_payment(session: Session) -> None:
+    test_lenders(session)
     a = User(id=1991, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(a)
     session.flush()
@@ -714,6 +725,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
         card_type="ruby",
         user_id=a.id,
         card_activation_date=parse_date("2020-05-01").date(),
+        lender_id=62311,
     )
 
     create_card_swipe(
@@ -821,6 +833,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
 
 
 def test_with_live_user_loan_id_4134872(session: Session) -> None:
+    test_lenders(session)
     a = User(
         id=1764433,
         performed_by=123,
@@ -838,6 +851,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         card_type="ruby",
         user_id=a.id,
         card_activation_date=parse_date("2020-05-01").date(),
+        lender_id=62311,
     )
 
     # Card transactions
@@ -1291,6 +1305,7 @@ def test_view(session: Session) -> None:
 
 
 def test_lender_incur(session: Session) -> None:
+    test_lenders(session)
     a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas")
     session.add(a)
     session.flush()
@@ -1301,6 +1316,7 @@ def test_lender_incur(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
         card_type="ruby",
+        lender_id=62311,
     )
     swipe = create_card_swipe(
         session=session,
@@ -1352,6 +1368,7 @@ def test_lender_incur(session: Session) -> None:
 
 
 def test_lender_incur_two(session: Session) -> None:
+    test_lenders(session)
     a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas")
     session.add(a)
     session.flush()
@@ -1362,6 +1379,7 @@ def test_lender_incur_two(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
         card_type="ruby",
+        lender_id=62311,
     )
     swipe = create_card_swipe(
         session=session,
@@ -1484,7 +1502,7 @@ def test_prepayment(session: Session) -> None:
 #
 #     # assign card
 #     uc = create_user_card(
-#         session=session, user_id=a.id, card_activation_date=parse_date("2020-03-02"), card_type="ruby",
+#         session=session, user_id=a.id, card_activation_date=parse_date("2020-03-02"), card_type="ruby", lender_id = 62311,
 #     )
 #
 #     user_card_id = uc.id
@@ -1591,6 +1609,7 @@ def test_prepayment(session: Session) -> None:
 
 
 def test_moratorium(session: Session) -> None:
+    test_lenders(session)
     a = User(
         id=38612,
         performed_by=123,
@@ -1610,6 +1629,7 @@ def test_moratorium(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-01-20").date(),
         interest_free_period_in_days=25,
+        lender_id=62311,
     )
 
     create_card_swipe(
@@ -1649,6 +1669,7 @@ def test_moratorium(session: Session) -> None:
 
 
 def test_refresh_schedule(session: Session) -> None:
+    test_lenders(session)
     a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(a)
     session.flush()
@@ -1659,6 +1680,7 @@ def test_refresh_schedule(session: Session) -> None:
         card_type="ruby",
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
+        lender_id=62311,
     )
 
     create_card_swipe(
@@ -1731,6 +1753,7 @@ def test_refresh_schedule(session: Session) -> None:
 
 
 def test_moratorium_schedule(session: Session) -> None:
+    test_lenders(session)
     a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     session.add(a)
     session.flush()
@@ -1741,6 +1764,7 @@ def test_moratorium_schedule(session: Session) -> None:
         card_type="ruby",
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
+        lender_id=62311,
     )
 
     create_card_swipe(
@@ -1818,6 +1842,7 @@ def test_moratorium_schedule(session: Session) -> None:
 
 
 def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
+    test_lenders(session)
     a = User(
         id=38613,
         performed_by=123,
@@ -1835,6 +1860,7 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
         card_type="ruby",
         card_activation_date=parse_date("2020-01-20").date(),
         interest_free_period_in_days=25,
+        lender_id=62311,
     )
 
     create_card_swipe(
@@ -1883,6 +1909,7 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
 
 
 def test_moratorium_live_user_1836540(session: Session) -> None:
+    test_lenders(session)
     a = User(
         id=1836540,
         performed_by=123,
@@ -1901,6 +1928,7 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
         user_id=a.id,
         # 16th March actual
         card_activation_date=parse_date("2020-03-01").date(),
+        lender_id=62311,
     )
 
     # Give moratorium
@@ -2011,6 +2039,7 @@ def test_intermediate_bill_generation(session: Session) -> None:
 
 
 def test_transaction_before_activation(session: Session) -> None:
+    test_lenders(session)
     a = User(
         id=1836540,
         performed_by=123,
@@ -2023,7 +2052,7 @@ def test_transaction_before_activation(session: Session) -> None:
     session.flush()
 
     # assign card
-    user_card = create_user_card(session=session, card_type="ruby", user_id=a.id,)
+    user_card = create_user_card(session=session, card_type="ruby", user_id=a.id, lender_id=62311,)
 
     # Swipe before activation
     swipe = create_card_swipe(

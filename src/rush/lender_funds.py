@@ -58,8 +58,6 @@ def lender_interest_incur(session: Session, from_date: Date, to_date: Date) -> b
 
 def verify_lender(session: Session, lender_id: int) -> bool:
     lender = (
-        session.query(Lenders)
-        .filter(Lenders.lender_id == lender_id, Lenders.row_status == "active")
-        .first()
+        session.query(Lenders).filter(Lenders.id == lender_id, Lenders.row_status == "active").first()
     )
     return True if lender else False

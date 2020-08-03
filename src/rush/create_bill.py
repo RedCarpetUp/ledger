@@ -3,6 +3,7 @@ from decimal import Decimal
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.functions import user
 
 from rush.accrue_financial_charges import accrue_interest_on_all_bills
 from rush.card import BaseCard
@@ -27,6 +28,7 @@ def get_or_create_bill_for_card_swipe(
     # Get the most recent bill
     last_bill = user_card.get_latest_bill()
     txn_date = txn_time.date()
+    lender_id = user_card.table.lender_id
     if not hasattr(user_card, "card_activation_date") or txn_date < user_card.card_activation_date:
         return {"result": "error", "message": "Transaction cannot occur before card activation"}
     if last_bill:
@@ -44,7 +46,7 @@ def get_or_create_bill_for_card_swipe(
             new_bill = user_card.create_bill(
                 bill_start_date=new_bill_date + relativedelta(months=i),
                 bill_close_date=new_bill_date + relativedelta(months=i + 1),
-                lender_id=62311,
+                lender_id=lender_id,
                 is_generated=False,
             )
             bill_generate(session, user_card)
@@ -53,7 +55,7 @@ def get_or_create_bill_for_card_swipe(
     new_bill = user_card.create_bill(
         bill_start_date=new_bill_date,
         bill_close_date=new_bill_date + relativedelta(months=1),
-        lender_id=62311,
+        lender_id=lender_id,
         is_generated=False,
     )
     return {"result": "success", "data": new_bill}
