@@ -183,7 +183,7 @@ def add_emi_on_new_bill(
     session.flush()
 
 
-def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerEvent = None) -> None:
+def slide_payments(user_card: BaseCard, payment_event: LedgerTriggerEvent = None) -> None:
     def slide_payments_repeated_logic(
         all_emis,
         payment_received_and_adjusted,
@@ -338,7 +338,7 @@ def slide_payments(session: Session, user_id: int, payment_event: LedgerTriggerE
                 )
                 payment_received_and_adjusted = abs(diff)
 
-    user_card = get_user_card(session, user_id)
+    session = user_card.session
     all_emis = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
@@ -609,10 +609,8 @@ def check_moratorium_eligibility(session: Session, data):
     # session.flush()
 
 
-def refresh_schedule(session: Session, user_id: int):
-    # Get user card
-    user_card = get_user_card(session, user_id)
-
+def refresh_schedule(user_card: BaseCard):
+    session = user_card.session
     # Get all generated bills of the user
     all_bills = user_card.get_all_bills()
 
@@ -680,14 +678,14 @@ def refresh_schedule(session: Session, user_id: int):
         check_moratorium_eligibility(
             session,
             {
-                "user_id": user_id,
+                "user_id": user_card.user_id,
                 "start_date": start_date.strftime("%Y-%m-%d"),
                 "months_to_be_inserted": months_to_be_inserted,
             },
         )
 
     # Slide all payments
-    slide_payments(session, user_id)
+    slide_payments(user_card=user_card)
 
 
 def store_and_get_card_level_dpd(session: Session, user_card: BaseCard) -> int:

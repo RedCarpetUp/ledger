@@ -18,7 +18,7 @@ def create_card_swipe(
     card_bill = get_or_create_bill_for_card_swipe(session, user_card, txn_time)
     if card_bill["result"] == "error":
         return card_bill
-    card_bill = card_bill["data"]
+    card_bill = card_bill["bill"]
     swipe = CardTransaction(  # This can be moved to user card too.
         loan_id=card_bill.id, txn_time=txn_time, amount=amount, description=description
     )

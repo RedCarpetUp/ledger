@@ -158,7 +158,7 @@ def payment_received_event(
     # Slide payment in emi
     from rush.create_emi import slide_payments
 
-    slide_payments(session, user_card.user_id, payment_event=event)
+    slide_payments(user_card=user_card, payment_event=event)
 
 
 def _adjust_for_gateway_expenses(session: Session, event: LedgerTriggerEvent, credit_book_str: str):

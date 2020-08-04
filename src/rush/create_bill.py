@@ -29,15 +29,15 @@ def get_or_create_bill_for_card_swipe(
     last_bill = user_card.get_latest_bill()
     txn_date = txn_time.date()
     lender_id = user_card.table.lender_id
-    if not hasattr(user_card, "card_activation_date") or txn_date < user_card.card_activation_date:
-        return {"result": "error", "message": "Transaction cannot occur before card activation"}
+    if not hasattr(user_card, "card_activation_date") or txn_time.date() < user_card.card_activation_date:
+        return {"result": "error", "message": "Incorrect activation date"}
     if last_bill:
         does_swipe_belong_to_current_bill = txn_date < last_bill.bill_close_date
         if does_swipe_belong_to_current_bill:
-            return {"result": "success", "data": last_bill}
+            return {"result": "success", "bill": last_bill}
         new_bill_date = last_bill.bill_close_date
     else:
-        new_bill_date = user_card.card_activation_date
+        new_bill_date = user_card.table.card_activation_date
     new_closing_date = new_bill_date + relativedelta(months=1)
     # Check if some months of bill generation were skipped and if they were then generate their bills
     months_diff = (txn_date.year - new_closing_date.year) * 12 + txn_date.month - new_closing_date.month
@@ -49,7 +49,7 @@ def get_or_create_bill_for_card_swipe(
                 lender_id=lender_id,
                 is_generated=False,
             )
-            bill_generate(session, user_card)
+            bill_generate(user_card)
         last_bill = user_card.get_latest_bill()
         new_bill_date = last_bill.bill_close_date
     new_bill = user_card.create_bill(
@@ -58,10 +58,11 @@ def get_or_create_bill_for_card_swipe(
         lender_id=lender_id,
         is_generated=False,
     )
-    return {"result": "success", "data": new_bill}
+    return {"result": "success", "bill": new_bill}
 
 
-def bill_generate(session: Session, user_card: BaseCard) -> BaseBill:
+def bill_generate(user_card: BaseCard) -> BaseBill:
+    session = user_card.session
     bill = user_card.get_latest_bill_to_generate()  # Get the first bill which is not generated.
     if not bill:
         bill = get_or_create_bill_for_card_swipe(
@@ -69,7 +70,7 @@ def bill_generate(session: Session, user_card: BaseCard) -> BaseBill:
         )  # TODO not sure about this
         if bill["result"] == "error":
             return bill
-        bill = bill["data"]
+        bill = bill["bill"]
     lt = LedgerTriggerEvent(name="bill_generate", card_id=user_card.id, post_date=bill.bill_start_date)
     session.add(lt)
     session.flush()
@@ -100,7 +101,7 @@ def bill_generate(session: Session, user_card: BaseCard) -> BaseBill:
     accrue_interest_on_all_bills(session, bill_closing_date, user_card)
 
     # Refresh the schedule
-    refresh_schedule(session, user_card.table.user_id)
+    refresh_schedule(user_card)
 
     return bill
 
@@ -117,4 +118,4 @@ def extend_tenure(session: Session, user_card: BaseCard, new_tenure: int) -> Non
         )
     session.flush()
     # Refresh the schedule
-    refresh_schedule(session, user_card.table.user_id)
+    refresh_schedule(user_card)
