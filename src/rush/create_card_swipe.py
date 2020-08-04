@@ -19,7 +19,7 @@ def create_card_swipe(
         return {"result": "error", "message": "Card has not been activated"}
     if txn_time.date() < user_card.card_activation_date:
         return {"result": "error", "message": "Transaction cannot happen before activation"}
-    card_bill = get_or_create_bill_for_card_swipe(session, user_card, txn_time)
+    card_bill = get_or_create_bill_for_card_swipe(user_card, txn_time)
     if card_bill["result"] == "error":
         return card_bill
     card_bill = card_bill["bill"]

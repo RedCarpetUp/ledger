@@ -22,9 +22,8 @@ from rush.utils import (
 )
 
 
-def get_or_create_bill_for_card_swipe(
-    session: Session, user_card: BaseCard, txn_time: DateTime
-) -> BaseBill:
+def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -> BaseBill:
+    session = user_card.session
     # Get the most recent bill
     last_bill = user_card.get_latest_bill()
     txn_date = txn_time.date()
@@ -64,7 +63,7 @@ def bill_generate(user_card: BaseCard) -> BaseBill:
     bill = user_card.get_latest_bill_to_generate()  # Get the first bill which is not generated.
     if not bill:
         bill = get_or_create_bill_for_card_swipe(
-            session, user_card, get_current_ist_time()
+            user_card, get_current_ist_time()
         )  # TODO not sure about this
         if bill["result"] == "error":
             return bill
