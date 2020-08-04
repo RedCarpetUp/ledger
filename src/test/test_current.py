@@ -107,7 +107,7 @@ def test_lender_disbursal(session: Session) -> None:
     test_lenders(session)
     amount = 100000
     lender_id = 62311
-    val = lender_disbursal(session, amount, lender_id)
+    val = lender_disbursal(session, amount, lender_id)["lender_capital"]
     assert val == Decimal(100000)
 
 
@@ -115,7 +115,7 @@ def test_m2p_transfer(session: Session) -> None:
     test_lenders(session)
     amount = 50000
     lender_id = 62311
-    val = m2p_transfer(session, amount, lender_id)
+    val = m2p_transfer(session, amount, lender_id)["lender_pool"]
     assert val == Decimal(50000)
 
 

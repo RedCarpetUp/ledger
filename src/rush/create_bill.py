@@ -29,11 +29,6 @@ def get_or_create_bill_for_card_swipe(
     last_bill = user_card.get_latest_bill()
     txn_date = txn_time.date()
     lender_id = user_card.table.lender_id
-    if (
-        not hasattr(user_card, "card_activation_date")
-        or txn_time.date() < user_card.card_activation_date
-    ):
-        return {"result": "error", "message": "Incorrect activation date"}
     if last_bill:
         does_swipe_belong_to_current_bill = txn_date < last_bill.bill_close_date
         if does_swipe_belong_to_current_bill:
