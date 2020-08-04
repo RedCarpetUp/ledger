@@ -34,6 +34,8 @@ from rush.lender_funds import (
 )
 from rush.models import (
     CardEmis,
+    CardKitNumbers,
+    CardNames,
     EmiPaymentMapping,
     LedgerTriggerEvent,
     LenderPy,
@@ -63,8 +65,18 @@ def test_current(get_alembic: alembic.config.Config) -> None:
     # assert output == ""
 
 
+def card_db_updates(session: Session) -> None:
+    cn = CardNames(name="ruby")
+    session.add(cn)
+    session.flush()
+    ckn = CardKitNumbers(kit_number="00000", card_name_id=cn.id, last_5_digits="0000", status="active")
+    session.add(ckn)
+    session.flush()
+
+
 def test_user2(session: Session) -> None:
-    u = User(performed_by=123, id=1, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    # u = User(performed_by=123, id=1, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    u = User(id=1, performed_by=123,)
     session.add(u)
     session.commit()
     a = session.query(User).first()
@@ -73,7 +85,8 @@ def test_user2(session: Session) -> None:
 
 
 def test_user(session: Session) -> None:
-    u = User(id=2, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    # u = User(id=2, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    u = User(id=2, performed_by=123,)
     session.add(u)
     session.commit()
     a = session.query(User).first()
@@ -108,6 +121,7 @@ def test_m2p_transfer(session: Session) -> None:
 
 def test_card_swipe(session: Session) -> None:
     test_lenders(session)
+    card_db_updates(session)
     uc = create_user_card(
         session=session,
         user_id=2,
@@ -150,7 +164,9 @@ def test_card_swipe(session: Session) -> None:
 
 def test_generate_bill_1(session: Session) -> None:
     test_lenders(session)
-    a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    card_db_updates(session)
+    # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    a = User(id=99, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -584,7 +600,9 @@ def test_generate_bill_2(session: Session) -> None:
 
 def test_generate_bill_3(session: Session) -> None:
     test_lenders(session)
-    a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    card_db_updates(session)
+    # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    a = User(id=99, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -624,7 +642,9 @@ def test_generate_bill_3(session: Session) -> None:
 
 def test_emi_creation(session: Session) -> None:
     test_lenders(session)
-    a = User(id=108, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    card_db_updates(session)
+    # a = User(id=108, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    a = User(id=108, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -661,7 +681,9 @@ def test_emi_creation(session: Session) -> None:
 
 def test_subsequent_emi_creation(session: Session) -> None:
     test_lenders(session)
-    a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    card_db_updates(session)
+    # a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    a = User(id=160, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -715,7 +737,9 @@ def test_subsequent_emi_creation(session: Session) -> None:
 
 def test_schedule_for_interest_and_payment(session: Session) -> None:
     test_lenders(session)
-    a = User(id=1991, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    card_db_updates(session)
+    # a = User(id=1991, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    a = User(id=1991, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -834,14 +858,16 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
 
 def test_with_live_user_loan_id_4134872(session: Session) -> None:
     test_lenders(session)
-    a = User(
-        id=1764433,
-        performed_by=123,
-        name="UPENDRA",
-        fullname="UPENDRA SINGH",
-        nickname="UPENDRA",
-        email="upsigh921067@gmail.com",
-    )
+    card_db_updates(session)
+    # a = User(
+    #     id=1764433,
+    #     performed_by=123,
+    #     name="UPENDRA",
+    #     fullname="UPENDRA SINGH",
+    #     nickname="UPENDRA",
+    #     email="upsigh921067@gmail.com",
+    # )
+    a = User(id=1764433, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -1306,7 +1332,9 @@ def test_view(session: Session) -> None:
 
 def test_lender_incur(session: Session) -> None:
     test_lenders(session)
-    a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas")
+    card_db_updates(session)
+    # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas")
+    a = User(id=99, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -1369,7 +1397,9 @@ def test_lender_incur(session: Session) -> None:
 
 def test_lender_incur_two(session: Session) -> None:
     test_lenders(session)
-    a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas")
+    card_db_updates(session)
+    # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas")
+    a = User(id=99, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -1497,6 +1527,7 @@ def test_prepayment(session: Session) -> None:
 #
 # def test_writeoff(session: Session) -> None:
 #     a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+#     a = User(id=99,performed_by=123,)
 #     session.add(a)
 #     session.flush()
 #
@@ -1610,14 +1641,16 @@ def test_prepayment(session: Session) -> None:
 
 def test_moratorium(session: Session) -> None:
     test_lenders(session)
-    a = User(
-        id=38612,
-        performed_by=123,
-        name="Ananth",
-        fullname="Ananth Venkatesh",
-        nickname="Ananth",
-        email="ananth@redcarpetup.com",
-    )
+    card_db_updates(session)
+    # a = User(
+    #     id=38612,
+    #     performed_by=123,
+    #     name="Ananth",
+    #     fullname="Ananth Venkatesh",
+    #     nickname="Ananth",
+    #     email="ananth@redcarpetup.com",
+    # )
+    a = User(id=38612, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -1670,7 +1703,9 @@ def test_moratorium(session: Session) -> None:
 
 def test_refresh_schedule(session: Session) -> None:
     test_lenders(session)
-    a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    card_db_updates(session)
+    # a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    a = User(id=160, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -1754,7 +1789,9 @@ def test_refresh_schedule(session: Session) -> None:
 
 def test_moratorium_schedule(session: Session) -> None:
     test_lenders(session)
-    a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    card_db_updates(session)
+    # a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    a = User(id=160, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -1843,14 +1880,16 @@ def test_moratorium_schedule(session: Session) -> None:
 
 def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
     test_lenders(session)
-    a = User(
-        id=38613,
-        performed_by=123,
-        name="Ananth",
-        fullname="Ananth Venkatesh",
-        nickname="Ananth",
-        email="ananth@redcarpetup.com",
-    )
+    card_db_updates(session)
+    # a = User(
+    #     id=38613,
+    #     performed_by=123,
+    #     name="Ananth",
+    #     fullname="Ananth Venkatesh",
+    #     nickname="Ananth",
+    #     email="ananth@redcarpetup.com",
+    # )
+    a = User(id=38613, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -1910,14 +1949,16 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
 
 def test_moratorium_live_user_1836540(session: Session) -> None:
     test_lenders(session)
-    a = User(
-        id=1836540,
-        performed_by=123,
-        name="Mohammad Shahbaz Mohammad Shafi Qureshi",
-        fullname="Mohammad Shahbaz Mohammad Shafi Qureshi",
-        nickname="Mohammad Shahbaz Mohammad Shafi Qureshi",
-        email="shahbazq797@gmail.com",
-    )
+    card_db_updates(session)
+    # a = User(
+    #     id=1836540,
+    #     performed_by=123,
+    #     name="Mohammad Shahbaz Mohammad Shafi Qureshi",
+    #     fullname="Mohammad Shahbaz Mohammad Shafi Qureshi",
+    #     nickname="Mohammad Shahbaz Mohammad Shafi Qureshi",
+    #     email="shahbazq797@gmail.com",
+    # )
+    a = User(id=1836540, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -2040,14 +2081,16 @@ def test_intermediate_bill_generation(session: Session) -> None:
 
 def test_transaction_before_activation(session: Session) -> None:
     test_lenders(session)
-    a = User(
-        id=1836540,
-        performed_by=123,
-        name="Mohammad Shahbaz Mohammad Shafi Qureshi",
-        fullname="Mohammad Shahbaz Mohammad Shafi Qureshi",
-        nickname="Mohammad Shahbaz Mohammad Shafi Qureshi",
-        email="shahbazq797@gmail.com",
-    )
+    card_db_updates(session)
+    # a = User(
+    #     id=1836540,
+    #     performed_by=123,
+    #     name="Mohammad Shahbaz Mohammad Shafi Qureshi",
+    #     fullname="Mohammad Shahbaz Mohammad Shafi Qureshi",
+    #     nickname="Mohammad Shahbaz Mohammad Shafi Qureshi",
+    #     email="shahbazq797@gmail.com",
+    # )
+    a = User(id=1836540, performed_by=123,)
     session.add(a)
     session.flush()
 
