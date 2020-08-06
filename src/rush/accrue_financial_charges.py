@@ -85,7 +85,9 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_car
     session.add(accrue_event)
     session.flush()
     for bill in unpaid_bills:
-        accrue_interest_event(session, bill, accrue_event, bill.table.interest_to_charge)
+        accrue_interest_event(
+            session, bill, accrue_event, bill.table.interest_to_charge, user_card=user_card
+        )
         accrue_event.amount += bill.table.interest_to_charge
 
 

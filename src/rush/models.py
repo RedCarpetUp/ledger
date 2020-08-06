@@ -22,7 +22,10 @@ from sqlalchemy import (
     Text,
 )
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import Session, relationship
+from sqlalchemy.orm import (
+    Session,
+    relationship,
+)
 from sqlalchemy.schema import Index
 
 from rush.utils import get_current_ist_time

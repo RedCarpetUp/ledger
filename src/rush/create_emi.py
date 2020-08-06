@@ -14,8 +14,8 @@ from sqlalchemy.orm import (
 
 from rush.anomaly_detection import get_payment_events
 from rush.card import (
-    get_user_card,
     BaseCard,
+    get_user_card,
 )
 from rush.card.base_card import BaseBill
 from rush.ledger_utils import get_account_balance_from_str
@@ -388,14 +388,13 @@ def slide_payments(user_card: BaseCard, payment_event: LedgerTriggerEvent = None
     store_and_get_card_level_dpd(session, user_card)
 
 
-def adjust_interest_in_emis(session: Session, user_id: int, post_date: DateTime) -> None:
+def adjust_interest_in_emis(session: Session, user_card: BaseCard, post_date: DateTime) -> None:
     latest_bill = (
         session.query(LoanData)
-        .filter(LoanData.user_id == user_id, LoanData.bill_start_date <= post_date)
+        .filter(LoanData.user_id == user_card.user_id, LoanData.bill_start_date <= post_date)
         .order_by(LoanData.bill_start_date.desc())
         .first()
     )
-    user_card = get_user_card(session, user_id)
     emis_for_this_bill = (
         session.query(CardEmis)
         .filter(

@@ -12,7 +12,10 @@ from rush.ledger_events import (
     lender_interest_incur_event,
     m2p_transfer_event,
 )
-from rush.models import LedgerTriggerEvent, Lenders
+from rush.models import (
+    LedgerTriggerEvent,
+    Lenders,
+)
 from rush.utils import get_current_ist_time
 
 

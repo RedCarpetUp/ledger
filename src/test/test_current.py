@@ -2061,7 +2061,9 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
 
 
 def test_generate_bill_1_flipkart_card(session: Session) -> None:
-    a = User(id=1337, performed_by=123, name="Raghav", fullname="Raghav", nickname="dfdd", email="asas",)
+    test_lenders(session)
+    card_db_updates(session)
+    a = User(id=1836540, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -2069,8 +2071,9 @@ def test_generate_bill_1_flipkart_card(session: Session) -> None:
     uc = create_user_card(
         session=session,
         user_id=a.id,
-        card_activation_date=parse_date("2020-04-02"),
+        card_activation_date=parse_date("2020-04-02").date(),
         card_type="flipkart",
+        lender_id=62311,
     )
 
     swipe = create_card_swipe(
@@ -2089,12 +2092,12 @@ def test_generate_bill_1_flipkart_card(session: Session) -> None:
         description="Flipkart",
     )
 
-    bill_id = swipe.loan_id
+    bill_id = swipe["data"].loan_id
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 2000
 
-    bill = bill_generate(session=session, user_card=uc)
+    bill = bill_generate(user_card=uc)
 
     assert bill.table.is_generated is True
     assert bill.table.principal == 2000
@@ -2108,12 +2111,12 @@ def test_generate_bill_1_flipkart_card(session: Session) -> None:
     assert billed_amount == 2000
 
     _, min_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/min/a")
-    assert min_amount == 197
+    assert min_amount == 167
 
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_id}/bill/interest_receivable/a"
     )
-    assert interest_due == Decimal("30.33")  # principal is 2k but interest is charged on 1k
+    assert interest_due == Decimal("0.33")  # principal is 2k but interest is charged on 1k
 
 
 def test_reward(session: Session) -> None:
@@ -2142,6 +2145,8 @@ def test_reward(session: Session) -> None:
         reward_rules={},
         performed_by=123,
     )
+
+
 def test_intermediate_bill_generation(session: Session) -> None:
     test_card_swipe(session)
     user_card = get_user_card(session, 2)

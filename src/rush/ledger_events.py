@@ -14,6 +14,7 @@ from rush.models import (
     CardTransaction,
     LedgerTriggerEvent,
     LoanData,
+    User,
     UserCard,
 )
 from rush.recon.dmi_interest_on_portfolio import interest_on_dmi_portfolio
@@ -292,7 +293,7 @@ def _adjust_for_prepayment(
 
 
 def accrue_interest_event(
-    session: Session, bill: BaseBill, event: LedgerTriggerEvent, amount: Decimal
+    session: Session, bill: BaseBill, event: LedgerTriggerEvent, amount: Decimal, user_card: UserCard
 ) -> None:
     create_ledger_entry_from_str(
         session,
@@ -304,7 +305,7 @@ def accrue_interest_event(
     # adjust the given interest in schedule
     from rush.create_emi import adjust_interest_in_emis
 
-    adjust_interest_in_emis(session, bill.user_id, event.post_date)
+    adjust_interest_in_emis(session, user_card, event.post_date)
 
 
 def accrue_late_fine_event(session: Session, bill: LoanData, event: LedgerTriggerEvent) -> None:
