@@ -325,6 +325,30 @@ class CardKitNumbers(AuditMixin):
     user_cards = relationship("UserCard")
 
 
+class Product(AuditMixin):
+    __tablename__ = "product"
+    product_name = Column(String(), nullable=False)
+
+
+@py_dataclass
+class ProductPy(AuditMixinPy):
+    product_name: str
+
+
+class MerchantInterest(AuditMixin):
+    __tablename__ = "merchant_interest_rates"
+    merchant_id = Column(String(), nullable=False)
+    product_id = Column(Integer, ForeignKey(Product.id), nullable=False)
+    interest_rate = Column(Numeric, nullable=True)
+
+
+@py_dataclass
+class MerchantInterestPy(AuditMixinPy):
+    merchant_id: str
+    product_id: int
+    interest_rate: Decimal
+
+
 class UserCard(AuditMixin):
     __tablename__ = "v3_user_cards"
     user_id = Column(Integer, ForeignKey(User.id), index=True, nullable=False)
@@ -351,6 +375,7 @@ class UserCard(AuditMixin):
     interest_free_period_in_days = Column(Integer, default=45, nullable=True)
     rc_rate_of_interest_monthly = Column(Numeric, nullable=True)
     lender_rate_of_interest_annual = Column(Numeric, nullable=True)
+    product_id = Column(Integer, ForeignKey(Product.id), nullable=False)
     dpd = Column(Integer, nullable=True)
 
     __table_args__ = (
@@ -415,6 +440,8 @@ class CardTransaction(AuditMixin):
     txn_time = Column(TIMESTAMP, nullable=False)
     amount = Column(Numeric, nullable=False)
     description = Column(String(100), nullable=False)
+    merchant_id = Column(String(100), nullable=False)
+    interest = Column(Numeric, nullable=False)
 
 
 class CardEmis(AuditMixin):
@@ -495,25 +522,15 @@ class RewardsCatalogPy(AuditMixinPy):
     reward_rules: Dict[str, Any]
 
 
-class Product(AuditMixin):
-    __tablename__ = "product"
-    product_name = Column(String(), nullable=False)
-
-
-@py_dataclass
-class ProductPy(AuditMixinPy):
-    product_name: str
-
-
-class RewardMaster(AuditMixin):
-    __tablename__ = "reward_master"
+class Rewards(AuditMixin):
+    __tablename__ = "rewards"
     identifier_type = Column(String(), nullable=False)
     reward_id = Column(Integer, ForeignKey(RewardsCatalog.id), nullable=False)
     product_id = Column(Integer, ForeignKey(Product.id), nullable=False)
 
 
 @py_dataclass
-class RewardMasterPy(AuditMixinPy):
+class RewardsPy(AuditMixinPy):
     identifier_type: str
     reward_id: int
     product_id: int

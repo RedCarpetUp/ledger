@@ -33,16 +33,7 @@ def upgrade() -> None:
     )
 
     op.create_table(
-        "product",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("product_name", sa.String(), nullable=False),
-        sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
-        sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
-        sa.Column("performed_by", sa.Integer(), nullable=False),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_table(
-        "reward_master",
+        "rewards",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("identifier_type", sa.String(), nullable=False),
         sa.Column("reward_id", sa.Integer(), nullable=False),
@@ -51,10 +42,23 @@ def upgrade() -> None:
         sa.Column("performed_by", sa.Integer(), nullable=False),
         sa.Column("product_id", sa.Integer(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
+        sa.ForeignKeyConstraint(["reward_id"], ["rewards_catalog.id"], name="fk_rewards_reward_id"),
+        sa.ForeignKeyConstraint(["product_id"], ["product.id"], name="fk_rewards_product_id"),
+    )
+
+    op.create_table(
+        "merchant_interest_rates",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("merchant_id", sa.String(), nullable=False),
+        sa.Column("product_id", sa.Integer(), nullable=False),
+        sa.Column("interest_rate", sa.DECIMAL(), nullable=False),
+        sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
+        sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
+        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(
-            ["reward_id"], ["rewards_catalog.id"], name="fk_reward_master_reward_id"
+            ["product_id"], ["product.id"], name="fk_merchant_interest_rates_product_id"
         ),
-        sa.ForeignKeyConstraint(["product_id"], ["product.id"], name="fk_reward_master_product_id"),
     )
 
 

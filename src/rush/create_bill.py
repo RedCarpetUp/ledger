@@ -1,4 +1,5 @@
 from decimal import Decimal
+from typing import Dict
 
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
@@ -22,7 +23,7 @@ from rush.utils import (
 )
 
 
-def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -> BaseBill:
+def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -> Dict:
     session = user_card.session
     # Get the most recent bill
     last_bill = user_card.get_latest_bill()
@@ -58,7 +59,7 @@ def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -
     return {"result": "success", "bill": new_bill}
 
 
-def bill_generate(user_card: BaseCard) -> BaseBill:
+def bill_generate(user_card: BaseCard) -> Dict:
     session = user_card.session
     bill = user_card.get_latest_bill_to_generate()  # Get the first bill which is not generated.
     if not bill:
@@ -99,8 +100,7 @@ def bill_generate(user_card: BaseCard) -> BaseBill:
 
     # Refresh the schedule
     refresh_schedule(user_card)
-
-    return bill
+    return {"result": "success", "bill": bill}
 
 
 def extend_tenure(session: Session, user_card: BaseCard, new_tenure: int) -> None:

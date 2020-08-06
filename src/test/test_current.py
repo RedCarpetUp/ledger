@@ -42,10 +42,12 @@ from rush.models import (
     Lenders,
     LoanData,
     LoanMoratorium,
-    RewardMaster,
-    RewardMasterPy,
+    Product,
+    ProductPy,
+    Rewards,
     RewardsCatalog,
     RewardsCatalogPy,
+    RewardsPy,
     User,
     UserPy,
 )
@@ -78,13 +80,21 @@ def card_db_updates(session: Session) -> None:
     session.flush()
 
 
+def product_db_updates(session: Session) -> None:
+    pn = Product(product_name="Ruby")
+    session.add(pn)
+    session.flush()
+    pn2 = Product(product_name="Flipkart")
+    session.add(pn2)
+    session.flush()
+
+
 def test_user2(session: Session) -> None:
     # u = User(performed_by=123, id=1, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     u = User(id=1, performed_by=123,)
     session.add(u)
     session.commit()
     a = session.query(User).first()
-    print(a.id)
     u = UserPy(id=a.id, performed_by=123, email="sss", name="dfd", fullname="dfdf", nickname="dfdd",)
 
 
@@ -126,12 +136,15 @@ def test_m2p_transfer(session: Session) -> None:
 def test_card_swipe(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
+    product_db_updates(session)
+    product_id = session.query(Product.id).filter(Product.product_name == "Ruby").one()
     uc = create_user_card(
         session=session,
         user_id=2,
         card_activation_date=parse_date("2020-05-01").date(),
         card_type="ruby",
         lender_id=62311,
+        product_id=product_id,
     )
     user_card_id = uc.id
 
@@ -169,11 +182,12 @@ def test_card_swipe(session: Session) -> None:
 def test_generate_bill_1(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
+    product_db_updates(session)
     # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     a = User(id=99, performed_by=123,)
     session.add(a)
     session.flush()
-
+    product_id = session.query(Product.id).filter(Product.product_name == "Ruby").one()
     # assign card
     uc = create_user_card(
         session=session,
@@ -181,6 +195,7 @@ def test_generate_bill_1(session: Session) -> None:
         card_activation_date=parse_date("2020-04-02").date(),
         card_type="ruby",
         lender_id=62311,
+        product_id=product_id,
     )
 
     swipe = create_card_swipe(
@@ -197,8 +212,8 @@ def test_generate_bill_1(session: Session) -> None:
 
     bill = bill_generate(get_user_card(session, a.id))
 
-    assert bill.bill_start_date == parse_date("2020-04-02").date()
-    assert bill.table.is_generated is True
+    assert bill["bill"].bill_start_date == parse_date("2020-04-02").date()
+    assert bill["bill"].table.is_generated is True
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     # Should be 0 because it has moved to billed account.
@@ -484,21 +499,21 @@ def _generate_bill_2(session: Session) -> None:
     assert user_card_balance == Decimal(-3000)
 
     bill_2 = bill_generate(user_card=uc)
-    assert bill_2.bill_start_date == parse_date("2020-05-02").date()
+    assert bill_2["bill"].bill_start_date == parse_date("2020-05-02").date()
 
     unpaid_bills = uc.get_unpaid_bills()
     assert len(unpaid_bills) == 2
 
     _, principal_due = get_account_balance_from_str(
-        session=session, book_string=f"{bill_2.id}/bill/principal_receivable/a"
+        session=session, book_string=f"{bill_2['bill'].id}/bill/principal_receivable/a"
     )
     assert principal_due == Decimal(2000)
 
-    min_due = bill_2.get_remaining_min()
+    min_due = bill_2["bill"].get_remaining_min()
     assert min_due == Decimal("227")
 
     _, interest_due = get_account_balance_from_str(
-        session, book_string=f"{bill_2.id}/bill/interest_receivable/a"
+        session, book_string=f"{bill_2['bill'].id}/bill/interest_receivable/a"
     )
     assert interest_due == Decimal("60.33")
 
@@ -605,11 +620,12 @@ def test_generate_bill_2(session: Session) -> None:
 def test_generate_bill_3(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
+    product_db_updates(session)
     # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     a = User(id=99, performed_by=123,)
     session.add(a)
     session.flush()
-
+    product_id = session.query(Product.id).filter(Product.product_name == "Ruby").one()
     # assign card
     uc = create_user_card(
         session=session,
@@ -617,6 +633,7 @@ def test_generate_bill_3(session: Session) -> None:
         card_activation_date=parse_date("2020-04-02").date(),
         card_type="ruby",
         lender_id=62311,
+        product_id=product_id,
     )
 
     create_card_swipe(
@@ -631,27 +648,28 @@ def test_generate_bill_3(session: Session) -> None:
     bill = bill_generate(get_user_card(session, a.id))
 
     _, unbilled_balance = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/unbilled_transactions/a"
+        session, book_string=f"{bill['bill'].id}/bill/unbilled_transactions/a"
     )
     assert unbilled_balance == 0
 
     _, principal_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/principal_receivable/a"
+        session, book_string=f"{bill['bill'].id}/bill/principal_receivable/a"
     )
     assert principal_due == 1500
 
-    _, min_due = get_account_balance_from_str(session, book_string=f"{bill.id}/bill/min/a")
+    _, min_due = get_account_balance_from_str(session, book_string=f"{bill['bill'].id}/bill/min/a")
     assert min_due == 170
 
 
 def test_emi_creation(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
+    product_db_updates(session)
     # a = User(id=108, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     a = User(id=108, performed_by=123,)
     session.add(a)
     session.flush()
-
+    product_id = session.query(Product.id).filter(Product.product_name == "Ruby").one()
     # assign card
     uc = create_user_card(
         session=session,
@@ -659,6 +677,7 @@ def test_emi_creation(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
         lender_id=62311,
+        product_id=product_id,
     )
 
     create_card_swipe(
@@ -686,11 +705,12 @@ def test_emi_creation(session: Session) -> None:
 def test_subsequent_emi_creation(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
+    product_db_updates(session)
     # a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     a = User(id=160, performed_by=123,)
     session.add(a)
     session.flush()
-
+    product_id = session.query(Product.id).filter(Product.product_name == "Ruby").one()
     # assign card
     uc = create_user_card(
         session=session,
@@ -698,6 +718,7 @@ def test_subsequent_emi_creation(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
         lender_id=62311,
+        product_id=product_id,
     )
 
     create_card_swipe(
@@ -742,11 +763,12 @@ def test_subsequent_emi_creation(session: Session) -> None:
 def test_schedule_for_interest_and_payment(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
+    product_db_updates(session)
     # a = User(id=1991, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     a = User(id=1991, performed_by=123,)
     session.add(a)
     session.flush()
-
+    product_id = session.query(Product.id).filter(Product.product_name == "Ruby").one()
     # assign card
     uc = create_user_card(
         session=session,
@@ -754,6 +776,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-05-01").date(),
         lender_id=62311,
+        product_id=product_id,
     )
 
     create_card_swipe(
@@ -769,7 +792,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
 
     # Check calculated interest
     _, interest_due = get_account_balance_from_str(
-        session, book_string=f"{bill_may.id}/bill/interest_receivable/a"
+        session, book_string=f"{bill_may['bill'].id}/bill/interest_receivable/a"
     )
     assert interest_due == 180
 
@@ -863,6 +886,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
 def test_with_live_user_loan_id_4134872(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
+    product_db_updates(session)
     # a = User(
     #     id=1764433,
     #     performed_by=123,
@@ -874,7 +898,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     a = User(id=1764433, performed_by=123,)
     session.add(a)
     session.flush()
-
+    product_id = session.query(Product.id).filter(Product.product_name == "Ruby").one()
     # assign card
     uc = create_user_card(
         session=session,
@@ -882,6 +906,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-05-01").date(),
         lender_id=62311,
+        product_id=product_id,
     )
 
     # Card transactions
@@ -1337,11 +1362,12 @@ def test_view(session: Session) -> None:
 def test_lender_incur(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
+    product_db_updates(session)
     # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas")
     a = User(id=99, performed_by=123,)
     session.add(a)
     session.flush()
-
+    product_id = session.query(Product.id).filter(Product.product_name == "Ruby").one()
     # assign card
     uc = create_user_card(
         session=session,
@@ -1349,6 +1375,7 @@ def test_lender_incur(session: Session) -> None:
         card_activation_date=parse_date("2020-04-02").date(),
         card_type="ruby",
         lender_id=62311,
+        product_id=product_id,
     )
     swipe = create_card_swipe(
         session=session,
@@ -1361,7 +1388,7 @@ def test_lender_incur(session: Session) -> None:
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 1000
     bill = bill_generate(get_user_card(session, a.id))
-    assert bill.table.is_generated is True
+    assert bill["bill"].table.is_generated is True
 
     swipe = create_card_swipe(
         session=session,
@@ -1371,7 +1398,7 @@ def test_lender_incur(session: Session) -> None:
         description="BigBasket.com",
     )
     bill = bill_generate(get_user_card(session, a.id))
-    assert bill.table.is_generated is True
+    assert bill["bill"].table.is_generated is True
 
     lender_interest_incur(
         session, from_date=parse_date("2020-06-01").date(), to_date=parse_date("2020-06-30").date()
@@ -1402,11 +1429,12 @@ def test_lender_incur(session: Session) -> None:
 def test_lender_incur_two(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
+    product_db_updates(session)
     # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas")
     a = User(id=99, performed_by=123,)
     session.add(a)
     session.flush()
-
+    product_id = session.query(Product.id).filter(Product.product_name == "Ruby").one()
     # assign card
     uc = create_user_card(
         session=session,
@@ -1414,6 +1442,7 @@ def test_lender_incur_two(session: Session) -> None:
         card_activation_date=parse_date("2020-04-02").date(),
         card_type="ruby",
         lender_id=62311,
+        product_id=product_id,
     )
     swipe = create_card_swipe(
         session=session,
@@ -1430,7 +1459,7 @@ def test_lender_incur_two(session: Session) -> None:
         description="BigBasket.com",
     )
     bill = bill_generate(get_user_card(session, a.id))
-    assert bill.table.is_generated is True
+    assert bill["bill"].table.is_generated is True
 
     lender_interest_incur(
         session, from_date=parse_date("2020-07-01").date(), to_date=parse_date("2020-07-31").date()
@@ -1511,7 +1540,7 @@ def test_prepayment(session: Session) -> None:
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 1000
     bill = bill_generate(user_card=uc)
-    assert bill.table.is_generated is True
+    assert bill["bill"].table.is_generated is True
 
     _, prepayment_amount = get_account_balance_from_str(
         session, book_string=f"{user_card_id}/card/pre_payment/l"
@@ -1646,6 +1675,7 @@ def test_prepayment(session: Session) -> None:
 def test_moratorium(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
+    product_db_updates(session)
     # a = User(
     #     id=38612,
     #     performed_by=123,
@@ -1657,7 +1687,7 @@ def test_moratorium(session: Session) -> None:
     a = User(id=38612, performed_by=123,)
     session.add(a)
     session.flush()
-
+    product_id = session.query(Product.id).filter(Product.product_name == "Ruby").one()
     # assign card
     # 25 days to enforce 15th june as first due date
     uc = create_user_card(
@@ -1667,6 +1697,7 @@ def test_moratorium(session: Session) -> None:
         card_activation_date=parse_date("2020-01-20").date(),
         interest_free_period_in_days=25,
         lender_id=62311,
+        product_id=product_id,
     )
 
     create_card_swipe(
@@ -1708,11 +1739,12 @@ def test_moratorium(session: Session) -> None:
 def test_refresh_schedule(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
+    product_db_updates(session)
     # a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     a = User(id=160, performed_by=123,)
     session.add(a)
     session.flush()
-
+    product_id = session.query(Product.id).filter(Product.product_name == "Ruby").one()
     # assign card
     uc = create_user_card(
         session=session,
@@ -1720,6 +1752,7 @@ def test_refresh_schedule(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
         lender_id=62311,
+        product_id=product_id,
     )
 
     create_card_swipe(
@@ -1794,11 +1827,12 @@ def test_refresh_schedule(session: Session) -> None:
 def test_moratorium_schedule(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
+    product_db_updates(session)
     # a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
     a = User(id=160, performed_by=123,)
     session.add(a)
     session.flush()
-
+    product_id = session.query(Product.id).filter(Product.product_name == "Ruby").one()
     # assign card
     uc = create_user_card(
         session=session,
@@ -1806,6 +1840,7 @@ def test_moratorium_schedule(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
         lender_id=62311,
+        product_id=product_id,
     )
 
     create_card_swipe(
@@ -1885,6 +1920,7 @@ def test_moratorium_schedule(session: Session) -> None:
 def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
     test_lenders(session)
     card_db_updates(session)
+    product_db_updates(session)
     # a = User(
     #     id=38613,
     #     performed_by=123,
@@ -1896,7 +1932,7 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
     a = User(id=38613, performed_by=123,)
     session.add(a)
     session.flush()
-
+    product_id = session.query(Product.id).filter(Product.product_name == "Ruby").one()
     user_card = create_user_card(
         session,
         user_id=a.id,
@@ -1904,6 +1940,7 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
         card_activation_date=parse_date("2020-01-20").date(),
         interest_free_period_in_days=25,
         lender_id=62311,
+        product_id=product_id,
     )
 
     create_card_swipe(
@@ -1954,6 +1991,7 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
 def test_moratorium_live_user_1836540(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
+    product_db_updates(session)
     # a = User(
     #     id=1836540,
     #     performed_by=123,
@@ -1965,7 +2003,7 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
     a = User(id=1836540, performed_by=123,)
     session.add(a)
     session.flush()
-
+    product_id = session.query(Product.id).filter(Product.product_name == "Ruby").one()
     # assign card
     user_card = create_user_card(
         session=session,
@@ -1974,6 +2012,7 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
         # 16th March actual
         card_activation_date=parse_date("2020-03-01").date(),
         lender_id=62311,
+        product_id=product_id,
     )
 
     # Give moratorium
@@ -2063,10 +2102,11 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
 def test_generate_bill_1_flipkart_card(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
+    product_db_updates(session)
     a = User(id=1836540, performed_by=123,)
     session.add(a)
     session.flush()
-
+    product_id = session.query(Product.id).filter(Product.product_name == "Flipkart").one()
     # assign card
     uc = create_user_card(
         session=session,
@@ -2074,6 +2114,7 @@ def test_generate_bill_1_flipkart_card(session: Session) -> None:
         card_activation_date=parse_date("2020-04-02").date(),
         card_type="flipkart",
         lender_id=62311,
+        product_id=product_id,
     )
 
     swipe = create_card_swipe(
@@ -2099,8 +2140,8 @@ def test_generate_bill_1_flipkart_card(session: Session) -> None:
 
     bill = bill_generate(user_card=uc)
 
-    assert bill.table.is_generated is True
-    assert bill.table.principal == 2000
+    assert bill["bill"].table.is_generated is True
+    assert bill["bill"].table.principal == 2000
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     # Should be 0 because it has moved to billed account.
     assert unbilled_amount == 0
@@ -2173,6 +2214,7 @@ def test_intermediate_bill_generation(session: Session) -> None:
 def test_transaction_before_activation(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
+    product_db_updates(session)
     # a = User(
     #     id=1836540,
     #     performed_by=123,
@@ -2184,9 +2226,11 @@ def test_transaction_before_activation(session: Session) -> None:
     a = User(id=1836540, performed_by=123,)
     session.add(a)
     session.flush()
-
+    product_id = session.query(Product.id).filter(Product.product_name == "Ruby").one()
     # assign card
-    user_card = create_user_card(session=session, card_type="ruby", user_id=a.id, lender_id=62311,)
+    user_card = create_user_card(
+        session=session, card_type="ruby", user_id=a.id, lender_id=62311, product_id=product_id
+    )
 
     # Swipe before activation
     swipe = create_card_swipe(

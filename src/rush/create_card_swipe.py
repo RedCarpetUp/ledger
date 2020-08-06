@@ -1,4 +1,5 @@
 from decimal import Decimal
+from typing import Dict
 
 from pendulum import DateTime
 from sqlalchemy.orm.session import Session
@@ -9,12 +10,22 @@ from rush.ledger_events import card_transaction_event
 from rush.models import (
     CardTransaction,
     LedgerTriggerEvent,
+    MerchantInterest,
+)
+from rush.utils import (
+    div,
+    mul,
 )
 
 
 def create_card_swipe(
-    session: Session, user_card: BaseCard, txn_time: DateTime, amount: Decimal, description: str
-) -> CardTransaction:
+    session: Session,
+    user_card: BaseCard,
+    txn_time: DateTime,
+    amount: Decimal,
+    description: str,
+    merchant_id: str = "rc1",
+) -> Dict:
     if not hasattr(user_card, "card_activation_date"):
         return {"result": "error", "message": "Card has not been activated"}
     if txn_time.date() < user_card.card_activation_date:
@@ -23,8 +34,24 @@ def create_card_swipe(
     if card_bill["result"] == "error":
         return card_bill
     card_bill = card_bill["bill"]
+    roi = (
+        session.query(MerchantInterest.interest_rate)
+        .filter(
+            MerchantInterest.merchant_id == merchant_id,
+            MerchantInterest.product_id == user_card.product_id,
+        )
+        .one_or_none()
+    )
+    if not roi:
+        roi = user_card.rc_rate_of_interest_monthly
+    interest_to_be_charged = mul(amount, div(roi, 100))
     swipe = CardTransaction(  # This can be moved to user card too.
-        loan_id=card_bill.id, txn_time=txn_time, amount=amount, description=description
+        loan_id=card_bill.id,
+        txn_time=txn_time,
+        amount=amount,
+        description=description,
+        merchant_id=merchant_id,
+        interest=interest_to_be_charged,
     )
     session.add(swipe)
     session.flush()
