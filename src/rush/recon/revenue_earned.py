@@ -67,4 +67,4 @@ def get_revenue_earned_in_a_period(session, from_date: Date, to_date: Date) -> D
       total_revenue_remaining;
     """
     revenue_earned = session.execute(q, params={"from_date": from_date, "to_date": to_date}).scalar()
-    return revenue_earned
+    return revenue_earned or 0
