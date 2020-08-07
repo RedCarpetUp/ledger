@@ -407,14 +407,17 @@ def slide_payments(user_card: BaseCard, payment_event: LedgerTriggerEvent = None
     store_and_get_card_level_dpd(session, user_card)
 
 
-def adjust_interest_in_emis(session: Session, user_id: int, post_date: DateTime) -> None:
+def adjust_interest_in_emis(session: Session, user_card: BaseCard, post_date: DateTime) -> None:
     latest_bill = (
         session.query(LoanData)
-        .filter(LoanData.user_id == user_id, LoanData.bill_start_date <= post_date)
+        .filter(
+            LoanData.card_id == user_card.id,
+            LoanData.bill_start_date <= post_date,
+            LoanData.is_generated.is_(True),
+        )
         .order_by(LoanData.bill_start_date.desc())
         .first()
     )
-    user_card = get_user_card(session, user_id)
     emis_for_this_bill = (
         session.query(CardEmis)
         .filter(
@@ -441,14 +444,17 @@ def adjust_interest_in_emis(session: Session, user_id: int, post_date: DateTime)
             # session.bulk_update_mappings(CardEmis, emis_dict)
 
 
-def adjust_late_fee_in_emis(session: Session, user_id: int, post_date: DateTime) -> None:
+def adjust_late_fee_in_emis(session: Session, user_card: BaseCard, post_date: DateTime) -> None:
     latest_bill = (
         session.query(LoanData)
-        .filter(LoanData.user_id == user_id, LoanData.bill_start_date < post_date)
+        .filter(
+            LoanData.card_id == user_card.id,
+            LoanData.bill_start_date < post_date,
+            LoanData.is_generated.is_(True),
+        )
         .order_by(LoanData.bill_start_date.desc())
         .first()
     )
-    user_card = get_user_card(session, user_id)
     emi = (
         session.query(CardEmis)
         .filter(
@@ -659,7 +665,7 @@ def refresh_schedule(user_card: BaseCard):
     bill_number = 1
     for bill in all_bills:
         _, late_fine_due = get_account_balance_from_str(session, f"{bill.table.id}/bill/late_fine/r")
-        interest_due = Decimal(bill.table.interest_to_charge)
+        interest_due = bill.table.interest_to_charge
         last_emi = (
             session.query(CardEmis)
             .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
