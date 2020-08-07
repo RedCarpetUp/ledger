@@ -12,7 +12,10 @@ from rush.ledger_events import (
     lender_interest_incur_event,
     m2p_transfer_event,
 )
-from rush.models import LedgerTriggerEvent, Lenders
+from rush.models import (
+    LedgerTriggerEvent,
+    Lenders,
+)
 from rush.utils import get_current_ist_time
 
 
@@ -27,8 +30,7 @@ def lender_disbursal(session: Session, amount: Decimal, lender_id: int) -> Decim
         session.add(lt)
         session.flush()
         lender_disbursal_event(session, lt, lender_id)
-        _, lender_capital = get_account_balance_from_str(session, f"{lender_id}/lender/lender_capital/l")
-        return {"result": "success", "lender_capital": lender_capital}
+        return {"result": "success"}
     return {"result": "error", "message": "Invalid lender"}
 
 
@@ -43,17 +45,15 @@ def m2p_transfer(session: Session, amount: Decimal, lender_id: int) -> Decimal:
         session.add(lt)
         session.flush()
         m2p_transfer_event(session, lt, lender_id)
-        _, lender_pool = get_account_balance_from_str(session, f"{lender_id}/lender/pool_balance/a")
-        return {"result": "success", "lender_pool": lender_pool}
+        return {"result": "success"}
     return {"result": "error", "message": "Invalid lender"}
 
 
-def lender_interest_incur(session: Session, from_date: Date, to_date: Date) -> bool:
+def lender_interest_incur(session: Session, from_date: Date, to_date: Date):
     lt = LedgerTriggerEvent(name="incur_lender_interest", post_date=to_date, amount=0)
     session.add(lt)
     session.flush()
     lender_interest_incur_event(session, from_date, to_date, lt)
-    return True
 
 
 def verify_lender(session: Session, lender_id: int) -> bool:

@@ -50,6 +50,7 @@ from rush.models import (
     UserPy,
 )
 from rush.payments import payment_received
+from rush.recon.revenue_earned import get_revenue_earned_in_a_period
 from rush.views import (
     bill_view,
     user_view,
@@ -74,6 +75,10 @@ def card_db_updates(session: Session) -> None:
     session.add(cn)
     session.flush()
     ckn = CardKitNumbers(kit_number="00000", card_name_id=cn.id, last_5_digits="0000", status="active")
+    session.add(ckn)
+    session.flush()
+
+    ckn = CardKitNumbers(kit_number="11111", card_name_id=cn.id, last_5_digits="0000", status="active")
     session.add(ckn)
     session.flush()
 
@@ -109,18 +114,19 @@ def test_lenders(session: Session) -> None:
 
 def test_lender_disbursal(session: Session) -> None:
     test_lenders(session)
-    amount = 100000
-    lender_id = 62311
-    val = lender_disbursal(session, amount, lender_id)["lender_capital"]
-    assert val == Decimal(100000)
+    resp = lender_disbursal(session, 100000, 62311)
+    assert resp["result"] == "success"
+    # _, lender_capital_balance = get_account_balance_from_str(session, "62311/lender/lender_capital/l")
+    # assert lender_capital_balance == Decimal(100000)
 
 
 def test_m2p_transfer(session: Session) -> None:
     test_lenders(session)
-    amount = 50000
-    lender_id = 62311
-    val = m2p_transfer(session, amount, lender_id)["lender_pool"]
-    assert val == Decimal(50000)
+    resp = m2p_transfer(session, 50000, 62311)
+    assert resp["result"] == "success"
+
+    # _, lender_pool_balance = get_account_balance_from_str(session, "62311/lender/pool_balance/a")
+    # assert lender_pool_balance == Decimal(50000)
 
 
 def test_card_swipe(session: Session) -> None:
@@ -221,7 +227,7 @@ def test_generate_bill_1(session: Session) -> None:
     assert interest_due == Decimal("30.67")
 
     _, interest_due = get_account_balance_from_str(
-        session, book_string=f"{bill_id}/bill/interest_earned/r"
+        session, book_string=f"{bill_id}/bill/interest_accrued/r"
     )
     assert interest_due == Decimal("30.67")
 
@@ -517,9 +523,18 @@ def _generate_bill_2(session: Session) -> None:
     assert interest_due == Decimal("30.67")
 
     _, interest_due = get_account_balance_from_str(
-        session, book_string=f"{first_bill.id}/bill/interest_earned/r"
+        session, book_string=f"{first_bill.id}/bill/interest_accrued/r"
     )
     assert interest_due == Decimal("61.34")
+
+    total_revenue_earned = get_revenue_earned_in_a_period(
+        session, parse_date("2020-05-01").date(), parse_date("2020-05-31").date()
+    )
+    assert total_revenue_earned == Decimal("130.67")
+    total_revenue_earned = get_revenue_earned_in_a_period(
+        session, parse_date("2020-06-01").date(), parse_date("2020-06-30").date()
+    )
+    assert total_revenue_earned == Decimal("0")
 
 
 def _generate_bill_3(session: Session) -> None:
@@ -1213,7 +1228,7 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
     assert interest_due == 0
 
     _, interest_earned = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/interest_earned/r"
+        session, book_string=f"{bill.id}/bill/interest_accrued/r"
     )
     assert interest_earned == 0
 
@@ -1242,12 +1257,12 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
     second_bill = unpaid_bills[1]
 
     _, interest_earned = get_account_balance_from_str(
-        session, book_string=f"{first_bill.id}/bill/interest_earned/r"
+        session, book_string=f"{first_bill.id}/bill/interest_accrued/r"
     )
     assert interest_earned == Decimal("61.34")
 
     _, interest_earned = get_account_balance_from_str(
-        session, book_string=f"{second_bill.id}/bill/interest_earned/r"
+        session, book_string=f"{second_bill.id}/bill/interest_accrued/r"
     )
     assert interest_earned == Decimal("60.33")
 
@@ -1267,13 +1282,13 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
     assert lender_payable == Decimal("-220.84")
 
     _, interest_earned = get_account_balance_from_str(
-        session, book_string=f"{first_bill.id}/bill/interest_earned/r"
+        session, book_string=f"{first_bill.id}/bill/interest_accrued/r"
     )
     # 30.67 Interest got removed from first bill.
     assert interest_earned == Decimal("30.67")
 
     _, interest_earned = get_account_balance_from_str(
-        session, book_string=f"{second_bill.id}/bill/interest_earned/r"
+        session, book_string=f"{second_bill.id}/bill/interest_accrued/r"
     )
     assert interest_earned == Decimal(0)
 
@@ -1320,13 +1335,13 @@ def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
     second_bill = unpaid_bills[1]
 
     _, interest_earned = get_account_balance_from_str(
-        session, book_string=f"{first_bill.id}/bill/interest_earned/r"
+        session, book_string=f"{first_bill.id}/bill/interest_accrued/r"
     )
     # 30 Interest did not get removed.
     assert interest_earned == Decimal("61.34")
 
     _, interest_earned = get_account_balance_from_str(
-        session, book_string=f"{second_bill.id}/bill/interest_earned/r"
+        session, book_string=f"{second_bill.id}/bill/interest_accrued/r"
     )
     assert interest_earned == Decimal("60.33")
     assert is_bill_closed(session, first_bill) is True
