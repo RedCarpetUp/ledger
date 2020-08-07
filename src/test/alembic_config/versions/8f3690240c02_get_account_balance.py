@@ -18,35 +18,24 @@ depends_on = None
 def upgrade() -> None:
     op.execute(
         """
-    create function get_account_balance(
-      identifier integer, identifier_type char, 
-      book_name char, account_type char
-    ) RETURNS numeric as $$ with book as (
+    create function get_account_balance_by_book_id(
+      book_account integer, till_date timestamp DEFAULT now() at time zone 'Asia/Kolkata'
+    ) RETURNS numeric as $$ with balances as (
       select 
-        * 
-      from 
-        book_account 
-      where 
-        identifier = $1 
-        and identifier_type = $2 
-        and book_name = $3 
-        and account_type = $4
-    ), 
-    balances as (
-      select 
-        b.id, 
+        $1 as id, 
         sum(
-          case when l.debit_account = b.id then l.amount else 0 end
+          case when debit_account = $1 then l.amount else 0 end
         ) as debit_balance, 
         sum(
-          case when l.credit_account = b.id then l.amount else 0 end
+          case when credit_account = $1 then l.amount else 0 end
         ) as credit_balance 
       from 
-        ledger_entry l, 
-        book b 
+        ledger_entry l,
+        ledger_trigger_event lte
       where 
-        l.debit_account = b.id 
-        or l.credit_account = b.id 
+        (debit_account = $1 
+        or credit_account = $1) and lte.id = l.event_id
+        and lte.post_date <= $2 
       group by 
         1
     ) 
@@ -54,7 +43,39 @@ def upgrade() -> None:
       case when book.account_type in ('a', 'e') then debit_balance - credit_balance else credit_balance - debit_balance end as account_balance 
     from 
       balances 
-      join book on book.id = balances.id;
+      join book_account book on book.id = balances.id;
+    $$ language SQL;
+    """
+    )
+
+    op.execute(
+        """
+    create function get_account_balance_between_periods_by_book_id(
+      book_account integer, from_date timestamp, till_date timestamp DEFAULT now() at time zone 'Asia/Kolkata' 
+    ) RETURNS numeric as $$ with balances as (
+      select 
+        $1 as id, 
+        sum(
+          case when debit_account = $1 then l.amount else 0 end
+        ) as debit_balance, 
+        sum(
+          case when credit_account = $1 then l.amount else 0 end
+        ) as credit_balance 
+      from 
+        ledger_entry l,
+        ledger_trigger_event lte
+      where 
+        (debit_account = $1 
+        or credit_account = $1) and lte.id = l.event_id
+        and lte.post_date >= $2 and lte.post_date <= $3 
+      group by 
+        1
+    ) 
+    select 
+      case when book.account_type in ('a', 'e') then debit_balance - credit_balance else credit_balance - debit_balance end as account_balance 
+    from 
+      balances 
+      join book_account book on book.id = balances.id;
     $$ language SQL;
     """
     )
@@ -63,7 +84,7 @@ def upgrade() -> None:
         """
     create function get_account_balance(
       identifier integer, identifier_type char, 
-      book_name char, account_type char, to_date timestamp
+      book_name char, account_type char, till_date timestamp DEFAULT now() at time zone 'Asia/Kolkata'
     ) RETURNS numeric as $$ with book as (
       select 
         * 
@@ -74,37 +95,16 @@ def upgrade() -> None:
         and identifier_type = $2 
         and book_name = $3 
         and account_type = $4
-    ), 
-    balances as (
-      select 
-        b.id, 
-        sum(
-          case when l.debit_account = b.id then l.amount else 0 end
-        ) as debit_balance, 
-        sum(
-          case when l.credit_account = b.id then l.amount else 0 end
-        ) as credit_balance 
-      from 
-        ledger_entry l, 
-        book b,
-        ledger_trigger_event lte
-      where 
-        (l.debit_account = b.id 
-        or l.credit_account = b.id) and lte.id = l.event_id
-        and lte.post_date <= $5 
-      group by 
-        1
     ) 
     select 
-      case when book.account_type in ('a', 'e') then debit_balance - credit_balance else credit_balance - debit_balance end as account_balance 
-    from 
-      balances 
-      join book on book.id = balances.id;
+      get_account_balance_by_book_id(id, $5) as account_balance 
+    from book
     $$ language SQL;
     """
     )
 
 
 def downgrade() -> None:
-    op.execute("DROP FUNCTION get_account_balance(integer, char, char, char, timestamp)")
-    op.execute("DROP FUNCTION get_account_balance(integer, char, char, char)")
+    op.execute("DROP FUNCTION get_account_balance_by_book_id")
+    op.execute("DROP FUNCTION get_account_balance_between_periods_by_book_id")
+    op.execute("DROP FUNCTION get_account_balance")

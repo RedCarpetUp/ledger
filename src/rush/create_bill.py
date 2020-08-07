@@ -4,6 +4,7 @@ from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.functions import user
+
 from rush.card import BaseCard
 from rush.card.base_card import BaseBill
 from rush.create_emi import refresh_schedule

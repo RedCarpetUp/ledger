@@ -14,8 +14,8 @@ from sqlalchemy.orm import (
 
 from rush.anomaly_detection import get_payment_events
 from rush.card import (
-    get_user_card,
     BaseCard,
+    get_user_card,
 )
 from rush.card.base_card import BaseBill
 from rush.ledger_utils import get_account_balance_from_str

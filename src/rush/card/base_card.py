@@ -7,6 +7,7 @@ from typing import (
     TypeVar,
 )
 
+from dateutil.relativedelta import relativedelta
 from pendulum import (
     Date,
     DateTime,
@@ -28,7 +29,6 @@ from rush.utils import (
     mul,
     round_up_decimal,
 )
-from dateutil.relativedelta import relativedelta
 
 
 class BaseBill:
