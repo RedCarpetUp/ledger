@@ -5,10 +5,14 @@ from io import StringIO
 import alembic
 from _pytest.monkeypatch import MonkeyPatch
 from alembic.command import current as alembic_current
+from dateutil.relativedelta import relativedelta
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
-from rush.accrue_financial_charges import accrue_late_charges
+from rush.accrue_financial_charges import (
+    accrue_interest_on_all_bills,
+    accrue_late_charges,
+)
 from rush.anomaly_detection import run_anomaly
 from rush.card import (
     create_user_card,
@@ -34,8 +38,12 @@ from rush.lender_funds import (
 )
 from rush.models import (
     CardEmis,
+    CardKitNumbers,
+    CardNames,
     EmiPaymentMapping,
     LedgerTriggerEvent,
+    LenderPy,
+    Lenders,
     LoanData,
     LoanMoratorium,
     User,
@@ -62,8 +70,18 @@ def test_current(get_alembic: alembic.config.Config) -> None:
     # assert output == ""
 
 
+def card_db_updates(session: Session) -> None:
+    cn = CardNames(name="ruby")
+    session.add(cn)
+    session.flush()
+    ckn = CardKitNumbers(kit_number="00000", card_name_id=cn.id, last_5_digits="0000", status="active")
+    session.add(ckn)
+    session.flush()
+
+
 def test_user2(session: Session) -> None:
-    u = User(performed_by=123, id=1, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    # u = User(performed_by=123, id=1, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    u = User(id=1, performed_by=123,)
     session.add(u)
     session.commit()
     a = session.query(User).first()
@@ -72,31 +90,50 @@ def test_user2(session: Session) -> None:
 
 
 def test_user(session: Session) -> None:
-    u = User(id=2, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    # u = User(id=2, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    u = User(id=2, performed_by=123,)
     session.add(u)
     session.commit()
     a = session.query(User).first()
     u = UserPy(id=a.id, performed_by=123, email="sss", name="dfd", fullname="dfdf", nickname="dfdd",)
 
 
+def test_lenders(session: Session) -> None:
+    l1 = Lenders(id=62311, performed_by=123, lender_name="DMI")
+    session.add(l1)
+    l2 = Lenders(id=1756833, performed_by=123, lender_name="Redux")
+    session.add(l2)
+    session.flush()
+    a = session.query(Lenders).first()
+    u = LenderPy(id=a.id, performed_by=123, lender_name="DMI", row_status="active")
+
+
 def test_lender_disbursal(session: Session) -> None:
-    lender_disbursal(session, 100000)
-    _, lender_capital_balance = get_account_balance_from_str(session, "62311/lender/lender_capital/l")
-    assert lender_capital_balance == Decimal(100000)
+    test_lenders(session)
+    resp = lender_disbursal(session, 100000, 62311)
+    assert resp["result"] == "success"
+    # _, lender_capital_balance = get_account_balance_from_str(session, "62311/lender/lender_capital/l")
+    # assert lender_capital_balance == Decimal(100000)
 
 
 def test_m2p_transfer(session: Session) -> None:
-    m2p_transfer(session, 50000)
-    _, lender_pool_balance = get_account_balance_from_str(session, "62311/lender/pool_balance/a")
-    assert lender_pool_balance == Decimal(50000)
+    test_lenders(session)
+    resp = m2p_transfer(session, 50000, 62311)
+    assert resp["result"] == "success"
+
+    # _, lender_pool_balance = get_account_balance_from_str(session, "62311/lender/pool_balance/a")
+    # assert lender_pool_balance == Decimal(50000)
 
 
 def test_card_swipe(session: Session) -> None:
+    test_lenders(session)
+    card_db_updates(session)
     uc = create_user_card(
         session=session,
         user_id=2,
         card_activation_date=parse_date("2020-05-01").date(),
         card_type="ruby",
+        lender_id=62311,
     )
     user_card_id = uc.id
 
@@ -107,6 +144,8 @@ def test_card_swipe(session: Session) -> None:
         amount=Decimal(700),
         description="Amazon.com",
     )
+    swipe1 = swipe1["data"]
+
     swipe2 = create_card_swipe(
         session=session,
         user_card=uc,
@@ -114,6 +153,8 @@ def test_card_swipe(session: Session) -> None:
         amount=Decimal(200),
         description="Flipkart.com",
     )
+    swipe2 = swipe2["data"]
+
     assert swipe1.loan_id == swipe2.loan_id
     bill_id = swipe1.loan_id
 
@@ -128,7 +169,10 @@ def test_card_swipe(session: Session) -> None:
 
 
 def test_generate_bill_1(session: Session) -> None:
-    a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    test_lenders(session)
+    card_db_updates(session)
+    # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    a = User(id=99, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -138,6 +182,7 @@ def test_generate_bill_1(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
         card_type="ruby",
+        lender_id=62311,
     )
 
     swipe = create_card_swipe(
@@ -147,12 +192,15 @@ def test_generate_bill_1(session: Session) -> None:
         amount=Decimal(1000),
         description="BigBasket.com",
     )
-    bill_id = swipe.loan_id
+    bill_id = swipe["data"].loan_id
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 1000
 
-    bill = bill_generate(session=session, user_card=uc)
+    user_card = get_user_card(session, a.id)
+    bill = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), user_card)
 
     assert bill.bill_start_date == parse_date("2020-04-02").date()
     assert bill.table.is_generated is True
@@ -185,7 +233,7 @@ def test_generate_bill_1(session: Session) -> None:
         .order_by(LedgerTriggerEvent.post_date.desc())
         .first()
     )
-    assert interest_event.post_date.date() == parse_date("2020-05-02").date()
+    assert interest_event.post_date.date() == parse_date("2020-05-18").date()
 
 
 def _partial_payment_bill_1(session: Session) -> None:
@@ -440,7 +488,9 @@ def _generate_bill_2(session: Session) -> None:
     )
     assert user_card_balance == Decimal(-3000)
 
-    bill_2 = bill_generate(session=session, user_card=uc)
+    bill_2 = bill_generate(user_card=uc)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(session, bill_2.table.bill_due_date + relativedelta(days=1), uc)
     assert bill_2.bill_start_date == parse_date("2020-05-02").date()
 
     unpaid_bills = uc.get_unpaid_bills()
@@ -511,7 +561,9 @@ def _generate_bill_3(session: Session) -> None:
     # previously 1000 now 2000 after a 1000 purchase
     assert user_card_balance == Decimal(-2000)
 
-    bill = bill_generate(session=session, user_card=uc)
+    bill = bill_generate(user_card=uc)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), uc)
 
     assert bill.bill_start_date == parse_date("2020-06-02").date()
     unpaid_bills = uc.get_unpaid_bills()
@@ -569,7 +621,10 @@ def test_generate_bill_2(session: Session) -> None:
 
 
 def test_generate_bill_3(session: Session) -> None:
-    a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    test_lenders(session)
+    card_db_updates(session)
+    # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    a = User(id=99, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -579,6 +634,7 @@ def test_generate_bill_3(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
         card_type="ruby",
+        lender_id=62311,
     )
 
     create_card_swipe(
@@ -590,7 +646,10 @@ def test_generate_bill_3(session: Session) -> None:
     )
 
     generate_date = parse_date("2020-06-01").date()
-    bill = bill_generate(session=session, user_card=uc)
+    user_card = get_user_card(session, a.id)
+    bill = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), user_card)
 
     _, unbilled_balance = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/unbilled_transactions/a"
@@ -607,7 +666,10 @@ def test_generate_bill_3(session: Session) -> None:
 
 
 def test_emi_creation(session: Session) -> None:
-    a = User(id=108, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    test_lenders(session)
+    card_db_updates(session)
+    # a = User(id=108, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    a = User(id=108, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -617,6 +679,7 @@ def test_emi_creation(session: Session) -> None:
         card_type="ruby",
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
+        lender_id=62311,
     )
 
     create_card_swipe(
@@ -627,8 +690,13 @@ def test_emi_creation(session: Session) -> None:
         description="BigBasket.com",
     )
 
+    user_card = get_user_card(session, a.id)
     # Generate bill
-    bill_april = bill_generate(session=session, user_card=uc)
+    bill_april = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_april.table.bill_due_date + relativedelta(days=1), user_card
+    )
 
     all_emis = (
         session.query(CardEmis)
@@ -642,7 +710,10 @@ def test_emi_creation(session: Session) -> None:
 
 
 def test_subsequent_emi_creation(session: Session) -> None:
-    a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    test_lenders(session)
+    card_db_updates(session)
+    # a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    a = User(id=160, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -652,6 +723,7 @@ def test_subsequent_emi_creation(session: Session) -> None:
         card_type="ruby",
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
+        lender_id=62311,
     )
 
     create_card_swipe(
@@ -663,7 +735,8 @@ def test_subsequent_emi_creation(session: Session) -> None:
     )
 
     generate_date = parse_date("2020-05-01").date()
-    bill_april = bill_generate(session=session, user_card=uc)
+    user_card = get_user_card(session, a.id)
+    bill_april = bill_generate(user_card)
 
     create_card_swipe(
         session=session,
@@ -673,8 +746,17 @@ def test_subsequent_emi_creation(session: Session) -> None:
         description="BigBasket.com",
     )
 
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_april.table.bill_due_date + relativedelta(days=1), user_card
+    )
+
     generate_date = parse_date("2020-06-01").date()
-    bill_may = bill_generate(session=session, user_card=uc)
+    bill_may = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_may.table.bill_due_date + relativedelta(days=1), user_card
+    )
 
     all_emis = (
         session.query(CardEmis)
@@ -694,7 +776,10 @@ def test_subsequent_emi_creation(session: Session) -> None:
 
 
 def test_schedule_for_interest_and_payment(session: Session) -> None:
-    a = User(id=1991, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    test_lenders(session)
+    card_db_updates(session)
+    # a = User(id=1991, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    a = User(id=1991, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -704,6 +789,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
         card_type="ruby",
         user_id=a.id,
         card_activation_date=parse_date("2020-05-01").date(),
+        lender_id=62311,
     )
 
     create_card_swipe(
@@ -715,7 +801,12 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     )
 
     generate_date = parse_date("2020-06-01").date()
-    bill_may = bill_generate(session=session, user_card=uc)
+    user_card = get_user_card(session, a.id)
+    bill_may = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_may.table.bill_due_date + relativedelta(days=1), user_card
+    )
 
     # Check calculated interest
     _, interest_due = get_account_balance_from_str(
@@ -811,14 +902,17 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
 
 
 def test_with_live_user_loan_id_4134872(session: Session) -> None:
-    a = User(
-        id=1764433,
-        performed_by=123,
-        name="UPENDRA",
-        fullname="UPENDRA SINGH",
-        nickname="UPENDRA",
-        email="upsigh921067@gmail.com",
-    )
+    test_lenders(session)
+    card_db_updates(session)
+    # a = User(
+    #     id=1764433,
+    #     performed_by=123,
+    #     name="UPENDRA",
+    #     fullname="UPENDRA SINGH",
+    #     nickname="UPENDRA",
+    #     email="upsigh921067@gmail.com",
+    # )
+    a = User(id=1764433, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -828,6 +922,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         card_type="ruby",
         user_id=a.id,
         card_activation_date=parse_date("2020-05-01").date(),
+        lender_id=62311,
     )
 
     # Card transactions
@@ -1003,7 +1098,12 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
 
     # Generate bill
     generate_date = parse_date("2020-06-01").date()
-    bill_may = bill_generate(session=session, user_card=uc)
+    user_card = get_user_card(session, a.id)
+    bill_may = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_may.table.bill_due_date + relativedelta(days=1), user_card
+    )
 
     # Check if amount is adjusted correctly in schedule
     all_emis_query = (
@@ -1281,13 +1381,20 @@ def test_view(session: Session) -> None:
 
 
 def test_lender_incur(session: Session) -> None:
-    a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas")
+    test_lenders(session)
+    card_db_updates(session)
+    # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas")
+    a = User(id=99, performed_by=123,)
     session.add(a)
     session.flush()
 
     # assign card
     uc = create_user_card(
-        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02").date(),
+        card_type="ruby",
+        lender_id=62311,
     )
     swipe = create_card_swipe(
         session=session,
@@ -1296,10 +1403,13 @@ def test_lender_incur(session: Session) -> None:
         amount=Decimal(1000),
         description="BigBasket.com",
     )
-    bill_id = swipe.loan_id
+    bill_id = swipe["data"].loan_id
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 1000
-    bill = bill_generate(session=session, user_card=uc)
+    user_card = get_user_card(session, a.id)
+    bill = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), user_card)
     assert bill.table.is_generated is True
 
     swipe = create_card_swipe(
@@ -1309,13 +1419,14 @@ def test_lender_incur(session: Session) -> None:
         amount=Decimal(1500),
         description="BigBasket.com",
     )
-    bill = bill_generate(session=session, user_card=uc)
+    bill = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), user_card)
     assert bill.table.is_generated is True
 
     lender_interest_incur(
         session, from_date=parse_date("2020-06-01").date(), to_date=parse_date("2020-06-30").date()
     )
-    uc = get_user_card(session, 99)
     _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
     assert amount == Decimal("2511.65")
 
@@ -1339,13 +1450,20 @@ def test_lender_incur(session: Session) -> None:
 
 
 def test_lender_incur_two(session: Session) -> None:
-    a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas")
+    test_lenders(session)
+    card_db_updates(session)
+    # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas")
+    a = User(id=99, performed_by=123,)
     session.add(a)
     session.flush()
 
     # assign card
     uc = create_user_card(
-        session=session, user_id=a.id, card_activation_date=parse_date("2020-04-02"), card_type="ruby"
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02").date(),
+        card_type="ruby",
+        lender_id=62311,
     )
     swipe = create_card_swipe(
         session=session,
@@ -1361,7 +1479,10 @@ def test_lender_incur_two(session: Session) -> None:
         amount=Decimal(500),
         description="BigBasket.com",
     )
-    bill = bill_generate(session=session, user_card=uc)
+    user_card = get_user_card(session, a.id)
+    bill = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), user_card)
     assert bill.table.is_generated is True
 
     lender_interest_incur(
@@ -1430,7 +1551,7 @@ def test_prepayment(session: Session) -> None:
         amount=Decimal(1000),
         description="BigBasket.com",
     )
-    bill_id = swipe.loan_id
+    bill_id = swipe["data"].loan_id
 
     emi_payment_mapping = (
         session.query(EmiPaymentMapping).filter(EmiPaymentMapping.card_id == user_card_id).all()
@@ -1442,7 +1563,9 @@ def test_prepayment(session: Session) -> None:
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 1000
-    bill = bill_generate(session=session, user_card=uc)
+    bill = bill_generate(user_card=uc)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), uc)
     assert bill.table.is_generated is True
 
     _, prepayment_amount = get_account_balance_from_str(
@@ -1463,12 +1586,13 @@ def test_prepayment(session: Session) -> None:
 #
 # def test_writeoff(session: Session) -> None:
 #     a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+#     a = User(id=99,performed_by=123,)
 #     session.add(a)
 #     session.flush()
 #
 #     # assign card
 #     uc = create_user_card(
-#         session=session, user_id=a.id, card_activation_date=parse_date("2020-03-02"), card_type="ruby",
+#         session=session, user_id=a.id, card_activation_date=parse_date("2020-03-02"), card_type="ruby", lender_id = 62311,
 #     )
 #
 #     user_card_id = uc.id
@@ -1480,7 +1604,7 @@ def test_prepayment(session: Session) -> None:
 #         amount=Decimal(1000),
 #         description="BigBasket.com",
 #     )
-#     bill = bill_generate(session=session, user_card=uc)
+#     bill = bill_generate(user_card=uc)
 #     assert bill.table.is_generated is True
 #
 #     swipe = create_card_swipe(
@@ -1494,7 +1618,7 @@ def test_prepayment(session: Session) -> None:
 #     _, prepayment_amount = get_account_balance_from_str(
 #         session, book_string=f"{user_card_id}/card/pre_payment/l"
 #     )
-#     bill = bill_generate(session=session, user_card=uc)
+#     bill = bill_generate(user_card=uc)
 #     assert bill.table.is_generated is True
 #
 #     swipe = create_card_swipe(
@@ -1504,7 +1628,7 @@ def test_prepayment(session: Session) -> None:
 #         amount=Decimal(1200),
 #         description="BigBasket.com",
 #     )
-#     bill = bill_generate(session=session, user_card=uc)
+#     bill = bill_generate(user_card=uc)
 #     assert bill.table.is_generated is True
 #     unpaid_bills = uc.get_unpaid_bills()
 #     bill = unpaid_bills[0]
@@ -1575,14 +1699,17 @@ def test_prepayment(session: Session) -> None:
 
 
 def test_moratorium(session: Session) -> None:
-    a = User(
-        id=38612,
-        performed_by=123,
-        name="Ananth",
-        fullname="Ananth Venkatesh",
-        nickname="Ananth",
-        email="ananth@redcarpetup.com",
-    )
+    test_lenders(session)
+    card_db_updates(session)
+    # a = User(
+    #     id=38612,
+    #     performed_by=123,
+    #     name="Ananth",
+    #     fullname="Ananth Venkatesh",
+    #     nickname="Ananth",
+    #     email="ananth@redcarpetup.com",
+    # )
+    a = User(id=38612, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -1594,6 +1721,7 @@ def test_moratorium(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-01-20").date(),
         interest_free_period_in_days=25,
+        lender_id=62311,
     )
 
     create_card_swipe(
@@ -1606,7 +1734,12 @@ def test_moratorium(session: Session) -> None:
 
     # Generate bill
     generate_date = parse_date("2020-02-01").date()
-    bill_may = bill_generate(session=session, user_card=uc)
+    user_card = get_user_card(session, a.id)
+    bill_may = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_may.table.bill_due_date + relativedelta(days=1), user_card
+    )
 
     # Check if amount is adjusted correctly in schedule
     all_emis_query = (
@@ -1633,7 +1766,10 @@ def test_moratorium(session: Session) -> None:
 
 
 def test_refresh_schedule(session: Session) -> None:
-    a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    test_lenders(session)
+    card_db_updates(session)
+    # a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    a = User(id=160, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -1643,6 +1779,7 @@ def test_refresh_schedule(session: Session) -> None:
         card_type="ruby",
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
+        lender_id=62311,
     )
 
     create_card_swipe(
@@ -1654,7 +1791,8 @@ def test_refresh_schedule(session: Session) -> None:
     )
 
     generate_date = parse_date("2020-05-01").date()
-    bill_april = bill_generate(session=session, user_card=uc)
+    user_card = get_user_card(session, a.id)
+    bill_april = bill_generate(user_card)
 
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{uc.id}/card/lender_payable/l"
@@ -1686,8 +1824,17 @@ def test_refresh_schedule(session: Session) -> None:
         description="BigBasket.com",
     )
 
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_april.table.bill_due_date + relativedelta(days=1), user_card
+    )
+
     generate_date = parse_date("2020-06-01").date()
-    bill_may = bill_generate(session=session, user_card=uc)
+    bill_may = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_may.table.bill_due_date + relativedelta(days=1), user_card
+    )
 
     # Get emi list post few bill creations
     all_emis_query = (
@@ -1698,7 +1845,7 @@ def test_refresh_schedule(session: Session) -> None:
     pre_emis_dict = [u.as_dict() for u in all_emis_query.all()]
 
     # Refresh schedule
-    refresh_schedule(session, a.id)
+    refresh_schedule(get_user_card(session, a.id))
 
     # Get list post refresh
     all_emis_query = (
@@ -1715,7 +1862,10 @@ def test_refresh_schedule(session: Session) -> None:
 
 
 def test_moratorium_schedule(session: Session) -> None:
-    a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    test_lenders(session)
+    card_db_updates(session)
+    # a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    a = User(id=160, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -1725,6 +1875,7 @@ def test_moratorium_schedule(session: Session) -> None:
         card_type="ruby",
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
+        lender_id=62311,
     )
 
     create_card_swipe(
@@ -1736,7 +1887,8 @@ def test_moratorium_schedule(session: Session) -> None:
     )
 
     generate_date = parse_date("2020-05-01").date()
-    bill_april = bill_generate(session=session, user_card=uc)
+    user_card = get_user_card(session, a.id)
+    bill_april = bill_generate(user_card)
 
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{uc.id}/card/lender_payable/l"
@@ -1768,8 +1920,18 @@ def test_moratorium_schedule(session: Session) -> None:
         description="BigBasket.com",
     )
 
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_april.table.bill_due_date + relativedelta(days=1), user_card
+    )
+
     generate_date = parse_date("2020-06-01").date()
-    bill_may = bill_generate(session=session, user_card=uc)
+    user_card = get_user_card(session, a.id)
+    bill_may = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_may.table.bill_due_date + relativedelta(days=1), user_card
+    )
 
     # Get emi list post few bill creations
     all_emis_query = (
@@ -1785,7 +1947,7 @@ def test_moratorium_schedule(session: Session) -> None:
     )
 
     # Refresh schedule
-    refresh_schedule(session, a.id)
+    refresh_schedule(get_user_card(session, a.id))
 
     # Get list post refresh
     all_emis_query = (
@@ -1802,14 +1964,17 @@ def test_moratorium_schedule(session: Session) -> None:
 
 
 def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
-    a = User(
-        id=38613,
-        performed_by=123,
-        name="Ananth",
-        fullname="Ananth Venkatesh",
-        nickname="Ananth",
-        email="ananth@redcarpetup.com",
-    )
+    test_lenders(session)
+    card_db_updates(session)
+    # a = User(
+    #     id=38613,
+    #     performed_by=123,
+    #     name="Ananth",
+    #     fullname="Ananth Venkatesh",
+    #     nickname="Ananth",
+    #     email="ananth@redcarpetup.com",
+    # )
+    a = User(id=38613, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -1819,6 +1984,7 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
         card_type="ruby",
         card_activation_date=parse_date("2020-01-20").date(),
         interest_free_period_in_days=25,
+        lender_id=62311,
     )
 
     create_card_swipe(
@@ -1829,8 +1995,11 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
         description="WWW YESBANK IN         GURGAON       IND",
     )
 
+    uc = get_user_card(session, a.id)
     # Generate bill
-    bill_generate(session=session, user_card=user_card)
+    bill = bill_generate(uc)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), uc)
 
     assert (
         LoanMoratorium.is_in_moratorium(
@@ -1867,14 +2036,17 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
 
 
 def test_moratorium_live_user_1836540(session: Session) -> None:
-    a = User(
-        id=1836540,
-        performed_by=123,
-        name="Mohammad Shahbaz Mohammad Shafi Qureshi",
-        fullname="Mohammad Shahbaz Mohammad Shafi Qureshi",
-        nickname="Mohammad Shahbaz Mohammad Shafi Qureshi",
-        email="shahbazq797@gmail.com",
-    )
+    test_lenders(session)
+    card_db_updates(session)
+    # a = User(
+    #     id=1836540,
+    #     performed_by=123,
+    #     name="Mohammad Shahbaz Mohammad Shafi Qureshi",
+    #     fullname="Mohammad Shahbaz Mohammad Shafi Qureshi",
+    #     nickname="Mohammad Shahbaz Mohammad Shafi Qureshi",
+    #     email="shahbazq797@gmail.com",
+    # )
+    a = User(id=1836540, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -1885,6 +2057,7 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
         user_id=a.id,
         # 16th March actual
         card_activation_date=parse_date("2020-03-01").date(),
+        lender_id=62311,
     )
 
     # Give moratorium
@@ -1911,7 +2084,8 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
         description="PAY*TRUEBALANCE IO     GURGAON       IND",
     )
 
-    bill_april = bill_generate(session=session, user_card=user_card)
+    uc = get_user_card(session, a.id)
+    bill_march = bill_generate(uc)
 
     create_card_swipe(
         session=session,
@@ -1929,9 +2103,14 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
         description="PAYU PAYMENTS PVT LTD  0001243054000 IND",
     )
 
-    bill_may = bill_generate(session=session, user_card=user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(session, bill_march.table.bill_due_date + relativedelta(days=1), uc)
 
-    # bill_june = bill_generate(session=session, user_card=user_card)
+    bill_april = bill_generate(uc)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(session, bill_april.table.bill_due_date + relativedelta(days=1), uc)
+
+    # bill_june = bill_generate(user_card=user_card)
 
     # Get emi list post few bill creations
     all_emis_query = (
@@ -1969,3 +2148,60 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
     assert last_emi.due_amount == Decimal("3.11")
     # First cycle 18 emis, next bill 19 emis, 2 because of moratorium == 21
     assert last_emi.emi_number == 21
+
+
+def test_intermediate_bill_generation(session: Session) -> None:
+    test_card_swipe(session)
+    user_card = get_user_card(session, 2)
+    bill_1 = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(session, bill_1.table.bill_due_date + relativedelta(days=1), user_card)
+
+    # We now create a swipe after 5 months
+    swipe3 = create_card_swipe(
+        session=session,
+        user_card=user_card,
+        txn_time=parse_date("2020-10-02 11:22:11"),
+        amount=Decimal(200),
+        description="Flipkart.com",
+    )
+
+    bill_2 = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(session, bill_2.table.bill_due_date + relativedelta(days=1), user_card)
+
+    assert (
+        session.query(LoanData)
+        .filter(LoanData.card_id == user_card.id, LoanData.is_generated.is_(True))
+        .count()
+    ) == 6
+
+
+def test_transaction_before_activation(session: Session) -> None:
+    test_lenders(session)
+    card_db_updates(session)
+    # a = User(
+    #     id=1836540,
+    #     performed_by=123,
+    #     name="Mohammad Shahbaz Mohammad Shafi Qureshi",
+    #     fullname="Mohammad Shahbaz Mohammad Shafi Qureshi",
+    #     nickname="Mohammad Shahbaz Mohammad Shafi Qureshi",
+    #     email="shahbazq797@gmail.com",
+    # )
+    a = User(id=1836540, performed_by=123,)
+    session.add(a)
+    session.flush()
+
+    # assign card
+    user_card = create_user_card(session=session, card_type="ruby", user_id=a.id, lender_id=62311,)
+
+    # Swipe before activation
+    swipe = create_card_swipe(
+        session=session,
+        user_card=user_card,
+        txn_time=parse_date("2020-05-02 11:22:11"),
+        amount=Decimal(200),
+        description="Flipkart.com",
+    )
+
+    assert swipe["result"] == "error"

@@ -7,6 +7,7 @@ from typing import (
     TypeVar,
 )
 
+from dateutil.relativedelta import relativedelta
 from pendulum import (
     Date,
     DateTime,
@@ -131,6 +132,7 @@ class BaseCard:
             lender_id=lender_id,
             bill_start_date=bill_start_date,
             bill_close_date=bill_close_date,
+            bill_due_date=bill_start_date + relativedelta(days=self.table.interest_free_period_in_days),
             is_generated=is_generated,
         )
         self.session.add(new_bill)

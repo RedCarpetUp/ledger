@@ -19,21 +19,21 @@ from rush.models import (
 from rush.recon.dmi_interest_on_portfolio import interest_on_dmi_portfolio
 
 
-def lender_disbursal_event(session: Session, event: LedgerTriggerEvent) -> None:
+def lender_disbursal_event(session: Session, event: LedgerTriggerEvent, lender_id: int) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
         debit_book_str=f"12345/redcarpet/rc_cash/a",
-        credit_book_str=f"62311/lender/lender_capital/l",
+        credit_book_str=f"{lender_id}/lender/lender_capital/l",
         amount=event.amount,
     )
 
 
-def m2p_transfer_event(session: Session, event: LedgerTriggerEvent) -> None:
+def m2p_transfer_event(session: Session, event: LedgerTriggerEvent, lender_id: int) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
-        debit_book_str=f"62311/lender/pool_balance/a",
+        debit_book_str=f"{lender_id}/lender/pool_balance/a",
         credit_book_str=f"12345/redcarpet/rc_cash/a",
         amount=event.amount,
     )
@@ -158,7 +158,7 @@ def payment_received_event(
     # Slide payment in emi
     from rush.create_emi import slide_payments
 
-    slide_payments(session, user_card.user_id, payment_event=event)
+    slide_payments(user_card=user_card, payment_event=event)
 
 
 def _adjust_for_gateway_expenses(session: Session, event: LedgerTriggerEvent, credit_book_str: str):
@@ -301,10 +301,6 @@ def accrue_interest_event(
         credit_book_str=f"{bill.id}/bill/interest_accrued/r",
         amount=amount,
     )
-    # adjust the given interest in schedule
-    from rush.create_emi import adjust_interest_in_emis
-
-    adjust_interest_in_emis(session, bill.user_id, event.post_date)
 
 
 def accrue_late_fine_event(session: Session, bill: LoanData, event: LedgerTriggerEvent) -> None:
@@ -315,10 +311,6 @@ def accrue_late_fine_event(session: Session, bill: LoanData, event: LedgerTrigge
         credit_book_str=f"{bill.id}/bill/late_fine/r",
         amount=event.amount,
     )
-    # adjust the given interest in schedule
-    from rush.create_emi import adjust_late_fee_in_emis
-
-    adjust_late_fee_in_emis(session, bill.user_id, event.post_date)
 
     # Add into min amount of the bill too.
     add_min_amount_event(session, bill, event, event.amount)

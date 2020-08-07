@@ -3,8 +3,8 @@ from decimal import Decimal
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.functions import user
 
-from rush.accrue_financial_charges import accrue_interest_on_all_bills
 from rush.card import BaseCard
 from rush.card.base_card import BaseBill
 from rush.create_emi import refresh_schedule
@@ -22,30 +22,51 @@ from rush.utils import (
 
 
 def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -> BaseBill:
+    session = user_card.session
     # Get the most recent bill
     last_bill = user_card.get_latest_bill()
+    txn_date = txn_time.date()
+    lender_id = user_card.table.lender_id
     if last_bill:
-        does_swipe_belong_to_current_bill = txn_time.date() < last_bill.bill_close_date
+        does_swipe_belong_to_current_bill = txn_date < last_bill.bill_close_date
         if does_swipe_belong_to_current_bill:
-            return last_bill
+            return {"result": "success", "bill": last_bill}
         new_bill_date = last_bill.bill_close_date
     else:
-        new_bill_date = user_card.card_activation_date
+        new_bill_date = user_card.table.card_activation_date
+    new_closing_date = new_bill_date + relativedelta(months=1)
+    # Check if some months of bill generation were skipped and if they were then generate their bills
+    months_diff = (txn_date.year - new_closing_date.year) * 12 + txn_date.month - new_closing_date.month
+    if months_diff > 0:
+        for i in range(months_diff + 1):
+            new_bill = user_card.create_bill(
+                bill_start_date=new_bill_date + relativedelta(months=i),
+                bill_close_date=new_bill_date + relativedelta(months=i + 1),
+                lender_id=lender_id,
+                is_generated=False,
+            )
+            bill_generate(user_card)
+        last_bill = user_card.get_latest_bill()
+        new_bill_date = last_bill.bill_close_date
     new_bill = user_card.create_bill(
         bill_start_date=new_bill_date,
         bill_close_date=new_bill_date + relativedelta(months=1),
-        lender_id=62311,
+        lender_id=lender_id,
         is_generated=False,
     )
-    return new_bill
+    return {"result": "success", "bill": new_bill}
 
 
-def bill_generate(session: Session, user_card: BaseCard) -> BaseBill:
+def bill_generate(user_card: BaseCard) -> BaseBill:
+    session = user_card.session
     bill = user_card.get_latest_bill_to_generate()  # Get the first bill which is not generated.
     if not bill:
         bill = get_or_create_bill_for_card_swipe(
             user_card, get_current_ist_time()
         )  # TODO not sure about this
+        if bill["result"] == "error":
+            return bill
+        bill = bill["bill"]
     lt = LedgerTriggerEvent(name="bill_generate", card_id=user_card.id, post_date=bill.bill_start_date)
     session.add(lt)
     session.flush()
@@ -72,11 +93,8 @@ def bill_generate(session: Session, user_card: BaseCard) -> BaseBill:
         # After the bill has generated. Call the min generation event on all unpaid bills.
         add_min_to_all_bills(session, bill_closing_date, user_card)
 
-    # Accrue interest on all bills. Before the actual date, yes.
-    accrue_interest_on_all_bills(session, bill_closing_date, user_card)
-
     # Refresh the schedule
-    refresh_schedule(session, user_card.table.user_id)
+    refresh_schedule(user_card)
 
     return bill
 
@@ -93,4 +111,4 @@ def extend_tenure(session: Session, user_card: BaseCard, new_tenure: int) -> Non
         )
     session.flush()
     # Refresh the schedule
-    refresh_schedule(session, user_card.table.user_id)
+    refresh_schedule(user_card)
