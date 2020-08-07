@@ -5,10 +5,14 @@ from io import StringIO
 import alembic
 from _pytest.monkeypatch import MonkeyPatch
 from alembic.command import current as alembic_current
+from dateutil.relativedelta import relativedelta
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
-from rush.accrue_financial_charges import accrue_late_charges
+from rush.accrue_financial_charges import (
+    accrue_interest_on_all_bills,
+    accrue_late_charges,
+)
 from rush.anomaly_detection import run_anomaly
 from rush.card import (
     create_user_card,
@@ -52,6 +56,7 @@ from rush.models import (
     UserPy,
 )
 from rush.payments import payment_received
+from rush.recon.revenue_earned import get_revenue_earned_in_a_period
 from rush.views import (
     bill_view,
     user_view,
@@ -76,6 +81,10 @@ def card_db_updates(session: Session) -> None:
     session.add(cn)
     session.flush()
     ckn = CardKitNumbers(kit_number="00000", card_name_id=cn.id, last_5_digits="0000", status="active")
+    session.add(ckn)
+    session.flush()
+
+    ckn = CardKitNumbers(kit_number="11111", card_name_id=cn.id, last_5_digits="0000", status="active")
     session.add(ckn)
     session.flush()
 
@@ -119,18 +128,19 @@ def test_lenders(session: Session) -> None:
 
 def test_lender_disbursal(session: Session) -> None:
     test_lenders(session)
-    amount = 100000
-    lender_id = 62311
-    val = lender_disbursal(session, amount, lender_id)["lender_capital"]
-    assert val == Decimal(100000)
+    resp = lender_disbursal(session, 100000, 62311)
+    assert resp["result"] == "success"
+    # _, lender_capital_balance = get_account_balance_from_str(session, "62311/lender/lender_capital/l")
+    # assert lender_capital_balance == Decimal(100000)
 
 
 def test_m2p_transfer(session: Session) -> None:
     test_lenders(session)
-    amount = 50000
-    lender_id = 62311
-    val = m2p_transfer(session, amount, lender_id)["lender_pool"]
-    assert val == Decimal(50000)
+    resp = m2p_transfer(session, 50000, 62311)
+    assert resp["result"] == "success"
+
+    # _, lender_pool_balance = get_account_balance_from_str(session, "62311/lender/pool_balance/a")
+    # assert lender_pool_balance == Decimal(50000)
 
 
 def test_card_swipe(session: Session) -> None:
@@ -210,7 +220,12 @@ def test_generate_bill_1(session: Session) -> None:
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 1000
 
-    bill = bill_generate(get_user_card(session, a.id))
+    user_card = get_user_card(session, a.id)
+    bill = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill["bill"].table.bill_due_date + relativedelta(days=1), user_card
+    )
 
     assert bill["bill"].bill_start_date == parse_date("2020-04-02").date()
     assert bill["bill"].table.is_generated is True
@@ -233,7 +248,7 @@ def test_generate_bill_1(session: Session) -> None:
     assert interest_due == Decimal("30.67")
 
     _, interest_due = get_account_balance_from_str(
-        session, book_string=f"{bill_id}/bill/interest_earned/r"
+        session, book_string=f"{bill_id}/bill/interest_accrued/r"
     )
     assert interest_due == Decimal("30.67")
 
@@ -243,7 +258,7 @@ def test_generate_bill_1(session: Session) -> None:
         .order_by(LedgerTriggerEvent.post_date.desc())
         .first()
     )
-    assert interest_event.post_date.date() == parse_date("2020-05-02").date()
+    assert interest_event.post_date.date() == parse_date("2020-05-18").date()
 
 
 def _partial_payment_bill_1(session: Session) -> None:
@@ -499,6 +514,8 @@ def _generate_bill_2(session: Session) -> None:
     assert user_card_balance == Decimal(-3000)
 
     bill_2 = bill_generate(user_card=uc)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(session, bill_2["bill"].table.bill_due_date + relativedelta(days=1), uc)
     assert bill_2["bill"].bill_start_date == parse_date("2020-05-02").date()
 
     unpaid_bills = uc.get_unpaid_bills()
@@ -527,9 +544,18 @@ def _generate_bill_2(session: Session) -> None:
     assert interest_due == Decimal("30.67")
 
     _, interest_due = get_account_balance_from_str(
-        session, book_string=f"{first_bill.id}/bill/interest_earned/r"
+        session, book_string=f"{first_bill.id}/bill/interest_accrued/r"
     )
     assert interest_due == Decimal("61.34")
+
+    total_revenue_earned = get_revenue_earned_in_a_period(
+        session, parse_date("2020-05-01").date(), parse_date("2020-05-31").date()
+    )
+    assert total_revenue_earned == Decimal("130.67")
+    total_revenue_earned = get_revenue_earned_in_a_period(
+        session, parse_date("2020-06-01").date(), parse_date("2020-06-30").date()
+    )
+    assert total_revenue_earned == Decimal("0")
 
 
 def _generate_bill_3(session: Session) -> None:
@@ -561,6 +587,8 @@ def _generate_bill_3(session: Session) -> None:
     assert user_card_balance == Decimal(-2000)
 
     bill = bill_generate(user_card=uc)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), uc)
 
     assert bill.bill_start_date == parse_date("2020-06-02").date()
     unpaid_bills = uc.get_unpaid_bills()
@@ -645,7 +673,12 @@ def test_generate_bill_3(session: Session) -> None:
     )
 
     generate_date = parse_date("2020-06-01").date()
-    bill = bill_generate(get_user_card(session, a.id))
+    user_card = get_user_card(session, a.id)
+    bill = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill["bill"].table.bill_due_date + relativedelta(days=1), user_card
+    )
 
     _, unbilled_balance = get_account_balance_from_str(
         session, book_string=f"{bill['bill'].id}/bill/unbilled_transactions/a"
@@ -688,8 +721,13 @@ def test_emi_creation(session: Session) -> None:
         description="BigBasket.com",
     )
 
+    user_card = get_user_card(session, a.id)
     # Generate bill
-    bill_april = bill_generate(get_user_card(session, a.id))
+    bill_april = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_april["bill"].table.bill_due_date + relativedelta(days=1), user_card
+    )
 
     all_emis = (
         session.query(CardEmis)
@@ -730,7 +768,8 @@ def test_subsequent_emi_creation(session: Session) -> None:
     )
 
     generate_date = parse_date("2020-05-01").date()
-    bill_april = bill_generate(get_user_card(session, a.id))
+    user_card = get_user_card(session, a.id)
+    bill_april = bill_generate(user_card)
 
     create_card_swipe(
         session=session,
@@ -740,8 +779,17 @@ def test_subsequent_emi_creation(session: Session) -> None:
         description="BigBasket.com",
     )
 
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_april["bill"].table.bill_due_date + relativedelta(days=1), user_card
+    )
+
     generate_date = parse_date("2020-06-01").date()
-    bill_may = bill_generate(get_user_card(session, a.id))
+    bill_may = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_may["bill"].table.bill_due_date + relativedelta(days=1), user_card
+    )
 
     all_emis = (
         session.query(CardEmis)
@@ -788,7 +836,12 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     )
 
     generate_date = parse_date("2020-06-01").date()
-    bill_may = bill_generate(get_user_card(session, a.id))
+    user_card = get_user_card(session, a.id)
+    bill_may = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_may["bill"].table.bill_due_date + relativedelta(days=1), user_card
+    )
 
     # Check calculated interest
     _, interest_due = get_account_balance_from_str(
@@ -1082,7 +1135,12 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
 
     # Generate bill
     generate_date = parse_date("2020-06-01").date()
-    bill_may = bill_generate(get_user_card(session, a.id))
+    user_card = get_user_card(session, a.id)
+    bill_may = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_may["bill"].table.bill_due_date + relativedelta(days=1), user_card
+    )
 
     # Check if amount is adjusted correctly in schedule
     all_emis_query = (
@@ -1172,7 +1230,7 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
     assert interest_due == 0
 
     _, interest_earned = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/interest_earned/r"
+        session, book_string=f"{bill.id}/bill/interest_accrued/r"
     )
     assert interest_earned == 0
 
@@ -1201,12 +1259,12 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
     second_bill = unpaid_bills[1]
 
     _, interest_earned = get_account_balance_from_str(
-        session, book_string=f"{first_bill.id}/bill/interest_earned/r"
+        session, book_string=f"{first_bill.id}/bill/interest_accrued/r"
     )
     assert interest_earned == Decimal("61.34")
 
     _, interest_earned = get_account_balance_from_str(
-        session, book_string=f"{second_bill.id}/bill/interest_earned/r"
+        session, book_string=f"{second_bill.id}/bill/interest_accrued/r"
     )
     assert interest_earned == Decimal("60.33")
 
@@ -1226,13 +1284,13 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
     assert lender_payable == Decimal("-220.84")
 
     _, interest_earned = get_account_balance_from_str(
-        session, book_string=f"{first_bill.id}/bill/interest_earned/r"
+        session, book_string=f"{first_bill.id}/bill/interest_accrued/r"
     )
     # 30.67 Interest got removed from first bill.
     assert interest_earned == Decimal("30.67")
 
     _, interest_earned = get_account_balance_from_str(
-        session, book_string=f"{second_bill.id}/bill/interest_earned/r"
+        session, book_string=f"{second_bill.id}/bill/interest_accrued/r"
     )
     assert interest_earned == Decimal(0)
 
@@ -1279,13 +1337,13 @@ def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
     second_bill = unpaid_bills[1]
 
     _, interest_earned = get_account_balance_from_str(
-        session, book_string=f"{first_bill.id}/bill/interest_earned/r"
+        session, book_string=f"{first_bill.id}/bill/interest_accrued/r"
     )
     # 30 Interest did not get removed.
     assert interest_earned == Decimal("61.34")
 
     _, interest_earned = get_account_balance_from_str(
-        session, book_string=f"{second_bill.id}/bill/interest_earned/r"
+        session, book_string=f"{second_bill.id}/bill/interest_accrued/r"
     )
     assert interest_earned == Decimal("60.33")
     assert is_bill_closed(session, first_bill) is True
@@ -1387,7 +1445,12 @@ def test_lender_incur(session: Session) -> None:
     bill_id = swipe["data"].loan_id
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 1000
-    bill = bill_generate(get_user_card(session, a.id))
+    user_card = get_user_card(session, a.id)
+    bill = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill["bill"].table.bill_due_date + relativedelta(days=1), user_card
+    )
     assert bill["bill"].table.is_generated is True
 
     swipe = create_card_swipe(
@@ -1397,13 +1460,16 @@ def test_lender_incur(session: Session) -> None:
         amount=Decimal(1500),
         description="BigBasket.com",
     )
-    bill = bill_generate(get_user_card(session, a.id))
+    bill = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill["bill"].table.bill_due_date + relativedelta(days=1), user_card
+    )
     assert bill["bill"].table.is_generated is True
 
     lender_interest_incur(
         session, from_date=parse_date("2020-06-01").date(), to_date=parse_date("2020-06-30").date()
     )
-    uc = get_user_card(session, 99)
     _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
     assert amount == Decimal("2511.65")
 
@@ -1458,7 +1524,12 @@ def test_lender_incur_two(session: Session) -> None:
         amount=Decimal(500),
         description="BigBasket.com",
     )
-    bill = bill_generate(get_user_card(session, a.id))
+    user_card = get_user_card(session, a.id)
+    bill = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill["bill"].table.bill_due_date + relativedelta(days=1), user_card
+    )
     assert bill["bill"].table.is_generated is True
 
     lender_interest_incur(
@@ -1540,6 +1611,8 @@ def test_prepayment(session: Session) -> None:
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 1000
     bill = bill_generate(user_card=uc)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(session, bill["bill"].table.bill_due_date + relativedelta(days=1), uc)
     assert bill["bill"].table.is_generated is True
 
     _, prepayment_amount = get_account_balance_from_str(
@@ -1710,7 +1783,12 @@ def test_moratorium(session: Session) -> None:
 
     # Generate bill
     generate_date = parse_date("2020-02-01").date()
-    bill_may = bill_generate(get_user_card(session, a.id))
+    user_card = get_user_card(session, a.id)
+    bill_may = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_may["bill"].table.bill_due_date + relativedelta(days=1), user_card
+    )
 
     # Check if amount is adjusted correctly in schedule
     all_emis_query = (
@@ -1764,7 +1842,8 @@ def test_refresh_schedule(session: Session) -> None:
     )
 
     generate_date = parse_date("2020-05-01").date()
-    bill_april = bill_generate(get_user_card(session, a.id))
+    user_card = get_user_card(session, a.id)
+    bill_april = bill_generate(user_card)
 
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{uc.id}/card/lender_payable/l"
@@ -1796,8 +1875,17 @@ def test_refresh_schedule(session: Session) -> None:
         description="BigBasket.com",
     )
 
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_april["bill"].table.bill_due_date + relativedelta(days=1), user_card
+    )
+
     generate_date = parse_date("2020-06-01").date()
-    bill_may = bill_generate(get_user_card(session, a.id))
+    bill_may = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_may["bill"].table.bill_due_date + relativedelta(days=1), user_card
+    )
 
     # Get emi list post few bill creations
     all_emis_query = (
@@ -1852,7 +1940,8 @@ def test_moratorium_schedule(session: Session) -> None:
     )
 
     generate_date = parse_date("2020-05-01").date()
-    bill_april = bill_generate(get_user_card(session, a.id))
+    user_card = get_user_card(session, a.id)
+    bill_april = bill_generate(user_card)
 
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{uc.id}/card/lender_payable/l"
@@ -1884,8 +1973,18 @@ def test_moratorium_schedule(session: Session) -> None:
         description="BigBasket.com",
     )
 
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_april["bill"].table.bill_due_date + relativedelta(days=1), user_card
+    )
+
     generate_date = parse_date("2020-06-01").date()
-    bill_may = bill_generate(get_user_card(session, a.id))
+    user_card = get_user_card(session, a.id)
+    bill_may = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_may["bill"].table.bill_due_date + relativedelta(days=1), user_card
+    )
 
     # Get emi list post few bill creations
     all_emis_query = (
@@ -1951,8 +2050,11 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
         description="WWW YESBANK IN         GURGAON       IND",
     )
 
+    uc = get_user_card(session, a.id)
     # Generate bill
-    bill_generate(get_user_card(session, a.id))
+    bill = bill_generate(uc)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(session, bill["bill"].table.bill_due_date + relativedelta(days=1), uc)
 
     assert (
         LoanMoratorium.is_in_moratorium(
@@ -2039,7 +2141,8 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
         description="PAY*TRUEBALANCE IO     GURGAON       IND",
     )
 
-    bill_april = bill_generate(get_user_card(session, a.id))
+    uc = get_user_card(session, a.id)
+    bill_march = bill_generate(uc)
 
     create_card_swipe(
         session=session,
@@ -2057,7 +2160,16 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
         description="PAYU PAYMENTS PVT LTD  0001243054000 IND",
     )
 
-    bill_may = bill_generate(get_user_card(session, a.id))
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_march["bill"].table.bill_due_date + relativedelta(days=1), uc
+    )
+
+    bill_april = bill_generate(uc)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_april["bill"].table.bill_due_date + relativedelta(days=1), uc
+    )
 
     # bill_june = bill_generate(user_card=user_card)
 
@@ -2157,7 +2269,7 @@ def test_generate_bill_1_flipkart_card(session: Session) -> None:
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_id}/bill/interest_receivable/a"
     )
-    assert interest_due == Decimal("0.33")  # principal is 2k but interest is charged on 1k
+    assert interest_due == Decimal("0.00")  # principal is 2k but interest is charged on 1k
 
 
 def test_reward(session: Session) -> None:
@@ -2191,7 +2303,11 @@ def test_reward(session: Session) -> None:
 def test_intermediate_bill_generation(session: Session) -> None:
     test_card_swipe(session)
     user_card = get_user_card(session, 2)
-    bill_generate(user_card)
+    bill_1 = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_1["bill"].table.bill_due_date + relativedelta(days=1), user_card
+    )
 
     # We now create a swipe after 5 months
     swipe3 = create_card_swipe(
@@ -2202,7 +2318,11 @@ def test_intermediate_bill_generation(session: Session) -> None:
         description="Flipkart.com",
     )
 
-    bill_generate(user_card)
+    bill_2 = bill_generate(user_card)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_2["bill"].table.bill_due_date + relativedelta(days=1), user_card
+    )
 
     assert (
         session.query(LoanData)

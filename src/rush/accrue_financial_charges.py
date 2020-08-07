@@ -59,7 +59,7 @@ def can_remove_interest(
     latest_bill = user_card.get_latest_generated_bill()
     # First check if there is even interest accrued in the latest bill.
     _, interest_accrued = get_account_balance_from_str(
-        session, f"{latest_bill.id}/bill/interest_earned/r"
+        session, f"{latest_bill.id}/bill/interest_accrued/r"
     )
     if interest_accrued == 0:
         return False  # Nothing to remove.
@@ -77,7 +77,7 @@ def can_remove_interest(
     return False
 
 
-def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_card: UserCard) -> None:
+def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_card: BaseCard) -> None:
     unpaid_bills = user_card.get_unpaid_bills()
     accrue_event = LedgerTriggerEvent(
         name="accrue_interest", card_id=user_card.id, post_date=post_date, amount=0
@@ -89,6 +89,11 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_car
             session, bill, accrue_event, bill.table.interest_to_charge, user_card=user_card
         )
         accrue_event.amount += bill.table.interest_to_charge
+    # adjust the given interest in schedule
+    # adjust the given interest in schedule
+    # from rush.create_emi import adjust_interest_in_emis
+
+    # adjust_interest_in_emis(session, user_card, post_date)
 
 
 def is_late_fee_valid(session: Session, user_card: BaseCard) -> bool:
@@ -127,6 +132,11 @@ def accrue_late_charges(session: Session, user_card: BaseCard, post_date: DateTi
         session.flush()
 
         accrue_late_fine_event(session, latest_bill, event)
+
+        # adjust the given interest in schedule
+        # from rush.create_emi import adjust_late_fee_in_emis
+
+        # adjust_late_fee_in_emis(session, user_card, event.post_date)
     return latest_bill
 
 
@@ -174,14 +184,14 @@ def reverse_interest_charges(
             create_ledger_entry_from_str(
                 session,
                 event_id=event.id,
-                debit_book_str=f"{bill.id}/bill/interest_earned/r",
+                debit_book_str=f"{bill.id}/bill/interest_accrued/r",
                 credit_book_str=f"{bill.id}/bill/interest_receivable/a",
                 amount=interest_due,
             )
 
         # We need to remove the amount that got adjusted in interest. interest_earned account needs
         # to be removed by the interest_that_was_added amount.
-        d = {"acc_to_remove_from": f"{bill.id}/bill/interest_earned/r", "amount": settled_amount}
+        d = {"acc_to_remove_from": f"{bill.id}/bill/interest_accrued/r", "amount": settled_amount}
         inter_bill_movement_entries.append(d)  # Move amount from this bill to some other bill.
 
         if not is_bill_closed(

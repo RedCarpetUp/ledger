@@ -6,7 +6,6 @@ from pendulum import DateTime
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.functions import user
 
-from rush.accrue_financial_charges import accrue_interest_on_all_bills
 from rush.card import BaseCard
 from rush.card.base_card import BaseBill
 from rush.create_emi import refresh_schedule
@@ -94,9 +93,6 @@ def bill_generate(user_card: BaseCard) -> Dict:
     if not LoanMoratorium.is_in_moratorium(session, user_card.id, bill_closing_date):
         # After the bill has generated. Call the min generation event on all unpaid bills.
         add_min_to_all_bills(session, bill_closing_date, user_card)
-
-    # Accrue interest on all bills. Before the actual date, yes.
-    accrue_interest_on_all_bills(session, bill_closing_date, user_card)
 
     # Refresh the schedule
     refresh_schedule(user_card)
