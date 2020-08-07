@@ -936,14 +936,18 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         amount=Decimal(500),
         description="AIRTELMONEY            MUMBAI        IND",
     )
-    # This was refunded so can be used to test refund
-    # create_card_swipe(
+
+    # Do Partial Payment
+    # payment_date = parse_date("2020-05-23 21:20:07")
+    # amount = Decimal(2)
+    # payment_received(
     #     session=session,
     #     user_card=uc,
-    #     txn_time=parse_date("2020-05-22 12:50:05"),
-    #     amount=Decimal(2),
-    #     description="PHONEPE RECHARGE.      GURGAON       IND",
+    #     payment_amount=amount,
+    #     payment_date=payment_date,
+    #     payment_request_id="a123",
     # )
+
     create_card_swipe(
         session=session,
         user_card=uc,
@@ -1089,6 +1093,15 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     generate_date = parse_date("2020-06-01").date()
     user_card = get_user_card(session, a.id)
     bill_may = bill_generate(user_card)
+
+    create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-06-13 12:17:49"),
+        amount=Decimal("8082.03"),
+        description="JUNE CUMULATIVE",
+    )
+
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(
         session, bill_may.table.bill_due_date + relativedelta(days=1), user_card
@@ -1105,7 +1118,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{uc.id}/card/lender_payable/l"
     )
-    assert lender_payable == Decimal("12914")
+    assert lender_payable == Decimal("20996.03")
 
     # Do Partial Payment
     payment_date = parse_date("2020-06-18 06:55:00")
@@ -1123,10 +1136,28 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{uc.id}/card/lender_payable/l"
     )
-    assert lender_payable == Decimal("12590.5")
+    assert lender_payable == Decimal("20672.53")
 
     # Refresh Schedule
     # slide_payments(session, a.id)
+
+    bill_june = bill_generate(user_card)
+
+    # Do Partial Payment
+    payment_date = parse_date("2020-08-02 14:11:06")
+    amount = Decimal(1140)
+    payment_received(
+        session=session,
+        user_card=uc,
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id="a123",
+    )
+
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_june.table.bill_due_date + relativedelta(days=1), user_card
+    )
 
     # Check if amount is adjusted correctly in schedule
     all_emis_query = (
@@ -1139,7 +1170,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     second_emi = emis_dict[1]
 
     assert first_emi["interest"] == Decimal("387.83")
-    assert first_emi["interest_received"] == Decimal("324")
+    assert first_emi["interest_received"] == Decimal("387.83")
 
 
 def test_interest_reversal_interest_already_settled(session: Session) -> None:
