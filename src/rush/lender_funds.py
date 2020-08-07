@@ -49,12 +49,11 @@ def m2p_transfer(session: Session, amount: Decimal, lender_id: int) -> Decimal:
     return {"result": "error", "message": "Invalid lender"}
 
 
-def lender_interest_incur(session: Session, from_date: Date, to_date: Date) -> bool:
+def lender_interest_incur(session: Session, from_date: Date, to_date: Date):
     lt = LedgerTriggerEvent(name="incur_lender_interest", post_date=to_date, amount=0)
     session.add(lt)
     session.flush()
     lender_interest_incur_event(session, from_date, to_date, lt)
-    return True
 
 
 def verify_lender(session: Session, lender_id: int) -> bool:

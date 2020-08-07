@@ -78,6 +78,10 @@ def card_db_updates(session: Session) -> None:
     session.add(ckn)
     session.flush()
 
+    ckn = CardKitNumbers(kit_number="11111", card_name_id=cn.id, last_5_digits="0000", status="active")
+    session.add(ckn)
+    session.flush()
+
 
 def test_user2(session: Session) -> None:
     # u = User(performed_by=123, id=1, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
