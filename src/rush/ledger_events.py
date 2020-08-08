@@ -128,14 +128,16 @@ def payment_received_event(
 ) -> None:
     payment_received = Decimal(event.amount)
     gateway_charges = event.extra_details.get("gateway_charges")
-    unpaid_bills = user_card.get_unpaid_bills()
-
-    payment_received = _adjust_for_min(
-        session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str,
-    )
-    payment_received = _adjust_for_complete_bill(
-        session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str,
-    )
+    if event.name == "merchant_refund":
+        pass
+    elif event.name == "payment_received":
+        unpaid_bills = user_card.get_unpaid_bills()
+        payment_received = _adjust_for_min(
+            session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str,
+        )
+        payment_received = _adjust_for_complete_bill(
+            session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str,
+        )
 
     if payment_received > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
@@ -314,31 +316,6 @@ def accrue_late_fine_event(session: Session, bill: LoanData, event: LedgerTrigge
 
     # Add into min amount of the bill too.
     add_min_amount_event(session, bill, event, event.amount)
-
-
-def refund_event(
-    session: Session, bill: LoanData, user_card: BaseCard, event: LedgerTriggerEvent
-) -> None:
-    _, amount_billed = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/principal_receivable/a"
-    )
-    if amount_billed == 0:  # Refund before bill generation
-        create_ledger_entry_from_str(
-            session,
-            event_id=event.id,
-            debit_book_str=f"{bill.lender_id}/lender/merchant_refund/a",
-            credit_book_str=f"{bill.id}/bill/unbilled/a",
-            amount=event.amount,
-        )
-        create_ledger_entry_from_str(
-            session,
-            event_id=event.id,
-            debit_book_str=f"{user_card.id}/card/lender_payable/l",
-            credit_book_str=f"{bill.lender_id}/lender/merchant_refund/a",
-            amount=event.amount,
-        )
-    else:
-        payment_received_event(session, user_card, f"{bill.lender_id}/lender/merchant_refund/a", event)
 
 
 def lender_interest_incur_event(
