@@ -374,7 +374,7 @@ def slide_payments(user_card: BaseCard, payment_event: LedgerTriggerEvent = None
     last_paid_emi_number = 0
     last_payment_date = None
     all_paid = False
-    events = get_payment_events(session, user_card.table)
+    events = get_payment_events(session, user_card)
     if not payment_event:
         for event in events:
             payment_received_and_adjusted = Decimal(0)
