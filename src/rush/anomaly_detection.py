@@ -10,13 +10,11 @@ from rush.accrue_financial_charges import (
     reverse_interest_charges,
     reverse_late_charges,
 )
-from rush.models import (
-    LedgerTriggerEvent,
-    UserCard,
-)
+from rush.card import BaseCard
+from rush.models import LedgerTriggerEvent
 
 
-def get_affected_events(session: Session, user_card: UserCard) -> List[LedgerTriggerEvent]:
+def get_affected_events(session: Session, user_card: BaseCard) -> List[LedgerTriggerEvent]:
     rank_func = (
         func.rank()
         .over(order_by=LedgerTriggerEvent.post_date.desc(), partition_by=LedgerTriggerEvent.name)
@@ -36,7 +34,7 @@ def get_affected_events(session: Session, user_card: UserCard) -> List[LedgerTri
     return events
 
 
-def get_payment_events(session: Session, user_card: UserCard) -> List[LedgerTriggerEvent]:
+def get_payment_events(session: Session, user_card: BaseCard) -> List[LedgerTriggerEvent]:
     events = (
         session.query(LedgerTriggerEvent)
         .filter(
@@ -48,7 +46,7 @@ def get_payment_events(session: Session, user_card: UserCard) -> List[LedgerTrig
     return events
 
 
-def run_anomaly(session: Session, user_card: UserCard, event_date: DateTime) -> None:
+def run_anomaly(session: Session, user_card: BaseCard, event_date: DateTime) -> None:
     """
     This checks for any anomalies after we have received the payment. If the interest needs to be
     removed because the complete payment has been made before due date. If the late fee event is not
