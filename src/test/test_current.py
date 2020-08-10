@@ -952,6 +952,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-24 16:29:25"),
         amount=Decimal(2500),
         description="WWW YESBANK IN         GURGAON       IND",
+        source="ATM",
     )
     create_card_swipe(
         session=session,
@@ -1080,6 +1081,12 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         session, book_string=f"{uc.id}/card/lender_payable/l"
     )
     assert lender_payable == Decimal("12914")
+
+    # Check for atm fee.
+    _, atm_fee_receivable = get_account_balance_from_str(
+        session, book_string=f"{bill_may.id}/bill/atm_fee_receivable/a"
+    )
+    assert atm_fee_receivable == 59
 
     # Do Partial Payment
     payment_date = parse_date("2020-06-18 06:55:00")

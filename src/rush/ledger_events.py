@@ -372,3 +372,13 @@ def limit_assignment_event(session: Session, card_id: int, event: LedgerTriggerE
         credit_book_str=f"{card_id}/card/available_limit/l",
         amount=Decimal(event.amount),
     )
+
+
+def atm_fee_event(session: Session, bill: BaseBill, event: LedgerTriggerEvent) -> None:
+    create_ledger_entry_from_str(
+        session,
+        event_id=event.id,
+        debit_book_str=f"{bill.id}/bill/atm_fee_receivable/a",
+        credit_book_str=f"{bill.id}/bill/atm_fee_accrued/r",
+        amount=Decimal(event.amount),
+    )

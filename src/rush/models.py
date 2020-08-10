@@ -417,6 +417,7 @@ class CardTransaction(AuditMixin):
     loan_id = Column(Integer, ForeignKey(LoanData.id))
     txn_time = Column(TIMESTAMP, nullable=False)
     amount = Column(Numeric, nullable=False)
+    source = Column(String(30), nullable=False)
     description = Column(String(100), nullable=False)
 
 
