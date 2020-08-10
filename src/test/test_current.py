@@ -1120,6 +1120,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     second_emi = emis_dict[1]
 
     assert first_emi["interest"] == Decimal("387.83")
+    assert first_emi["atm_fee"] == Decimal(59)
     assert first_emi["interest_received"] == Decimal("324")
 
 
