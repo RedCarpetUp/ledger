@@ -227,6 +227,11 @@ def _adjust_bill(
     remaining_amount = adjust(
         amount_to_adjust_in_this_bill,
         to_acc=debit_acc_str,  # f"{bill.lender_id}/lender/pg_account/a"
+        from_acc=f"{bill.id}/bill/atm_fee_receivable/a",
+    )
+    remaining_amount = adjust(
+        remaining_amount,
+        to_acc=debit_acc_str,  # f"{bill.lender_id}/lender/pg_account/a"
         from_acc=f"{bill.id}/bill/late_fine_receivable/a",
     )
     remaining_amount = adjust(
