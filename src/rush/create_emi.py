@@ -40,6 +40,7 @@ def create_emis_for_card(
     last_bill: BaseBill,
     late_fee: Decimal = None,
     interest: Decimal = None,
+    atm_fee: Decimal = None,
     bill_tenure: Decimal = 12,
 ) -> None:
     first_emi_due_date = user_card.card_activation_date + timedelta(
@@ -55,7 +56,9 @@ def create_emis_for_card(
             if i == 1
             else due_date + timedelta(days=user_card.statement_period_in_days + 1)
         )
+        # A bill's late fee/atm fee will only go on first emi.
         late_fine = late_fee if late_fee and i == 1 else Decimal(0)
+        atm_fine = atm_fee if atm_fee and i == 1 else Decimal(0)
         total_due_amount = due_amount
         total_closing_balance = (
             principal_due - mul(due_amount, (i - 1))
@@ -80,6 +83,7 @@ def create_emis_for_card(
             total_closing_balance_post_due_date=total_closing_balance_post_due_date,
             due_amount=due_amount,
             late_fee=late_fine,
+            atm_fee=atm_fine,
             interest=total_interest,
             interest_current_month=current_interest,
             interest_next_month=next_interest,
@@ -98,6 +102,7 @@ def add_emi_on_new_bill(
     bill_number: int,
     late_fee: Decimal = None,
     interest: Decimal = None,
+    atm_fee_due: Decimal = None,
     bill_tenure: Decimal = 12,
 ) -> None:
     if bill_tenure < last_emi_number:
@@ -121,6 +126,8 @@ def add_emi_on_new_bill(
             continue
         elif late_fee and emi.emi_number == bill_number:
             emi.late_fee += late_fee
+        elif atm_fee_due and emi.emi_number == bill_number:
+            emi.atm_fee += atm_fee_due
         emi.due_amount += due_amount
         emi.total_due_amount = (
             min_due if emi.emi_number == bill_number else emi.total_due_amount + due_amount
@@ -200,6 +207,8 @@ def slide_payments(user_card: BaseCard, payment_event: LedgerTriggerEvent = None
                 emi.last_payment_date = last_payment_date
             if all_paid:
                 emi.payment_received = (
+                    emi.atm_fee_received
+                ) = (
                     emi.late_fee_received
                 ) = (
                     emi.interest_received
@@ -220,19 +229,17 @@ def slide_payments(user_card: BaseCard, payment_event: LedgerTriggerEvent = None
                 actual_closing_balance = emi.total_closing_balance_post_due_date
                 if last_payment_date.date() <= emi.due_date:
                     actual_closing_balance = emi.total_closing_balance
-                if (
-                    payment_received_and_adjusted >= actual_closing_balance
-                    and actual_closing_balance > 0
-                    and (
-                        (
-                            last_payment_date.date() <= emi.due_date
-                            and last_payment_date.date() > (emi.due_date + relativedelta(months=-1))
-                        )
-                        or emi.emi_number == last_emi_number
+                if payment_received_and_adjusted >= actual_closing_balance > 0 and (
+                    (
+                        emi.due_date
+                        >= last_payment_date.date()
+                        > (emi.due_date + relativedelta(months=-1))
                     )
+                    or emi.emi_number == last_emi_number
                 ):
                     all_paid = True
                     emi.late_fee_received = emi.late_fee
+                    emi.atm_fee_received = emi.atm_fee
                     # Edge case of last emi
                     if emi.emi_number == last_emi_number and last_payment_date.date() > emi.due_date:
                         emi.interest_received = emi.interest
@@ -256,6 +263,7 @@ def slide_payments(user_card: BaseCard, payment_event: LedgerTriggerEvent = None
                         payment_request_id,
                         emi.interest_received,
                         emi.late_fee_received,
+                        emi.atm_fee_received,
                         emi.payment_received,
                     )
                     continue
@@ -266,10 +274,10 @@ def slide_payments(user_card: BaseCard, payment_event: LedgerTriggerEvent = None
                         emi.payment_status = "Paid"
                         emi.dpd = (last_payment_date.date() - emi.due_date).days
                     if (
-                        emi.late_fee > 0
-                        and (emi.late_fee_received + payment_received_and_adjusted) <= emi.late_fee
+                        emi.atm_fee > 0
+                        and (emi.atm_fee_received + payment_received_and_adjusted) <= emi.atm_fee
                     ):
-                        emi.late_fee_received += payment_received_and_adjusted
+                        emi.atm_fee_received += payment_received_and_adjusted
                         emi.total_closing_balance -= payment_received_and_adjusted
                         emi.total_closing_balance_post_due_date -= payment_received_and_adjusted
                         # Create payment mapping
@@ -281,23 +289,20 @@ def slide_payments(user_card: BaseCard, payment_event: LedgerTriggerEvent = None
                             payment_request_id,
                             emi.interest_received,
                             emi.late_fee_received,
+                            emi.atm_fee_received,
                             emi.payment_received,
                         )
                         break
                     else:
+                        if 0 < emi.atm_fee < (emi.atm_fee_received + payment_received_and_adjusted):
+                            atm_fee_actually_received = emi.atm_fee - emi.atm_fee_received
+                            emi.atm_fee_received = emi.atm_fee
+                            payment_received_and_adjusted -= atm_fee_actually_received
                         if (
                             emi.late_fee > 0
-                            and (emi.late_fee_received + payment_received_and_adjusted) > emi.late_fee
+                            and (emi.late_fee_received + payment_received_and_adjusted) <= emi.late_fee
                         ):
-                            late_fee_actually_received = emi.late_fee - emi.late_fee_received
-                            emi.late_fee_received = emi.late_fee
-                            payment_received_and_adjusted -= late_fee_actually_received
-                        if (
-                            last_payment_date.date() > emi.due_date
-                            and emi.interest > 0
-                            and (emi.interest_received + payment_received_and_adjusted) <= emi.interest
-                        ):
-                            emi.interest_received += payment_received_and_adjusted
+                            emi.late_fee_received += payment_received_and_adjusted
                             emi.total_closing_balance -= payment_received_and_adjusted
                             emi.total_closing_balance_post_due_date -= payment_received_and_adjusted
                             # Create payment mapping
@@ -309,21 +314,26 @@ def slide_payments(user_card: BaseCard, payment_event: LedgerTriggerEvent = None
                                 payment_request_id,
                                 emi.interest_received,
                                 emi.late_fee_received,
+                                emi.atm_fee_received,
                                 emi.payment_received,
                             )
                             break
                         else:
                             if (
+                                0
+                                < emi.late_fee
+                                < (emi.late_fee_received + payment_received_and_adjusted)
+                            ):
+                                late_fee_actually_received = emi.late_fee - emi.late_fee_received
+                                emi.late_fee_received = emi.late_fee
+                                payment_received_and_adjusted -= late_fee_actually_received
+                            if (
                                 last_payment_date.date() > emi.due_date
                                 and emi.interest > 0
                                 and (emi.interest_received + payment_received_and_adjusted)
-                                > emi.interest
+                                <= emi.interest
                             ):
-                                interest_actually_received = emi.interest - emi.interest_received
-                                emi.interest_received = emi.interest
-                                payment_received_and_adjusted -= interest_actually_received
-                            if payment_received_and_adjusted <= emi.due_amount:
-                                emi.payment_received = payment_received_and_adjusted
+                                emi.interest_received += payment_received_and_adjusted
                                 emi.total_closing_balance -= payment_received_and_adjusted
                                 emi.total_closing_balance_post_due_date -= payment_received_and_adjusted
                                 # Create payment mapping
@@ -335,9 +345,36 @@ def slide_payments(user_card: BaseCard, payment_event: LedgerTriggerEvent = None
                                     payment_request_id,
                                     emi.interest_received,
                                     emi.late_fee_received,
+                                    emi.atm_fee_received,
                                     emi.payment_received,
                                 )
                                 break
+                            else:
+                                if last_payment_date.date() > emi.due_date and 0 < emi.interest < (
+                                    emi.interest_received + payment_received_and_adjusted
+                                ):
+                                    interest_actually_received = emi.interest - emi.interest_received
+                                    emi.interest_received = emi.interest
+                                    payment_received_and_adjusted -= interest_actually_received
+                                if payment_received_and_adjusted <= emi.due_amount:
+                                    emi.payment_received = payment_received_and_adjusted
+                                    emi.total_closing_balance -= payment_received_and_adjusted
+                                    emi.total_closing_balance_post_due_date -= (
+                                        payment_received_and_adjusted
+                                    )
+                                    # Create payment mapping
+                                    create_emi_payment_mapping(
+                                        session,
+                                        user_card,
+                                        emi.emi_number,
+                                        last_payment_date,
+                                        payment_request_id,
+                                        emi.interest_received,
+                                        emi.late_fee_received,
+                                        emi.atm_fee_received,
+                                        emi.payment_received,
+                                    )
+                                    break
                 emi.late_fee_received = emi.late_fee
                 emi.interest_received = emi.interest
                 emi.payment_received = emi.due_amount
@@ -353,6 +390,7 @@ def slide_payments(user_card: BaseCard, payment_event: LedgerTriggerEvent = None
                     payment_request_id,
                     emi.interest_received,
                     emi.late_fee_received,
+                    emi.atm_fee_received,
                     emi.payment_received,
                 )
                 payment_received_and_adjusted = abs(diff)
@@ -479,7 +517,43 @@ def adjust_late_fee_in_emis(session: Session, user_card: BaseCard, post_date: Da
         emi.total_due_amount = min_due if min_due else emi.total_due_amount + late_fee
         emi.late_fee += late_fee
         session.flush()
-        # session.bulk_update_mappings(CardEmis, [emi_dict])
+
+
+def adjust_atm_fee_in_emis(session: Session, user_card: BaseCard, post_date: DateTime) -> None:
+    latest_bill = (
+        session.query(LoanData)
+        .filter(
+            LoanData.card_id == user_card.id,
+            LoanData.bill_start_date < post_date,
+            LoanData.is_generated.is_(True),
+        )
+        .order_by(LoanData.bill_start_date.desc())
+        .first()
+    )
+    emi = (
+        session.query(CardEmis)
+        .filter(
+            CardEmis.card_id == user_card.id,
+            CardEmis.due_date < post_date,
+            CardEmis.row_status == "active",
+        )
+        .order_by(CardEmis.due_date.desc())
+        .first()
+    )
+    min_due = user_card.get_min_for_schedule()
+    if not emi:
+        emi = (
+            session.query(CardEmis)
+            .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
+            .order_by(CardEmis.emi_number.asc())
+            .first()
+        )
+    _, atm_fee = get_account_balance_from_str(session, f"{latest_bill.id}/bill/atm_fee_accrued/r")
+    if atm_fee and atm_fee > 0:
+        emi.total_closing_balance_post_due_date += atm_fee
+        emi.total_due_amount = min_due if min_due else emi.total_due_amount + atm_fee
+        emi.atm_fee += atm_fee
+        session.flush()
 
 
 def create_emi_payment_mapping(
@@ -490,6 +564,7 @@ def create_emi_payment_mapping(
     payment_request_id: str,
     interest_received: Decimal,
     late_fee_received: Decimal,
+    atm_fee_received: Decimal,
     principal_received: Decimal,
 ) -> None:
     new_payment_mapping = EmiPaymentMapping(
@@ -499,6 +574,7 @@ def create_emi_payment_mapping(
         payment_request_id=payment_request_id,
         interest_received=interest_received,
         late_fee_received=late_fee_received,
+        atm_fee_received=atm_fee_received,
         principal_received=principal_received,
     )
     session.add(new_payment_mapping)
@@ -665,6 +741,7 @@ def refresh_schedule(user_card: BaseCard):
     bill_number = 1
     for bill in all_bills:
         _, late_fine_due = get_account_balance_from_str(session, f"{bill.table.id}/bill/late_fine/r")
+        _, atm_fee_due = get_account_balance_from_str(session, f"{bill.id}/bill/atm_fee_accrued/r")
         interest_due = bill.table.interest_to_charge
         last_emi = (
             session.query(CardEmis)
@@ -674,7 +751,13 @@ def refresh_schedule(user_card: BaseCard):
         )
         if not last_emi:
             create_emis_for_card(
-                session, user_card.table, bill, late_fine_due, interest_due, bill.table.bill_tenure
+                session,
+                user_card.table,
+                bill,
+                late_fine_due,
+                interest_due,
+                atm_fee_due,
+                bill.table.bill_tenure,
             )
         else:
             add_emi_on_new_bill(
@@ -685,6 +768,7 @@ def refresh_schedule(user_card: BaseCard):
                 bill_number,
                 late_fine_due,
                 interest_due,
+                atm_fee_due,
                 bill.table.bill_tenure,
             )
         bill_number += 1
