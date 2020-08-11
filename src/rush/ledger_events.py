@@ -379,7 +379,9 @@ def limit_assignment_event(session: Session, card_id: int, event: LedgerTriggerE
     )
 
 
-def atm_fee_event(session: Session, bill: BaseBill, event: LedgerTriggerEvent) -> None:
+def atm_fee_event(
+    session: Session, user_card: BaseCard, bill: BaseBill, event: LedgerTriggerEvent
+) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
@@ -387,3 +389,8 @@ def atm_fee_event(session: Session, bill: BaseBill, event: LedgerTriggerEvent) -
         credit_book_str=f"{bill.id}/bill/atm_fee_accrued/r",
         amount=Decimal(event.amount),
     )
+
+    # Adjust atm fee in emis
+    from rush.create_emi import adjust_atm_fee_in_emis
+
+    adjust_atm_fee_in_emis(session, user_card, event.post_date)
