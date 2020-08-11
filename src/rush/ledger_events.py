@@ -51,12 +51,17 @@ def card_transaction_event(session: Session, user_card: BaseCard, event: LedgerT
     lender_id = bill.lender_id
     bill_id = bill.id
 
+    # TODO: add mcc check. - Prashant
+    user_books_prefix_str = f"{user_card_id}/card/available_limit"
+    if user_card.card_type == "health_card":
+        user_books_prefix_str = f"{user_card_id}/card/health_limit"
+
     # Reduce user's card balance
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
-        debit_book_str=f"{user_card_id}/card/available_limit/l",
-        credit_book_str=f"{user_card_id}/card/available_limit/a",
+        debit_book_str=f"{user_books_prefix_str}/l",
+        credit_book_str=f"{user_books_prefix_str}/a",
         amount=amount,
     )
 

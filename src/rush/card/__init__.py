@@ -3,6 +3,10 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from rush.card.base_card import BaseCard
+from rush.card.health_card import (
+    HealthBill,
+    HealthCard,
+)
 from rush.card.ruby_card import (
     RubyBill,
     RubyCard,
@@ -19,6 +23,8 @@ def get_user_card(session: Session, user_id: int, card_type: str = "ruby") -> Ba
 
     if user_card.card_type == "ruby":
         return RubyCard(session, RubyBill, user_card)
+    elif user_card.card_type == "health_card":
+        return HealthCard(session, HealthBill, user_card)
 
 
 def create_user_card(session: Session, **kwargs) -> BaseCard:
@@ -30,4 +36,6 @@ def create_user_card(session: Session, **kwargs) -> BaseCard:
 
     if uc.card_type == "ruby":
         return RubyCard(session, RubyBill, uc)
+    elif uc.card_type == "health_card":
+        return HealthCard(session, HealthBill, uc)
     return uc

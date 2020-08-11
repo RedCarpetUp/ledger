@@ -29,6 +29,8 @@ def create_card_swipe(
     session.add(swipe)
     session.flush()
 
+    # TODO: (Opinion needed) get txn mcc info and maybe pass as an extra detail. - Prashant
+
     lt = LedgerTriggerEvent(
         performed_by=user_card.user_id,
         name="card_transaction",
