@@ -810,6 +810,8 @@ def update_event_with_dpd(event: LedgerTriggerEvent, user_card: BaseCard) -> Non
                 emi.dpd = (post_date - emi.due_date).days
         dpd = (post_date - last_unpaid_bill.table.bill_due_date).days
         user_card.table.dpd = dpd
-        new_event = EventDpd(card_id=user_card.id, event_id=event.id, dpd=dpd, post_date=event.post_date,)
+        new_event = EventDpd(
+            card_id=user_card.id, event_id=event.id, dpd=dpd, post_date=event.post_date,
+        )
         session.add(new_event)
         session.flush()
