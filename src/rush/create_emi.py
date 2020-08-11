@@ -196,6 +196,7 @@ def slide_payments(user_card: BaseCard, payment_event: LedgerTriggerEvent = None
     ) -> None:
         last_emi_number = all_emis[-1].emi_number
         for emi in all_emis:
+            emi.dpd = (last_payment_date.date() - emi.due_date).days
             if emi.emi_number <= last_paid_emi_number or emi.total_due_amount <= Decimal(0):
                 continue
             if last_payment_date:
@@ -217,7 +218,7 @@ def slide_payments(user_card: BaseCard, payment_event: LedgerTriggerEvent = None
                     emi.total_closing_balance_post_due_date
                 ) = emi.interest_current_month = emi.interest_next_month = emi.interest = Decimal(0)
                 emi.payment_status = "Paid"
-                emi.dpd = (last_payment_date.date() - emi.due_date).days
+                emi.dpd = 0
                 last_paid_emi_number = emi.emi_number
                 continue
             if payment_received_and_adjusted:
@@ -248,7 +249,7 @@ def slide_payments(user_card: BaseCard, payment_event: LedgerTriggerEvent = None
                     emi.due_amount = emi.total_due_amount = actual_closing_balance
                     last_paid_emi_number = emi.emi_number
                     emi.payment_status = "Paid"
-                    emi.dpd = (last_payment_date.date() - emi.due_date).days
+                    emi.dpd = 0
                     # Create payment mapping
                     create_emi_payment_mapping(
                         session,
@@ -267,7 +268,7 @@ def slide_payments(user_card: BaseCard, payment_event: LedgerTriggerEvent = None
                     if diff == 0:
                         last_paid_emi_number = emi.emi_number
                         emi.payment_status = "Paid"
-                        emi.dpd = (last_payment_date.date() - emi.due_date).days
+                        emi.dpd = 0
                     if (
                         emi.atm_fee > 0
                         and (emi.atm_fee_received + payment_received_and_adjusted) <= emi.atm_fee
@@ -374,7 +375,7 @@ def slide_payments(user_card: BaseCard, payment_event: LedgerTriggerEvent = None
                 emi.interest_received = emi.interest
                 emi.payment_received = emi.due_amount
                 emi.payment_status = "Paid"
-                emi.dpd = (last_payment_date.date() - emi.due_date).days
+                emi.dpd = 0
                 last_paid_emi_number = emi.emi_number
                 # Create payment mapping
                 create_emi_payment_mapping(
@@ -436,8 +437,6 @@ def slide_payments(user_card: BaseCard, payment_event: LedgerTriggerEvent = None
             all_paid=all_paid,
         )
     session.flush()
-    # Update card level dpd
-    store_and_get_card_level_dpd(session, user_card)
 
 
 def adjust_interest_in_emis(session: Session, user_card: BaseCard, post_date: DateTime) -> None:
@@ -792,33 +791,23 @@ def refresh_schedule(user_card: BaseCard):
     slide_payments(user_card=user_card)
 
 
-def store_and_get_card_level_dpd(session: Session, user_card: BaseCard) -> int:
-    latest_unpaid_emi = (
-        session.query(CardEmis)
-        .filter(
-            CardEmis.card_id == user_card.id,
-            CardEmis.row_status == "active",
-            CardEmis.payment_status == "UnPaid",
-        )
-        .order_by(CardEmis.emi_number.asc())
-        .first()
-    )
-    if not latest_unpaid_emi:
-        return -99
-    dpd = (get_current_ist_time().date() - latest_unpaid_emi.due_date).days
-    user_card.table.dpd = dpd
-    session.flush()
-    return dpd
-
-
-def update_event_with_dpd(session: Session, event: LedgerTriggerEvent, user_card: BaseCard) -> None:
+def update_event_with_dpd(event: LedgerTriggerEvent, user_card: BaseCard) -> None:
+    session = user_card.session
     last_unpaid_bill = user_card.get_last_unpaid_bill()
-    dpd = (event.post_date.date() - last_unpaid_bill.table.due_date).days
-    new_event = EventDpd(
-        card_id=user_card.id,
-        event_id=event.id,
-        dpd=dpd,
-        post_date=event.post_date,
-    )
-    session.add(new_event)
-    session.flush()
+    if last_unpaid_bill:
+        all_emis = (
+            session.query(CardEmis)
+            .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
+            .order_by(CardEmis.emi_number.asc())
+            .all()
+        )
+        for emi in all_emis:
+            if emi.payment_status != "Paid":
+                emi.dpd = (event.post_date.date() - emi.due_date).days
+        dpd = (event.post_date.date() - last_unpaid_bill.table.bill_due_date).days
+        user_card.table.dpd = dpd
+        new_event = EventDpd(
+            card_id=user_card.id, event_id=event.id, dpd=dpd, post_date=event.post_date,
+        )
+        session.add(new_event)
+        session.flush()

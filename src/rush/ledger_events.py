@@ -78,6 +78,11 @@ def card_transaction_event(session: Session, user_card: BaseCard, event: LedgerT
         amount=amount,
     )
 
+    from rush.create_emi import update_event_with_dpd
+
+    # Update card level dpd
+    update_event_with_dpd(event, user_card)
+
 
 def bill_generate_event(
     session: Session, bill: BaseBill, user_card_id: int, event: LedgerTriggerEvent
@@ -158,9 +163,12 @@ def payment_received_event(
         _adjust_lender_payable(session, user_card.id, debit_book_str, gateway_charges, event)
 
     # Slide payment in emi
-    from rush.create_emi import slide_payments
+    from rush.create_emi import slide_payments, update_event_with_dpd
 
     slide_payments(user_card=user_card, payment_event=event)
+
+    # Update card level dpd
+    update_event_with_dpd(event, user_card)
 
 
 def _adjust_for_gateway_expenses(session: Session, event: LedgerTriggerEvent, credit_book_str: str):
@@ -394,3 +402,17 @@ def atm_fee_event(
     from rush.create_emi import adjust_atm_fee_in_emis
 
     adjust_atm_fee_in_emis(session, user_card, event.post_date)
+
+
+def daily_dpd_event(session: Session, user_card: BaseCard) -> None:
+    from rush.utils import get_current_ist_time
+
+    event = LedgerTriggerEvent(
+        name="daily_dpd", post_date=get_current_ist_time(), card_id=user_card.id, amount=0
+    )
+    session.add(event)
+    session.flush()
+    from rush.create_emi import update_event_with_dpd
+
+    # Update card level dpd
+    update_event_with_dpd(event, user_card)
