@@ -88,7 +88,7 @@ def postgres_server(docker_client: docker.DockerClient) -> Iterator[Dict[str, st
             cont = docker_client.containers.get(container_name)
         except Exception as e:
             cont = docker_client.containers.run(
-                image="postgres:12",
+                image="postgres:12-alpine",
                 name=container_name,
                 detach=True,
                 auto_remove=True,
