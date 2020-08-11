@@ -3,18 +3,9 @@ from decimal import Decimal
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
-from rush.card import (
-    create_user_card,
-)
-
-from rush.create_card_swipe import (
-    create_card_swipe,
-)
-
-from rush.ledger_utils import (
-    get_account_balance_from_str,
-)
-
+from rush.card import create_user_card
+from rush.create_card_swipe import create_card_swipe
+from rush.ledger_utils import get_account_balance_from_str
 from rush.models import (
     CardKitNumbers,
     CardNames,
@@ -92,7 +83,9 @@ def test_health_card_swipe(session: Session) -> None:
     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.id}/card/health_limit/l")
     assert medical_limit_balance == -700
 
-    _, non_medical_limit_balance = get_account_balance_from_str(session, f"{uc.id}/card/available_limit/l")
+    _, non_medical_limit_balance = get_account_balance_from_str(
+        session, f"{uc.id}/card/available_limit/l"
+    )
     assert non_medical_limit_balance == 0
 
     _, lender_payable = get_account_balance_from_str(session, f"{uc.id}/card/lender_payable/l")
