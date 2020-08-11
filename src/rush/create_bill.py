@@ -8,12 +8,13 @@ from sqlalchemy.sql.functions import user
 
 from rush.card import BaseCard
 from rush.card.base_card import BaseBill
-from rush.create_emi import refresh_schedule
 from rush.ledger_events import bill_generate_event
 from rush.ledger_utils import get_account_balance_from_str
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
+    CardEmis,
     LedgerTriggerEvent,
+    LoanData,
     LoanMoratorium,
 )
 from rush.utils import (
@@ -68,7 +69,7 @@ def bill_generate(user_card: BaseCard) -> Dict:
         if bill["result"] == "error":
             return bill
         bill = bill["bill"]
-    lt = LedgerTriggerEvent(name="bill_generate", card_id=user_card.id, post_date=bill.bill_start_date)
+    lt = LedgerTriggerEvent(name="bill_generate", card_id=user_card.id, post_date=bill.bill_close_date)
     session.add(lt)
     session.flush()
 
@@ -94,9 +95,35 @@ def bill_generate(user_card: BaseCard) -> Dict:
         # After the bill has generated. Call the min generation event on all unpaid bills.
         add_min_to_all_bills(session, bill_closing_date, user_card)
 
-    # Refresh the schedule
-    refresh_schedule(user_card)
-    return {"result": "success", "bill": bill}
+
+        # TODO move this to a function because this step is only for DMI
+        from rush.create_emi import adjust_interest_in_emis, create_emis_for_card, add_emi_on_new_bill
+
+        # If last emi does not exist then we can consider to be first set of emi creation
+        last_emi = (
+            session.query(CardEmis)
+            .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
+            .order_by(CardEmis.due_date.desc())
+            .first()
+        )
+        if not last_emi:
+            create_emis_for_card(session, user_card, bill)
+        else:
+            bill_count = (
+                session.query(LoanData)
+                .filter(LoanData.card_id == user_card.id, LoanData.is_generated.is_(True))
+                .count()
+            )
+            add_emi_on_new_bill(session, user_card, bill, last_emi.emi_number, bill_count)
+
+        # adjust the given interest in schedule
+        adjust_interest_in_emis(session, user_card, bill_closing_date)
+    else:
+        from rush.create_emi import refresh_schedule
+
+        refresh_schedule(user_card)
+
+    return bill
 
 
 def extend_tenure(session: Session, user_card: BaseCard, new_tenure: int) -> None:
@@ -111,4 +138,6 @@ def extend_tenure(session: Session, user_card: BaseCard, new_tenure: int) -> Non
         )
     session.flush()
     # Refresh the schedule
+    from rush.create_emi import refresh_schedule
+
     refresh_schedule(user_card)
