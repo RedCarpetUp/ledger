@@ -2049,7 +2049,7 @@ def test_refresh_schedule(session: Session) -> None:
 
     second_emi_pre_dict = pre_emis_dict[1]
     second_emi_post_dict = post_emis_dict[1]
-    assert second_emi_pre_dict["interest_received"] == Decimal(180)
+    assert second_emi_pre_dict["interest_received"] == Decimal(360)
     assert second_emi_post_dict["interest_received"] == Decimal(360)
 
 
@@ -2151,7 +2151,7 @@ def test_moratorium_schedule(session: Session) -> None:
 
     second_emi_pre_dict = pre_emis_dict[1]
     second_emi_post_dict = post_emis_dict[1]
-    assert second_emi_pre_dict["interest_received"] == Decimal(180)
+    assert second_emi_pre_dict["interest_received"] == Decimal(360)
     assert second_emi_post_dict["interest_received"] == Decimal(360)
 
 

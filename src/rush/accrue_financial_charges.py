@@ -87,11 +87,10 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_car
     for bill in unpaid_bills:
         accrue_interest_event(session, bill, accrue_event, bill.table.interest_to_charge)
         accrue_event.amount += bill.table.interest_to_charge
-    # adjust the given interest in schedule
-    # adjust the given interest in schedule
-    # from rush.create_emi import adjust_interest_in_emis
 
-    # adjust_interest_in_emis(session, user_card, post_date)
+    from rush.create_emi import update_event_with_dpd
+
+    update_event_with_dpd(accrue_event, user_card)
 
 
 def is_late_fee_valid(session: Session, user_card: BaseCard) -> bool:
@@ -131,10 +130,9 @@ def accrue_late_charges(session: Session, user_card: BaseCard, post_date: DateTi
 
         accrue_late_fine_event(session, latest_bill, event)
 
-        # adjust the given interest in schedule
-        # from rush.create_emi import adjust_late_fee_in_emis
+        from rush.create_emi import update_event_with_dpd
 
-        # adjust_late_fee_in_emis(session, user_card, event.post_date)
+        update_event_with_dpd(event, user_card)
     return latest_bill
 
 
@@ -218,6 +216,13 @@ def reverse_interest_charges(
                 session, user_card.user_id, event.id, entry["amount"], entry["acc_to_remove_from"]
             )
 
+    # Slide payment in emi
+    from rush.create_emi import refresh_schedule, update_event_with_dpd
+
+    refresh_schedule(user_card=user_card)
+    # Update on card level
+    update_event_with_dpd(event, user_card)
+
 
 def reverse_late_charges(
     session: Session, user_card: UserCard, event_to_reverse: LedgerTriggerEvent
@@ -267,3 +272,10 @@ def reverse_late_charges(
         )
         if remaining_amount > 0:
             pass  # TODO prepayment
+
+    # Slide payment in emi
+    from rush.create_emi import refresh_schedule, update_event_with_dpd
+
+    refresh_schedule(user_card=user_card)
+    # Update on card level
+    update_event_with_dpd(event, user_card)

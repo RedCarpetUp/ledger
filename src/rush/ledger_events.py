@@ -399,9 +399,9 @@ def atm_fee_event(
     )
 
     # Adjust atm fee in emis
-    from rush.create_emi import adjust_atm_fee_in_emis
+    # from rush.create_emi import adjust_atm_fee_in_emis
 
-    adjust_atm_fee_in_emis(session, user_card, event.post_date)
+    # adjust_atm_fee_in_emis(session, user_card, event.post_date)
 
 
 def daily_dpd_event(session: Session, user_card: BaseCard) -> None:
