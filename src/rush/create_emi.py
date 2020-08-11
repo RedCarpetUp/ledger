@@ -2,15 +2,9 @@ from datetime import timedelta
 from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
-from pendulum import (
-    Date,
-    DateTime,
-)
+from pendulum import DateTime
 from pendulum import parse as parse_date
-from sqlalchemy.orm import (
-    Session,
-    session,
-)
+from sqlalchemy.orm import Session
 
 from rush.anomaly_detection import get_payment_events
 from rush.card import (
@@ -22,6 +16,7 @@ from rush.ledger_utils import get_account_balance_from_str
 from rush.models import (
     CardEmis,
     EmiPaymentMapping,
+    EventDpd,
     LedgerTriggerEvent,
     LoanData,
     LoanMoratorium,
@@ -730,3 +725,16 @@ def store_and_get_card_level_dpd(session: Session, user_card: BaseCard) -> int:
     user_card.table.dpd = dpd
     session.flush()
     return dpd
+
+
+def update_event_with_dpd(session: Session, event: LedgerTriggerEvent, user_card: BaseCard) -> None:
+    last_unpaid_bill = user_card.get_last_unpaid_bill()
+    dpd = (event.post_date.date() - last_unpaid_bill.table.due_date).days
+    new_event = EventDpd(
+        card_id=user_card.id,
+        event_id=event.id,
+        dpd=dpd,
+        post_date=event.post_date,
+    )
+    session.add(new_event)
+    session.flush()

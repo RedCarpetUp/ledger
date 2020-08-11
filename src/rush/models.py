@@ -474,3 +474,13 @@ class LoanMoratorium(AuditMixin):
             .one_or_none()
         )
         return v is not None
+
+
+class EventDpd(AuditMixin):
+    __tablename__ = "event_dpd"
+
+    card_id = Column(Integer, ForeignKey(UserCard.id), nullable=False)
+    post_date = Column(TIMESTAMP, nullable=False)
+    event_id = Column(Integer, ForeignKey(LedgerTriggerEvent.id), nullable=False)
+    dpd = Column(Integer, nullable=False)
+    row_status = Column(String(length=10), nullable=False, default="active")
