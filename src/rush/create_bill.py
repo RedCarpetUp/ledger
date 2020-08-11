@@ -68,7 +68,7 @@ def bill_generate(user_card: BaseCard) -> BaseBill:
         if bill["result"] == "error":
             return bill
         bill = bill["bill"]
-    lt = LedgerTriggerEvent(name="bill_generate", card_id=user_card.id, post_date=bill.bill_start_date)
+    lt = LedgerTriggerEvent(name="bill_generate", card_id=user_card.id, post_date=bill.bill_close_date)
     session.add(lt)
     session.flush()
 

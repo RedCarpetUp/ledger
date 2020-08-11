@@ -910,7 +910,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         amount=Decimal(500),
         description="AIRTELMONEY            MUMBAI        IND",
     )
-    create_card_swipe(
+    refunded_swipe = create_card_swipe(
         session=session,
         user_card=uc,
         txn_time=parse_date("2020-05-22 12:50:05"),
@@ -946,15 +946,10 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         description="ULLU DIGITAL PRIVATE L MUMBAI        IND",
     )
     # Merchant Refund
-    payment_date = parse_date("2020-05-23 21:20:07")
+    refund_date = parse_date("2020-05-23 21:20:07")
     amount = Decimal(2)
-    payment_received(
-        session=session,
-        user_card=uc,
-        payment_amount=amount,
-        payment_date=payment_date,
-        payment_request_id="a123",
-    )
+    refund_payment(session, uc, amount, refund_date, "A3d223g2", refunded_swipe["data"])
+
     create_card_swipe(
         session=session,
         user_card=uc,
@@ -1276,14 +1271,10 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{uc.id}/card/lender_payable/l"
     )
-    assert lender_payable == Decimal("20675.53")
+    assert lender_payable == Decimal("20675.03")
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert lender_amount == Decimal("0")
-    _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{uc.id}/card/lender_payable/l"
-    )
-    assert lender_payable == Decimal("20675.53")
 
     # Refresh Schedule
     # slide_payments(session, a.id)
