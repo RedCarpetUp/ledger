@@ -73,6 +73,13 @@ class BaseBill:
         return min_due
 
     def is_bill_closed(self, to_date: Optional[DateTime] = None) -> bool:
+        # Check if unbilled is zero. If not, return false.
+        _, unbilled_balance = get_account_balance_from_str(
+            self.session, book_string=f"{self.id}/bill/unbilled/a", to_date=to_date
+        )
+        if unbilled_balance != 0:
+            return False
+
         # Check if principal is paid. If not, return false.
         _, principal_due = get_account_balance_from_str(
             self.session, book_string=f"{self.id}/bill/principal_receivable/a", to_date=to_date
