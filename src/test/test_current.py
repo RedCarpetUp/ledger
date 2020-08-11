@@ -956,6 +956,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-24 16:29:25"),
         amount=Decimal(2500),
         description="WWW YESBANK IN         GURGAON       IND",
+        source="ATM",
     )
     create_card_swipe(
         session=session,
@@ -1067,6 +1068,12 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     generate_date = parse_date("2020-06-01").date()
     user_card = get_user_card(session, a.id)
     bill_may = bill_generate(user_card)
+
+    # Check for atm fee.
+    _, atm_fee_receivable = get_account_balance_from_str(
+        session, book_string=f"{bill_may.id}/bill/atm_fee_receivable/a"
+    )
+    assert atm_fee_receivable == 59
 
     create_card_swipe(
         session=session,
@@ -1318,6 +1325,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     second_emi = emis_dict[1]
 
     assert first_emi["interest"] == Decimal("387.83")
+    assert first_emi["atm_fee"] == Decimal(59)
     assert first_emi["interest_received"] == Decimal("387.83")
 
 

@@ -3,11 +3,13 @@ from decimal import Decimal
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
 from sqlalchemy.orm import Session
-from sqlalchemy.sql.functions import user
 
 from rush.card import BaseCard
 from rush.card.base_card import BaseBill
-from rush.ledger_events import bill_generate_event
+from rush.ledger_events import (
+    atm_fee_event,
+    bill_generate_event,
+)
 from rush.ledger_utils import get_account_balance_from_str
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
@@ -19,6 +21,7 @@ from rush.models import (
 from rush.utils import (
     div,
     get_current_ist_time,
+    mul,
 )
 
 
@@ -121,6 +124,10 @@ def bill_generate(user_card: BaseCard) -> BaseBill:
 
         refresh_schedule(user_card)
 
+    atm_transactions_sum = bill.sum_of_atm_transactions()
+    if atm_transactions_sum > 0:
+        add_atm_fee(session, user_card, bill, bill.table.bill_close_date, atm_transactions_sum)
+
     return bill
 
 
@@ -139,3 +146,23 @@ def extend_tenure(session: Session, user_card: BaseCard, new_tenure: int) -> Non
     from rush.create_emi import refresh_schedule
 
     refresh_schedule(user_card)
+
+
+def add_atm_fee(
+    session: Session,
+    user_card: BaseCard,
+    bill: BaseBill,
+    post_date: DateTime,
+    atm_transactions_amount: Decimal,
+) -> None:
+    atm_fee_perc = Decimal(2)
+    gst_perc = Decimal(18)
+    atm_fee_without_gst = mul(div(atm_transactions_amount, 100), atm_fee_perc)
+    atm_fee_with_gst = atm_fee_without_gst + mul(div(atm_fee_without_gst, 100), gst_perc)
+
+    lt = LedgerTriggerEvent(
+        name="atm_fee_added", card_id=bill.table.card_id, post_date=post_date, amount=atm_fee_with_gst
+    )
+    session.add(lt)
+    session.flush()
+    atm_fee_event(session, user_card, bill, lt)

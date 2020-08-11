@@ -13,7 +13,12 @@ from rush.models import (
 
 
 def create_card_swipe(
-    session: Session, user_card: BaseCard, txn_time: DateTime, amount: Decimal, description: str
+    session: Session,
+    user_card: BaseCard,
+    txn_time: DateTime,
+    amount: Decimal,
+    description: str,
+    source: str = "ECOM",
 ) -> CardTransaction:
     if not hasattr(user_card, "card_activation_date"):
         return {"result": "error", "message": "Card has not been activated"}
@@ -24,7 +29,7 @@ def create_card_swipe(
         return card_bill
     card_bill = card_bill["bill"]
     swipe = CardTransaction(  # This can be moved to user card too.
-        loan_id=card_bill.id, txn_time=txn_time, amount=amount, description=description
+        loan_id=card_bill.id, txn_time=txn_time, amount=amount, description=description, source=source
     )
     session.add(swipe)
     session.flush()
