@@ -1,5 +1,9 @@
 from decimal import Decimal
-from typing import Any, Dict, Optional
+from typing import (
+    Any,
+    Dict,
+    Optional,
+)
 
 from pendulum import DateTime
 from sqlalchemy.orm.session import Session

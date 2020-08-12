@@ -1,4 +1,8 @@
-from typing import Type
+from decimal import Decimal
+from typing import (
+    Dict,
+    Type,
+)
 
 from sqlalchemy.orm import Session
 
@@ -7,6 +11,7 @@ from rush.card.base_card import (
     BaseBill,
     BaseCard,
 )
+from rush.ledger_utils import get_account_balance_from_str
 from rush.models import UserCard
 
 HEALTH_TXN_MCC = [
@@ -34,6 +39,29 @@ class HealthCard(BaseCard):
     @staticmethod
     def get_limit_type(mcc: str) -> str:
         return "available_limit" if mcc not in HEALTH_TXN_MCC else "health_limit"
+
+    def get_split_payment(self, session: Session, payment_amount: Decimal) -> Dict[str, Decimal]:
+        # TODO: change negative due calculation logic, once @raghav adds limit addition logic.
+        _, non_medical_due = get_account_balance_from_str(
+            session, book_string=f"{self.id}/card/available_limit/l"
+        )
+
+        _, medical_due = get_account_balance_from_str(
+            session, book_string=f"{self.id}/card/health_limit/l"
+        )
+
+        medical_settlement = Decimal(0.9 * payment_amount)
+        non_medical_settlement = Decimal(0.1 * payment_amount)
+
+        non_medical_settlement += medical_settlement - min(-1 * medical_due, medical_settlement)
+        medical_settlement = min(-1 * medical_due, medical_settlement)
+
+        if non_medical_settlement > -1 * non_medical_due:
+            if medical_settlement < -1 * medical_due:
+                medical_settlement += non_medical_settlement - (-1 * non_medical_due)
+                non_medical_settlement = -1 * non_medical_due
+
+        return {"medical": Decimal(medical_settlement), "non_medical": Decimal(non_medical_settlement)}
 
 
 class HealthBill(BaseBill):
