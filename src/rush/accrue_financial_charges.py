@@ -6,11 +6,13 @@ from pendulum import DateTime
 from sqlalchemy.orm import Session
 
 from rush.card import BaseCard
+from rush.card.base_card import BaseBill
 from rush.ledger_events import (
     _adjust_bill,
     _adjust_for_prepayment,
     accrue_interest_event,
     accrue_late_fine_event,
+    add_min_amount_event,
 )
 from rush.ledger_utils import (
     create_ledger_entry_from_str,
@@ -20,6 +22,7 @@ from rush.ledger_utils import (
 )
 from rush.models import (
     BookAccount,
+    Fee,
     LedgerEntry,
     LedgerTriggerEvent,
     LoanData,
@@ -116,25 +119,42 @@ def is_late_fee_valid(session: Session, user_card: BaseCard) -> bool:
     return False
 
 
-def accrue_late_charges(session: Session, user_card: BaseCard, post_date: DateTime) -> LoanData:
+def create_fee_entry(
+    session: Session, bill: BaseBill, event: LedgerTriggerEvent, fee_name: str, net_fee_amount: Decimal
+) -> Fee:
+    f = Fee(
+        bill_id=bill.id,
+        event_id=event.id,
+        card_id=bill.table.card_id,
+        name=fee_name,
+        net_amount=net_fee_amount,
+        sgst_rate=Decimal(9),
+        cgst_rate=Decimal(9),
+        igst_rate=Decimal(0),
+    )
+    sgst = mul(f.net_amount, div(f.sgst_rate, 100))
+    cgst = mul(f.net_amount, div(f.cgst_rate, 100))
+    igst = mul(f.net_amount, div(f.igst_rate, 100))
+    f.gross_amount = f.net_amount + sgst + cgst + igst
+    session.add(f)
+    return f
+
+
+def accrue_late_charges(session: Session, user_card: BaseCard, post_date: DateTime) -> BaseBill:
     latest_bill = user_card.get_latest_generated_bill()
     can_charge_fee = latest_bill.get_remaining_min() > 0
     #  accrue_late_charges_prerequisites(session, bill)
     if can_charge_fee:  # if min isn't paid charge late fine.
         # TODO get correct date here.
         # Adjust for rounding because total due amount has to be rounded
-        event = LedgerTriggerEvent(
-            name="accrue_late_fine", post_date=post_date, card_id=user_card.id, amount=Decimal(100)
-        )
+        late_fee_to_charge_without_tax = Decimal(100)
+        event = LedgerTriggerEvent(name="charge_late_fine", post_date=post_date, card_id=user_card.id)
         session.add(event)
         session.flush()
-
-        accrue_late_fine_event(session, latest_bill, event)
-
-        # adjust the given interest in schedule
-        # from rush.create_emi import adjust_late_fee_in_emis
-
-        # adjust_late_fee_in_emis(session, user_card, event.post_date)
+        fee = create_fee_entry(session, latest_bill, event, "late_fee", late_fee_to_charge_without_tax)
+        event.amount = fee.gross_amount
+        # Add into min amount of the bill too.
+        add_min_amount_event(session, latest_bill, event, event.amount)
     return latest_bill
 
 

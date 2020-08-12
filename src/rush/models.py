@@ -19,7 +19,6 @@ from sqlalchemy import (
     Date,
     ForeignKey,
     Integer,
-    Numeric,
     String,
     Text,
 )
@@ -29,6 +28,7 @@ from sqlalchemy.orm import (
     relationship,
 )
 from sqlalchemy.schema import Index
+from sqlalchemy.types import Numeric
 
 from rush.utils import get_current_ist_time
 
@@ -478,3 +478,20 @@ class LoanMoratorium(AuditMixin):
             .one_or_none()
         )
         return v is not None
+
+
+class Fee(AuditMixin):
+    __tablename__ = "fee"
+
+    bill_id = Column(Integer, ForeignKey(LoanData.id), nullable=True)
+    event_id = Column(Integer, ForeignKey(LedgerTriggerEvent.id), nullable=False)
+    card_id = Column(Integer, ForeignKey(UserCard.id), nullable=False)
+    name = Column(String(30), nullable=False)
+    net_amount = Column(Numeric, nullable=False)
+    sgst_rate = Column(Numeric, nullable=False)
+    cgst_rate = Column(Numeric, nullable=False)
+    igst_rate = Column(Numeric, nullable=False)
+    gross_amount = Column(Numeric, nullable=False)
+    net_amount_paid = Column(Numeric, nullable=True)
+    gross_amount_paid = Column(Numeric, nullable=True)
+    fee_status = Column(String(10), nullable=False, default="UNPAID")

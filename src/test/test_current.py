@@ -42,6 +42,7 @@ from rush.models import (
     CardNames,
     CardTransaction,
     EmiPaymentMapping,
+    Fee,
     LedgerTriggerEvent,
     LenderPy,
     Lenders,
@@ -298,14 +299,17 @@ def _accrue_late_fine_bill_1(session: Session) -> None:
     event_date = parse_date("2020-05-16 00:00:00")
     bill = accrue_late_charges(session, user_card, event_date)
 
-    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_receivable/a")
-    assert late_fine_due == Decimal(100)
-
-    _, late_fine_earned = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine/r")
-    assert late_fine_earned == Decimal(100)
+    fee_due = (
+        session.query(Fee)
+        .filter(Fee.bill_id == bill.id, Fee.name == "late_fee")
+        .order_by(Fee.id.desc())
+        .one_or_none()
+    )
+    assert fee_due.net_amount == Decimal(100)
+    assert fee_due.gross_amount == Decimal(118)
 
     min_due = bill.get_remaining_min()
-    assert min_due == 114
+    assert min_due == 132
 
 
 def _accrue_late_fine_bill_2(session: Session) -> None:
@@ -314,11 +318,17 @@ def _accrue_late_fine_bill_2(session: Session) -> None:
     user_card = get_user_card(session, 99)
     bill = accrue_late_charges(session, user_card, event_date)
 
-    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_receivable/a")
-    assert late_fine_due == Decimal(100)
+    fee_due = (
+        session.query(Fee)
+        .filter(Fee.bill_id == bill.id, Fee.name == "late_fee")
+        .order_by(Fee.id.desc())
+        .one_or_none()
+    )
+    assert fee_due.net_amount == Decimal(100)
+    assert fee_due.gross_amount == Decimal(118)
 
     min_due = bill.get_remaining_min()
-    assert min_due == Decimal("270")
+    assert min_due == Decimal("288")
 
 
 def test_accrue_late_fine_bill_1(session: Session) -> None:
@@ -342,7 +352,7 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
     payment_received(
         session=session,
         user_card=user_card,
-        payment_amount=Decimal("114"),
+        payment_amount=Decimal("132"),
         payment_date=parse_date("2020-05-20"),
         payment_request_id="a123",
     )

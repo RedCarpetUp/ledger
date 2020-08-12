@@ -250,6 +250,20 @@ def upgrade() -> None:
     )
 
     op.create_table(
+        "ledger_entry",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("event_id", sa.Integer(), nullable=False),
+        sa.Column("debit_account", sa.Integer(), nullable=False),
+        sa.Column("credit_account", sa.Integer(), nullable=False),
+        sa.Column("amount", sa.DECIMAL(), nullable=False),
+        sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
+        sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
+        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.PrimaryKeyConstraint("id"),
+        sa.ForeignKeyConstraint(["event_id"], ["ledger_trigger_event.id"], name="fk_fee_event_id"),
+    )
+
+    op.create_table(
         "emi_payment_mapping",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("performed_by", sa.Integer(), nullable=False),
@@ -281,6 +295,30 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["card_id"], ["v3_user_cards.id"], name="fk_loan_moratorium_card_id"),
+    )
+
+    op.create_table(
+        "fee",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.Column("card_id", sa.Integer(), nullable=False),
+        sa.Column("event_id", sa.Integer(), nullable=False),
+        sa.Column("bill_id", sa.Integer(), nullable=True),
+        sa.Column("name", sa.String(30), nullable=False),
+        sa.Column("net_amount", sa.DECIMAL(), nullable=False),
+        sa.Column("sgst_rate", sa.DECIMAL(), nullable=False),
+        sa.Column("cgst_rate", sa.DECIMAL(), nullable=False),
+        sa.Column("igst_rate", sa.DECIMAL(), nullable=False),
+        sa.Column("gross_amount", sa.DECIMAL(), nullable=False),
+        sa.Column("net_amount_paid", sa.DECIMAL(), nullable=True),
+        sa.Column("gross_amount_paid", sa.DECIMAL(), nullable=True),
+        sa.Column("fee_status", sa.String(10), nullable=False, default="UNPAID"),
+        sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
+        sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
+        sa.PrimaryKeyConstraint("id"),
+        sa.ForeignKeyConstraint(["card_id"], ["v3_user_cards.id"], name="fk_fee_card_id"),
+        sa.ForeignKeyConstraint(["bill_id"], ["loan_data.id"], name="fk_fee_bill_id"),
+        sa.ForeignKeyConstraint(["event_id"], ["ledger_trigger_event.id"], name="fk_fee_event_id"),
     )
 
 
