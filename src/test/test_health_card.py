@@ -14,6 +14,7 @@ from rush.models import (
     CardNames,
     Lenders,
     User,
+    UserCard,
 )
 
 
@@ -42,39 +43,40 @@ def create_user(session: Session) -> None:
     session.flush()
 
 
-def test_create_health_card(session: Session) -> None:
-    create_lenders(session)
-    card_db_updates(session)
-    create_user(session)
+def create_test_user_card(session: Session) -> UserCard:
     uc = create_user_card(
         session=session,
         user_id=3,
-        card_activation_date=parse_date("2020-08-11").date(),
+        card_activation_date=parse_date("2020-07-01").date(),
         card_type="health_card",
         lender_id=62311,
         kit_number="10000",
     )
 
+    return uc
+
+
+def test_create_health_card(session: Session) -> None:
+    create_lenders(session=session)
+    card_db_updates(session=session)
+    create_user(session=session)
+    uc = create_test_user_card(session=session)
+
     assert uc.card_type == "health_card"
+    assert uc.get_limit_type(mcc="8011") == "health_limit"
+    assert uc.get_limit_type(mcc="5555") == "available_limit"
 
 
 def test_medical_health_card_swipe(session: Session) -> None:
-    create_lenders(session)
-    card_db_updates(session)
-    create_user(session)
-    uc = create_user_card(
-        session=session,
-        user_id=3,
-        card_activation_date=parse_date("2020-08-11").date(),
-        card_type="health_card",
-        lender_id=62311,
-        kit_number="10000",
-    )
+    create_lenders(session=session)
+    card_db_updates(session=session)
+    create_user(session=session)
+    uc = create_test_user_card(session=session)
 
     swipe = create_card_swipe(
         session=session,
         user_card=uc,
-        txn_time=parse_date("2020-08-11 18:30:10"),
+        txn_time=parse_date("2020-07-11 18:30:10"),
         amount=Decimal(700),
         description="Amazon.com",
         mcc="8011",
@@ -97,22 +99,15 @@ def test_medical_health_card_swipe(session: Session) -> None:
 
 
 def test_mixed_health_card_swipe(session: Session) -> None:
-    create_lenders(session)
-    card_db_updates(session)
-    create_user(session)
-    uc = create_user_card(
-        session=session,
-        user_id=3,
-        card_activation_date=parse_date("2020-08-11").date(),
-        card_type="health_card",
-        lender_id=62311,
-        kit_number="10000",
-    )
+    create_lenders(session=session)
+    card_db_updates(session=session)
+    create_user(session=session)
+    uc = create_test_user_card(session=session)
 
     medical_swipe = create_card_swipe(
         session=session,
         user_card=uc,
-        txn_time=parse_date("2020-08-11 18:30:10"),
+        txn_time=parse_date("2020-07-11 18:30:10"),
         amount=Decimal(1500),
         description="Max Hospital",
         mcc="8011",
@@ -122,7 +117,7 @@ def test_mixed_health_card_swipe(session: Session) -> None:
     non_medical_swipe = create_card_swipe(
         session=session,
         user_card=uc,
-        txn_time=parse_date("2020-08-11 18:30:10"),
+        txn_time=parse_date("2020-07-11 18:30:10"),
         amount=Decimal(700),
         description="Amazon.com",
     )
@@ -148,21 +143,11 @@ def test_mixed_health_card_swipe(session: Session) -> None:
 
 
 def test_generate_health_card_bill_1(session: Session) -> None:
-    create_lenders(session)
-    card_db_updates(session)
-    create_user(session)
+    create_lenders(session=session)
+    card_db_updates(session=session)
+    create_user(session=session)
 
-    user_id = 3
-
-    # assign card
-    uc = create_user_card(
-        session=session,
-        user_id=user_id,
-        card_activation_date=parse_date("2020-06-01").date(),
-        card_type="health_card",
-        lender_id=62311,
-        kit_number="10000",
-    )
+    uc = create_test_user_card(session=session)
 
     swipe = create_card_swipe(
         session=session,
@@ -181,7 +166,7 @@ def test_generate_health_card_bill_1(session: Session) -> None:
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), uc)
 
-    assert bill.bill_start_date == parse_date("2020-06-01").date()
+    assert bill.bill_start_date == parse_date("2020-07-01").date()
     assert bill.table.is_generated is True
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
@@ -199,30 +184,19 @@ def test_generate_health_card_bill_1(session: Session) -> None:
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_id}/bill/interest_receivable/a"
     )
-    assert interest_due == Decimal("30.67")
+    assert interest_due == Decimal("0")
 
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_id}/bill/interest_accrued/r"
     )
-    assert interest_due == Decimal("30.67")
+    assert interest_due == Decimal("0")
 
 
 def test_generate_health_card_bill_2(session: Session) -> None:
-    create_lenders(session)
-    card_db_updates(session)
-    create_user(session)
-
-    user_id = 3
-
-    # assign card
-    uc = create_user_card(
-        session=session,
-        user_id=user_id,
-        card_activation_date=parse_date("2020-06-01").date(),
-        card_type="health_card",
-        lender_id=62311,
-        kit_number="10000",
-    )
+    create_lenders(session=session)
+    card_db_updates(session=session)
+    create_user(session=session)
+    uc = create_test_user_card(session=session)
 
     swipe = create_card_swipe(
         session=session,
@@ -240,7 +214,7 @@ def test_generate_health_card_bill_2(session: Session) -> None:
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), uc)
 
-    assert bill.bill_start_date == parse_date("2020-06-01").date()
+    assert bill.bill_start_date == parse_date("2020-07-01").date()
     assert bill.table.is_generated is True
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
@@ -258,30 +232,19 @@ def test_generate_health_card_bill_2(session: Session) -> None:
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_id}/bill/interest_receivable/a"
     )
-    assert interest_due == Decimal("30.67")
+    assert interest_due == Decimal("0")
 
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_id}/bill/interest_accrued/r"
     )
-    assert interest_due == Decimal("30.67")
+    assert interest_due == Decimal("0")
 
 
 def test_generate_health_card_bill_3(session: Session) -> None:
-    create_lenders(session)
-    card_db_updates(session)
-    create_user(session)
-
-    user_id = 3
-
-    # assign card
-    uc = create_user_card(
-        session=session,
-        user_id=user_id,
-        card_activation_date=parse_date("2020-06-01").date(),
-        card_type="health_card",
-        lender_id=62311,
-        kit_number="10000",
-    )
+    create_lenders(session=session)
+    card_db_updates(session=session)
+    create_user(session=session)
+    uc = create_test_user_card(session=session)
 
     medical_swipe = create_card_swipe(
         session=session,
@@ -313,7 +276,7 @@ def test_generate_health_card_bill_3(session: Session) -> None:
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), uc)
 
-    assert bill.bill_start_date == parse_date("2020-06-01").date()
+    assert bill.bill_start_date == parse_date("2020-07-01").date()
     assert bill.table.is_generated is True
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
@@ -326,14 +289,14 @@ def test_generate_health_card_bill_3(session: Session) -> None:
     assert billed_amount == 2500
 
     _, min_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/min/a")
-    assert min_amount == 285
+    assert min_amount == 284
 
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_id}/bill/interest_receivable/a"
     )
-    assert interest_due == Decimal("76.675")
+    assert interest_due == Decimal("0")
 
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_id}/bill/interest_accrued/r"
     )
-    assert interest_due == Decimal("76.675")
+    assert interest_due == Decimal("0")
