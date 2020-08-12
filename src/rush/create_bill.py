@@ -95,9 +95,12 @@ def bill_generate(user_card: BaseCard) -> Dict:
         # After the bill has generated. Call the min generation event on all unpaid bills.
         add_min_to_all_bills(session, bill_closing_date, user_card)
 
-
         # TODO move this to a function because this step is only for DMI
-        from rush.create_emi import adjust_interest_in_emis, create_emis_for_card, add_emi_on_new_bill
+        from rush.create_emi import (
+            add_emi_on_new_bill,
+            adjust_interest_in_emis,
+            create_emis_for_card,
+        )
 
         # If last emi does not exist then we can consider to be first set of emi creation
         last_emi = (
@@ -123,7 +126,7 @@ def bill_generate(user_card: BaseCard) -> Dict:
 
         refresh_schedule(user_card)
 
-    return bill
+    return {"result": "success", "bill": bill}
 
 
 def extend_tenure(session: Session, user_card: BaseCard, new_tenure: int) -> None:

@@ -1337,7 +1337,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
 
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(
-        session, bill_june.table.bill_due_date + relativedelta(days=1), user_card
+        session, bill_june["bill"].table.bill_due_date + relativedelta(days=1), user_card
     )
 
     # Check if amount is adjusted correctly in schedule
