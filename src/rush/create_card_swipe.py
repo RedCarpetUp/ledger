@@ -1,5 +1,4 @@
 from decimal import Decimal
-from typing import Dict
 
 from pendulum import DateTime
 from sqlalchemy.orm.session import Session
@@ -24,8 +23,9 @@ def create_card_swipe(
     txn_time: DateTime,
     amount: Decimal,
     description: str,
+    source: str = "ECOM",
     merchant_id: str = "rc1",
-) -> Dict:
+) -> CardTransaction:
     if not hasattr(user_card, "card_activation_date"):
         return {"result": "error", "message": "Card has not been activated"}
     if txn_time.date() < user_card.card_activation_date:
@@ -52,6 +52,7 @@ def create_card_swipe(
         description=description,
         merchant_id=merchant_id,
         interest=interest_to_be_charged,
+        source=source,
     )
     session.add(swipe)
     session.flush()

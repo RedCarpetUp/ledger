@@ -228,6 +228,11 @@ def _adjust_bill(
     remaining_amount = adjust(
         amount_to_adjust_in_this_bill,
         to_acc=debit_acc_str,  # f"{bill.lender_id}/lender/pg_account/a"
+        from_acc=f"{bill.id}/bill/atm_fee_receivable/a",
+    )
+    remaining_amount = adjust(
+        remaining_amount,
+        to_acc=debit_acc_str,  # f"{bill.lender_id}/lender/pg_account/a"
         from_acc=f"{bill.id}/bill/late_fine_receivable/a",
     )
     remaining_amount = adjust(
@@ -373,3 +378,20 @@ def limit_assignment_event(session: Session, card_id: int, event: LedgerTriggerE
         credit_book_str=f"{card_id}/card/available_limit/l",
         amount=Decimal(event.amount),
     )
+
+
+def atm_fee_event(
+    session: Session, user_card: BaseCard, bill: BaseBill, event: LedgerTriggerEvent
+) -> None:
+    create_ledger_entry_from_str(
+        session,
+        event_id=event.id,
+        debit_book_str=f"{bill.id}/bill/atm_fee_receivable/a",
+        credit_book_str=f"{bill.id}/bill/atm_fee_accrued/r",
+        amount=Decimal(event.amount),
+    )
+
+    # Adjust atm fee in emis
+    from rush.create_emi import adjust_atm_fee_in_emis
+
+    adjust_atm_fee_in_emis(session, user_card, event.post_date)

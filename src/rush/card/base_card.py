@@ -14,6 +14,7 @@ from pendulum import (
     Date,
     DateTime,
 )
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from rush.ledger_utils import (
@@ -21,6 +22,7 @@ from rush.ledger_utils import (
     get_remaining_bill_balance,
 )
 from rush.models import (
+    CardTransaction,
     LoanData,
     LoanMoratorium,
     UserCard,
@@ -94,6 +96,15 @@ class BaseBill:
         if late_fine_due != 0:
             return False
         return True
+
+    def sum_of_atm_transactions(self):
+        atm_transactions_sum = (
+            self.session.query(func.sum(CardTransaction.amount))
+            .filter_by(loan_id=self.table.id, source="ATM")
+            .group_by(CardTransaction.loan_id)
+            .scalar()
+        )
+        return atm_transactions_sum or 0
 
 
 B = TypeVar("B", bound=BaseBill)
