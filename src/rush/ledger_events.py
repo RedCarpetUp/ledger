@@ -143,6 +143,10 @@ def payment_received_event(
             session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str,
         )
 
+        if user_card.card_type == "health_card":
+            # TODO: settle payment in medical limit and non-medical limit accounts.
+            pass
+
     if payment_received > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
             session, user_card.id, event.id, payment_received, debit_book_str=debit_book_str

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from rush.accrue_financial_charges import accrue_interest_on_all_bills
 from rush.card import create_user_card
+from rush.card.health_card import HealthCard
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import get_account_balance_from_str
@@ -14,7 +15,6 @@ from rush.models import (
     CardNames,
     Lenders,
     User,
-    UserCard,
 )
 
 
@@ -43,7 +43,7 @@ def create_user(session: Session) -> None:
     session.flush()
 
 
-def create_test_user_card(session: Session) -> UserCard:
+def create_test_user_card(session: Session) -> HealthCard:
     uc = create_user_card(
         session=session,
         user_id=3,
@@ -65,6 +65,7 @@ def test_create_health_card(session: Session) -> None:
     assert uc.card_type == "health_card"
     assert uc.get_limit_type(mcc="8011") == "health_limit"
     assert uc.get_limit_type(mcc="5555") == "available_limit"
+    assert uc.multiple_limits == True
 
 
 def test_medical_health_card_swipe(session: Session) -> None:

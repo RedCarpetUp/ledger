@@ -106,6 +106,7 @@ class BaseCard:
         self.bill_class = bill_class
         self.table = user_card
         self.__dict__.update(user_card.__dict__)
+        self.multiple_limits = False
 
     @staticmethod
     def get_limit_type(mcc: str) -> str:

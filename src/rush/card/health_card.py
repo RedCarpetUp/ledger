@@ -1,7 +1,13 @@
+from typing import Type
+
+from sqlalchemy.orm import Session
+
 from rush.card.base_card import (
+    B,
     BaseBill,
     BaseCard,
 )
+from rush.models import UserCard
 
 HEALTH_TXN_MCC = [
     "8011",
@@ -21,6 +27,10 @@ HEALTH_TXN_MCC = [
 
 class HealthCard(BaseCard):
     # todo: add implementation for health card.
+    def __init__(self, session: Session, bill_class: Type[B], user_card: UserCard):
+        super().__init__(session=session, bill_class=bill_class, user_card=user_card)
+        self.multiple_limits = True
+
     @staticmethod
     def get_limit_type(mcc: str) -> str:
         return "available_limit" if mcc not in HEALTH_TXN_MCC else "health_limit"
