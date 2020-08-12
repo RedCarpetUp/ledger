@@ -354,6 +354,7 @@ class UserCard(AuditMixin):
     rc_rate_of_interest_monthly = Column(Numeric, nullable=True)
     lender_rate_of_interest_annual = Column(Numeric, nullable=True)
     dpd = Column(Integer, nullable=True)
+    ever_dpd = Column(Integer, nullable=True)
 
     __table_args__ = (
         Index(

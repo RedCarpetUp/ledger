@@ -5,6 +5,7 @@ from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
 from pendulum import parse as parse_date
 from sqlalchemy.orm import Session, aliased
+from sqlalchemy.sql import func
 
 from rush.anomaly_detection import get_payment_events
 from rush.card import (
@@ -840,7 +841,7 @@ def update_event_with_dpd(user_card: BaseCard, post_date: DateTime = None) -> No
                     event_id=ledger_trigger_event.id,
                     credit=ledger_entry.amount,
                     balance=get_remaining_bill_balance(
-                        session, bill, ledger_trigger_event.post_date + relativedelta(minutes=5), True
+                        session, bill, ledger_trigger_event.post_date, True
                     )["total_due"],
                     dpd=dpd,
                 )
@@ -863,7 +864,7 @@ def update_event_with_dpd(user_card: BaseCard, post_date: DateTime = None) -> No
                     event_id=ledger_trigger_event.id,
                     credit=ledger_entry.amount,
                     balance=get_remaining_bill_balance(
-                        session, bill, ledger_trigger_event.post_date + relativedelta(minutes=5), True
+                        session, bill, ledger_trigger_event.post_date, True
                     )["total_due"],
                     dpd=dpd,
                 )
@@ -889,7 +890,7 @@ def update_event_with_dpd(user_card: BaseCard, post_date: DateTime = None) -> No
                     event_id=ledger_trigger_event.id,
                     credit=ledger_entry.amount,
                     balance=get_remaining_bill_balance(
-                        session, bill, ledger_trigger_event.post_date + relativedelta(minutes=5), True
+                        session, bill, ledger_trigger_event.post_date, True
                     )["total_due"],
                     dpd=dpd,
                 )
@@ -912,21 +913,27 @@ def update_event_with_dpd(user_card: BaseCard, post_date: DateTime = None) -> No
                     event_id=ledger_trigger_event.id,
                     credit=ledger_entry.amount,
                     balance=get_remaining_bill_balance(
-                        session, bill, ledger_trigger_event.post_date + relativedelta(minutes=5), True
+                        session, bill, ledger_trigger_event.post_date, True
                     )["total_due"],
                     dpd=dpd,
                 )
                 session.add(new_event)
 
     # Adjust dpd in schedule
-    all_emis = (
-        session.query(CardEmis)
-        .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
-        .order_by(CardEmis.emi_number.asc())
-        .all()
-    )
-    for emi in all_emis:
-        if emi.payment_status != "Paid":
-            emi.dpd = (post_date.date() - emi.due_date).days
+    # TODO Introduce schedule level updation when this converts to a DAG system
+    # all_emis = (
+    #     session.query(CardEmis)
+    #     .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
+    #     .order_by(CardEmis.emi_number.asc())
+    #     .all()
+    # )
+    # for emi in all_emis:
+    #     if emi.payment_status != "Paid":
+    #         emi.dpd = (post_date.date() - emi.due_date).days
+
+    max_dpd = session.query(func.max(EventDpd.dpd).label("max_dpd")).one()
+    user_card.table.dpd = max_dpd.max_dpd
+    if not user_card.table.ever_dpd or max_dpd.max_dpd > user_card.table.ever_dpd:
+        user_card.table.ever_dpd = max_dpd.max_dpd
 
     session.flush()

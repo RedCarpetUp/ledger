@@ -123,6 +123,7 @@ def upgrade() -> None:
         "v3_user_cards", sa.Column("lender_rate_of_interest_annual", sa.Numeric(), nullable=True)
     )
     op.add_column("v3_user_cards", sa.Column("dpd", sa.Integer, nullable=True))
+    op.add_column("v3_user_cards", sa.Column("ever_dpd", sa.Integer, nullable=True))
     with op.batch_alter_table("v3_user_cards") as batch_op:
         batch_op.add_column(sa.Column("no_of_txn_per_day", sa.Integer(), nullable=True))
         batch_op.add_column(sa.Column("single_txn_spend_limit", sa.Integer(), nullable=True))
