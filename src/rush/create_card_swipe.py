@@ -1,4 +1,5 @@
 from decimal import Decimal
+from typing import Any, Dict, Optional
 
 from pendulum import DateTime
 from sqlalchemy.orm.session import Session
@@ -13,8 +14,13 @@ from rush.models import (
 
 
 def create_card_swipe(
-    session: Session, user_card: BaseCard, txn_time: DateTime, amount: Decimal, description: str
-) -> CardTransaction:
+    session: Session,
+    user_card: BaseCard,
+    txn_time: DateTime,
+    amount: Decimal,
+    description: str,
+    mcc: Optional[str] = None,
+) -> Dict[str, Any]:
     if not hasattr(user_card, "card_activation_date"):
         return {"result": "error", "message": "Card has not been activated"}
     if txn_time.date() < user_card.card_activation_date:
@@ -29,8 +35,6 @@ def create_card_swipe(
     session.add(swipe)
     session.flush()
 
-    # TODO: (Opinion needed) get txn mcc info and maybe pass as an extra detail. - Prashant
-
     lt = LedgerTriggerEvent(
         performed_by=user_card.user_id,
         name="card_transaction",
@@ -41,5 +45,5 @@ def create_card_swipe(
     )
     session.add(lt)
     session.flush()  # need id. TODO Gotta use table relationships
-    card_transaction_event(session, user_card, lt)
+    card_transaction_event(session=session, user_card=user_card, event=lt, mcc=mcc)
     return {"result": "success", "data": swipe}

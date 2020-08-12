@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import List
+from typing import List, Optional
 
 from sqlalchemy import Date
 from sqlalchemy.orm import Session
@@ -39,7 +39,9 @@ def m2p_transfer_event(session: Session, event: LedgerTriggerEvent, lender_id: i
     )
 
 
-def card_transaction_event(session: Session, user_card: BaseCard, event: LedgerTriggerEvent) -> None:
+def card_transaction_event(
+    session: Session, user_card: BaseCard, event: LedgerTriggerEvent, mcc: Optional[str] = None
+) -> None:
     amount = Decimal(event.amount)
     user_card_id = user_card.id
     swipe_id = event.extra_details["swipe_id"]
@@ -51,10 +53,7 @@ def card_transaction_event(session: Session, user_card: BaseCard, event: LedgerT
     lender_id = bill.lender_id
     bill_id = bill.id
 
-    # TODO: add mcc check. - Prashant
-    user_books_prefix_str = f"{user_card_id}/card/available_limit"
-    if user_card.card_type == "health_card":
-        user_books_prefix_str = f"{user_card_id}/card/health_limit"
+    user_books_prefix_str = f"{user_card_id}/card/{user_card.get_limit_type(mcc=mcc)}"
 
     # Reduce user's card balance
     create_ledger_entry_from_str(
