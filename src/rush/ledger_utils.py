@@ -132,15 +132,21 @@ def is_bill_closed(session: Session, bill: LoanData, to_date: Optional[DateTime]
     return True
 
 
-def get_remaining_bill_balance(session: Session, bill: LoanData) -> Dict[str, Decimal]:
+def get_remaining_bill_balance(
+    session: Session, bill: LoanData, to_date: Optional[DateTime] = None, at_the_moment: bool = False
+) -> Dict[str, Decimal]:
     _, principal_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/principal_receivable/a"
+        session, book_string=f"{bill.id}/bill/principal_receivable/a", to_date=to_date
     )
+    if at_the_moment:
+        _, principal_due = get_account_balance_from_str(
+            session, book_string=f"{bill.id}/bill/unbilled/a", to_date=to_date
+        )
     _, interest_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/interest_receivable/a"
+        session, book_string=f"{bill.id}/bill/interest_receivable/a", to_date=to_date
     )
     _, late_fine_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/late_fine_receivable/a"
+        session, book_string=f"{bill.id}/bill/late_fine_receivable/a", to_date=to_date
     )
     return {
         "total_due": principal_due + interest_due + late_fine_due,

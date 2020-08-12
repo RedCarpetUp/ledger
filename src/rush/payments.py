@@ -112,8 +112,6 @@ def transaction_refund_event(
     )
 
     # Slide payment in emi
-    from rush.create_emi import refresh_schedule, update_event_with_dpd
+    from rush.create_emi import refresh_schedule
 
     refresh_schedule(user_card=user_card)
-    # Update on card level
-    update_event_with_dpd(event, user_card)

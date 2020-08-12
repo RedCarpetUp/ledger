@@ -25,11 +25,7 @@ from rush.models import (
     LoanData,
     UserCard,
 )
-from rush.utils import (
-    div,
-    get_current_ist_time,
-    mul,
-)
+from rush.utils import get_current_ist_time
 
 
 def _get_total_outstanding(session, user_card):
@@ -88,10 +84,6 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_car
         accrue_interest_event(session, bill, accrue_event, bill.table.interest_to_charge)
         accrue_event.amount += bill.table.interest_to_charge
 
-    from rush.create_emi import update_event_with_dpd
-
-    update_event_with_dpd(accrue_event, user_card)
-
 
 def is_late_fee_valid(session: Session, user_card: BaseCard) -> bool:
     """
@@ -129,10 +121,6 @@ def accrue_late_charges(session: Session, user_card: BaseCard, post_date: DateTi
         session.flush()
 
         accrue_late_fine_event(session, latest_bill, event)
-
-        from rush.create_emi import update_event_with_dpd
-
-        update_event_with_dpd(event, user_card)
     return latest_bill
 
 
@@ -216,12 +204,10 @@ def reverse_interest_charges(
                 session, user_card.user_id, event.id, entry["amount"], entry["acc_to_remove_from"]
             )
 
-    # Slide payment in emi
-    from rush.create_emi import refresh_schedule, update_event_with_dpd
+    from rush.create_emi import refresh_schedule
 
+    # Slide payment in emi
     refresh_schedule(user_card=user_card)
-    # Update on card level
-    update_event_with_dpd(event, user_card)
 
 
 def reverse_late_charges(
@@ -273,9 +259,7 @@ def reverse_late_charges(
         if remaining_amount > 0:
             pass  # TODO prepayment
 
-    # Slide payment in emi
-    from rush.create_emi import refresh_schedule, update_event_with_dpd
+    from rush.create_emi import refresh_schedule
 
+    # Slide payment in emi
     refresh_schedule(user_card=user_card)
-    # Update on card level
-    update_event_with_dpd(event, user_card)

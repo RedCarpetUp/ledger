@@ -483,8 +483,11 @@ class LoanMoratorium(AuditMixin):
 class EventDpd(AuditMixin):
     __tablename__ = "event_dpd"
 
+    bill_id = Column(Integer, ForeignKey(LoanData.id), nullable=False)
     card_id = Column(Integer, ForeignKey(UserCard.id), nullable=False)
-    post_date = Column(TIMESTAMP, nullable=False)
     event_id = Column(Integer, ForeignKey(LedgerTriggerEvent.id), nullable=False)
+    debit = Column(Numeric, nullable=True, default=Decimal(0))
+    credit = Column(Numeric, nullable=True, default=Decimal(0))
+    balance = Column(Numeric, nullable=True, default=Decimal(0))
     dpd = Column(Integer, nullable=False)
     row_status = Column(String(length=10), nullable=False, default="active")

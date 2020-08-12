@@ -26,6 +26,7 @@ from rush.create_card_swipe import create_card_swipe
 from rush.create_emi import (
     check_moratorium_eligibility,
     refresh_schedule,
+    update_event_with_dpd,
 )
 from rush.ledger_utils import (
     get_account_balance_from_str,
@@ -37,11 +38,14 @@ from rush.lender_funds import (
     m2p_transfer,
 )
 from rush.models import (
+    BookAccount,
     CardEmis,
     CardKitNumbers,
     CardNames,
     CardTransaction,
     EmiPaymentMapping,
+    EventDpd,
+    LedgerEntry,
     LedgerTriggerEvent,
     LenderPy,
     Lenders,
@@ -235,13 +239,11 @@ def test_generate_bill_1(session: Session) -> None:
     )
     assert interest_due == Decimal("30.67")
 
-    interest_event = (
-        session.query(LedgerTriggerEvent)
-        .filter_by(card_id=uc.id, name="accrue_interest")
-        .order_by(LedgerTriggerEvent.post_date.desc())
-        .first()
-    )
-    # assert interest_event.post_date.date() == parse_date("2020-05-18").date()
+    update_event_with_dpd(user_card, parse_date("2020-05-21 00:05:00"))
+
+    dpd_events = session.query(EventDpd).filter_by(card_id=uc.id).all()
+
+    assert dpd_events[0].balance == Decimal(1000)
 
 
 def _partial_payment_bill_1(session: Session) -> None:

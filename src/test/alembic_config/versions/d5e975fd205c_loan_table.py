@@ -289,14 +289,18 @@ def upgrade() -> None:
         sa.Column("performed_by", sa.Integer(), nullable=False),
         sa.Column("card_id", sa.Integer(), nullable=False),
         sa.Column("event_id", sa.Integer(), nullable=False),
-        sa.Column("post_date", sa.TIMESTAMP(), nullable=False),
+        sa.Column("credit", sa.DECIMAL(), nullable=True),
+        sa.Column("debit", sa.DECIMAL(), nullable=True),
+        sa.Column("balance", sa.DECIMAL(), nullable=True),
         sa.Column("dpd", sa.Integer, nullable=False),
+        sa.Column("bill_id", sa.Integer(), nullable=False),
         sa.Column("row_status", sa.String(length=20), nullable=False),
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["card_id"], ["v3_user_cards.id"], name="fk_event_dpd_card_id"),
         sa.ForeignKeyConstraint(["event_id"], ["ledger_trigger_event.id"], name="fk_event_dpd_event_id"),
+        sa.ForeignKeyConstraint(["bill_id"], ["loan_data.id"], name="fk_event_dpd_bill_id"),
     )
 
 
