@@ -30,19 +30,6 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
 
-    op.create_table(
-        "ledger_entry",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("event_id", sa.Integer(), nullable=False),
-        sa.Column("debit_account", sa.Integer(), nullable=False),
-        sa.Column("credit_account", sa.Integer(), nullable=False),
-        sa.Column("amount", sa.DECIMAL(), nullable=False),
-        sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
-        sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
-        sa.Column("performed_by", sa.Integer(), nullable=False),
-        sa.PrimaryKeyConstraint("id"),
-    )
-
 
 def downgrade() -> None:
     pass

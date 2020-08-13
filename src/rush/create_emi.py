@@ -5,7 +5,10 @@ from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
 from pendulum import parse as parse_date
 from sqlalchemy import or_
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm import (
+    Session,
+    aliased,
+)
 from sqlalchemy.sql import func
 
 from rush.anomaly_detection import get_payment_events
@@ -14,12 +17,16 @@ from rush.card import (
     get_user_card,
 )
 from rush.card.base_card import BaseBill
-from rush.ledger_utils import get_account_balance_from_str, get_remaining_bill_balance
+from rush.ledger_utils import (
+    get_account_balance_from_str,
+    get_remaining_bill_balance,
+)
 from rush.models import (
     BookAccount,
     CardEmis,
     EmiPaymentMapping,
     EventDpd,
+    Fee,
     LedgerEntry,
     LedgerTriggerEvent,
     LoanData,
@@ -737,8 +744,13 @@ def refresh_schedule(user_card: BaseCard):
     # Re-Create schedule from all the bills
     bill_number = 1
     for bill in all_bills:
-        _, late_fine_due = get_account_balance_from_str(session, f"{bill.table.id}/bill/late_fine/r")
-        _, atm_fee_due = get_account_balance_from_str(session, f"{bill.id}/bill/atm_fee_accrued/r")
+        fees = session.query(Fee).filter(Fee.bill_id == bill.id, Fee.fee_status != "REVERSED").all()
+        late_fine_due = atm_fee_due = 0
+        for fee in fees:
+            if fee.name == "late_fee":
+                late_fine_due = fee.gross_amount
+            elif fee.name == "atm_fee":
+                atm_fee_due = fee.gross_amount
         interest_due = bill.table.interest_to_charge
         last_emi = (
             session.query(CardEmis)

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from rush.models import (
     BookAccount,
+    Fee,
     LedgerEntry,
     LedgerTriggerEvent,
     LoanData,
@@ -86,29 +87,13 @@ def get_book_account_by_string(session: Session, book_string: str) -> BookAccoun
     return book_account
 
 
-def is_min_paid(session: Session, bill: LoanData, to_date: Optional[DateTime] = None) -> bool:
-    _, min_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/min/a", to_date=to_date
-    )
-    _, interest_received = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/interest_received/a", to_date=to_date
-    )
-    _, principal_received = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/principal_received/a", to_date=to_date
-    )
-    amount_received = interest_received + principal_received
-
-    # Consider all receivables if event_date is not null. Assuming it's being checked for anomlay.
-    # In that case the payment can be settled in any of the receivables.
-    if to_date:
-        _, late_fee_received = get_account_balance_from_str(
-            session, book_string=f"{bill.id}/bill/late_fee_received/a", to_date=to_date
-        )
-        amount_received += late_fee_received
-    return amount_received >= min_due
-
-
 def is_bill_closed(session: Session, bill: LoanData, to_date: Optional[DateTime] = None) -> bool:
+    # Check if unbilled is zero. If not, return false.
+    _, unbilled_balance = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/unbilled/a", to_date=to_date
+    )
+    if unbilled_balance != 0:
+        return False
     # Check if principal is paid. If not, return false.
     _, principal_due = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/principal_receivable/a", to_date=to_date
@@ -123,11 +108,8 @@ def is_bill_closed(session: Session, bill: LoanData, to_date: Optional[DateTime]
     if interest_due != 0:
         return False
 
-    # Check if late fine is paid. If not, return false.
-    _, late_fine_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/late_fine_receivable/a", to_date=to_date
-    )
-    if late_fine_due != 0:
+    unpaid_fees = session.query(Fee).filter(Fee.bill_id == bill.id, Fee.fee_status == "UNPAID").all()
+    if unpaid_fees:
         return False
     return True
 
@@ -146,16 +128,11 @@ def get_remaining_bill_balance(
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/interest_receivable/a", to_date=to_date
     )
-    _, late_fine_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/late_fine_receivable/a", to_date=to_date
-    )
-    _, atm_fee_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/atm_fee_receivable/a", to_date=to_date
-    )
-    return {
-        "total_due": principal_due + interest_due + late_fine_due + atm_fee_due,
-        "principal_due": principal_due,
-        "interest_due": interest_due,
-        "late_fine": late_fine_due,
-        "atm_fee": atm_fee_due,
-    }
+    d = {"principal_due": principal_due, "interest_due": interest_due}
+    fees = session.query(Fee).filter(Fee.bill_id == bill.id, Fee.fee_status == "UNPAID").all()
+    for fee in fees:
+        fee_due_amount = fee.gross_amount - fee.gross_amount_paid
+        d[fee.name] = fee_due_amount
+    d["total_due"] = sum(v for _, v in d.items())  # sum of all values becomes total due.
+
+    return d
