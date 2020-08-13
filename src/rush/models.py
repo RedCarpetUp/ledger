@@ -486,16 +486,16 @@ class EmiPaymentMapping(AuditMixin):
 class LoanMoratorium(AuditMixin):
     __tablename__ = "loan_moratorium"
 
-    card_id = Column(Integer, ForeignKey(UserCard.id), nullable=False)
+    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
 
     @classmethod
-    def is_in_moratorium(cls, session: Session, card_id: int, date_to_check_against: PythonDate) -> bool:
+    def is_in_moratorium(cls, session: Session, loan_id: int, date_to_check_against: PythonDate) -> bool:
         v = (
             session.query(cls)
             .filter(
-                cls.card_id == card_id,
+                cls.card_id == loan_id,
                 date_to_check_against >= cls.start_date,
                 date_to_check_against <= cls.end_date,
             )
