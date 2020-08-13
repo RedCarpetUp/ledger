@@ -23,6 +23,7 @@ def create_card_swipe(
     txn_time: DateTime,
     amount: Decimal,
     description: str,
+    source: str = "ECOM",
     mcc: Optional[str] = None,
 ) -> Dict[str, Any]:
     if not hasattr(user_card, "card_activation_date"):
@@ -34,7 +35,7 @@ def create_card_swipe(
         return card_bill
     card_bill = card_bill["bill"]
     swipe = CardTransaction(  # This can be moved to user card too.
-        loan_id=card_bill.id, txn_time=txn_time, amount=amount, description=description
+        loan_id=card_bill.id, txn_time=txn_time, amount=amount, description=description, source=source
     )
     session.add(swipe)
     session.flush()
