@@ -293,15 +293,21 @@ def test_drawdown_open(session: Session) -> None:
             date = parse_date("2019-01-20").date() + relativedelta(months=x)
             all_events.append({"type": "interest", "data": {}, "date": date})
 
-        # for event in all_events:
-        #     if event["type"] == "payment":
-        #         payment_received(
-        #             session=session,
-        #             user_card=user_card,
-        #             payment_amount=Decimal(event["data"]["payment_request_amount"]),
-        #             payment_date=event["data"]["intermediary_payment_date"],
-        #             payment_request_id=event["data"]["payment_request_id"],
-        #         )
+        all_events = sorted(all_events, key=lambda i: i["date"])
+
+        for event in all_events:
+            if event["type"] == "payment":
+                payment_received(
+                    session=session,
+                    user_card=user_card,
+                    payment_amount=Decimal(event["data"]["payment_request_amount"]),
+                    payment_date=event["data"]["intermediary_payment_date"],
+                    payment_request_id=event["data"]["payment_request_id"],
+                )
+            elif event["type"] == 'interest':
+                accrue_interest_on_all_bills(
+                    session, event['date'], user_card
+                )
 
     # conn = pg.connect(v3_conn)
     # cursor = conn.cursor()
