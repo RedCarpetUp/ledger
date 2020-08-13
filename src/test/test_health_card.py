@@ -391,3 +391,149 @@ def test_mixed_payment_received(session: Session) -> None:
         session, f"{uc.id}/card/available_limit/l"
     )
     assert non_medical_limit_balance == -500
+
+def test_medical_payment_received(session: Session) -> None:
+    create_lenders(session=session)
+    card_db_updates(session=session)
+    create_user(session=session)
+    uc = create_test_user_card(session=session)
+
+    medical_swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-07-08 19:23:11"),
+        amount=Decimal(1000),
+        description="Apollo Hospital",
+        mcc="8011",
+    )
+    bill_id = medical_swipe["data"].loan_id
+
+    _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
+    assert unbilled_amount == 1000
+
+    bill = bill_generate(uc)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), uc)
+
+    assert bill.bill_start_date == parse_date("2020-07-01").date()
+    assert bill.table.is_generated is True
+
+    _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
+    # Should be 0 because it has moved to billed account.
+    assert unbilled_amount == 0
+
+    _, billed_amount = get_account_balance_from_str(
+        session, book_string=f"{bill_id}/bill/principal_receivable/a"
+    )
+    assert billed_amount == 1000
+
+    _, min_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/min/a")
+    assert min_amount == 114
+
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_id}/bill/interest_receivable/a"
+    )
+    assert interest_due == Decimal("0")
+
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_id}/bill/interest_accrued/r"
+    )
+    assert interest_due == Decimal("0")
+
+    _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.id}/card/health_limit/l")
+    assert medical_limit_balance == -1000
+
+    _, non_medical_limit_balance = get_account_balance_from_str(
+        session, f"{uc.id}/card/available_limit/l"
+    )
+    assert non_medical_limit_balance == Decimal(0)
+
+    payment_received(
+        session=session,
+        user_card=uc,
+        payment_amount=Decimal(700),
+        payment_date=parse_date("2020-08-03"),
+        payment_request_id="medical_payment",
+    )
+
+    _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.id}/card/health_limit/l")
+    assert medical_limit_balance == Decimal(-300)
+
+    _, non_medical_limit_balance = get_account_balance_from_str(
+        session, f"{uc.id}/card/available_limit/l"
+    )
+    assert non_medical_limit_balance == Decimal(0)
+
+def test_non_medical_payment_received(session: Session) -> None:
+    create_lenders(session=session)
+    card_db_updates(session=session)
+    create_user(session=session)
+    uc = create_test_user_card(session=session)
+
+    non_medical_swipe = create_card_swipe(
+        session=session,
+        user_card=uc,
+        txn_time=parse_date("2020-07-09 19:23:11"),
+        amount=Decimal(1500),
+        description="Amazon.com",
+    )
+    bill_id = non_medical_swipe["data"].loan_id
+
+    _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
+    assert unbilled_amount == 1500
+
+    bill = bill_generate(uc)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), uc)
+
+    assert bill.bill_start_date == parse_date("2020-07-01").date()
+    assert bill.table.is_generated is True
+
+    _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
+    # Should be 0 because it has moved to billed account.
+    assert unbilled_amount == 0
+
+    _, billed_amount = get_account_balance_from_str(
+        session, book_string=f"{bill_id}/bill/principal_receivable/a"
+    )
+    assert billed_amount == 1500
+
+    _, min_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/min/a")
+    assert min_amount == 170
+
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_id}/bill/interest_receivable/a"
+    )
+    assert interest_due == Decimal("0")
+
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_id}/bill/interest_accrued/r"
+    )
+    assert interest_due == Decimal("0")
+
+    _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.id}/card/health_limit/l")
+    assert medical_limit_balance == Decimal(0)
+
+    _, non_medical_limit_balance = get_account_balance_from_str(
+        session, f"{uc.id}/card/available_limit/l"
+    )
+    assert non_medical_limit_balance == -1500
+
+    payment_date = parse_date("2020-08-03")
+    amount = Decimal(1200)
+
+    payment_received(
+        session=session,
+        user_card=uc,
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id="non_medical_payment",
+    )
+
+    _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.id}/card/health_limit/l")
+    assert medical_limit_balance == Decimal(0)
+
+    _, non_medical_limit_balance = get_account_balance_from_str(
+        session, f"{uc.id}/card/available_limit/l"
+    )
+    assert non_medical_limit_balance == -300
