@@ -159,6 +159,10 @@ def accrue_late_charges(
         event.amount = fee.gross_amount
         # Add into min amount of the bill too.
         add_min_amount_event(session, latest_bill, event, event.amount)
+
+        from rush.create_emi import refresh_schedule
+
+        refresh_schedule(user_card)
     return latest_bill
 
 

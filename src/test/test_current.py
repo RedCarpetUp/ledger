@@ -308,6 +308,16 @@ def _accrue_late_fine_bill_1(session: Session) -> None:
     assert fee_due.net_amount == Decimal(100)
     assert fee_due.gross_amount == Decimal(118)
 
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.emi_number.asc())
+    )
+    emis_dict = [u.as_dict() for u in all_emis_query.all()]
+    first_emi = emis_dict[0]
+
+    assert first_emi["late_fee"] == Decimal(118)
+
     min_due = bill.get_remaining_min()
     assert min_due == 132
 

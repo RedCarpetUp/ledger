@@ -22,6 +22,7 @@ from rush.ledger_utils import get_account_balance_from_str
 from rush.models import (
     CardEmis,
     EmiPaymentMapping,
+    Fee,
     LedgerTriggerEvent,
     LoanData,
     LoanMoratorium,
@@ -482,43 +483,6 @@ def adjust_interest_in_emis(session: Session, user_card: BaseCard, post_date: Da
             # session.bulk_update_mappings(CardEmis, emis_dict)
 
 
-def adjust_late_fee_in_emis(session: Session, user_card: BaseCard, post_date: DateTime) -> None:
-    latest_bill = (
-        session.query(LoanData)
-        .filter(
-            LoanData.card_id == user_card.id,
-            LoanData.bill_start_date < post_date,
-            LoanData.is_generated.is_(True),
-        )
-        .order_by(LoanData.bill_start_date.desc())
-        .first()
-    )
-    emi = (
-        session.query(CardEmis)
-        .filter(
-            CardEmis.card_id == user_card.id,
-            CardEmis.due_date < post_date,
-            CardEmis.row_status == "active",
-        )
-        .order_by(CardEmis.due_date.desc())
-        .first()
-    )
-    min_due = user_card.get_min_for_schedule()
-    if not emi:
-        emi = (
-            session.query(CardEmis)
-            .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
-            .order_by(CardEmis.emi_number.asc())
-            .first()
-        )
-    _, late_fee = get_account_balance_from_str(session, f"{latest_bill.id}/bill/late_fine/r")
-    if late_fee and late_fee > 0:
-        emi.total_closing_balance_post_due_date += late_fee
-        emi.total_due_amount = min_due if min_due else emi.total_due_amount + late_fee
-        emi.late_fee += late_fee
-        session.flush()
-
-
 def adjust_atm_fee_in_emis(session: Session, user_card: BaseCard, post_date: DateTime) -> None:
     latest_bill = (
         session.query(LoanData)
@@ -740,8 +704,13 @@ def refresh_schedule(user_card: BaseCard):
     # Re-Create schedule from all the bills
     bill_number = 1
     for bill in all_bills:
-        _, late_fine_due = get_account_balance_from_str(session, f"{bill.table.id}/bill/late_fine/r")
-        _, atm_fee_due = get_account_balance_from_str(session, f"{bill.id}/bill/atm_fee_accrued/r")
+        fees = session.query(Fee).filter(Fee.bill_id == bill.id, Fee.fee_status != "REVERSED").all()
+        late_fine_due = atm_fee_due = 0
+        for fee in fees:
+            if fee.name == "late_fee":
+                late_fine_due = fee.gross_amount
+            elif fee.name == "atm_fee":
+                atm_fee_due = fee.gross_amount
         interest_due = bill.table.interest_to_charge
         last_emi = (
             session.query(CardEmis)
