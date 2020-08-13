@@ -140,14 +140,18 @@ def create_fee_entry(
     return f
 
 
-def accrue_late_charges(session: Session, user_card: BaseCard, post_date: DateTime) -> BaseBill:
+def accrue_late_charges(
+    session: Session,
+    user_card: BaseCard,
+    post_date: DateTime,
+    late_fee_to_charge_without_tax: Decimal = Decimal(100),
+) -> BaseBill:
     latest_bill = user_card.get_latest_generated_bill()
     can_charge_fee = latest_bill.get_remaining_min() > 0
     #  accrue_late_charges_prerequisites(session, bill)
     if can_charge_fee:  # if min isn't paid charge late fine.
         # TODO get correct date here.
         # Adjust for rounding because total due amount has to be rounded
-        late_fee_to_charge_without_tax = Decimal(100)
         event = LedgerTriggerEvent(name="charge_late_fine", post_date=post_date, card_id=user_card.id)
         session.add(event)
         session.flush()
