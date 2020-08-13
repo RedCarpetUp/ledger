@@ -5,7 +5,10 @@ from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
 from pendulum import parse as parse_date
 from sqlalchemy import or_
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm import (
+    Session,
+    aliased,
+)
 from sqlalchemy.sql import func
 
 from rush.anomaly_detection import get_payment_events
@@ -14,14 +17,17 @@ from rush.card import (
     get_user_card,
 )
 from rush.card.base_card import BaseBill
-from rush.ledger_utils import get_account_balance_from_str, get_remaining_bill_balance
+from rush.ledger_utils import (
+    get_account_balance_from_str,
+    get_remaining_bill_balance,
+)
 from rush.models import (
     BookAccount,
     CardEmis,
     EmiPaymentMapping,
     EventDpd,
-    LedgerEntry,
     Fee,
+    LedgerEntry,
     LedgerTriggerEvent,
     LoanData,
     LoanMoratorium,
