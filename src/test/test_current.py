@@ -2364,7 +2364,7 @@ def test_intermediate_bill_generation(session: Session) -> None:
 
     assert (
         session.query(LoanData)
-        .filter(LoanData.card_id == user_card.id, LoanData.is_generated.is_(True))
+        .filter(LoanData.loan_id == user_card.loan_id, LoanData.is_generated.is_(True))
         .count()
     ) == 6
 

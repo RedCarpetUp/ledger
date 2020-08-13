@@ -36,7 +36,7 @@ def _get_total_outstanding(session, user_card):
     # Temp func.
     all_bills = (
         session.query(LoanData)
-        .filter(LoanData.card_id == user_card.id, LoanData.is_generated.is_(True))
+        .filter(LoanData.loan_id == user_card.loan_id, LoanData.is_generated.is_(True))
         .all()
     )
     total_outstanding = sum(get_remaining_bill_balance(session, bill)["total_due"] for bill in all_bills)

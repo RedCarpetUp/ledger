@@ -116,7 +116,7 @@ def bill_generate(user_card: BaseCard) -> BaseBill:
         else:
             bill_count = (
                 session.query(LoanData)
-                .filter(LoanData.card_id == user_card.id, LoanData.is_generated.is_(True))
+                .filter(LoanData.loan_id == user_card.loan_id, LoanData.is_generated.is_(True))
                 .count()
             )
             add_emi_on_new_bill(session, user_card, bill, last_emi.emi_number, bill_count)

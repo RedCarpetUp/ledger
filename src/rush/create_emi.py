@@ -449,7 +449,7 @@ def adjust_interest_in_emis(session: Session, user_card: BaseCard, post_date: Da
     latest_bill = (
         session.query(LoanData)
         .filter(
-            LoanData.card_id == user_card.id,
+            LoanData.loan_id == user_card.loan_id,
             LoanData.bill_start_date <= post_date,
             LoanData.is_generated.is_(True),
         )
@@ -486,7 +486,7 @@ def adjust_late_fee_in_emis(session: Session, user_card: BaseCard, post_date: Da
     latest_bill = (
         session.query(LoanData)
         .filter(
-            LoanData.card_id == user_card.id,
+            LoanData.loan_id == user_card.loan_id,
             LoanData.bill_start_date < post_date,
             LoanData.is_generated.is_(True),
         )
@@ -523,7 +523,7 @@ def adjust_atm_fee_in_emis(session: Session, user_card: BaseCard, post_date: Dat
     latest_bill = (
         session.query(LoanData)
         .filter(
-            LoanData.card_id == user_card.id,
+            LoanData.loan_id == user_card.loan_id,
             LoanData.bill_start_date < post_date,
             LoanData.is_generated.is_(True),
         )

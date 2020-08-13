@@ -139,7 +139,7 @@ class BaseCard:
     ) -> BaseBill:
         new_bill = LoanData(
             user_id=self.user_id,
-            card_id=self.id,
+            loan_id=self.id,
             lender_id=lender_id,
             bill_start_date=bill_start_date,
             bill_close_date=bill_close_date,
