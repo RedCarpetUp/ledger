@@ -208,9 +208,7 @@ def create_all_users(session: Session, loan_ids: List[Integer]) -> pd.DataFrame:
     return user_ids
 
 
-def add_all_txns(session: Session, user_id: Decimal, loan_id: Decimal) -> None:
-
-    user_card = get_user_card(session, user_id)
+def get_all_txns(session: Session, user_id: Decimal, loan_id: Decimal) -> pd.DataFrame:
 
     txns = pd.read_sql_query(
         """
@@ -229,14 +227,7 @@ def add_all_txns(session: Session, user_id: Decimal, loan_id: Decimal) -> None:
         params={"loan_id": loan_id},
     )
 
-    for index, row in txns.iterrows():
-        create_card_swipe(
-            session=session,
-            user_card=user_card,
-            txn_time=row["agreement_date"],
-            amount=Decimal(row["product_price"]),
-            description=row["product_name"],
-        )
+    return txns
 
 
 def get_all_payments(session: Session, loan_id: Decimal) -> pd.DataFrame:
@@ -260,8 +251,25 @@ def get_all_payments(session: Session, loan_id: Decimal) -> pd.DataFrame:
         params={"loan_id": loan_id},
     )
 
-    print(payments)
     return payments
+
+
+def get_all_late_fee(session: Session, loan_id: Decimal) -> pd.DataFrame:
+
+    fees = pd.read_sql_query(
+        """
+        select led.gross_due_late_payment_fees amount, led.due_date fee_date
+        from v3_loan_emis_data led
+        where led.row_status = 'active' 
+        and led.loan_id = %(loan_id)s
+        and led.gross_due_late_payment_fees > 0
+        order by led.due_date
+    """,
+        con=v3_conn,
+        params={"loan_id": loan_id},
+    )
+
+    return fees
 
 
 def test_drawdown_open(session: Session) -> None:
@@ -272,41 +280,59 @@ def test_drawdown_open(session: Session) -> None:
     for index, row in users.iterrows():
         user_id = Decimal(row["user_id"].item())
         loan_id = Decimal(row["loan_id"].item())
+        user_card = get_user_card(session, user_id)
+        all_events = []
 
         # add all txns
-        add_all_txns(session, user_id, loan_id)
+        txns = get_all_txns(session, user_id, loan_id)
+        for index, row in txns.iterrows():
+            all_events.append({"type": "txn", "data": row, "date": row["agreement_date"]})
 
-        # create all bills
-        user_card = get_user_card(session, user_id)
-        for x in range(20):
-            bill_generate(user_card)
-
-        all_events = []
+        # add create bill and interest accrue for each month to events
+        for x in range(20):  # 20 is no of months from 2019-01-10 to 2020-08-01
+            date = parse_date("2019-02-01").date() + relativedelta(months=x)
+            all_events.append({"type": "create_bill", "data": {}, "date": date})
+            date = parse_date("2019-02-20").date() + relativedelta(months=x)
+            all_events.append({"type": "interest", "data": {}, "date": date})
 
         # fetch all payments and add to events
         payments = get_all_payments(session, loan_id)
         for index, row in payments.iterrows():
             all_events.append({"type": "payment", "data": row, "date": row["intermediary_payment_date"]})
 
-        # add interest accrue for each month
-        for x in range(20):
-            date = parse_date("2019-01-20").date() + relativedelta(months=x)
-            all_events.append({"type": "interest", "data": {}, "date": date})
+        # fetch all late fee
+        late_fee = get_all_late_fee(session, loan_id)
+        for index, row in late_fee.iterrows():
+            all_events.append({"type": "late_fee", "data": row, "date": row["fee_date"]})
 
+        # sort events on post date
         all_events = sorted(all_events, key=lambda i: i["date"])
 
         for event in all_events:
-            if event["type"] == "payment":
+            if event["type"] == "txn":
+                create_card_swipe(
+                    session=session,
+                    user_card=user_card,
+                    txn_time=event["data"]["agreement_date"],
+                    amount=Decimal(event["data"]["product_price"]),
+                    description=event["data"]["product_name"],
+                )
+            elif event["type"] == "create_bill":
+                latest_bill = user_card.get_latest_generated_bill()
+                if latest_bill and latest_bill.table.bill_start_date >= event["date"]:
+                    continue
+                bill_generate(user_card)
+            elif event["type"] == "interest":
+                accrue_interest_on_all_bills(session, event["date"], user_card)
+            elif event["type"] == "late_fee":
+                accrue_late_charges(session, user_card, event["date"])
+            elif event["type"] == "payment":
                 payment_received(
                     session=session,
                     user_card=user_card,
                     payment_amount=Decimal(event["data"]["payment_request_amount"]),
                     payment_date=event["data"]["intermediary_payment_date"],
                     payment_request_id=event["data"]["payment_request_id"],
-                )
-            elif event["type"] == 'interest':
-                accrue_interest_on_all_bills(
-                    session, event['date'], user_card
                 )
 
     # conn = pg.connect(v3_conn)
