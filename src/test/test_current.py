@@ -299,12 +299,7 @@ def _accrue_late_fine_bill_1(session: Session) -> None:
     event_date = parse_date("2020-05-16 00:00:00")
     bill = accrue_late_charges(session, user_card, event_date)
 
-    fee_due = (
-        session.query(Fee)
-        .filter(Fee.bill_id == bill.id, Fee.name == "late_fee")
-        .order_by(Fee.id.desc())
-        .one_or_none()
-    )
+    fee_due = session.query(Fee).filter(Fee.bill_id == bill.id, Fee.name == "late_fee").one_or_none()
     assert fee_due.net_amount == Decimal(100)
     assert fee_due.gross_amount == Decimal(118)
 
@@ -1075,10 +1070,10 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     bill_may = bill_generate(user_card)
 
     # Check for atm fee.
-    _, atm_fee_receivable = get_account_balance_from_str(
-        session, book_string=f"{bill_may.id}/bill/atm_fee_receivable/a"
+    atm_fee_due = (
+        session.query(Fee).filter(Fee.bill_id == bill_may.id, Fee.name == "atm_fee").one_or_none()
     )
-    assert atm_fee_receivable == 59
+    assert atm_fee_due.gross_amount == 59
 
     create_card_swipe(
         session=session,
@@ -2017,23 +2012,10 @@ def test_refresh_schedule(session: Session) -> None:
         .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
-    pre_emis_dict = [u.as_dict() for u in all_emis_query.all()]
+    emis_dict = [u.as_dict() for u in all_emis_query.all()]
 
-    # Refresh schedule
-    refresh_schedule(get_user_card(session, a.id))
-
-    # Get list post refresh
-    all_emis_query = (
-        session.query(CardEmis)
-        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
-        .order_by(CardEmis.emi_number.asc())
-    )
-    post_emis_dict = [u.as_dict() for u in all_emis_query.all()]
-
-    second_emi_pre_dict = pre_emis_dict[1]
-    second_emi_post_dict = post_emis_dict[1]
-    assert second_emi_pre_dict["interest_received"] == Decimal(180)
-    assert second_emi_post_dict["interest_received"] == Decimal(360)
+    second_emi = emis_dict[1]
+    assert second_emi["interest_received"] == Decimal(360)
 
 
 def test_moratorium_schedule(session: Session) -> None:
@@ -2108,14 +2090,6 @@ def test_moratorium_schedule(session: Session) -> None:
         session, bill_may.table.bill_due_date + relativedelta(days=1), user_card
     )
 
-    # Get emi list post few bill creations
-    all_emis_query = (
-        session.query(CardEmis)
-        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
-        .order_by(CardEmis.emi_number.asc())
-    )
-    pre_emis_dict = [u.as_dict() for u in all_emis_query.all()]
-
     # Give moratorium to user
     m = LoanMoratorium.new(
         session, card_id=uc.id, start_date=parse_date("2020-09-01"), end_date=parse_date("2020-12-01"),
@@ -2130,12 +2104,10 @@ def test_moratorium_schedule(session: Session) -> None:
         .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
-    post_emis_dict = [u.as_dict() for u in all_emis_query.all()]
+    emis_dict = [u.as_dict() for u in all_emis_query.all()]
 
-    second_emi_pre_dict = pre_emis_dict[1]
-    second_emi_post_dict = post_emis_dict[1]
-    assert second_emi_pre_dict["interest_received"] == Decimal(180)
-    assert second_emi_post_dict["interest_received"] == Decimal(360)
+    second_emi = emis_dict[1]
+    assert second_emi["interest_received"] == Decimal(360)
 
 
 def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
