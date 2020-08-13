@@ -142,7 +142,12 @@ class BaseCard:
         return self.bill_class(self.session, bill)
 
     def create_bill(
-        self, bill_start_date: Date, bill_close_date: Date, lender_id: int, is_generated: bool,
+        self,
+        bill_start_date: Date,
+        bill_close_date: Date,
+        bill_due_date: Date,
+        lender_id: int,
+        is_generated: bool,
     ) -> BaseBill:
         new_bill = LoanData(
             user_id=self.user_id,
@@ -150,7 +155,7 @@ class BaseCard:
             lender_id=lender_id,
             bill_start_date=bill_start_date,
             bill_close_date=bill_close_date,
-            bill_due_date=bill_start_date + relativedelta(days=self.table.interest_free_period_in_days),
+            bill_due_date=bill_due_date,
             is_generated=is_generated,
         )
         self.session.add(new_bill)

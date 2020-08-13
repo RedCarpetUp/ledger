@@ -44,8 +44,9 @@ def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -
     if months_diff > 0:
         for i in range(months_diff + 1):
             new_bill = user_card.create_bill(
-                bill_start_date=new_bill_date + relativedelta(months=i),
-                bill_close_date=new_bill_date + relativedelta(months=i + 1),
+                bill_start_date=new_bill_date + relativedelta(months=i, day=1),
+                bill_close_date=new_bill_date + relativedelta(months=i + 1, day=1),
+                bill_due_date=new_bill_date + relativedelta(months=i + 1, day=15),
                 lender_id=lender_id,
                 is_generated=False,
             )
@@ -54,7 +55,8 @@ def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -
         new_bill_date = last_bill.bill_close_date
     new_bill = user_card.create_bill(
         bill_start_date=new_bill_date,
-        bill_close_date=new_bill_date + relativedelta(months=1),
+        bill_close_date=new_bill_date + relativedelta(months=1, day=1),
+        bill_due_date=new_bill_date + relativedelta(months=1, day=15),
         lender_id=lender_id,
         is_generated=False,
     )

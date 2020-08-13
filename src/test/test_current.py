@@ -502,7 +502,7 @@ def _generate_bill_2(session: Session) -> None:
     bill_2 = bill_generate(user_card=uc)
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(session, bill_2.table.bill_due_date + relativedelta(days=1), uc)
-    assert bill_2.bill_start_date == parse_date("2020-05-02").date()
+    assert bill_2.bill_start_date == parse_date("2020-05-01").date()
 
     unpaid_bills = uc.get_unpaid_bills()
     assert len(unpaid_bills) == 2
@@ -887,7 +887,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         session=session,
         card_type="ruby",
         user_id=a.id,
-        card_activation_date=parse_date("2020-05-01").date(),
+        card_activation_date=parse_date("2020-05-04").date(),
         lender_id=62311,
     )
 
