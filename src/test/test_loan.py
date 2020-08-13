@@ -42,7 +42,7 @@ def tets_term_loan(session: Session) -> None:
     session.add(u)
     session.commit()
     a = session.query(User).first()
-    loan=create_user_term_loan(
+    loan = create_user_term_loan(
         session=session,
         user_id=a.id,
         bill_start_date=parse_date("2020-01-01 14:23:11"),
