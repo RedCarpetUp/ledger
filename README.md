@@ -28,3 +28,4 @@
 - all source code is under `src/rush/` . That is where you should make your code
 - docker kill rush_pg
 - psql postgresql://alem_user:password@localhost:5680/alem_db
+- docker kill rush_pg && isort -rc . && black . && pytest --mypy --black --isort --cov=rush --cov-report=xml --cov-report=term -v -s
