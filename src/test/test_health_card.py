@@ -186,12 +186,12 @@ def test_generate_health_card_bill_1(session: Session) -> None:
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_id}/bill/interest_receivable/a"
     )
-    assert interest_due == Decimal("0")
+    assert interest_due == Decimal("30.67")
 
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_id}/bill/interest_accrued/r"
     )
-    assert interest_due == Decimal("0")
+    assert interest_due == Decimal("30.67")
 
 
 def test_generate_health_card_bill_2(session: Session) -> None:
@@ -234,12 +234,12 @@ def test_generate_health_card_bill_2(session: Session) -> None:
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_id}/bill/interest_receivable/a"
     )
-    assert interest_due == Decimal("0")
+    assert interest_due == Decimal("30.67")
 
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_id}/bill/interest_accrued/r"
     )
-    assert interest_due == Decimal("0")
+    assert interest_due == Decimal("30.67")
 
 
 def test_generate_health_card_bill_3(session: Session) -> None:
@@ -296,12 +296,12 @@ def test_generate_health_card_bill_3(session: Session) -> None:
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_id}/bill/interest_receivable/a"
     )
-    assert interest_due == Decimal("0")
+    assert interest_due == Decimal("75.67")
 
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_id}/bill/interest_accrued/r"
     )
-    assert interest_due == Decimal("0")
+    assert interest_due == Decimal("75.67")
 
 
 def test_mixed_payment_received(session: Session) -> None:
@@ -358,12 +358,12 @@ def test_mixed_payment_received(session: Session) -> None:
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_id}/bill/interest_receivable/a"
     )
-    assert interest_due == Decimal("0")
+    assert interest_due == Decimal("75.67")
 
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_id}/bill/interest_accrued/r"
     )
-    assert interest_due == Decimal("0")
+    assert interest_due == Decimal("75.67")
 
     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.id}/card/health_limit/l")
     assert medical_limit_balance == -1000
@@ -434,12 +434,12 @@ def test_medical_payment_received(session: Session) -> None:
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_id}/bill/interest_receivable/a"
     )
-    assert interest_due == Decimal("0")
+    assert interest_due == Decimal("30.67")
 
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_id}/bill/interest_accrued/r"
     )
-    assert interest_due == Decimal("0")
+    assert interest_due == Decimal("30.67")
 
     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.id}/card/health_limit/l")
     assert medical_limit_balance == -1000
@@ -506,12 +506,12 @@ def test_non_medical_payment_received(session: Session) -> None:
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_id}/bill/interest_receivable/a"
     )
-    assert interest_due == Decimal("0")
+    assert interest_due == Decimal("45")
 
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_id}/bill/interest_accrued/r"
     )
-    assert interest_due == Decimal("0")
+    assert interest_due == Decimal("45")
 
     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.id}/card/health_limit/l")
     assert medical_limit_balance == Decimal(0)
