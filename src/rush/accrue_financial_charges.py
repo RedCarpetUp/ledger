@@ -29,6 +29,7 @@ from rush.models import (
     UserCard,
 )
 from rush.utils import (
+    add_gst_split_to_amount,
     div,
     get_current_ist_time,
     mul,
@@ -132,10 +133,10 @@ def create_fee_entry(
         cgst_rate=Decimal(9),
         igst_rate=Decimal(0),
     )
-    sgst = mul(f.net_amount, div(f.sgst_rate, 100))
-    cgst = mul(f.net_amount, div(f.cgst_rate, 100))
-    igst = mul(f.net_amount, div(f.igst_rate, 100))
-    f.gross_amount = f.net_amount + sgst + cgst + igst
+    d = add_gst_split_to_amount(
+        net_fee_amount, sgst_rate=f.sgst_rate, cgst_rate=f.cgst_rate, igst_rate=f.igst_rate
+    )
+    f.gross_amount = d["gross_amount"]
     session.add(f)
     return f
 
@@ -229,8 +230,8 @@ def reverse_interest_charges(
             entry["amount"] = remaining_amount
 
     # Check if there's still amount that's left. If yes, then we received extra prepayment.
-    is_prepayment = any(d["amount"] > 0 for d in inter_bill_movement_entries)
-    if is_prepayment:
+    is_payment_left = any(d["amount"] > 0 for d in inter_bill_movement_entries)
+    if is_payment_left:
         for entry in inter_bill_movement_entries:
             if entry["amount"] == 0:
                 continue
@@ -240,50 +241,55 @@ def reverse_interest_charges(
 
 
 def reverse_late_charges(
-    session: Session, user_card: UserCard, event_to_reverse: LedgerTriggerEvent
+    session: Session, user_card: BaseCard, event_to_reverse: LedgerTriggerEvent
 ) -> None:
-    event = LedgerTriggerEvent(name="reverse_late_charges", post_date=get_current_ist_time())
+    event = LedgerTriggerEvent(
+        name="reverse_late_charges",
+        card_id=user_card.id,
+        post_date=get_current_ist_time(),
+        amount=event_to_reverse.amount,
+    )
     session.add(event)
     session.flush()
 
-    bill = (
-        session.query(LoanData)
-        .distinct()
-        .filter(
-            LedgerEntry.debit_account == BookAccount.id,
-            LedgerEntry.event_id == event_to_reverse.id,
-            BookAccount.identifier_type == "bill",
-            LoanData.id == BookAccount.identifier,
-            BookAccount.book_name == "late_fine_receivable",
-            LoanData.is_generated.is_(True),
-        )
-        .one()
+    fee, bill = (
+        session.query(Fee, LoanData)
+        .filter(Fee.event_id == event_to_reverse.id, LoanData.id == Fee.bill_id)
+        .one_or_none()
     )
-    late_fine_charged = event_to_reverse.amount
-    # We check how much got settled in the interest which we're planning to remove.
-    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_receivable/a")
-    settled_amount = late_fine_charged - late_fine_due
 
-    if late_fine_due > 0:
-        # We reverse the original entry by whatever is the remaining amount.
-        create_ledger_entry_from_str(
-            session,
-            event_id=event.id,
-            debit_book_str=f"{bill.id}/bill/late_fine/r",
-            credit_book_str=f"{bill.id}/bill/late_fine_receivable/a",
-            amount=late_fine_due,
-        )
-        # Remove from min too. But only what's due. Rest doesn't matter.
+    if fee.fee_status == "UNPAID":
+        # Remove from min. But only what's remaining. Rest doesn't matter.
         create_ledger_entry_from_str(
             session,
             event_id=event.id,
             debit_book_str=f"{bill.id}/bill/min/l",
             credit_book_str=f"{bill.id}/bill/min/a",
-            amount=late_fine_due,
+            amount=fee.gross_amount - fee.gross_amount_paid,
         )
-    if settled_amount > 0:
-        remaining_amount = _adjust_bill(
-            session, bill, settled_amount, event.id, debit_acc_str=f"{bill.id}/bill/late_fine/r"
-        )
-        if remaining_amount > 0:
-            pass  # TODO prepayment
+    if fee.gross_amount_paid > 0:
+        # Need to remove money from all these accounts and slide them back to the same bill.
+        acc_info = [
+            {"acc_to_remove_from": f"{bill.id}/bill/late_fine/r", "amount": fee.net_amount_paid},
+            {"acc_to_remove_from": "12345/redcarpet/cgst_payable/l", "amount": fee.cgst_paid},
+            {"acc_to_remove_from": "12345/redcarpet/sgst_payable/l", "amount": fee.sgst_paid},
+            {"acc_to_remove_from": "12345/redcarpet/igst_payable/l", "amount": fee.igst_paid},
+        ]
+        for acc in acc_info:
+            if acc["amount"] == 0:
+                continue
+            remaining_amount = _adjust_bill(
+                session, bill, acc["amount"], event.id, acc["acc_to_remove_from"]
+            )
+            acc["amount"] = remaining_amount
+        # Check if there's still amount that's left. If yes, then we received extra prepayment.
+        is_payment_left = any(d["amount"] > 0 for d in acc_info)
+        if is_payment_left:
+            for acc in acc_info:
+                if acc["amount"] == 0:
+                    continue
+                # TODO maybe just call the entire payment received event here?
+                _adjust_for_prepayment(
+                    session, user_card.user_id, event.id, acc["amount"], acc["acc_to_remove_from"]
+                )
+    fee.fee_status = "REVERSED"

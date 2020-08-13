@@ -493,5 +493,8 @@ class Fee(AuditMixin):
     igst_rate = Column(Numeric, nullable=False)
     gross_amount = Column(Numeric, nullable=False)
     net_amount_paid = Column(Numeric, nullable=True)
+    sgst_paid = Column(Numeric, nullable=True)
+    cgst_paid = Column(Numeric, nullable=True)
+    igst_paid = Column(Numeric, nullable=True)
     gross_amount_paid = Column(Numeric, nullable=True)
     fee_status = Column(String(10), nullable=False, default="UNPAID")
