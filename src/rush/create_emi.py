@@ -4,6 +4,7 @@ from decimal import Decimal
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
 from pendulum import parse as parse_date
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy.sql import func
 
@@ -793,6 +794,48 @@ def refresh_schedule(user_card: BaseCard):
     slide_payments(user_card=user_card)
 
 
+def entry_checks(
+    ledger_trigger_event,
+    ledger_entry,
+    debit_account,
+    credit_account,
+    event_id,
+    event_type,
+    event_amount,
+    bills_touched,
+) -> bool:
+    verdict = False
+
+    if ledger_trigger_event.name == event_type and ledger_trigger_event.id == event_id:
+        verdict = True
+    else:
+        verdict = False
+
+    if event_amount and ledger_entry.amount + event_amount == ledger_trigger_event.amount:
+        return False
+
+    if (credit_account.identifier_type == "bill" and credit_account.identifier in bills_touched) and (
+        debit_account.identifier_type == "bill" and debit_account.identifier not in bills_touched
+    ):
+        return False
+    elif (
+        credit_account.identifier_type == "bill" and credit_account.identifier not in bills_touched
+    ) and (debit_account.identifier_type == "bill" and debit_account.identifier in bills_touched):
+        return False
+    elif (
+        credit_account.identifier_type == "bill" and credit_account.identifier not in bills_touched
+    ) and (debit_account.identifier_type == "bill" and debit_account.identifier not in bills_touched):
+        return False
+    elif (
+        verdict
+        and (credit_account.identifier_type == "bill" and credit_account.identifier in bills_touched)
+        and (debit_account.identifier_type == "bill" and debit_account.identifier in bills_touched)
+    ):
+        verdict = True
+
+    return verdict
+
+
 def update_event_with_dpd(user_card: BaseCard, post_date: DateTime = None) -> None:
     session = user_card.session
 
@@ -813,12 +856,29 @@ def update_event_with_dpd(user_card: BaseCard, post_date: DateTime = None) -> No
             LedgerEntry.debit_account == debit_book_account.id,
             LedgerEntry.credit_account == credit_book_account.id,
             LedgerTriggerEvent.post_date <= post_date,
+            or_(
+                debit_book_account.identifier_type == "bill",
+                credit_book_account.identifier_type == "bill",
+            ),
         )
         .order_by(LedgerTriggerEvent.post_date.asc())
         .all()
     )
 
+    event_id = event_type = event_amount = None
+    bills_touched = []
     for ledger_trigger_event, ledger_entry, debit_account, credit_account in events_list:
+        if entry_checks(
+            ledger_trigger_event,
+            ledger_entry,
+            debit_account,
+            credit_account,
+            event_id,
+            event_type,
+            event_amount,
+            bills_touched,
+        ):
+            continue
         bills_touched = []
         event_post_date = ledger_trigger_event.post_date.date()
         if ledger_trigger_event.name in [
@@ -826,8 +886,12 @@ def update_event_with_dpd(user_card: BaseCard, post_date: DateTime = None) -> No
             "accrue_late_fine",
             "card_transaction",
             "daily_dpd",
+            "atm_fee_added",
         ]:
             if debit_account.identifier_type == "bill" and debit_account.identifier not in bills_touched:
+                event_id = ledger_trigger_event.id
+                event_type = ledger_trigger_event.name
+                event_amount = ledger_entry.amount
                 bills_touched.append(debit_account.identifier)
                 bill = (
                     session.query(LoanData)
@@ -840,9 +904,9 @@ def update_event_with_dpd(user_card: BaseCard, post_date: DateTime = None) -> No
                     card_id=user_card.id,
                     event_id=ledger_trigger_event.id,
                     credit=ledger_entry.amount,
-                    balance=get_remaining_bill_balance(
-                        session, bill, ledger_trigger_event.post_date, True
-                    )["total_due"],
+                    balance=get_remaining_bill_balance(session, bill, ledger_trigger_event.post_date)[
+                        "total_due"
+                    ],
                     dpd=dpd,
                 )
                 session.add(new_event)
@@ -851,6 +915,9 @@ def update_event_with_dpd(user_card: BaseCard, post_date: DateTime = None) -> No
                 credit_account.identifier_type == "bill"
                 and credit_account.identifier not in bills_touched
             ):
+                event_id = ledger_trigger_event.id
+                event_type = ledger_trigger_event.name
+                event_amount = ledger_entry.amount
                 bills_touched.append(credit_account.identifier)
                 bill = (
                     session.query(LoanData)
@@ -863,9 +930,9 @@ def update_event_with_dpd(user_card: BaseCard, post_date: DateTime = None) -> No
                     card_id=user_card.id,
                     event_id=ledger_trigger_event.id,
                     credit=ledger_entry.amount,
-                    balance=get_remaining_bill_balance(
-                        session, bill, ledger_trigger_event.post_date, True
-                    )["total_due"],
+                    balance=get_remaining_bill_balance(session, bill, ledger_trigger_event.post_date)[
+                        "total_due"
+                    ],
                     dpd=dpd,
                 )
                 session.add(new_event)
@@ -877,6 +944,9 @@ def update_event_with_dpd(user_card: BaseCard, post_date: DateTime = None) -> No
             "transaction_refund",
         ]:
             if debit_account.identifier_type == "bill" and debit_account.identifier not in bills_touched:
+                event_id = ledger_trigger_event.id
+                event_type = ledger_trigger_event.name
+                event_amount = ledger_entry.amount
                 bills_touched.append(debit_account.identifier)
                 bill = (
                     session.query(LoanData)
@@ -888,10 +958,10 @@ def update_event_with_dpd(user_card: BaseCard, post_date: DateTime = None) -> No
                     bill_id=debit_account.identifier,
                     card_id=user_card.id,
                     event_id=ledger_trigger_event.id,
-                    credit=ledger_entry.amount,
-                    balance=get_remaining_bill_balance(
-                        session, bill, ledger_trigger_event.post_date, True
-                    )["total_due"],
+                    debit=ledger_entry.amount,
+                    balance=get_remaining_bill_balance(session, bill, ledger_trigger_event.post_date)[
+                        "total_due"
+                    ],
                     dpd=dpd,
                 )
                 session.add(new_event)
@@ -900,6 +970,9 @@ def update_event_with_dpd(user_card: BaseCard, post_date: DateTime = None) -> No
                 credit_account.identifier_type == "bill"
                 and credit_account.identifier not in bills_touched
             ):
+                event_id = ledger_trigger_event.id
+                event_type = ledger_trigger_event.name
+                event_amount = ledger_entry.amount
                 bills_touched.append(credit_account.identifier)
                 bill = (
                     session.query(LoanData)
@@ -911,10 +984,10 @@ def update_event_with_dpd(user_card: BaseCard, post_date: DateTime = None) -> No
                     bill_id=credit_account.identifier,
                     card_id=user_card.id,
                     event_id=ledger_trigger_event.id,
-                    credit=ledger_entry.amount,
-                    balance=get_remaining_bill_balance(
-                        session, bill, ledger_trigger_event.post_date, True
-                    )["total_due"],
+                    debit=ledger_entry.amount,
+                    balance=get_remaining_bill_balance(session, bill, ledger_trigger_event.post_date)[
+                        "total_due"
+                    ],
                     dpd=dpd,
                 )
                 session.add(new_event)
