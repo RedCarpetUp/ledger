@@ -245,6 +245,11 @@ def reverse_interest_charges(
                 session, user_card.user_id, event.id, entry["amount"], entry["acc_to_remove_from"]
             )
 
+    from rush.create_emi import refresh_schedule
+
+    # Slide payment in emi
+    refresh_schedule(user_card=user_card)
+
 
 def reverse_late_charges(
     session: Session, user_card: BaseCard, event_to_reverse: LedgerTriggerEvent
@@ -299,3 +304,8 @@ def reverse_late_charges(
                     session, user_card.user_id, event.id, acc["amount"], acc["acc_to_remove_from"]
                 )
     fee.fee_status = "REVERSED"
+
+    from rush.create_emi import refresh_schedule
+
+    # Slide payment in emi
+    refresh_schedule(user_card=user_card)

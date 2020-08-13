@@ -112,6 +112,6 @@ def transaction_refund_event(
     )
 
     # Slide payment in emi
-    from rush.create_emi import slide_payments
+    from rush.create_emi import refresh_schedule
 
-    slide_payments(user_card=user_card, payment_event=event)
+    refresh_schedule(user_card=user_card)

@@ -26,9 +26,11 @@ from rush.create_card_swipe import create_card_swipe
 from rush.create_emi import (
     check_moratorium_eligibility,
     refresh_schedule,
+    update_event_with_dpd,
 )
 from rush.ledger_utils import (
     get_account_balance_from_str,
+    get_remaining_bill_balance,
     is_bill_closed,
 )
 from rush.lender_funds import (
@@ -37,12 +39,15 @@ from rush.lender_funds import (
     m2p_transfer,
 )
 from rush.models import (
+    BookAccount,
     CardEmis,
     CardKitNumbers,
     CardNames,
     CardTransaction,
     EmiPaymentMapping,
     Fee,
+    EventDpd,
+    LedgerEntry,
     LedgerTriggerEvent,
     LenderPy,
     Lenders,
@@ -235,6 +240,11 @@ def test_generate_bill_1(session: Session) -> None:
         session, book_string=f"{bill_id}/bill/interest_accrued/r"
     )
     assert interest_due == Decimal("30.67")
+
+    update_event_with_dpd(user_card, parse_date("2020-05-21 00:05:00"))
+
+    dpd_events = session.query(EventDpd).filter_by(card_id=uc.id).all()
+    assert dpd_events[0].balance == Decimal(1000)
 
     interest_event = (
         session.query(LedgerTriggerEvent)
@@ -533,7 +543,7 @@ def _generate_bill_2(session: Session) -> None:
     bill_2 = bill_generate(user_card=uc)
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(session, bill_2.table.bill_due_date + relativedelta(days=1), uc)
-    assert bill_2.bill_start_date == parse_date("2020-05-02").date()
+    assert bill_2.bill_start_date == parse_date("2020-05-01").date()
 
     unpaid_bills = uc.get_unpaid_bills()
     assert len(unpaid_bills) == 2
@@ -884,7 +894,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         session=session,
         card_type="ruby",
         user_id=a.id,
-        card_activation_date=parse_date("2020-05-01").date(),
+        card_activation_date=parse_date("2020-05-04").date(),
         lender_id=62311,
     )
 
@@ -945,6 +955,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         amount=Decimal(99),
         description="ULLU DIGITAL PRIVATE L MUMBAI        IND",
     )
+
     # Merchant Refund
     refund_date = parse_date("2020-05-23 21:20:07")
     amount = Decimal(2)
@@ -1021,7 +1032,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         amount=Decimal(700),
         description="WWW YESBANK IN         GURGAON       IND",
     )
-    create_card_swipe(
+    one_sixty_rupee = create_card_swipe(
         session=session,
         user_card=uc,
         txn_time=parse_date("2020-05-26 22:10:58"),
@@ -1082,28 +1093,28 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         amount=Decimal("150"),
         description="JUNE",
     )
-    create_card_swipe(
+    one_rupee_1 = create_card_swipe(
         session=session,
         user_card=uc,
         txn_time=parse_date("2020-06-07 17:09:57"),
         amount=Decimal("1"),
         description="JUNE",
     )
-    create_card_swipe(
+    one_rupee_2 = create_card_swipe(
         session=session,
         user_card=uc,
         txn_time=parse_date("2020-06-07 17:12:01"),
         amount=Decimal("1"),
         description="JUNE",
     )
-    create_card_swipe(
+    one_rupee_3 = create_card_swipe(
         session=session,
         user_card=uc,
         txn_time=parse_date("2020-06-07 17:26:54"),
         amount=Decimal("1"),
         description="JUNE",
     )
-    create_card_swipe(
+    one_rupee_4 = create_card_swipe(
         session=session,
         user_card=uc,
         txn_time=parse_date("2020-06-07 18:02:08"),
@@ -1194,78 +1205,43 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         amount=Decimal("281.52"),
         description="JUNE",
     )
-    create_card_swipe(
+    refunded_swipe = create_card_swipe(
         session=session,
         user_card=uc,
         txn_time=parse_date("2020-06-13 12:17:49"),
         amount=Decimal("1340.64"),
         description="JUNE",
     )
-    # Merchant Refund
-    payment_date = parse_date("2020-06-16 01:48:05")
-    amount = Decimal(160)
-    payment_received(
-        session=session,
-        user_card=uc,
-        payment_amount=amount,
-        payment_date=payment_date,
-        payment_request_id="a123",
-    )
-    # Merchant Refund
-    payment_date = parse_date("2020-06-17 00:21:23")
-    amount = Decimal(160)
-    payment_received(
-        session=session,
-        user_card=uc,
-        payment_amount=amount,
-        payment_date=payment_date,
-        payment_request_id="a123",
-    )
-    # Merchant Refund
-    payment_date = parse_date("2020-06-18 06:54:58")
-    amount = Decimal(1)
-    payment_received(
-        session=session,
-        user_card=uc,
-        payment_amount=amount,
-        payment_date=payment_date,
-        payment_request_id="a123",
-    )
-    # Merchant Refund
-    payment_date = parse_date("2020-06-18 06:54:59")
-    amount = Decimal(1)
-    payment_received(
-        session=session,
-        user_card=uc,
-        payment_amount=amount,
-        payment_date=payment_date,
-        payment_request_id="a123",
-    )
-    # Merchant Refund
-    payment_date = parse_date("2020-06-18 06:54:59")
-    amount = Decimal(1)
-    payment_received(
-        session=session,
-        user_card=uc,
-        payment_amount=amount,
-        payment_date=payment_date,
-        payment_request_id="a123",
-    )
-    # Merchant Refund
-    payment_date = parse_date("2020-06-18 06:55:00")
-    amount = Decimal(1)
-    payment_received(
-        session=session,
-        user_card=uc,
-        payment_amount=amount,
-        payment_date=payment_date,
-        payment_request_id="a123",
-    )
 
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(
         session, bill_may.table.bill_due_date + relativedelta(days=1), user_card
     )
+
+    # Merchant Refund
+    refund_date = parse_date("2020-06-16 01:48:05")
+    amount = Decimal(160)
+    refund_payment(session, uc, amount, refund_date, "A3d223g3", one_sixty_rupee["data"])
+    # Merchant Refund
+    refund_date = parse_date("2020-06-17 00:21:23")
+    amount = Decimal(160)
+    refund_payment(session, uc, amount, refund_date, "A3d223g4", refunded_swipe["data"])
+    # Merchant Refund
+    refund_date = parse_date("2020-06-18 06:54:58")
+    amount = Decimal(1)
+    refund_payment(session, uc, amount, refund_date, "A3d223g5", one_rupee_1["data"])
+    # Merchant Refund
+    refund_date = parse_date("2020-06-18 06:54:59")
+    amount = Decimal(1)
+    refund_payment(session, uc, amount, refund_date, "A3d223g6", one_rupee_2["data"])
+    # Merchant Refund
+    refund_date = parse_date("2020-06-18 06:54:59")
+    amount = Decimal(1)
+    refund_payment(session, uc, amount, refund_date, "A3d223g7", one_rupee_3["data"])
+    # Merchant Refund
+    refund_date = parse_date("2020-06-18 06:55:00")
+    amount = Decimal(1)
+    refund_payment(session, uc, amount, refund_date, "A3d223g8", one_rupee_4["data"])
 
     # Check if amount is adjusted correctly in schedule
     all_emis_query = (
@@ -1278,15 +1254,19 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{uc.id}/card/lender_payable/l"
     )
-    assert lender_payable == Decimal("20675.03")
+    assert lender_payable == Decimal("20672.03")
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert lender_amount == Decimal("0")
 
-    # Refresh Schedule
-    # slide_payments(session, a.id)
-
     bill_june = bill_generate(user_card)
+
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_june.table.bill_due_date + relativedelta(days=1), user_card
+    )
+
+    bill_july = bill_generate(user_card)
 
     # Do Partial Payment
     payment_date = parse_date("2020-08-02 14:25:52")
@@ -1309,11 +1289,6 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         payment_request_id="a123",
     )
 
-    # Interest event to be fired separately now
-    accrue_interest_on_all_bills(
-        session, bill_june.table.bill_due_date + relativedelta(days=1), user_card
-    )
-
     # Check if amount is adjusted correctly in schedule
     all_emis_query = (
         session.query(CardEmis)
@@ -1322,11 +1297,21 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
     first_emi = emis_dict[0]
-    second_emi = emis_dict[1]
 
     assert first_emi["interest"] == Decimal("387.83")
     assert first_emi["atm_fee"] == Decimal(59)
     assert first_emi["interest_received"] == Decimal("387.83")
+
+    event_date = parse_date("2020-08-21 00:05:00")
+    update_event_with_dpd(user_card, event_date)
+
+    dpd_events = session.query(EventDpd).filter_by(card_id=uc.id).all()
+
+    last_entry_first_bill = dpd_events[54]
+    last_entry_second_bill = dpd_events[52]
+
+    assert last_entry_first_bill.balance == Decimal("12448.66")
+    assert last_entry_second_bill.balance == Decimal("8156.19")
 
 
 def test_interest_reversal_interest_already_settled(session: Session) -> None:
@@ -2016,6 +2001,10 @@ def test_refresh_schedule(session: Session) -> None:
 
     second_emi = emis_dict[1]
     assert second_emi["interest_received"] == Decimal(360)
+    second_emi_pre_dict = pre_emis_dict[1]
+    second_emi_post_dict = post_emis_dict[1]
+    assert second_emi_pre_dict["interest_received"] == Decimal(360)
+    assert second_emi_post_dict["interest_received"] == Decimal(360)
 
 
 def test_moratorium_schedule(session: Session) -> None:

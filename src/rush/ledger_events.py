@@ -162,9 +162,9 @@ def payment_received_event(
     else:
         _adjust_lender_payable(session, user_card.id, debit_book_str, gateway_charges, event)
 
-    # Slide payment in emi
     from rush.create_emi import slide_payments
 
+    # Slide payment
     slide_payments(user_card=user_card, payment_event=event)
 
 
@@ -421,3 +421,13 @@ def limit_assignment_event(session: Session, card_id: int, event: LedgerTriggerE
         credit_book_str=f"{card_id}/card/available_limit/l",
         amount=Decimal(event.amount),
     )
+
+
+def daily_dpd_event(session: Session, user_card: BaseCard) -> None:
+    from rush.utils import get_current_ist_time
+
+    event = LedgerTriggerEvent(
+        name="daily_dpd", post_date=get_current_ist_time(), card_id=user_card.id, amount=0
+    )
+    session.add(event)
+    session.flush()
