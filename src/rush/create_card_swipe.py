@@ -23,7 +23,7 @@ def create_card_swipe(
     txn_time: DateTime,
     amount: Decimal,
     description: str,
-    source: str = "ECOM",
+    source: Optional[str] = "ECOM",
     mcc: Optional[str] = None,
 ) -> Dict[str, Any]:
     if not hasattr(user_card, "card_activation_date"):
