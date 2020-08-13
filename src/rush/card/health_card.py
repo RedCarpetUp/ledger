@@ -61,7 +61,10 @@ class HealthCard(BaseCard):
                 medical_settlement += non_medical_settlement - (-1 * non_medical_due)
                 non_medical_settlement = -1 * non_medical_due
 
-        return {"medical": Decimal(round(medical_settlement)), "non_medical": Decimal(round(non_medical_settlement))}
+        return {
+            "medical": Decimal(round(medical_settlement)),
+            "non_medical": Decimal(round(non_medical_settlement)),
+        }
 
 
 class HealthBill(BaseBill):

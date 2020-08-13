@@ -392,6 +392,7 @@ def test_mixed_payment_received(session: Session) -> None:
     )
     assert non_medical_limit_balance == -500
 
+
 def test_medical_payment_received(session: Session) -> None:
     create_lenders(session=session)
     card_db_updates(session=session)
@@ -463,6 +464,7 @@ def test_medical_payment_received(session: Session) -> None:
         session, f"{uc.id}/card/available_limit/l"
     )
     assert non_medical_limit_balance == Decimal(0)
+
 
 def test_non_medical_payment_received(session: Session) -> None:
     create_lenders(session=session)
