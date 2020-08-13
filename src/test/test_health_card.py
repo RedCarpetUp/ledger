@@ -13,6 +13,7 @@ from rush.ledger_utils import get_account_balance_from_str
 from rush.models import (
     CardKitNumbers,
     CardNames,
+    CardTransaction,
     Lenders,
     User,
 )
@@ -84,6 +85,11 @@ def test_medical_health_card_swipe(session: Session) -> None:
         mcc="8011",
     )
     swipe_loan_id = swipe["data"].loan_id
+
+    transaction = session.query(CardTransaction).filter(CardTransaction.mcc == "8011").first()
+
+    assert transaction.amount == Decimal(700)
+    assert transaction.description == "Amazon.com"
 
     _, unbilled_balance = get_account_balance_from_str(session, f"{swipe_loan_id}/bill/unbilled/a")
     assert unbilled_balance == 700
