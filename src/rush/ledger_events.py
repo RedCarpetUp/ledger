@@ -367,16 +367,6 @@ def accrue_interest_event(
     )
 
 
-def accrue_late_fine_event(session: Session, bill: BaseBill, event: LedgerTriggerEvent) -> None:
-    create_ledger_entry_from_str(
-        session,
-        event_id=event.id,
-        debit_book_str=f"{bill.id}/bill/late_fine_receivable/a",
-        credit_book_str=f"{bill.id}/bill/late_fine/r",
-        amount=event.amount,
-    )
-
-
 def lender_interest_incur_event(
     session: Session, from_date: Date, to_date: Date, event: LedgerTriggerEvent
 ) -> None:

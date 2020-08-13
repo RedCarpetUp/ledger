@@ -11,7 +11,6 @@ from rush.ledger_events import (
     _adjust_bill,
     _adjust_for_prepayment,
     accrue_interest_event,
-    accrue_late_fine_event,
     add_min_amount_event,
 )
 from rush.ledger_utils import (
