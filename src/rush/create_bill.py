@@ -44,8 +44,9 @@ def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -
     if months_diff > 0:
         for i in range(months_diff + 1):
             new_bill = user_card.create_bill(
-                bill_start_date=new_bill_date + relativedelta(months=i),
-                bill_close_date=new_bill_date + relativedelta(months=i + 1),
+                bill_start_date=new_bill_date + relativedelta(months=i, day=1),
+                bill_close_date=new_bill_date + relativedelta(months=i + 1, day=1),
+                bill_due_date=new_bill_date + relativedelta(months=i + 1, day=15),
                 lender_id=lender_id,
                 is_generated=False,
             )
@@ -54,7 +55,8 @@ def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -
         new_bill_date = last_bill.bill_close_date
     new_bill = user_card.create_bill(
         bill_start_date=new_bill_date,
-        bill_close_date=new_bill_date + relativedelta(months=1),
+        bill_close_date=new_bill_date + relativedelta(months=1, day=1),
+        bill_due_date=new_bill_date + relativedelta(months=1, day=15),
         lender_id=lender_id,
         is_generated=False,
     )
@@ -97,36 +99,13 @@ def bill_generate(user_card: BaseCard) -> BaseBill:
         # After the bill has generated. Call the min generation event on all unpaid bills.
         add_min_to_all_bills(session, bill_closing_date, user_card)
 
-        # TODO move this to a function because this step is only for DMI
-        from rush.create_emi import adjust_interest_in_emis, create_emis_for_card, add_emi_on_new_bill
-
-        # If last emi does not exist then we can consider to be first set of emi creation
-        last_emi = (
-            session.query(CardEmis)
-            .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
-            .order_by(CardEmis.due_date.desc())
-            .first()
-        )
-        if not last_emi:
-            create_emis_for_card(session, user_card, bill)
-        else:
-            bill_count = (
-                session.query(LoanData)
-                .filter(LoanData.card_id == user_card.id, LoanData.is_generated.is_(True))
-                .count()
-            )
-            add_emi_on_new_bill(session, user_card, bill, last_emi.emi_number, bill_count)
-
-        # adjust the given interest in schedule
-        adjust_interest_in_emis(session, user_card, bill_closing_date)
-    else:
-        from rush.create_emi import refresh_schedule
-
-        refresh_schedule(user_card)
-
     atm_transactions_sum = bill.sum_of_atm_transactions()
     if atm_transactions_sum > 0:
         add_atm_fee(session, user_card, bill, bill.table.bill_close_date, atm_transactions_sum)
+
+    from rush.create_emi import refresh_schedule
+
+    refresh_schedule(user_card)
 
     return bill
 

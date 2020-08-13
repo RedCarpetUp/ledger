@@ -354,6 +354,7 @@ class UserCard(AuditMixin):
     rc_rate_of_interest_monthly = Column(Numeric, nullable=True)
     lender_rate_of_interest_annual = Column(Numeric, nullable=True)
     dpd = Column(Integer, nullable=True)
+    ever_dpd = Column(Integer, nullable=True)
 
     __table_args__ = (
         Index(
@@ -478,3 +479,16 @@ class LoanMoratorium(AuditMixin):
             .one_or_none()
         )
         return v is not None
+
+
+class EventDpd(AuditMixin):
+    __tablename__ = "event_dpd"
+
+    bill_id = Column(Integer, ForeignKey(LoanData.id), nullable=False)
+    card_id = Column(Integer, ForeignKey(UserCard.id), nullable=False)
+    event_id = Column(Integer, ForeignKey(LedgerTriggerEvent.id), nullable=False)
+    debit = Column(Numeric, nullable=True, default=Decimal(0))
+    credit = Column(Numeric, nullable=True, default=Decimal(0))
+    balance = Column(Numeric, nullable=True, default=Decimal(0))
+    dpd = Column(Integer, nullable=False)
+    row_status = Column(String(length=10), nullable=False, default="active")

@@ -157,9 +157,9 @@ def payment_received_event(
     else:
         _adjust_lender_payable(session, user_card.id, debit_book_str, gateway_charges, event)
 
-    # Slide payment in emi
     from rush.create_emi import slide_payments
 
+    # Slide payment
     slide_payments(user_card=user_card, payment_event=event)
 
 
@@ -391,6 +391,16 @@ def atm_fee_event(
     )
 
     # Adjust atm fee in emis
-    from rush.create_emi import adjust_atm_fee_in_emis
+    # from rush.create_emi import adjust_atm_fee_in_emis
 
-    adjust_atm_fee_in_emis(session, user_card, event.post_date)
+    # adjust_atm_fee_in_emis(session, user_card, event.post_date)
+
+
+def daily_dpd_event(session: Session, user_card: BaseCard) -> None:
+    from rush.utils import get_current_ist_time
+
+    event = LedgerTriggerEvent(
+        name="daily_dpd", post_date=get_current_ist_time(), card_id=user_card.id, amount=0
+    )
+    session.add(event)
+    session.flush()
