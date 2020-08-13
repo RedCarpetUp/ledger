@@ -35,7 +35,12 @@ def create_card_swipe(
         return card_bill
     card_bill = card_bill["bill"]
     swipe = CardTransaction(  # This can be moved to user card too.
-        loan_id=card_bill.id, txn_time=txn_time, amount=amount, description=description, source=source
+        loan_id=card_bill.id,
+        txn_time=txn_time,
+        amount=amount,
+        description=description,
+        source=source,
+        mcc=mcc,
     )
     session.add(swipe)
     session.flush()

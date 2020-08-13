@@ -192,6 +192,7 @@ def upgrade() -> None:
         sa.Column("loan_id", sa.Integer(), nullable=False),
         sa.Column("txn_time", sa.TIMESTAMP(), nullable=False),
         sa.Column("amount", sa.Numeric(), nullable=False),
+        sa.Column("mcc", sa.String(10), nullable=True),
         sa.Column("source", sa.String(30), nullable=False),
         sa.Column("description", sa.String(100), nullable=True),
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
