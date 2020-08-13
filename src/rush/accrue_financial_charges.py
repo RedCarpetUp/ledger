@@ -90,11 +90,10 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_car
     for bill in unpaid_bills:
         accrue_interest_event(session, bill, accrue_event, bill.table.interest_to_charge)
         accrue_event.amount += bill.table.interest_to_charge
-    # adjust the given interest in schedule
-    # adjust the given interest in schedule
-    # from rush.create_emi import adjust_interest_in_emis
 
-    # adjust_interest_in_emis(session, user_card, post_date)
+    from rush.create_emi import refresh_schedule
+
+    refresh_schedule(user_card)
 
 
 def is_late_fee_valid(session: Session, user_card: BaseCard) -> bool:
@@ -137,6 +136,8 @@ def create_fee_entry(
     )
     f.gross_amount = d["gross_amount"]
     session.add(f)
+    # Add into min amount of the bill too.
+    add_min_amount_event(session, bill, event, f.gross_amount)
     return f
 
 
@@ -157,8 +158,6 @@ def accrue_late_charges(
         session.flush()
         fee = create_fee_entry(session, latest_bill, event, "late_fee", late_fee_to_charge_without_tax)
         event.amount = fee.gross_amount
-        # Add into min amount of the bill too.
-        add_min_amount_event(session, latest_bill, event, event.amount)
 
         from rush.create_emi import refresh_schedule
 
