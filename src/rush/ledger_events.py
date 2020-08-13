@@ -139,6 +139,7 @@ def payment_received_event(
         pass
     elif event.name == "payment_received":
         unpaid_bills = user_card.get_unpaid_bills()
+        actual_payment = payment_received
         payment_received = _adjust_for_min(
             session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str,
         )
@@ -149,7 +150,7 @@ def payment_received_event(
         if user_card.multiple_limits:
             if user_card.card_type == "health_card":
                 settlement_limit = user_card.get_split_payment(
-                    session=session, payment_amount=payment_received
+                    session=session, payment_amount=actual_payment
                 )
 
                 # settling medical limit
