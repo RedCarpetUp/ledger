@@ -376,7 +376,7 @@ class UserCard(AuditMixin):
 class LedgerTriggerEvent(AuditMixin):
     __tablename__ = "ledger_trigger_event"
     name = Column(String(50))
-    card_id = Column(Integer, ForeignKey(UserCard.id))
+    loan_id = Column(Integer, ForeignKey(Loan.id))
     post_date = Column(TIMESTAMP)
     amount = Column(Numeric)
     extra_details = Column(JSON, default="{}")
@@ -398,7 +398,7 @@ class LoanData(AuditMixin):
     bill_close_date = Column(Date, nullable=False)
     bill_due_date = Column(Date, nullable=False)
     bill_tenure = Column(Integer, nullable=False, default=12)
-    card_id = Column(Integer, ForeignKey(UserCard.id))
+    loan_id = Column(Integer, ForeignKey(Loan.id))
     is_generated = Column(Boolean, nullable=False, server_default="false")
     principal = Column(Numeric, nullable=True)
     principal_instalment = Column(Numeric, nullable=True)
@@ -423,7 +423,7 @@ class CardTransaction(AuditMixin):
 
 class CardEmis(AuditMixin):
     __tablename__ = "card_emis"
-    card_id = Column(Integer, ForeignKey(UserCard.id))
+    loan_id = Column(Integer, ForeignKey(Loan.id))
     due_date = Column(TIMESTAMP, nullable=False)
     due_amount = Column(Numeric, nullable=False, default=Decimal(0))
     total_due_amount = Column(Numeric, nullable=False, default=Decimal(0))
@@ -448,7 +448,7 @@ class CardEmis(AuditMixin):
 
 class EmiPaymentMapping(AuditMixin):
     __tablename__ = "emi_payment_mapping"
-    card_id = Column(Integer, ForeignKey(UserCard.id), nullable=False)
+    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
     emi_number = Column(Integer, nullable=False)
     payment_date = Column(TIMESTAMP, nullable=False)
     payment_request_id = Column(String(), nullable=False)
@@ -478,3 +478,29 @@ class LoanMoratorium(AuditMixin):
             .one_or_none()
         )
         return v is not None
+
+
+class Product(AuditMixin):
+    __tablename__ = "product"
+    product_name = Column(String(), nullable=False)
+
+
+@py_dataclass
+class ProductPy(AuditMixinPy):
+    product_name: str
+
+
+class Loan(AuditMixin):
+    __tablename__ = ("loan",)
+    user_id = Column(Integer, ForeignKey(User.id))
+    amortization_date = Column(TIMESTAMP, nullable=False)
+    loan_status = Column(String(), nullable=False)
+    product_id = Column(Integer, ForeignKey(Product.id))
+
+
+@py_dataclass
+class LoanPy(AuditMixinPy):
+    user_id: int
+    amortization_date: DateTime
+    loan_status: str
+    product_id: int
