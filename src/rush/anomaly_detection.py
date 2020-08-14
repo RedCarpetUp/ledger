@@ -25,7 +25,7 @@ def get_affected_events(session: Session, user_card: BaseCard) -> List[LedgerTri
         .filter(
             LedgerTriggerEvent.card_id == user_card.id,
             # These are the only events which can be affected by a payment.
-            LedgerTriggerEvent.name.in_(["accrue_interest", "accrue_late_fine"]),
+            LedgerTriggerEvent.name.in_(["accrue_interest", "charge_late_fine"]),
         )
         .from_self(LedgerTriggerEvent)
         .filter(rank_func == 1)

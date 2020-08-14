@@ -4,12 +4,10 @@ from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
 from sqlalchemy.orm import Session
 
+from rush.accrue_financial_charges import create_fee_entry
 from rush.card import BaseCard
 from rush.card.base_card import BaseBill
-from rush.ledger_events import (
-    atm_fee_event,
-    bill_generate_event,
-)
+from rush.ledger_events import bill_generate_event
 from rush.ledger_utils import get_account_balance_from_str
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
@@ -44,8 +42,9 @@ def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -
     if months_diff > 0:
         for i in range(months_diff + 1):
             new_bill = user_card.create_bill(
-                bill_start_date=new_bill_date + relativedelta(months=i),
-                bill_close_date=new_bill_date + relativedelta(months=i + 1),
+                bill_start_date=new_bill_date + relativedelta(months=i, day=1),
+                bill_close_date=new_bill_date + relativedelta(months=i + 1, day=1),
+                bill_due_date=new_bill_date + relativedelta(months=i + 1, day=15),
                 lender_id=lender_id,
                 is_generated=False,
             )
@@ -54,7 +53,8 @@ def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -
         new_bill_date = last_bill.bill_close_date
     new_bill = user_card.create_bill(
         bill_start_date=new_bill_date,
-        bill_close_date=new_bill_date + relativedelta(months=1),
+        bill_close_date=new_bill_date + relativedelta(months=1, day=1),
+        bill_due_date=new_bill_date + relativedelta(months=1, day=15),
         lender_id=lender_id,
         is_generated=False,
     )
@@ -97,36 +97,13 @@ def bill_generate(user_card: BaseCard) -> BaseBill:
         # After the bill has generated. Call the min generation event on all unpaid bills.
         add_min_to_all_bills(session, bill_closing_date, user_card)
 
-        # TODO move this to a function because this step is only for DMI
-        from rush.create_emi import adjust_interest_in_emis, create_emis_for_card, add_emi_on_new_bill
-
-        # If last emi does not exist then we can consider to be first set of emi creation
-        last_emi = (
-            session.query(CardEmis)
-            .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
-            .order_by(CardEmis.due_date.desc())
-            .first()
-        )
-        if not last_emi:
-            create_emis_for_card(session, user_card, bill)
-        else:
-            bill_count = (
-                session.query(LoanData)
-                .filter(LoanData.card_id == user_card.id, LoanData.is_generated.is_(True))
-                .count()
-            )
-            add_emi_on_new_bill(session, user_card, bill, last_emi.emi_number, bill_count)
-
-        # adjust the given interest in schedule
-        adjust_interest_in_emis(session, user_card, bill_closing_date)
-    else:
-        from rush.create_emi import refresh_schedule
-
-        refresh_schedule(user_card)
-
     atm_transactions_sum = bill.sum_of_atm_transactions()
     if atm_transactions_sum > 0:
-        add_atm_fee(session, user_card, bill, bill.table.bill_close_date, atm_transactions_sum)
+        add_atm_fee(session, bill, bill.table.bill_close_date, atm_transactions_sum)
+
+    from rush.create_emi import refresh_schedule
+
+    refresh_schedule(user_card)
 
     return bill
 
@@ -149,20 +126,14 @@ def extend_tenure(session: Session, user_card: BaseCard, new_tenure: int) -> Non
 
 
 def add_atm_fee(
-    session: Session,
-    user_card: BaseCard,
-    bill: BaseBill,
-    post_date: DateTime,
-    atm_transactions_amount: Decimal,
+    session: Session, bill: BaseBill, post_date: DateTime, atm_transactions_amount: Decimal,
 ) -> None:
     atm_fee_perc = Decimal(2)
-    gst_perc = Decimal(18)
-    atm_fee_without_gst = mul(div(atm_transactions_amount, 100), atm_fee_perc)
-    atm_fee_with_gst = atm_fee_without_gst + mul(div(atm_fee_without_gst, 100), gst_perc)
+    atm_fee_without_gst = mul(atm_transactions_amount / 100, atm_fee_perc)
 
-    lt = LedgerTriggerEvent(
-        name="atm_fee_added", card_id=bill.table.card_id, post_date=post_date, amount=atm_fee_with_gst
-    )
-    session.add(lt)
+    event = LedgerTriggerEvent(name="atm_fee_added", card_id=bill.table.card_id, post_date=post_date)
+    session.add(event)
     session.flush()
-    atm_fee_event(session, user_card, bill, lt)
+
+    fee = create_fee_entry(session, bill, event, "atm_fee", atm_fee_without_gst)
+    event.amount = fee.gross_amount

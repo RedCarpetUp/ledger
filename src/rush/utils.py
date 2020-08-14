@@ -24,6 +24,32 @@ def round_up_decimal(val: Decimal) -> Decimal:
     return rounded_up
 
 
+def get_gst_split_from_amount(
+    amount: Decimal, sgst_rate: Decimal, cgst_rate: Decimal, igst_rate: Decimal
+) -> dict:
+    sgst_multiplier = sgst_rate / 100
+    cgst_multiplier = cgst_rate / 100
+    igst_multiplier = igst_rate / 100
+
+    net_amount = div(amount, (sgst_multiplier + cgst_multiplier + igst_multiplier) + Decimal(1))
+    return add_gst_split_to_amount(net_amount, sgst_rate, cgst_rate, igst_rate)
+
+
+def add_gst_split_to_amount(
+    net_amount: Decimal, sgst_rate: Decimal, cgst_rate: Decimal, igst_rate: Decimal
+) -> dict:
+    sgst_multiplier = sgst_rate / 100
+    cgst_multiplier = cgst_rate / 100
+    igst_multiplier = igst_rate / 100
+
+    sgst = mul(net_amount, sgst_multiplier)
+    cgst = mul(net_amount, cgst_multiplier)
+    igst = mul(net_amount, igst_multiplier)
+    d = {"net_amount": net_amount, "sgst": sgst, "cgst": cgst, "igst": igst}
+    d["gross_amount"] = round_up_decimal(d["net_amount"] + d["sgst"] + d["cgst"] + d["igst"])
+    return d
+
+
 EMI_FORMULA_DICT = {
     "card_id": None,
     "due_date": None,
