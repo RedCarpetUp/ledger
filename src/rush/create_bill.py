@@ -69,9 +69,7 @@ def bill_generate(user_card: BaseCard, post_date: Optional[DateTime] = None) -> 
     bill = user_card.get_latest_bill_to_generate()  # Get the first bill which is not generated.
     if not bill:
         assert post_date != None
-        bill = get_or_create_bill_for_card_swipe(
-            user_card, post_date
-        )  # TODO not sure about this
+        bill = get_or_create_bill_for_card_swipe(user_card, post_date)  # TODO not sure about this
         if bill["result"] == "error":
             return bill
         bill = bill["bill"]

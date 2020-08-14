@@ -131,7 +131,7 @@ def get_remaining_bill_balance(
     d = {"principal_due": principal_due, "interest_due": interest_due}
     fees = session.query(Fee).filter(Fee.bill_id == bill.id, Fee.fee_status == "UNPAID").all()
     for fee in fees:
-        fee_due_amount = fee.gross_amount - fee.gross_amount_paid
+        fee_due_amount = fee.gross_amount - (fee.gross_amount_paid if fee.gross_amount_paid else Decimal(0))
         d[fee.name] = fee_due_amount
     d["total_due"] = sum(v for _, v in d.items())  # sum of all values becomes total due.
 
