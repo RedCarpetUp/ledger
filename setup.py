@@ -12,7 +12,6 @@ DEV_REQUIRES = [
     "pytest",
     "pytest-cov",
     "mkdocs",
-    "pandas"
 ]
 
 setup(
@@ -39,6 +38,7 @@ setup(
         "isort",
         "pytest-cov",
         "pendulum",
+        "pandas",
     ],
     extras_require={"dev": DEV_REQUIRES},
     include_package_data=True,
