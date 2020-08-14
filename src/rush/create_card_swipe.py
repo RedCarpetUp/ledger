@@ -3,9 +3,15 @@ from decimal import Decimal
 from pendulum import DateTime
 from sqlalchemy.orm.session import Session
 
-from rush.card import BaseCard
+from rush.card import (
+    BaseCard,
+    RubyCard,
+)
 from rush.create_bill import get_or_create_bill_for_card_swipe
-from rush.ledger_events import card_transaction_event
+from rush.ledger_events import (
+    card_transaction_event,
+    disburse_money_to_card,
+)
 from rush.models import (
     CardTransaction,
     LedgerTriggerEvent,
@@ -44,5 +50,7 @@ def create_card_swipe(
     )
     session.add(lt)
     session.flush()  # need id. TODO Gotta use table relationships
+    if isinstance(user_card, RubyCard):  # Need to load card balance at every swipe.
+        disburse_money_to_card(session, user_card, lt)
     card_transaction_event(session, user_card, lt)
     return {"result": "success", "data": swipe}
