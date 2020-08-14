@@ -18,10 +18,7 @@ from rush.models import (
     UserCard,
 )
 from rush.recon.dmi_interest_on_portfolio import interest_on_dmi_portfolio
-from rush.utils import (
-    div,
-    get_gst_split_from_amount,
-)
+from rush.utils import get_gst_split_from_amount
 
 
 def lender_disbursal_event(session: Session, event: LedgerTriggerEvent, lender_id: int) -> None:

@@ -1,12 +1,6 @@
 # pylint: disable=redefined-outer-name,no-member
-
 import contextlib
-import json
-import logging
 import os
-import shutil
-import subprocess
-import sys
 import time
 from pathlib import Path
 from typing import (
@@ -15,7 +9,6 @@ from typing import (
     Type,
 )
 
-import alembic
 import docker
 import psycopg2
 import pytest
@@ -27,10 +20,7 @@ from parse import (
     Result,
     parse,
 )
-from sqlalchemy import (
-    create_engine,
-    text,
-)
+from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
