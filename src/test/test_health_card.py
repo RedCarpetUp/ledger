@@ -1,6 +1,5 @@
 from decimal import Decimal
 
-from dateutil.relativedelta import relativedelta
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
@@ -172,7 +171,7 @@ def test_generate_health_card_bill_1(session: Session) -> None:
 
     bill = bill_generate(uc)
     # Interest event to be fired separately now
-    accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), uc)
+    accrue_interest_on_all_bills(session, parse_date("2020-07-31"), uc)
 
     assert bill.bill_start_date == parse_date("2020-07-01").date()
     assert bill.table.is_generated is True
@@ -220,7 +219,7 @@ def test_generate_health_card_bill_2(session: Session) -> None:
 
     bill = bill_generate(uc)
     # Interest event to be fired separately now
-    accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), uc)
+    accrue_interest_on_all_bills(session, parse_date("2020-07-31"), uc)
 
     assert bill.bill_start_date == parse_date("2020-07-01").date()
     assert bill.table.is_generated is True
@@ -282,7 +281,7 @@ def test_generate_health_card_bill_3(session: Session) -> None:
 
     bill = bill_generate(uc)
     # Interest event to be fired separately now
-    accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), uc)
+    accrue_interest_on_all_bills(session, parse_date("2020-07-31"), uc)
 
     assert bill.bill_start_date == parse_date("2020-07-01").date()
     assert bill.table.is_generated is True
@@ -344,7 +343,7 @@ def test_mixed_payment_received(session: Session) -> None:
 
     bill = bill_generate(uc)
     # Interest event to be fired separately now
-    accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), uc)
+    accrue_interest_on_all_bills(session, parse_date("2020-07-31"), uc)
 
     assert bill.bill_start_date == parse_date("2020-07-01").date()
     assert bill.table.is_generated is True
@@ -420,7 +419,7 @@ def test_medical_payment_received(session: Session) -> None:
 
     bill = bill_generate(uc)
     # Interest event to be fired separately now
-    accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), uc)
+    accrue_interest_on_all_bills(session, parse_date("2020-07-31"), uc)
 
     assert bill.bill_start_date == parse_date("2020-07-01").date()
     assert bill.table.is_generated is True
@@ -492,7 +491,7 @@ def test_non_medical_payment_received(session: Session) -> None:
 
     bill = bill_generate(uc)
     # Interest event to be fired separately now
-    accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), uc)
+    accrue_interest_on_all_bills(session, parse_date("2020-07-31"), uc)
 
     assert bill.bill_start_date == parse_date("2020-07-01").date()
     assert bill.table.is_generated is True
