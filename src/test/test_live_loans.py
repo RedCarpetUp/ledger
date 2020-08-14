@@ -321,7 +321,7 @@ def test_drawdown_open(session: Session) -> None:
                 latest_bill = user_card.get_latest_generated_bill()
                 if latest_bill and latest_bill.table.bill_start_date >= event["date"]:
                     continue
-                bill_generate(user_card)
+                bill_generate(user_card, event['date'])
             elif event["type"] == "interest":
                 accrue_interest_on_all_bills(session, event["date"], user_card)
             elif event["type"] == "late_fee":
