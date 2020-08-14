@@ -1,7 +1,11 @@
 from decimal import Decimal
+from typing import Optional
 
 from dateutil.relativedelta import relativedelta
-from pendulum import DateTime, Date
+from pendulum import (
+    Date,
+    DateTime,
+)
 from sqlalchemy.orm import Session
 
 from rush.accrue_financial_charges import create_fee_entry
@@ -20,7 +24,6 @@ from rush.utils import (
     div,
     mul,
 )
-from typing import Optional
 
 
 def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -> BaseBill:
