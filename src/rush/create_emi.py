@@ -404,9 +404,6 @@ def slide_payments(user_card: BaseCard, payment_event: LedgerTriggerEvent = None
     if not all_emis:
         # Success and Error handling later
         return
-    # To run test, remove later
-    # first_emi = emis_dict[0]
-    # return first_emi
     payment_request_id = None
     last_paid_emi_number = 0
     last_payment_date = None
@@ -683,29 +680,6 @@ def check_moratorium_eligibility(session: Session, data):
     if resp["result"] == "error":
         return resp
 
-    # Updation of emis in schedule
-    # to_update_emi_list = [i for i in resp["data"] if not (i["extra_details"].get("moratorium"))]
-    # session.bulk_update_mappings(CardEmis, to_update_emi_list)
-    # session.flush()
-    # for emi in resp["data"]:
-    #     if emi["extra_details"].get("moratorium"):
-    #         new_emi = CardEmis(
-    #             card_id=user_card.table.id,
-    #             emi_number=emi["emi_number"],
-    #             total_closing_balance=emi["total_closing_balance"],
-    #             total_closing_balance_post_due_date=emi["total_closing_balance_post_due_date"],
-    #             due_amount=emi["due_amount"],
-    #             late_fee=emi["late_fee"],
-    #             interest=emi["interest"],
-    #             interest_current_month=emi["interest_current_month"],
-    #             interest_next_month=emi["interest_next_month"],
-    #             total_due_amount=emi["total_due_amount"],
-    #             due_date=emi["due_date"],
-    #             extra_details=emi["extra_details"],
-    #         )
-    #         session.add(new_emi)
-    # session.flush()
-
 
 def refresh_schedule(user_card: BaseCard):
     session = user_card.session
@@ -837,6 +811,35 @@ def entry_checks(
 
 
 def update_event_with_dpd(user_card: BaseCard, post_date: DateTime = None) -> None:
+    def actual_event_update(
+        session: Session, is_debit: bool, ledger_trigger_event, ledger_entry, account
+    ):
+        if is_debit:
+            debit_amount = ledger_entry.amount
+            credit_amount = Decimal(0)
+        else:
+            debit_amount = Decimal(0)
+            credit_amount = ledger_entry.amount
+        bills_touched.append(account.identifier)
+        bill = (
+            session.query(LoanData)
+            .filter(LoanData.card_id == user_card.id, LoanData.id == account.identifier,)
+            .first()
+        )
+        dpd = (event_post_date - bill.bill_due_date).days
+        new_event = EventDpd(
+            bill_id=account.identifier,
+            card_id=user_card.id,
+            event_id=ledger_trigger_event.id,
+            credit=credit_amount,
+            debit=debit_amount,
+            balance=get_remaining_bill_balance(session, bill, ledger_trigger_event.post_date)[
+                "total_due"
+            ],
+            dpd=dpd,
+        )
+        session.add(new_event)
+
     session = user_card.session
 
     # TODO Need to bring the start and end into context later
@@ -892,24 +895,7 @@ def update_event_with_dpd(user_card: BaseCard, post_date: DateTime = None) -> No
                 event_id = ledger_trigger_event.id
                 event_type = ledger_trigger_event.name
                 event_amount = ledger_entry.amount
-                bills_touched.append(debit_account.identifier)
-                bill = (
-                    session.query(LoanData)
-                    .filter(LoanData.card_id == user_card.id, LoanData.id == debit_account.identifier,)
-                    .first()
-                )
-                dpd = (event_post_date - bill.bill_due_date).days
-                new_event = EventDpd(
-                    bill_id=debit_account.identifier,
-                    card_id=user_card.id,
-                    event_id=ledger_trigger_event.id,
-                    credit=ledger_entry.amount,
-                    balance=get_remaining_bill_balance(session, bill, ledger_trigger_event.post_date)[
-                        "total_due"
-                    ],
-                    dpd=dpd,
-                )
-                session.add(new_event)
+                actual_event_update(session, False, ledger_trigger_event, ledger_entry, debit_account)
 
             if (
                 credit_account.identifier_type == "bill"
@@ -918,24 +904,7 @@ def update_event_with_dpd(user_card: BaseCard, post_date: DateTime = None) -> No
                 event_id = ledger_trigger_event.id
                 event_type = ledger_trigger_event.name
                 event_amount = ledger_entry.amount
-                bills_touched.append(credit_account.identifier)
-                bill = (
-                    session.query(LoanData)
-                    .filter(LoanData.card_id == user_card.id, LoanData.id == credit_account.identifier,)
-                    .first()
-                )
-                dpd = (event_post_date - bill.bill_due_date).days
-                new_event = EventDpd(
-                    bill_id=credit_account.identifier,
-                    card_id=user_card.id,
-                    event_id=ledger_trigger_event.id,
-                    credit=ledger_entry.amount,
-                    balance=get_remaining_bill_balance(session, bill, ledger_trigger_event.post_date)[
-                        "total_due"
-                    ],
-                    dpd=dpd,
-                )
-                session.add(new_event)
+                actual_event_update(session, False, ledger_trigger_event, ledger_entry, credit_account)
 
         elif ledger_trigger_event.name in [
             "reverse_interest_charges",
@@ -947,24 +916,7 @@ def update_event_with_dpd(user_card: BaseCard, post_date: DateTime = None) -> No
                 event_id = ledger_trigger_event.id
                 event_type = ledger_trigger_event.name
                 event_amount = ledger_entry.amount
-                bills_touched.append(debit_account.identifier)
-                bill = (
-                    session.query(LoanData)
-                    .filter(LoanData.card_id == user_card.id, LoanData.id == debit_account.identifier,)
-                    .first()
-                )
-                dpd = (event_post_date - bill.bill_due_date).days
-                new_event = EventDpd(
-                    bill_id=debit_account.identifier,
-                    card_id=user_card.id,
-                    event_id=ledger_trigger_event.id,
-                    debit=ledger_entry.amount,
-                    balance=get_remaining_bill_balance(session, bill, ledger_trigger_event.post_date)[
-                        "total_due"
-                    ],
-                    dpd=dpd,
-                )
-                session.add(new_event)
+                actual_event_update(session, True, ledger_trigger_event, ledger_entry, debit_account)
 
             if (
                 credit_account.identifier_type == "bill"
@@ -973,24 +925,7 @@ def update_event_with_dpd(user_card: BaseCard, post_date: DateTime = None) -> No
                 event_id = ledger_trigger_event.id
                 event_type = ledger_trigger_event.name
                 event_amount = ledger_entry.amount
-                bills_touched.append(credit_account.identifier)
-                bill = (
-                    session.query(LoanData)
-                    .filter(LoanData.card_id == user_card.id, LoanData.id == credit_account.identifier,)
-                    .first()
-                )
-                dpd = (event_post_date - bill.bill_due_date).days
-                new_event = EventDpd(
-                    bill_id=credit_account.identifier,
-                    card_id=user_card.id,
-                    event_id=ledger_trigger_event.id,
-                    debit=ledger_entry.amount,
-                    balance=get_remaining_bill_balance(session, bill, ledger_trigger_event.post_date)[
-                        "total_due"
-                    ],
-                    dpd=dpd,
-                )
-                session.add(new_event)
+                actual_event_update(session, True, ledger_trigger_event, ledger_entry, credit_account)
 
     # Adjust dpd in schedule
     # TODO Introduce schedule level updation when this converts to a DAG system
