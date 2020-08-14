@@ -6,11 +6,12 @@ from pendulum import DateTime
 from sqlalchemy.orm import Session
 
 from rush.card import BaseCard
+from rush.card.base_card import BaseBill
 from rush.ledger_events import (
     _adjust_bill,
     _adjust_for_prepayment,
     accrue_interest_event,
-    accrue_late_fine_event,
+    add_min_amount_event,
 )
 from rush.ledger_utils import (
     create_ledger_entry_from_str,
@@ -20,12 +21,18 @@ from rush.ledger_utils import (
 )
 from rush.models import (
     BookAccount,
+    Fee,
     LedgerEntry,
     LedgerTriggerEvent,
     LoanData,
     UserCard,
 )
-from rush.utils import get_current_ist_time
+from rush.utils import (
+    add_gst_split_to_amount,
+    div,
+    get_current_ist_time,
+    mul,
+)
 
 
 def _get_total_outstanding(session, user_card):
@@ -84,6 +91,10 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_car
         accrue_interest_event(session, bill, accrue_event, bill.table.interest_to_charge)
         accrue_event.amount += bill.table.interest_to_charge
 
+    from rush.create_emi import refresh_schedule
+
+    refresh_schedule(user_card)
+
 
 def is_late_fee_valid(session: Session, user_card: BaseCard) -> bool:
     """
@@ -107,20 +118,50 @@ def is_late_fee_valid(session: Session, user_card: BaseCard) -> bool:
     return False
 
 
-def accrue_late_charges(session: Session, user_card: BaseCard, post_date: DateTime) -> LoanData:
+def create_fee_entry(
+    session: Session, bill: BaseBill, event: LedgerTriggerEvent, fee_name: str, net_fee_amount: Decimal
+) -> Fee:
+    f = Fee(
+        bill_id=bill.id,
+        event_id=event.id,
+        card_id=bill.table.card_id,
+        name=fee_name,
+        net_amount=net_fee_amount,
+        sgst_rate=Decimal(9),
+        cgst_rate=Decimal(9),
+        igst_rate=Decimal(0),
+    )
+    d = add_gst_split_to_amount(
+        net_fee_amount, sgst_rate=f.sgst_rate, cgst_rate=f.cgst_rate, igst_rate=f.igst_rate
+    )
+    f.gross_amount = d["gross_amount"]
+    session.add(f)
+    # Add into min amount of the bill too.
+    add_min_amount_event(session, bill, event, f.gross_amount)
+    return f
+
+
+def accrue_late_charges(
+    session: Session,
+    user_card: BaseCard,
+    post_date: DateTime,
+    late_fee_to_charge_without_tax: Decimal = Decimal(100),
+) -> BaseBill:
     latest_bill = user_card.get_latest_generated_bill()
     can_charge_fee = latest_bill.get_remaining_min() > 0
     #  accrue_late_charges_prerequisites(session, bill)
     if can_charge_fee:  # if min isn't paid charge late fine.
         # TODO get correct date here.
         # Adjust for rounding because total due amount has to be rounded
-        event = LedgerTriggerEvent(
-            name="accrue_late_fine", post_date=post_date, card_id=user_card.id, amount=Decimal(100)
-        )
+        event = LedgerTriggerEvent(name="charge_late_fine", post_date=post_date, card_id=user_card.id)
         session.add(event)
         session.flush()
+        fee = create_fee_entry(session, latest_bill, event, "late_fee", late_fee_to_charge_without_tax)
+        event.amount = fee.gross_amount
 
-        accrue_late_fine_event(session, latest_bill, event)
+        from rush.create_emi import refresh_schedule
+
+        refresh_schedule(user_card)
     return latest_bill
 
 
@@ -195,8 +236,8 @@ def reverse_interest_charges(
             entry["amount"] = remaining_amount
 
     # Check if there's still amount that's left. If yes, then we received extra prepayment.
-    is_prepayment = any(d["amount"] > 0 for d in inter_bill_movement_entries)
-    if is_prepayment:
+    is_payment_left = any(d["amount"] > 0 for d in inter_bill_movement_entries)
+    if is_payment_left:
         for entry in inter_bill_movement_entries:
             if entry["amount"] == 0:
                 continue
@@ -211,53 +252,58 @@ def reverse_interest_charges(
 
 
 def reverse_late_charges(
-    session: Session, user_card: UserCard, event_to_reverse: LedgerTriggerEvent
+    session: Session, user_card: BaseCard, event_to_reverse: LedgerTriggerEvent
 ) -> None:
-    event = LedgerTriggerEvent(name="reverse_late_charges", post_date=get_current_ist_time())
+    event = LedgerTriggerEvent(
+        name="reverse_late_charges",
+        card_id=user_card.id,
+        post_date=get_current_ist_time(),
+        amount=event_to_reverse.amount,
+    )
     session.add(event)
     session.flush()
 
-    bill = (
-        session.query(LoanData)
-        .distinct()
-        .filter(
-            LedgerEntry.debit_account == BookAccount.id,
-            LedgerEntry.event_id == event_to_reverse.id,
-            BookAccount.identifier_type == "bill",
-            LoanData.id == BookAccount.identifier,
-            BookAccount.book_name == "late_fine_receivable",
-            LoanData.is_generated.is_(True),
-        )
-        .one()
+    fee, bill = (
+        session.query(Fee, LoanData)
+        .filter(Fee.event_id == event_to_reverse.id, LoanData.id == Fee.bill_id)
+        .one_or_none()
     )
-    late_fine_charged = event_to_reverse.amount
-    # We check how much got settled in the interest which we're planning to remove.
-    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine_receivable/a")
-    settled_amount = late_fine_charged - late_fine_due
 
-    if late_fine_due > 0:
-        # We reverse the original entry by whatever is the remaining amount.
-        create_ledger_entry_from_str(
-            session,
-            event_id=event.id,
-            debit_book_str=f"{bill.id}/bill/late_fine/r",
-            credit_book_str=f"{bill.id}/bill/late_fine_receivable/a",
-            amount=late_fine_due,
-        )
-        # Remove from min too. But only what's due. Rest doesn't matter.
+    if fee.fee_status == "UNPAID":
+        # Remove from min. But only what's remaining. Rest doesn't matter.
         create_ledger_entry_from_str(
             session,
             event_id=event.id,
             debit_book_str=f"{bill.id}/bill/min/l",
             credit_book_str=f"{bill.id}/bill/min/a",
-            amount=late_fine_due,
+            amount=fee.gross_amount - fee.gross_amount_paid,
         )
-    if settled_amount > 0:
-        remaining_amount = _adjust_bill(
-            session, bill, settled_amount, event.id, debit_acc_str=f"{bill.id}/bill/late_fine/r"
-        )
-        if remaining_amount > 0:
-            pass  # TODO prepayment
+    if fee.gross_amount_paid > 0:
+        # Need to remove money from all these accounts and slide them back to the same bill.
+        acc_info = [
+            {"acc_to_remove_from": f"{bill.id}/bill/late_fine/r", "amount": fee.net_amount_paid},
+            {"acc_to_remove_from": "12345/redcarpet/cgst_payable/l", "amount": fee.cgst_paid},
+            {"acc_to_remove_from": "12345/redcarpet/sgst_payable/l", "amount": fee.sgst_paid},
+            {"acc_to_remove_from": "12345/redcarpet/igst_payable/l", "amount": fee.igst_paid},
+        ]
+        for acc in acc_info:
+            if acc["amount"] == 0:
+                continue
+            remaining_amount = _adjust_bill(
+                session, bill, acc["amount"], event.id, acc["acc_to_remove_from"]
+            )
+            acc["amount"] = remaining_amount
+        # Check if there's still amount that's left. If yes, then we received extra prepayment.
+        is_payment_left = any(d["amount"] > 0 for d in acc_info)
+        if is_payment_left:
+            for acc in acc_info:
+                if acc["amount"] == 0:
+                    continue
+                # TODO maybe just call the entire payment received event here?
+                _adjust_for_prepayment(
+                    session, user_card.user_id, event.id, acc["amount"], acc["acc_to_remove_from"]
+                )
+    fee.fee_status = "REVERSED"
 
     from rush.create_emi import refresh_schedule
 

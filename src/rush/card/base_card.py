@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from rush.ledger_utils import (
     get_account_balance_from_str,
     get_remaining_bill_balance,
+    is_bill_closed,
 )
 from rush.models import (
     CardTransaction,
@@ -73,34 +74,7 @@ class BaseBill:
         return min_due
 
     def is_bill_closed(self, to_date: Optional[DateTime] = None) -> bool:
-        # Check if unbilled is zero. If not, return false.
-        _, unbilled_balance = get_account_balance_from_str(
-            self.session, book_string=f"{self.id}/bill/unbilled/a", to_date=to_date
-        )
-        if unbilled_balance != 0:
-            return False
-
-        # Check if principal is paid. If not, return false.
-        _, principal_due = get_account_balance_from_str(
-            self.session, book_string=f"{self.id}/bill/principal_receivable/a", to_date=to_date
-        )
-        if principal_due != 0:
-            return False
-
-        # Check if interest is paid. If not, return false.
-        _, interest_due = get_account_balance_from_str(
-            self.session, book_string=f"{self.id}/bill/interest_receivable/a", to_date=to_date
-        )
-        if interest_due != 0:
-            return False
-
-        # Check if late fine is paid. If not, return false.
-        _, late_fine_due = get_account_balance_from_str(
-            self.session, book_string=f"{self.id}/bill/late_fine_receivable/a", to_date=to_date
-        )
-        if late_fine_due != 0:
-            return False
-        return True
+        return is_bill_closed(self.session, self.table, to_date)
 
     def sum_of_atm_transactions(self):
         atm_transactions_sum = (
