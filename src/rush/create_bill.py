@@ -1,7 +1,11 @@
 from decimal import Decimal
+from typing import Optional
 
 from dateutil.relativedelta import relativedelta
-from pendulum import DateTime, Date
+from pendulum import (
+    Date,
+    DateTime,
+)
 from sqlalchemy.orm import Session
 
 from rush.accrue_financial_charges import create_fee_entry
@@ -20,7 +24,6 @@ from rush.utils import (
     div,
     mul,
 )
-from typing import Optional
 
 
 def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -> BaseBill:
@@ -69,9 +72,7 @@ def bill_generate(user_card: BaseCard, post_date: Optional[DateTime] = None) -> 
     bill = user_card.get_latest_bill_to_generate()  # Get the first bill which is not generated.
     if not bill:
         assert post_date != None
-        bill = get_or_create_bill_for_card_swipe(
-            user_card, post_date
-        )  # TODO not sure about this
+        bill = get_or_create_bill_for_card_swipe(user_card, post_date)  # TODO not sure about this
         if bill["result"] == "error":
             return bill
         bill = bill["bill"]
