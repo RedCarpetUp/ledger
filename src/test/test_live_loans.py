@@ -325,7 +325,7 @@ def test_drawdown_open(session: Session) -> None:
             elif event["type"] == "interest":
                 accrue_interest_on_all_bills(session, event["date"], user_card)
             elif event["type"] == "late_fee":
-                accrue_late_charges(session, user_card, event["date"], event['data']['amount'])
+                accrue_late_charges(session, user_card, event["date"], Decimal(event["data"]["amount"]))
             elif event["type"] == "payment":
                 continue
                 payment_received(
