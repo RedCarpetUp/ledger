@@ -12,6 +12,7 @@ DEV_REQUIRES = [
     "pytest",
     "pytest-cov",
     "mkdocs",
+    "pandas"
 ]
 
 setup(
