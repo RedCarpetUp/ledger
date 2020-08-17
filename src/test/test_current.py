@@ -385,21 +385,14 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
     bill_fee = session.query(Fee).filter_by(id=fee_id).one_or_none()
     assert bill_fee.fee_status == "PAID"
     assert bill_fee.net_amount_paid == Decimal(100)
-    assert bill_fee.cgst_paid == Decimal(9)
-    assert bill_fee.sgst_paid == Decimal(9)
+    assert bill_fee.igst_paid == Decimal(18)
     assert bill_fee.gross_amount_paid == Decimal(118)
 
     _, late_fine_earned = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine/r")
     assert late_fine_earned == Decimal(100)
 
-    _, cgst_balance = get_account_balance_from_str(session, "12345/redcarpet/cgst_payable/l")
-    assert cgst_balance == Decimal(9)
-
-    _, sgst_balance = get_account_balance_from_str(session, "12345/redcarpet/sgst_payable/l")
-    assert sgst_balance == Decimal(9)
-
     _, igst_balance = get_account_balance_from_str(session, "12345/redcarpet/igst_payable/l")
-    assert igst_balance == Decimal(0)
+    assert igst_balance == Decimal(18)
 
     _, principal_due = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/principal_receivable/a"

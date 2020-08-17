@@ -21,10 +21,7 @@ from rush.models import (
     UserCard,
 )
 from rush.recon.dmi_interest_on_portfolio import interest_on_dmi_portfolio
-from rush.utils import (
-    div,
-    get_gst_split_from_amount,
-)
+from rush.utils import get_gst_split_from_amount
 
 
 def lender_disbursal_event(session: Session, event: LedgerTriggerEvent, lender_id: int) -> None:
@@ -47,6 +44,16 @@ def m2p_transfer_event(session: Session, event: LedgerTriggerEvent, lender_id: i
     )
 
 
+def disburse_money_to_card(session: Session, user_card: BaseCard, event: LedgerTriggerEvent) -> None:
+    create_ledger_entry_from_str(
+        session,
+        event_id=event.id,
+        debit_book_str=f"{user_card.table.id}/card/card_balance/a",
+        credit_book_str=f"{user_card.table.lender_id}/lender/pool_balance/a",
+        amount=event.amount,
+    )
+
+    
 def card_transaction_event(
     session: Session, user_card: BaseCard, event: LedgerTriggerEvent, mcc: Optional[str] = None
 ) -> None:
@@ -86,7 +93,7 @@ def card_transaction_event(
         session,
         event_id=event.id,
         debit_book_str=f"{bill_id}/bill/unbilled/a",
-        credit_book_str=f"{lender_id}/lender/pool_balance/a",
+        credit_book_str=f"{user_card.table.id}/card/card_balance/a",
         amount=amount,
     )
 
