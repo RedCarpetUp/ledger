@@ -97,9 +97,9 @@ def upgrade() -> None:
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("row_status", sa.String(50), nullable=False),
-        sa.Column("interest_type", sa.String(30), nullable=True), # TODO: change back to nullable=False
-        sa.Column("loan_status", sa.String(50), nullable=True), # TODO: change back to nullable=False
-        sa.Column("product_id", sa.Integer(), nullable=True), # TODO: change back to nullable=False
+        sa.Column("interest_type", sa.String(30), nullable=True),  # TODO: change back to nullable=False
+        sa.Column("loan_status", sa.String(50), nullable=True),  # TODO: change back to nullable=False
+        sa.Column("product_id", sa.Integer(), nullable=True),  # TODO: change back to nullable=False
         sa.ForeignKeyConstraint(["product_id"], ["product.id"], name="fk_loan_product_id"),
         sa.PrimaryKeyConstraint("id"),
     )
