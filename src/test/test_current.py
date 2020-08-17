@@ -261,7 +261,7 @@ def _partial_payment_bill_1(session: Session) -> None:
     amount = Decimal(100)
     unpaid_bills = user_card.get_unpaid_bills()
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
     )
     assert lender_payable == Decimal("1000")
     payment_received(
@@ -294,7 +294,7 @@ def _partial_payment_bill_1(session: Session) -> None:
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
     )
     assert lender_payable == Decimal("900.5")
 
@@ -315,7 +315,7 @@ def _accrue_late_fine_bill_1(session: Session) -> None:
 
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.loan_id == user_card.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
@@ -359,7 +359,7 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
     unpaid_bills = user_card.get_unpaid_bills()
 
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
     )
     assert lender_payable == Decimal("900.5")
 
@@ -403,7 +403,7 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
     _, pg_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert pg_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
     )
     assert lender_payable == Decimal("769.0")
 
@@ -425,7 +425,7 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
     unpaid_bills = user_card.get_unpaid_bills()
 
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
     )
     assert lender_payable == Decimal("900.5")
 
@@ -459,7 +459,7 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
     )
     assert lender_payable == Decimal("769.0")
 
@@ -482,7 +482,7 @@ def test_is_bill_paid_bill_1(session: Session) -> None:
     is_it_paid = is_bill_closed(session, bill)
     assert is_it_paid is False
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
     )
     assert lender_payable == Decimal("769")
 
@@ -501,7 +501,7 @@ def test_is_bill_paid_bill_1(session: Session) -> None:
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
     )
     assert lender_payable == Decimal("-147.17")  # negative that implies prepaid
 
@@ -1317,7 +1317,7 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
     user_card = get_user_card(session, 99)
 
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
     )
     assert lender_payable == Decimal("769")
 
@@ -1335,7 +1335,7 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
     )
     assert lender_payable == Decimal("-116.5")
 
@@ -1396,7 +1396,7 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
     )
     assert lender_payable == Decimal("-238.84")
 
@@ -1426,7 +1426,7 @@ def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
     user_card = get_user_card(session, 99)
 
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
     )
     assert lender_payable == Decimal("2769")
 
@@ -1446,7 +1446,7 @@ def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
     )
     assert lender_payable == Decimal("-147.17")
 
@@ -1471,7 +1471,7 @@ def _pay_minimum_amount_bill_2(session: Session) -> None:
     user_card = get_user_card(session, 99)
 
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
     )
     assert lender_payable == Decimal("1500")
 
@@ -1487,7 +1487,7 @@ def _pay_minimum_amount_bill_2(session: Session) -> None:
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
     )
     assert lender_payable == Decimal("1390.5")
 
@@ -1508,7 +1508,7 @@ def test_refund_1(session: Session) -> None:
     refund_payment(session, user_card, 100, parse_date("2020-05-05 15:24:34"), "asd23g2", refunded_swipe)
 
     _, merchant_refund_off_balance = get_account_balance_from_str(
-        session, book_string=f"{user_card.id}/card/refund_off_balance/l"
+        session, book_string=f"{user_card.loan_id}/card/refund_off_balance/l"
     )
     assert merchant_refund_off_balance == Decimal("100")  # 1000 refunded with interest 60
 
@@ -1523,7 +1523,7 @@ def test_refund_1(session: Session) -> None:
     refund_payment(session, user_card, 1500, parse_date("2020-05-15 15:24:34"), "af423g2", swipe["data"])
 
     _, merchant_refund_off_balance = get_account_balance_from_str(
-        session, book_string=f"{user_card.id}/card/refund_off_balance/l"
+        session, book_string=f"{user_card.loan_id}/card/refund_off_balance/l"
     )
     assert merchant_refund_off_balance == Decimal("1600")  # 1000 refunded with interest 60
 
@@ -2243,7 +2243,7 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
     # Get emi list post few bill creations
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.loan_id == user_card.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
         .all()
     )
@@ -2263,7 +2263,7 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
     # Get emi list post tenure extension
     all_emis = (
         session.query(CardEmis)
-        .filter(CardEmis.loan_id == user_card.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
         .all()
     )

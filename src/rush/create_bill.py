@@ -75,12 +75,12 @@ def bill_generate(user_card: BaseCard) -> BaseBill:
     session.add(lt)
     session.flush()
 
-    bill_generate_event(session, bill, user_card.id, lt)
+    bill_generate_event(session=session, bill=bill, loan_id=user_card.loan_id, event=lt)
 
     bill.table.is_generated = True
 
     _, billed_amount = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/principal_receivable/a"
+        session=session, book_string=f"{bill.id}/bill/principal_receivable/a"
     )
     principal_instalment = div(billed_amount, bill.table.bill_tenure)
 
@@ -93,7 +93,9 @@ def bill_generate(user_card: BaseCard) -> BaseBill:
 
     bill_closing_date = bill.bill_start_date + relativedelta(months=+1)
     # Don't add in min if user is in moratorium.
-    if not LoanMoratorium.is_in_moratorium(session, user_card.id, bill_closing_date):
+    if not LoanMoratorium.is_in_moratorium(
+        session=session, loan_id=user_card.loan_id, date_to_check_against=bill_closing_date
+    ):
         # After the bill has generated. Call the min generation event on all unpaid bills.
         add_min_to_all_bills(session, bill_closing_date, user_card)
 

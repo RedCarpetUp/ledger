@@ -58,7 +58,7 @@ def card_transaction_event(
     session: Session, user_card: BaseCard, event: LedgerTriggerEvent, mcc: Optional[str] = None
 ) -> None:
     amount = Decimal(event.amount)
-    user_card_id = user_card.id
+    user_card_id = user_card.loan_id
     swipe_id = event.extra_details["swipe_id"]
     bill = (
         session.query(LoanData)
@@ -99,7 +99,7 @@ def card_transaction_event(
 
 
 def bill_generate_event(
-    session: Session, bill: BaseBill, user_card_id: int, event: LedgerTriggerEvent
+    session: Session, bill: BaseBill, loan_id: int, event: LedgerTriggerEvent
 ) -> None:
     bill_id = bill.id
 
@@ -116,7 +116,7 @@ def bill_generate_event(
 
     # checking prepayment_balance
     _, prepayment_balance = get_account_balance_from_str(
-        session, book_string=f"{user_card_id}/card/pre_payment/l"
+        session, book_string=f"{loan_id}/card/pre_payment/l"
     )
     if prepayment_balance > 0:
         balance = min(unbilled_balance, prepayment_balance)
@@ -124,7 +124,7 @@ def bill_generate_event(
         create_ledger_entry_from_str(
             session,
             event_id=event.id,
-            debit_book_str=f"{user_card_id}/card/pre_payment/l",
+            debit_book_str=f"{loan_id}/card/pre_payment/l",
             credit_book_str=f"{bill_id}/bill/principal_receivable/a",
             amount=balance,
         )
@@ -134,7 +134,7 @@ def add_min_amount_event(
     session: Session, bill: BaseBill, event: LedgerTriggerEvent, amount: Decimal
 ) -> None:
     create_ledger_entry_from_str(
-        session,
+        session=session,
         event_id=event.id,
         debit_book_str=f"{bill.id}/bill/min/a",
         credit_book_str=f"{bill.id}/bill/min/l",
@@ -185,21 +185,21 @@ def payment_received_event(
 
     if payment_received > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
-            session, user_card.id, event.id, payment_received, debit_book_str=debit_book_str
+            session, user_card.loan_id, event.id, payment_received, debit_book_str=debit_book_str
         )
 
     if gateway_charges > 0:  # Adjust for gateway expenses.
         _adjust_for_gateway_expenses(session, event, debit_book_str)
 
     _, writeoff_balance = get_account_balance_from_str(
-        session, book_string=f"{user_card.id}/card/writeoff_expenses/e"
+        session, book_string=f"{user_card.loan_id}/card/writeoff_expenses/e"
     )
     if writeoff_balance > 0:
         amount = min(writeoff_balance, event.amount)
-        _adjust_for_recovery(session, user_card.id, event.id, amount)
+        _adjust_for_recovery(session, user_card.loan_id, event.id, amount)
 
     else:
-        _adjust_lender_payable(session, user_card.id, debit_book_str, gateway_charges, event)
+        _adjust_lender_payable(session, user_card.loan_id, debit_book_str, gateway_charges, event)
 
     from rush.create_emi import slide_payments
 
@@ -427,15 +427,15 @@ def writeoff_event(session: Session, user_card: UserCard, event: LedgerTriggerEv
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
-        debit_book_str=f"{user_card.id}/card/lender_payable/l",
-        credit_book_str=f"{user_card.id}/card/bad_debt_allowance/ca",
+        debit_book_str=f"{user_card.loan_id}/card/lender_payable/l",
+        credit_book_str=f"{user_card.loan_id}/card/bad_debt_allowance/ca",
         amount=event.amount,
     )
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
-        debit_book_str=f"{user_card.id}/card/writeoff_expenses/e",
-        credit_book_str=f"{user_card.id}/redcarpet/redcarpet_account/a",
+        debit_book_str=f"{user_card.loan_id}/card/writeoff_expenses/e",
+        credit_book_str=f"{user_card.loan_id}/redcarpet/redcarpet_account/a",
         amount=event.amount,
     )
 

@@ -118,7 +118,7 @@ def add_emi_on_new_bill(
     due_amount = last_bill.table.principal_instalment
     all_emis = (
         session.query(CardEmis)
-        .filter(CardEmis.loan_id == user_card.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
         .all()
     )
@@ -404,7 +404,7 @@ def slide_payments(user_card: BaseCard, payment_event: LedgerTriggerEvent = None
     session = user_card.session
     all_emis = (
         session.query(CardEmis)
-        .filter(CardEmis.loan_id == user_card.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
         .all()
     )
@@ -460,7 +460,7 @@ def adjust_interest_in_emis(session: Session, user_card: BaseCard, post_date: Da
     emis_for_this_bill = (
         session.query(CardEmis)
         .filter(
-            CardEmis.loan_id == user_card.id,
+            CardEmis.loan_id == user_card.loan_id,
             CardEmis.due_date >= post_date,
             CardEmis.row_status == "active",
         )
@@ -497,7 +497,7 @@ def adjust_late_fee_in_emis(session: Session, user_card: BaseCard, post_date: Da
     emi = (
         session.query(CardEmis)
         .filter(
-            CardEmis.loan_id == user_card.id,
+            CardEmis.loan_id == user_card.loan_id,
             CardEmis.due_date < post_date,
             CardEmis.row_status == "active",
         )
@@ -508,7 +508,7 @@ def adjust_late_fee_in_emis(session: Session, user_card: BaseCard, post_date: Da
     if not emi:
         emi = (
             session.query(CardEmis)
-            .filter(CardEmis.loan_id == user_card.id, CardEmis.row_status == "active")
+            .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
             .order_by(CardEmis.emi_number.asc())
             .first()
         )
@@ -534,7 +534,7 @@ def adjust_atm_fee_in_emis(session: Session, user_card: BaseCard, post_date: Dat
     emi = (
         session.query(CardEmis)
         .filter(
-            CardEmis.loan_id == user_card.id,
+            CardEmis.loan_id == user_card.loan_id,
             CardEmis.due_date < post_date,
             CardEmis.row_status == "active",
         )
@@ -545,7 +545,7 @@ def adjust_atm_fee_in_emis(session: Session, user_card: BaseCard, post_date: Dat
     if not emi:
         emi = (
             session.query(CardEmis)
-            .filter(CardEmis.loan_id == user_card.id, CardEmis.row_status == "active")
+            .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
             .order_by(CardEmis.emi_number.asc())
             .first()
         )
@@ -672,7 +672,7 @@ def check_moratorium_eligibility(session: Session, data):
     user_card = get_user_card(session, user_id)
     emis = (
         session.query(CardEmis)
-        .filter(CardEmis.loan_id == user_card.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
         .all()
     )
@@ -728,7 +728,7 @@ def refresh_schedule(user_card: BaseCard):
         interest_due = bill.table.interest_to_charge
         last_emi = (
             session.query(CardEmis)
-            .filter(CardEmis.loan_id == user_card.id, CardEmis.row_status == "active")
+            .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
             .order_by(CardEmis.due_date.desc())
             .first()
         )
@@ -943,7 +943,7 @@ def update_event_with_dpd(user_card: BaseCard, post_date: DateTime = None) -> No
     # TODO Introduce schedule level updation when this converts to a DAG system
     # all_emis = (
     #     session.query(CardEmis)
-    #     .filter(CardEmis.loan_id == user_card.id, CardEmis.row_status == "active")
+    #     .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
     #     .order_by(CardEmis.emi_number.asc())
     #     .all()
     # )
