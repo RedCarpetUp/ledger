@@ -168,7 +168,7 @@ def payment_received_event(
                 # settling medical limit
                 health_limit_assignment_event(
                     session=session,
-                    card_id=user_card.id,
+                    loan_id=user_card.loan_id,
                     event=event,
                     amount=settlement_limit["medical"],
                     limit_str="health_limit",
@@ -177,7 +177,7 @@ def payment_received_event(
                 # settling non medical limit
                 health_limit_assignment_event(
                     session=session,
-                    card_id=user_card.id,
+                    loan_id=user_card.loan_id,
                     event=event,
                     amount=settlement_limit["non_medical"],
                     limit_str="available_limit",
@@ -466,19 +466,19 @@ def daily_dpd_event(session: Session, user_card: BaseCard) -> None:
     from rush.utils import get_current_ist_time
 
     event = LedgerTriggerEvent(
-        name="daily_dpd", post_date=get_current_ist_time(), card_id=user_card.id, amount=0
+        name="daily_dpd", post_date=get_current_ist_time(), loan_id=user_card.loan_id, amount=0
     )
     session.add(event)
     session.flush()
 
 
 def health_limit_assignment_event(
-    session: Session, card_id: int, event: LedgerTriggerEvent, amount: Decimal, limit_str: str
+    session: Session, loan_id: int, event: LedgerTriggerEvent, amount: Decimal, limit_str: str
 ) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
-        debit_book_str=f"{card_id}/card/{limit_str}/a",
-        credit_book_str=f"{card_id}/card/{limit_str}/l",
+        debit_book_str=f"{loan_id}/card/{limit_str}/a",
+        credit_book_str=f"{loan_id}/card/{limit_str}/l",
         amount=amount,
     )

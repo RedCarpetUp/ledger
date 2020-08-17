@@ -196,11 +196,12 @@ class User(AuditMixin):
 
 
 class Loan(AuditMixin):
-    __tablename__ = ("loan",)
+    __tablename__ = "loan"
     user_id = Column(Integer, ForeignKey(User.id))
     amortization_date = Column(TIMESTAMP, nullable=False)
     loan_status = Column(String(), nullable=False)
     product_id = Column(Integer, ForeignKey(Product.id))
+    row_status = Column(String(50), nullable=False, default="active")
 
 
 @py_dataclass
@@ -497,7 +498,7 @@ class LoanMoratorium(AuditMixin):
         v = (
             session.query(cls)
             .filter(
-                cls.card_id == loan_id,
+                cls.loan_id == loan_id,
                 date_to_check_against >= cls.start_date,
                 date_to_check_against <= cls.end_date,
             )
@@ -511,7 +512,7 @@ class Fee(AuditMixin):
 
     bill_id = Column(Integer, ForeignKey(LoanData.id), nullable=True)
     event_id = Column(Integer, ForeignKey(LedgerTriggerEvent.id), nullable=False)
-    card_id = Column(Integer, ForeignKey(UserCard.id), nullable=False)
+    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
     name = Column(String(30), nullable=False)
     net_amount = Column(Numeric, nullable=False)
     sgst_rate = Column(Numeric, nullable=False)
@@ -530,7 +531,7 @@ class EventDpd(AuditMixin):
     __tablename__ = "event_dpd"
 
     bill_id = Column(Integer, ForeignKey(LoanData.id), nullable=False)
-    card_id = Column(Integer, ForeignKey(UserCard.id), nullable=False)
+    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
     event_id = Column(Integer, ForeignKey(LedgerTriggerEvent.id), nullable=False)
     debit = Column(Numeric, nullable=True, default=Decimal(0))
     credit = Column(Numeric, nullable=True, default=Decimal(0))

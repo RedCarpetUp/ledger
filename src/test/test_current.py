@@ -243,12 +243,12 @@ def test_generate_bill_1(session: Session) -> None:
 
     update_event_with_dpd(user_card, parse_date("2020-05-21 00:05:00"))
 
-    dpd_events = session.query(EventDpd).filter_by(card_id=uc.id).all()
+    dpd_events = session.query(EventDpd).filter_by(loan_id=uc.loan_id).all()
     assert dpd_events[0].balance == Decimal(1000)
 
     interest_event = (
         session.query(LedgerTriggerEvent)
-        .filter_by(card_id=uc.id, name="accrue_interest")
+        .filter_by(loan_id=uc.loan_id, name="accrue_interest")
         .order_by(LedgerTriggerEvent.post_date.desc())
         .first()
     )
@@ -315,7 +315,7 @@ def _accrue_late_fine_bill_1(session: Session) -> None:
 
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == user_card.id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
@@ -666,7 +666,7 @@ def test_emi_creation(session: Session) -> None:
 
     all_emis = (
         session.query(CardEmis)
-        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == uc.id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
         .all()
     )  # Get the latest emi of that user.
@@ -726,7 +726,7 @@ def test_subsequent_emi_creation(session: Session) -> None:
 
     all_emis = (
         session.query(CardEmis)
-        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == uc.id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
         .all()
     )  # Get the latest emi of that user.
@@ -783,7 +783,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     # Check if emi is adjusted correctly in schedule
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == uc.id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
@@ -820,7 +820,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     # Check if amount is adjusted correctly in schedule
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == uc.id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
@@ -1239,7 +1239,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     # Check if amount is adjusted correctly in schedule
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == uc.id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
@@ -1285,7 +1285,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     # Check if amount is adjusted correctly in schedule
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == uc.id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
@@ -1298,7 +1298,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     event_date = parse_date("2020-08-21 00:05:00")
     update_event_with_dpd(user_card, event_date)
 
-    dpd_events = session.query(EventDpd).filter_by(card_id=uc.id).all()
+    dpd_events = session.query(EventDpd).filter_by(loan_id=uc.loan_id).all()
 
     last_entry_first_bill = dpd_events[54]
     last_entry_second_bill = dpd_events[52]
@@ -1651,7 +1651,7 @@ def test_prepayment(session: Session) -> None:
     # Check if amount is adjusted correctly in schedule
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == uc.id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
@@ -1682,7 +1682,7 @@ def test_prepayment(session: Session) -> None:
     # Check if amount is adjusted correctly in schedule
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == uc.id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
@@ -1702,7 +1702,7 @@ def test_prepayment(session: Session) -> None:
     bill_id = swipe["data"].loan_id
 
     emi_payment_mapping = (
-        session.query(EmiPaymentMapping).filter(EmiPaymentMapping.card_id == user_card_id).all()
+        session.query(EmiPaymentMapping).filter(EmiPaymentMapping.loan_id == user_card_id).all()
     )
     first_payment_mapping = emi_payment_mapping[0]
     assert first_payment_mapping.emi_number == 1
@@ -1892,7 +1892,7 @@ def test_moratorium(session: Session) -> None:
     # Check if amount is adjusted correctly in schedule
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == uc.id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
@@ -1904,7 +1904,7 @@ def test_moratorium(session: Session) -> None:
     # Check if scehdule has been updated according to moratorium
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == uc.id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
@@ -1987,7 +1987,7 @@ def test_refresh_schedule(session: Session) -> None:
     # Get emi list post few bill creations
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == uc.id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
@@ -2070,7 +2070,10 @@ def test_moratorium_schedule(session: Session) -> None:
 
     # Give moratorium to user
     m = LoanMoratorium.new(
-        session, card_id=uc.id, start_date=parse_date("2020-09-01"), end_date=parse_date("2020-12-01"),
+        session,
+        loan_id=uc.loan_id,
+        start_date=parse_date("2020-09-01"),
+        end_date=parse_date("2020-12-01"),
     )
 
     # Refresh schedule
@@ -2079,7 +2082,7 @@ def test_moratorium_schedule(session: Session) -> None:
     # Get list post refresh
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.card_id == uc.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == uc.id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
@@ -2128,7 +2131,7 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
 
     assert (
         LoanMoratorium.is_in_moratorium(
-            session, card_id=user_card.id, date_to_check_against=parse_date("2020-02-21")
+            session, loan_id=user_card.loan_id, date_to_check_against=parse_date("2020-02-21")
         )
         is False
     )
@@ -2138,14 +2141,14 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
     # Give moratorium
     m = LoanMoratorium.new(
         session,
-        card_id=user_card.id,
+        loan_id=user_card.loan_id,
         start_date=parse_date("2020-01-20"),
         end_date=parse_date("2020-03-20"),
     )
 
     assert (
         LoanMoratorium.is_in_moratorium(
-            session, card_id=user_card.id, date_to_check_against=parse_date("2020-02-21")
+            session, loan_id=user_card.loan_id, date_to_check_against=parse_date("2020-02-21")
         )
         is True
     )
@@ -2153,7 +2156,7 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
     # Date is outside the moratorium period
     assert (
         LoanMoratorium.is_in_moratorium(
-            session, card_id=user_card.id, date_to_check_against=parse_date("2020-03-21")
+            session, loan_id=user_card.loan_id, date_to_check_against=parse_date("2020-03-21")
         )
         is False
     )
@@ -2188,7 +2191,7 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
     # Give moratorium
     m = LoanMoratorium.new(
         session,
-        card_id=user_card.id,
+        loan_id=user_card.loan_id,
         start_date=parse_date("2020-04-01"),
         end_date=parse_date("2020-06-01"),
     )
@@ -2240,7 +2243,7 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
     # Get emi list post few bill creations
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == user_card.id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
         .all()
     )
@@ -2260,7 +2263,7 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
     # Get emi list post tenure extension
     all_emis = (
         session.query(CardEmis)
-        .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == user_card.id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
         .all()
     )

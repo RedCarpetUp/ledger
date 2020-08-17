@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
 from rush.card.base_card import BaseCard
@@ -11,7 +12,10 @@ from rush.card.ruby_card import (
     RubyBill,
     RubyCard,
 )
-from rush.models import UserCard
+from rush.models import (
+    Loan,
+    UserCard,
+)
 
 
 def get_user_card(session: Session, user_id: int, card_type: str = "ruby") -> BaseCard:
@@ -28,6 +32,15 @@ def get_user_card(session: Session, user_id: int, card_type: str = "ruby") -> Ba
 
 
 def create_user_card(session: Session, **kwargs) -> BaseCard:
+    loan = Loan(
+        user_id=kwargs["user_id"],
+        amortization_date=kwargs.get("card_activation_date", parse_date("2020-04-01").date()),
+    )
+    session.add(loan)
+    session.flush()
+
+    kwargs["loan_id"] = loan.id
+
     uc = UserCard(
         rc_rate_of_interest_monthly=Decimal(3), lender_rate_of_interest_annual=Decimal(18), **kwargs
     )

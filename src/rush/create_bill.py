@@ -69,7 +69,9 @@ def bill_generate(user_card: BaseCard) -> BaseBill:
         if bill["result"] == "error":
             return bill
         bill = bill["bill"]
-    lt = LedgerTriggerEvent(name="bill_generate", card_id=user_card.id, post_date=bill.bill_close_date)
+    lt = LedgerTriggerEvent(
+        name="bill_generate", loan_id=user_card.loan_id, post_date=bill.bill_close_date
+    )
     session.add(lt)
     session.flush()
 
@@ -129,7 +131,7 @@ def add_atm_fee(
     atm_fee_perc = Decimal(2)
     atm_fee_without_gst = mul(atm_transactions_amount / 100, atm_fee_perc)
 
-    event = LedgerTriggerEvent(name="atm_fee_added", card_id=bill.table.card_id, post_date=post_date)
+    event = LedgerTriggerEvent(name="atm_fee_added", loan_id=bill.table.loan_id, post_date=post_date)
     session.add(event)
     session.flush()
 

@@ -97,9 +97,9 @@ def upgrade() -> None:
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("row_status", sa.String(50), nullable=False),
-        sa.Column("interest_type", sa.String(30), nullable=False),
-        sa.Column("loan_status", sa.String(50), nullable=False),
-        sa.Column("product_id", sa.Integer(), nullable=False),
+        sa.Column("interest_type", sa.String(30), nullable=True), # TODO: change back to nullable=False
+        sa.Column("loan_status", sa.String(50), nullable=True), # TODO: change back to nullable=False
+        sa.Column("product_id", sa.Integer(), nullable=True), # TODO: change back to nullable=False
         sa.ForeignKeyConstraint(["product_id"], ["product.id"], name="fk_loan_product_id"),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -293,7 +293,7 @@ def upgrade() -> None:
         "emi_payment_mapping",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("performed_by", sa.Integer(), nullable=False),
-        sa.Column("card_id", sa.Integer(), nullable=True),
+        sa.Column("loan_id", sa.Integer(), nullable=True),
         sa.Column("emi_number", sa.Integer(), nullable=False),
         sa.Column("payment_date", sa.TIMESTAMP(), nullable=False),
         sa.Column("payment_request_id", sa.String(), nullable=False),
@@ -305,7 +305,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
-        sa.ForeignKeyConstraint(["card_id"], ["loan.id"], name="fk_emi_payment_mapping_loan_id"),
+        sa.ForeignKeyConstraint(["loan_id"], ["loan.id"], name="fk_emi_payment_mapping_loan_id"),
     )
 
     op.create_table(
@@ -325,7 +325,7 @@ def upgrade() -> None:
         "fee",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("performed_by", sa.Integer(), nullable=False),
-        sa.Column("card_id", sa.Integer(), nullable=False),
+        sa.Column("loan_id", sa.Integer(), nullable=False),
         sa.Column("event_id", sa.Integer(), nullable=False),
         sa.Column("bill_id", sa.Integer(), nullable=True),
         sa.Column("name", sa.String(30), nullable=False),
@@ -343,7 +343,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
-        sa.ForeignKeyConstraint(["card_id"], ["v3_user_cards.id"], name="fk_fee_card_id"),
+        sa.ForeignKeyConstraint(["loan_id"], ["loan.id"], name="fk_fee_card_id"),
         sa.ForeignKeyConstraint(["bill_id"], ["loan_data.id"], name="fk_fee_bill_id"),
         sa.ForeignKeyConstraint(["event_id"], ["ledger_trigger_event.id"], name="fk_fee_event_id"),
     )
@@ -352,7 +352,7 @@ def upgrade() -> None:
         "event_dpd",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("performed_by", sa.Integer(), nullable=False),
-        sa.Column("card_id", sa.Integer(), nullable=False),
+        sa.Column("loan_id", sa.Integer(), nullable=False),
         sa.Column("event_id", sa.Integer(), nullable=False),
         sa.Column("credit", sa.DECIMAL(), nullable=True),
         sa.Column("debit", sa.DECIMAL(), nullable=True),
@@ -363,7 +363,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
-        sa.ForeignKeyConstraint(["card_id"], ["v3_user_cards.id"], name="fk_event_dpd_card_id"),
+        sa.ForeignKeyConstraint(["loan_id"], ["loan.id"], name="fk_event_dpd_card_id"),
         sa.ForeignKeyConstraint(["event_id"], ["ledger_trigger_event.id"], name="fk_event_dpd_event_id"),
         sa.ForeignKeyConstraint(["bill_id"], ["loan_data.id"], name="fk_event_dpd_bill_id"),
     )
