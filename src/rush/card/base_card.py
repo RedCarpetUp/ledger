@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from rush.ledger_utils import (
     get_account_balance_from_str,
     get_remaining_bill_balance,
+    is_bill_closed,
 )
 from rush.models import (
     CardTransaction,
@@ -73,27 +74,7 @@ class BaseBill:
         return min_due
 
     def is_bill_closed(self, to_date: Optional[DateTime] = None) -> bool:
-        # Check if principal is paid. If not, return false.
-        _, principal_due = get_account_balance_from_str(
-            self.session, book_string=f"{self.id}/bill/principal_receivable/a", to_date=to_date
-        )
-        if principal_due != 0:
-            return False
-
-        # Check if interest is paid. If not, return false.
-        _, interest_due = get_account_balance_from_str(
-            self.session, book_string=f"{self.id}/bill/interest_receivable/a", to_date=to_date
-        )
-        if interest_due != 0:
-            return False
-
-        # Check if late fine is paid. If not, return false.
-        _, late_fine_due = get_account_balance_from_str(
-            self.session, book_string=f"{self.id}/bill/late_fine_receivable/a", to_date=to_date
-        )
-        if late_fine_due != 0:
-            return False
-        return True
+        return is_bill_closed(self.session, self.table, to_date)
 
     def sum_of_atm_transactions(self):
         atm_transactions_sum = (
@@ -117,6 +98,11 @@ class BaseCard:
         self.bill_class = bill_class
         self.table = user_card
         self.__dict__.update(user_card.__dict__)
+        self.multiple_limits = False
+
+    @staticmethod
+    def get_limit_type(mcc: str) -> str:
+        return "available_limit"
 
     def _convert_to_bill_class_decorator(func) -> BaseBill:
         def f(self):
@@ -135,7 +121,12 @@ class BaseCard:
         return self.bill_class(self.session, bill)
 
     def create_bill(
-        self, bill_start_date: Date, bill_close_date: Date, lender_id: int, is_generated: bool,
+        self,
+        bill_start_date: Date,
+        bill_close_date: Date,
+        bill_due_date: Date,
+        lender_id: int,
+        is_generated: bool,
     ) -> BaseBill:
         new_bill = LoanData(
             user_id=self.user_id,
@@ -143,7 +134,7 @@ class BaseCard:
             lender_id=lender_id,
             bill_start_date=bill_start_date,
             bill_close_date=bill_close_date,
-            bill_due_date=bill_start_date + relativedelta(days=self.table.interest_free_period_in_days),
+            bill_due_date=bill_due_date,
             is_generated=is_generated,
         )
         self.session.add(new_bill)
@@ -170,6 +161,19 @@ class BaseCard:
         )
         all_bills = [self.convert_to_bill_class(bill) for bill in all_bills]
         return all_bills
+
+    def get_last_unpaid_bill(self) -> BaseBill:
+        all_bills = (
+            self.session.query(LoanData)
+            .filter(LoanData.user_id == self.user_id)
+            .order_by(LoanData.bill_start_date)
+            .all()
+        )
+        all_bills = [self.convert_to_bill_class(bill) for bill in all_bills]
+        unpaid_bills = [bill for bill in all_bills if not bill.is_bill_closed()]
+        if unpaid_bills:
+            return unpaid_bills[0]
+        return None
 
     @_convert_to_bill_class_decorator
     def get_latest_generated_bill(self) -> BaseBill:

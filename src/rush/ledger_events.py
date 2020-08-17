@@ -1,5 +1,8 @@
 from decimal import Decimal
-from typing import List
+from typing import (
+    List,
+    Optional,
+)
 
 from sqlalchemy import Date
 from sqlalchemy.orm import Session
@@ -12,11 +15,13 @@ from rush.ledger_utils import (
 )
 from rush.models import (
     CardTransaction,
+    Fee,
     LedgerTriggerEvent,
     LoanData,
     UserCard,
 )
 from rush.recon.dmi_interest_on_portfolio import interest_on_dmi_portfolio
+from rush.utils import get_gst_split_from_amount
 
 
 def lender_disbursal_event(session: Session, event: LedgerTriggerEvent, lender_id: int) -> None:
@@ -39,7 +44,19 @@ def m2p_transfer_event(session: Session, event: LedgerTriggerEvent, lender_id: i
     )
 
 
-def card_transaction_event(session: Session, user_card: BaseCard, event: LedgerTriggerEvent) -> None:
+def disburse_money_to_card(session: Session, user_card: BaseCard, event: LedgerTriggerEvent) -> None:
+    create_ledger_entry_from_str(
+        session,
+        event_id=event.id,
+        debit_book_str=f"{user_card.table.id}/card/card_balance/a",
+        credit_book_str=f"{user_card.table.lender_id}/lender/pool_balance/a",
+        amount=event.amount,
+    )
+
+
+def card_transaction_event(
+    session: Session, user_card: BaseCard, event: LedgerTriggerEvent, mcc: Optional[str] = None
+) -> None:
     amount = Decimal(event.amount)
     user_card_id = user_card.id
     swipe_id = event.extra_details["swipe_id"]
@@ -51,12 +68,14 @@ def card_transaction_event(session: Session, user_card: BaseCard, event: LedgerT
     lender_id = bill.lender_id
     bill_id = bill.id
 
+    user_books_prefix_str = f"{user_card_id}/card/{user_card.get_limit_type(mcc=mcc)}"
+
     # Reduce user's card balance
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
-        debit_book_str=f"{user_card_id}/card/available_limit/l",
-        credit_book_str=f"{user_card_id}/card/available_limit/a",
+        debit_book_str=f"{user_books_prefix_str}/l",
+        credit_book_str=f"{user_books_prefix_str}/a",
         amount=amount,
     )
 
@@ -74,7 +93,7 @@ def card_transaction_event(session: Session, user_card: BaseCard, event: LedgerT
         session,
         event_id=event.id,
         debit_book_str=f"{bill_id}/bill/unbilled/a",
-        credit_book_str=f"{lender_id}/lender/pool_balance/a",
+        credit_book_str=f"{user_card.table.id}/card/card_balance/a",
         amount=amount,
     )
 
@@ -132,12 +151,37 @@ def payment_received_event(
         pass
     elif event.name == "payment_received":
         unpaid_bills = user_card.get_unpaid_bills()
+        actual_payment = payment_received
         payment_received = _adjust_for_min(
             session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str,
         )
         payment_received = _adjust_for_complete_bill(
             session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str,
         )
+
+        if user_card.multiple_limits:
+            if user_card.card_type == "health_card":
+                settlement_limit = user_card.get_split_payment(
+                    session=session, payment_amount=actual_payment
+                )
+
+                # settling medical limit
+                health_limit_assignment_event(
+                    session=session,
+                    card_id=user_card.id,
+                    event=event,
+                    amount=settlement_limit["medical"],
+                    limit_str="health_limit",
+                )
+
+                # settling non medical limit
+                health_limit_assignment_event(
+                    session=session,
+                    card_id=user_card.id,
+                    event=event,
+                    amount=settlement_limit["non_medical"],
+                    limit_str="available_limit",
+                )
 
     if payment_received > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
@@ -157,9 +201,9 @@ def payment_received_event(
     else:
         _adjust_lender_payable(session, user_card.id, debit_book_str, gateway_charges, event)
 
-    # Slide payment in emi
     from rush.create_emi import slide_payments
 
+    # Slide payment
     slide_payments(user_card=user_card, payment_event=event)
 
 
@@ -207,7 +251,65 @@ def _adjust_bill(
     event_id: int,
     debit_acc_str: str,
 ) -> Decimal:
-    def adjust(payment_to_adjust_from: Decimal, to_acc: str, from_acc: str) -> Decimal:
+    def adjust_for_revenue(payment_to_adjust_from: Decimal, debit_str: str, bill_fee: Fee) -> Decimal:
+        if bill_fee.name == "late_fee":
+            credit_book_str = f"{bill_fee.bill_id}/bill/late_fine/r"
+        elif bill_fee.name == "atm_fee":
+            credit_book_str = f"{bill_fee.bill_id}/bill/atm_fee/r"
+        fee_to_adjust = min(payment_to_adjust_from, bill_fee.gross_amount)
+        gst_split = get_gst_split_from_amount(
+            amount=fee_to_adjust,
+            sgst_rate=bill_fee.sgst_rate,
+            cgst_rate=bill_fee.cgst_rate,
+            igst_rate=bill_fee.igst_rate,
+        )
+        assert gst_split["gross_amount"] == fee_to_adjust
+        # Settle for net fee
+        create_ledger_entry_from_str(
+            session,
+            event_id=event_id,
+            debit_book_str=debit_str,
+            credit_book_str=credit_book_str,
+            amount=gst_split["net_amount"],
+        )
+        bill_fee.net_amount_paid = gst_split["net_amount"]
+
+        # Settle for cgst
+        create_ledger_entry_from_str(
+            session,
+            event_id=event_id,
+            debit_book_str=debit_str,
+            credit_book_str="12345/redcarpet/cgst_payable/l",
+            amount=gst_split["cgst"],
+        )
+        bill_fee.cgst_paid = gst_split["cgst"]
+
+        # Settle for sgst
+        create_ledger_entry_from_str(
+            session,
+            event_id=event_id,
+            debit_book_str=debit_str,
+            credit_book_str="12345/redcarpet/sgst_payable/l",
+            amount=gst_split["sgst"],
+        )
+        bill_fee.sgst_paid = gst_split["sgst"]
+
+        # Settle for igst
+        create_ledger_entry_from_str(
+            session,
+            event_id=event_id,
+            debit_book_str=debit_str,
+            credit_book_str="12345/redcarpet/igst_payable/l",
+            amount=gst_split["igst"],
+        )
+        bill_fee.igst_paid = gst_split["igst"]
+
+        bill_fee.gross_amount_paid = gst_split["gross_amount"]
+        if bill_fee.gross_amount == bill_fee.gross_amount_paid:
+            bill_fee.fee_status = "PAID"
+        return payment_to_adjust_from - fee_to_adjust
+
+    def adjust_for_receivable(payment_to_adjust_from: Decimal, to_acc: str, from_acc: str) -> Decimal:
         if payment_to_adjust_from <= 0:
             return payment_to_adjust_from
         _, book_balance = get_account_balance_from_str(session, book_string=from_acc)
@@ -223,21 +325,15 @@ def _adjust_bill(
             payment_to_adjust_from -= balance_to_adjust
         return payment_to_adjust_from
 
-    # Now adjust into other accounts.
-    remaining_amount = adjust(
-        amount_to_adjust_in_this_bill,
-        to_acc=debit_acc_str,  # f"{bill.lender_id}/lender/pg_account/a"
-        from_acc=f"{bill.id}/bill/atm_fee_receivable/a",
-    )
-    remaining_amount = adjust(
-        remaining_amount,
-        to_acc=debit_acc_str,  # f"{bill.lender_id}/lender/pg_account/a"
-        from_acc=f"{bill.id}/bill/late_fine_receivable/a",
-    )
-    remaining_amount = adjust(
+    remaining_amount = amount_to_adjust_in_this_bill
+    fees = session.query(Fee).filter(Fee.bill_id == bill.id, Fee.fee_status == "UNPAID").all()
+    for fee in fees:
+        remaining_amount = adjust_for_revenue(remaining_amount, debit_acc_str, fee)
+
+    remaining_amount = adjust_for_receivable(
         remaining_amount, to_acc=debit_acc_str, from_acc=f"{bill.id}/bill/interest_receivable/a",
     )
-    remaining_amount = adjust(
+    remaining_amount = adjust_for_receivable(
         remaining_amount, to_acc=debit_acc_str, from_acc=f"{bill.id}/bill/principal_receivable/a",
     )
     return remaining_amount
@@ -310,19 +406,6 @@ def accrue_interest_event(
     )
 
 
-def accrue_late_fine_event(session: Session, bill: LoanData, event: LedgerTriggerEvent) -> None:
-    create_ledger_entry_from_str(
-        session,
-        event_id=event.id,
-        debit_book_str=f"{bill.id}/bill/late_fine_receivable/a",
-        credit_book_str=f"{bill.id}/bill/late_fine/r",
-        amount=event.amount,
-    )
-
-    # Add into min amount of the bill too.
-    add_min_amount_event(session, bill, event, event.amount)
-
-
 def lender_interest_incur_event(
     session: Session, from_date: Date, to_date: Date, event: LedgerTriggerEvent
 ) -> None:
@@ -379,18 +462,23 @@ def limit_assignment_event(session: Session, card_id: int, event: LedgerTriggerE
     )
 
 
-def atm_fee_event(
-    session: Session, user_card: BaseCard, bill: BaseBill, event: LedgerTriggerEvent
+def daily_dpd_event(session: Session, user_card: BaseCard) -> None:
+    from rush.utils import get_current_ist_time
+
+    event = LedgerTriggerEvent(
+        name="daily_dpd", post_date=get_current_ist_time(), card_id=user_card.id, amount=0
+    )
+    session.add(event)
+    session.flush()
+
+
+def health_limit_assignment_event(
+    session: Session, card_id: int, event: LedgerTriggerEvent, amount: Decimal, limit_str: str
 ) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
-        debit_book_str=f"{bill.id}/bill/atm_fee_receivable/a",
-        credit_book_str=f"{bill.id}/bill/atm_fee_accrued/r",
-        amount=Decimal(event.amount),
+        debit_book_str=f"{card_id}/card/{limit_str}/a",
+        credit_book_str=f"{card_id}/card/{limit_str}/l",
+        amount=amount,
     )
-
-    # Adjust atm fee in emis
-    from rush.create_emi import adjust_atm_fee_in_emis
-
-    adjust_atm_fee_in_emis(session, user_card, event.post_date)
