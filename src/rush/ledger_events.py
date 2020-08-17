@@ -53,7 +53,7 @@ def disburse_money_to_card(session: Session, user_card: BaseCard, event: LedgerT
         amount=event.amount,
     )
 
-    
+
 def card_transaction_event(
     session: Session, user_card: BaseCard, event: LedgerTriggerEvent, mcc: Optional[str] = None
 ) -> None:

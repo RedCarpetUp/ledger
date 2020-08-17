@@ -64,6 +64,6 @@ def create_card_swipe(
 
     if isinstance(user_card, RubyCard):  # Need to load card balance at every swipe.
         disburse_money_to_card(session, user_card, lt)
- 
+
     card_transaction_event(session=session, user_card=user_card, event=lt, mcc=mcc)
     return {"result": "success", "data": swipe}
