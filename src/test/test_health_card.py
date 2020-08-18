@@ -102,15 +102,15 @@ def test_medical_health_card_swipe(session: Session) -> None:
     _, unbilled_balance = get_account_balance_from_str(session, f"{swipe_loan_id}/bill/unbilled/a")
     assert unbilled_balance == 700
 
-    _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.id}/card/health_limit/l")
+    _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")
     assert medical_limit_balance == -700
 
     _, non_medical_limit_balance = get_account_balance_from_str(
-        session, f"{uc.id}/card/available_limit/l"
+        session, f"{uc.loan_id}/card/available_limit/l"
     )
     assert non_medical_limit_balance == 0
 
-    _, lender_payable = get_account_balance_from_str(session, f"{uc.id}/card/lender_payable/l")
+    _, lender_payable = get_account_balance_from_str(session, f"{uc.loan_id}/card/lender_payable/l")
     assert lender_payable == 700
 
 
@@ -146,15 +146,15 @@ def test_mixed_health_card_swipe(session: Session) -> None:
     _, unbilled_balance = get_account_balance_from_str(session, f"{swipe_loan_id}/bill/unbilled/a")
     assert unbilled_balance == 2200
 
-    _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.id}/card/health_limit/l")
+    _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")
     assert medical_limit_balance == -1500
 
     _, non_medical_limit_balance = get_account_balance_from_str(
-        session, f"{uc.id}/card/available_limit/l"
+        session, f"{uc.loan_id}/card/available_limit/l"
     )
     assert non_medical_limit_balance == -700
 
-    _, lender_payable = get_account_balance_from_str(session, f"{uc.id}/card/lender_payable/l")
+    _, lender_payable = get_account_balance_from_str(session, f"{uc.loan_id}/card/lender_payable/l")
     assert lender_payable == 2200
 
 
@@ -379,11 +379,11 @@ def test_mixed_payment_received(session: Session) -> None:
     )
     assert interest_due == Decimal("75.67")
 
-    _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.id}/card/health_limit/l")
+    _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")
     assert medical_limit_balance == -1000
 
     _, non_medical_limit_balance = get_account_balance_from_str(
-        session, f"{uc.id}/card/available_limit/l"
+        session, f"{uc.loan_id}/card/available_limit/l"
     )
     assert non_medical_limit_balance == -1500
 
@@ -398,11 +398,11 @@ def test_mixed_payment_received(session: Session) -> None:
         payment_request_id="mixed_payment",
     )
 
-    _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.id}/card/health_limit/l")
+    _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")
     assert medical_limit_balance == Decimal(0)
 
     _, non_medical_limit_balance = get_account_balance_from_str(
-        session, f"{uc.id}/card/available_limit/l"
+        session, f"{uc.loan_id}/card/available_limit/l"
     )
     assert non_medical_limit_balance == -500
 
@@ -455,11 +455,11 @@ def test_medical_payment_received(session: Session) -> None:
     )
     assert interest_due == Decimal("30.67")
 
-    _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.id}/card/health_limit/l")
+    _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")
     assert medical_limit_balance == -1000
 
     _, non_medical_limit_balance = get_account_balance_from_str(
-        session, f"{uc.id}/card/available_limit/l"
+        session, f"{uc.loan_id}/card/available_limit/l"
     )
     assert non_medical_limit_balance == Decimal(0)
 
@@ -471,11 +471,11 @@ def test_medical_payment_received(session: Session) -> None:
         payment_request_id="medical_payment",
     )
 
-    _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.id}/card/health_limit/l")
+    _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")
     assert medical_limit_balance == Decimal(-300)
 
     _, non_medical_limit_balance = get_account_balance_from_str(
-        session, f"{uc.id}/card/available_limit/l"
+        session, f"{uc.loan_id}/card/available_limit/l"
     )
     assert non_medical_limit_balance == Decimal(0)
 
@@ -527,11 +527,11 @@ def test_non_medical_payment_received(session: Session) -> None:
     )
     assert interest_due == Decimal("45")
 
-    _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.id}/card/health_limit/l")
+    _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")
     assert medical_limit_balance == Decimal(0)
 
     _, non_medical_limit_balance = get_account_balance_from_str(
-        session, f"{uc.id}/card/available_limit/l"
+        session, f"{uc.loan_id}/card/available_limit/l"
     )
     assert non_medical_limit_balance == -1500
 
@@ -546,10 +546,10 @@ def test_non_medical_payment_received(session: Session) -> None:
         payment_request_id="non_medical_payment",
     )
 
-    _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.id}/card/health_limit/l")
+    _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")
     assert medical_limit_balance == Decimal(0)
 
     _, non_medical_limit_balance = get_account_balance_from_str(
-        session, f"{uc.id}/card/available_limit/l"
+        session, f"{uc.loan_id}/card/available_limit/l"
     )
     assert non_medical_limit_balance == -300

@@ -10,6 +10,7 @@ from rush.models import (
 )
 from rush.utils import div
 
+
 class BaseLoan:
     session: Session = None
 
@@ -46,13 +47,15 @@ class BaseLoan:
         event = LedgerTriggerEvent(
             performed_by=kwargs["user_id"],
             name="Tenure loan Disbursal",
-            card_id=None,
+            loan_id=kwargs["loan_id"],
             post_date=kwargs["bill_start_date"],
             amount=kwargs["amount"],
         )
         session.add(event)
         session.flush()
 
-        term_loan_creation_event(session=session, loan=loan_data, event=event, lender_id=kwargs["lender_id"])
+        term_loan_creation_event(
+            session=session, loan=loan_data, event=event, lender_id=kwargs["lender_id"]
+        )
 
         return loan_data
