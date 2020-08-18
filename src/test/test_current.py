@@ -738,7 +738,7 @@ def test_subsequent_emi_creation(session: Session) -> None:
     assert last_emi.due_amount == 500
     assert second_emi.due_amount == 1000
     assert last_emi.emi_number == 13
-    assert last_emi.due_date.strftime("%Y-%m-%d") == "2021-05-25"
+    assert last_emi.due_date.strftime("%Y-%m-%d") == "2021-05-15"
 
 
 def test_schedule_for_interest_and_payment(session: Session) -> None:
@@ -788,8 +788,8 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
     first_emi = emis_dict[0]
-    assert first_emi["interest_current_month"] == 84
-    assert first_emi["interest_next_month"] == 96
+    assert first_emi["interest_current_month"] == 90
+    assert first_emi["interest_next_month"] == 90
 
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{uc.id}/card/lender_payable/l"
@@ -825,7 +825,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
 
-    assert emis_dict[0]["due_date"] == parse_date("2020-06-16").date()
+    assert emis_dict[0]["due_date"] == parse_date("2020-06-15").date()
     assert emis_dict[0]["total_due_amount"] == 680
     assert emis_dict[0]["due_amount"] == 500
     assert emis_dict[0]["total_closing_balance"] == 6000
@@ -833,9 +833,9 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     assert emis_dict[0]["interest_received"] == 180
     assert emis_dict[0]["payment_received"] == 500
     assert emis_dict[0]["interest"] == 180
-    assert emis_dict[0]["interest_current_month"] == 84
-    assert emis_dict[0]["interest_next_month"] == 96
-    assert emis_dict[1]["due_date"] == parse_date("2020-07-17").date()
+    assert emis_dict[0]["interest_current_month"] == 90
+    assert emis_dict[0]["interest_next_month"] == 90
+    assert emis_dict[1]["due_date"] == parse_date("2020-07-15").date()
     assert emis_dict[1]["total_due_amount"] == 680
     assert emis_dict[1]["due_amount"] == 500
     assert emis_dict[1]["total_closing_balance"] == 5500
@@ -843,9 +843,9 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     assert emis_dict[1]["interest_received"] == 180
     assert emis_dict[1]["payment_received"] == 500
     assert emis_dict[1]["interest"] == 180
-    assert emis_dict[1]["interest_current_month"] == 78
-    assert emis_dict[1]["interest_next_month"] == 102
-    assert emis_dict[2]["due_date"] == parse_date("2020-08-17").date()
+    assert emis_dict[1]["interest_current_month"] == 90
+    assert emis_dict[1]["interest_next_month"] == 90
+    assert emis_dict[2]["due_date"] == parse_date("2020-08-15").date()
     assert emis_dict[2]["total_due_amount"] == 5000
     assert emis_dict[2]["due_amount"] == 5000
     assert emis_dict[2]["total_closing_balance"] == 0
@@ -855,7 +855,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     assert emis_dict[2]["interest"] == 0
     assert emis_dict[2]["interest_current_month"] == 0
     assert emis_dict[2]["interest_next_month"] == 0
-    assert emis_dict[3]["due_date"] == parse_date("2020-09-17").date()
+    assert emis_dict[3]["due_date"] == parse_date("2020-09-15").date()
     assert emis_dict[3]["total_due_amount"] == 0
     assert emis_dict[3]["due_amount"] == 0
     assert emis_dict[3]["total_closing_balance"] == 0
