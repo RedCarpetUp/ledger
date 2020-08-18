@@ -482,3 +482,24 @@ def health_limit_assignment_event(
         credit_book_str=f"{loan_id}/card/{limit_str}/l",
         amount=amount,
     )
+
+
+def term_loan_creation_event(
+    session: Session, loan: LoanData, event: LedgerTriggerEvent, lender_id: int
+) -> None:
+    create_ledger_entry_from_str(
+        session,
+        event_id=event.id,
+        debit_book_str=f"{lender_id}/lender/lender_capital/l",
+        credit_book_str=f"{loan.loan_id}/loan/lender_payable/l",
+        amount=event.amount,
+    )
+
+    # Reduce money from lender's pool account
+    create_ledger_entry_from_str(
+        session,
+        event_id=event.id,
+        debit_book_str=f"{loan.loan_id}/bill/billed/a",
+        credit_book_str=f"{lender_id}/lender/pool_balance/a",
+        amount=event.amount,
+    )
