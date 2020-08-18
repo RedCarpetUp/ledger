@@ -9,6 +9,7 @@ from sqlalchemy.orm import (
     aliased,
 )
 from sqlalchemy.sql import func
+from sqlalchemy.orm.attributes import flag_modified
 
 from rush.anomaly_detection import get_payment_events
 from rush.card import (
@@ -114,6 +115,7 @@ def add_emi_on_new_bill(
     atm_fee_due: Decimal = None,
     post_date: DateTime = None,
     bill_accumalation_till_date: Decimal = None,
+    last_old_bill_emi_number: int = None,
 ) -> None:
     last_emi_number = last_emi.emi_number
     bill_tenure = bill.table.bill_tenure
@@ -137,12 +139,8 @@ def add_emi_on_new_bill(
         difference_counter = bill_number
     else:
         principal_due = Decimal(bill.table.principal - bill_accumalation_till_date)
-        due_amount = (
-            div(principal_due, bill_tenure - last_emi.emi_number)
-            if bill_tenure - last_emi.emi_number > 0
-            else bill.table.principal_instalment
-        )
-        difference_counter = bill_number
+        due_amount = div(principal_due, bill_tenure - last_old_bill_emi_number)
+        difference_counter = last_old_bill_emi_number + 1
 
     for emi in all_emis:
         # We consider 12 because the first insertion had 12 emis
@@ -163,7 +161,8 @@ def add_emi_on_new_bill(
             mul(due_amount, (emi.emi_number - difference_counter))
         )
         emi.payment_status = "UnPaid"
-        emi.extra_details.update({str(bill.id): str(due_amount)})
+        emi.extra_details[str(bill.id)] = str(due_amount)
+        flag_modified(emi, "extra_details")
         if interest:
             emi.total_closing_balance_post_due_date += interest
             emi.total_due_amount = (
@@ -816,6 +815,8 @@ def refresh_schedule(user_card: BaseCard, post_date: DateTime = None):
                 atm_fee_due,
                 post_date,
                 bill_accumalation_till_date,
+                # The last old bill emi number can only exist in case of post date existence
+                pre_post_date_emis[-1].emi_number if post_date else 0,
             )
         bill_number += 1
 
