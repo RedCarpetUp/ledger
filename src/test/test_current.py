@@ -2252,10 +2252,75 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
 
 
 def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
-    test_moratorium_live_user_1836540(session)
-    user_card = get_user_card(session, 1836540)
+    test_lenders(session)
+    card_db_updates(session)
+
+    a = User(id=1836540, performed_by=123,)
+    session.add(a)
+    session.flush()
+
+    # assign card
+    user_card = create_user_card(
+        session=session,
+        card_type="ruby",
+        user_id=a.id,
+        # 16th March actual
+        card_activation_date=parse_date("2020-03-01").date(),
+        lender_id=62311,
+    )
+
+    create_card_swipe(
+        session=session,
+        user_card=user_card,
+        txn_time=parse_date("2020-03-19 21:33:53"),
+        amount=Decimal(10),
+        description="TRUEBALANCE IO         GURGAON       IND",
+    )
+
+    create_card_swipe(
+        session=session,
+        user_card=user_card,
+        txn_time=parse_date("2020-03-24 14:01:35"),
+        amount=Decimal(100),
+        description="PAY*TRUEBALANCE IO     GURGAON       IND",
+    )
+
+    uc = get_user_card(session, a.id)
+    bill_march = bill_generate(uc)
+
+    create_card_swipe(
+        session=session,
+        user_card=user_card,
+        txn_time=parse_date("2020-04-03 17:41:43"),
+        amount=Decimal(4),
+        description="TRUEBALANCE IO         GURGAON       IND",
+    )
+
+    create_card_swipe(
+        session=session,
+        user_card=user_card,
+        txn_time=parse_date("2020-04-12 22:02:47"),
+        amount=Decimal(52),
+        description="PAYU PAYMENTS PVT LTD  0001243054000 IND",
+    )
+
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(session, bill_march.table.bill_due_date + relativedelta(days=1), uc)
+
+    bill_april = bill_generate(uc)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(session, bill_april.table.bill_due_date + relativedelta(days=1), uc)
+
+    # Get emi list post few bill creations
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.emi_number.asc())
+        .all()
+    )
+
     # Extend tenure to 18 months
-    extend_tenure(session, user_card, 18)
+    extend_tenure(session, uc, 18, parse_date("2020-05-22 22:02:47"))
 
     # Get emi list post tenure extension
     all_emis = (
@@ -2268,11 +2333,11 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
     last_emi = all_emis[-1]
     second_last_emi = all_emis[-2]
     # 110/18 = 6.11 + 56/18 = 3.11 == 9.22
-    assert second_last_emi.due_amount == Decimal("9.22")
+    assert second_last_emi.due_amount == Decimal("8.84")
     # 56/18 = 3.11
     assert last_emi.due_amount == Decimal("3.11")
     # First cycle 18 emis, next bill 19 emis, 2 because of moratorium == 21
-    assert last_emi.emi_number == 21
+    assert last_emi.emi_number == 19
 
 
 def test_intermediate_bill_generation(session: Session) -> None:

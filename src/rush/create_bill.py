@@ -12,6 +12,7 @@ from rush.ledger_utils import get_account_balance_from_str
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
     LedgerTriggerEvent,
+    LoanData,
     LoanMoratorium,
 )
 from rush.utils import (
@@ -106,9 +107,28 @@ def bill_generate(user_card: BaseCard) -> BaseBill:
     return bill
 
 
-def extend_tenure(session: Session, user_card: BaseCard, new_tenure: int) -> None:
-    unpaid_bills = user_card.get_unpaid_bills()
-    for bill in unpaid_bills:
+def extend_tenure(
+    session: Session, user_card: BaseCard, new_tenure: int, post_date: DateTime, bill_id: int = None
+) -> None:
+    list_of_bills = []
+    if not bill_id:
+        unpaid_bills = user_card.get_unpaid_bills()
+        for bill in unpaid_bills:
+            list_of_bills.append(bill.id)
+            bill.table.bill_tenure = new_tenure
+            principal_instalment = div(bill.table.principal, bill.table.bill_tenure)
+            # Update the bill rows here
+            bill.table.principal_instalment = principal_instalment
+            bill.table.interest_to_charge = bill.get_interest_to_charge(
+                user_card.table.rc_rate_of_interest_monthly
+            )
+    else:
+        bill = (
+            session.query(LoanData)
+            .filter(LoanData.card_id == user_card.id, LoanData.id == bill_id)
+            .first()
+        )
+        list_of_bills.append(bill.id)
         bill.table.bill_tenure = new_tenure
         principal_instalment = div(bill.table.principal, bill.table.bill_tenure)
         # Update the bill rows here
@@ -116,11 +136,20 @@ def extend_tenure(session: Session, user_card: BaseCard, new_tenure: int) -> Non
         bill.table.interest_to_charge = bill.get_interest_to_charge(
             user_card.table.rc_rate_of_interest_monthly
         )
+
+    event = LedgerTriggerEvent(
+        name="tenure_extended",
+        card_id=user_card.id,
+        post_date=post_date,
+        extra_details={"bills": list_of_bills},
+    )
+    session.add(event)
     session.flush()
+
     # Refresh the schedule
     from rush.create_emi import refresh_schedule
 
-    refresh_schedule(user_card)
+    refresh_schedule(user_card, post_date)
 
 
 def add_atm_fee(
