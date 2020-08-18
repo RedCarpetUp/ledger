@@ -53,6 +53,7 @@ from rush.models import (
     Lenders,
     LoanData,
     LoanMoratorium,
+    Product,
     User,
     UserPy,
 )
@@ -80,7 +81,15 @@ def test_current(get_alembic: alembic.config.Config) -> None:
     # assert output == ""
 
 
+def create_products(session: Session) -> None:
+    ruby_product = Product(product_name="ruby")
+    session.add(ruby_product)
+    session.flush()
+
+
 def card_db_updates(session: Session) -> None:
+    create_products(session=session)
+
     cn = CardNames(name="ruby")
     session.add(cn)
     session.flush()

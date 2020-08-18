@@ -93,13 +93,13 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("performed_by", sa.Integer(), nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=True),
-        sa.Column("amortization_date", sa.Date(), nullable=False),
+        sa.Column("amortization_date", sa.Date(), nullable=True),  # TODO: change back to nullable=False
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("row_status", sa.String(50), nullable=False),
         sa.Column("interest_type", sa.String(30), nullable=True),  # TODO: change back to nullable=False
         sa.Column("loan_status", sa.String(50), nullable=True),  # TODO: change back to nullable=False
-        sa.Column("product_id", sa.Integer(), nullable=True),  # TODO: change back to nullable=False
+        sa.Column("product_id", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(["product_id"], ["product.id"], name="fk_loan_product_id"),
         sa.PrimaryKeyConstraint("id"),
     )

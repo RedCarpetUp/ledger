@@ -17,13 +17,22 @@ from rush.models import (
     CardKitNumbers,
     CardNames,
     Lenders,
+    Product,
     User,
 )
 from rush.payments import payment_received
 from rush.recon.revenue_earned import get_revenue_earned_in_a_period
 
 
+def create_products(session: Session) -> None:
+    ruby_product = Product(product_name="ruby")
+    session.add(ruby_product)
+    session.flush()
+
+
 def card_db_updates(session: Session) -> None:
+    create_products(session=session)
+
     cn = CardNames(name="ruby")
     session.add(cn)
     session.flush()

@@ -14,6 +14,7 @@ from rush.models import (
     CardNames,
     CardTransaction,
     Lenders,
+    Product,
     User,
 )
 from rush.payments import payment_received
@@ -28,7 +29,15 @@ def create_lenders(session: Session) -> None:
     session.flush()
 
 
+def create_products(session: Session) -> None:
+    hc_product = Product(product_name="health_card")
+    session.add(hc_product)
+    session.flush()
+
+
 def card_db_updates(session: Session) -> None:
+    create_products(session=session)
+
     cn = CardNames(name="ruby")
     session.add(cn)
     session.flush()

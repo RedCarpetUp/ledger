@@ -12,6 +12,7 @@ from rush.card.ruby_card import (
     RubyBill,
     RubyCard,
 )
+from rush.card.utils import get_product_id_from_card_type
 from rush.models import (
     Loan,
     UserCard,
@@ -34,7 +35,7 @@ def get_user_card(session: Session, user_id: int, card_type: str = "ruby") -> Ba
 def create_user_card(session: Session, **kwargs) -> BaseCard:
     loan = Loan(
         user_id=kwargs["user_id"],
-        amortization_date=kwargs.get("card_activation_date", parse_date("2020-04-01").date()),
+        product_id=get_product_id_from_card_type(session=session, card_type=kwargs["card_type"]),
     )
     session.add(loan)
     session.flush()
