@@ -158,7 +158,7 @@ def test_card_swipe(session: Session) -> None:
         card_type="ruby",
         lender_id=62311,
     )
-    user_card_id = uc.id
+    user_card_id = uc.loan_id
 
     swipe1 = create_card_swipe(
         session=session,
@@ -538,7 +538,7 @@ def _generate_bill_2(session: Session) -> None:
     )
 
     _, user_card_balance = get_account_balance_from_str(
-        session=session, book_string=f"{uc.id}/card/available_limit/a"
+        session=session, book_string=f"{uc.loan_id}/card/available_limit/a"
     )
     assert user_card_balance == Decimal(-3000)
 
@@ -675,7 +675,7 @@ def test_emi_creation(session: Session) -> None:
 
     all_emis = (
         session.query(CardEmis)
-        .filter(CardEmis.loan_id == uc.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == uc.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
         .all()
     )  # Get the latest emi of that user.
@@ -735,7 +735,7 @@ def test_subsequent_emi_creation(session: Session) -> None:
 
     all_emis = (
         session.query(CardEmis)
-        .filter(CardEmis.loan_id == uc.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == uc.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
         .all()
     )  # Get the latest emi of that user.
@@ -792,7 +792,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     # Check if emi is adjusted correctly in schedule
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.loan_id == uc.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == uc.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
@@ -801,7 +801,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     assert first_emi["interest_next_month"] == 96
 
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{uc.id}/card/lender_payable/l"
+        session, book_string=f"{uc.loan_id}/card/lender_payable/l"
     )
     assert lender_payable == Decimal("6000")
 
@@ -819,7 +819,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{uc.id}/card/lender_payable/l"
+        session, book_string=f"{uc.loan_id}/card/lender_payable/l"
     )
     assert lender_payable == Decimal("-359.5")
 
@@ -829,7 +829,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     # Check if amount is adjusted correctly in schedule
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.loan_id == uc.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == uc.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
@@ -1248,13 +1248,13 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     # Check if amount is adjusted correctly in schedule
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.loan_id == uc.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == uc.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
 
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{uc.id}/card/lender_payable/l"
+        session, book_string=f"{uc.loan_id}/card/lender_payable/l"
     )
     assert lender_payable == Decimal("20672.03")
 
@@ -1294,7 +1294,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     # Check if amount is adjusted correctly in schedule
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.loan_id == uc.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == uc.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
@@ -1584,10 +1584,10 @@ def test_lender_incur(session: Session) -> None:
     lender_interest_incur(
         session, from_date=parse_date("2020-06-01").date(), to_date=parse_date("2020-06-30").date()
     )
-    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.loan_id}/card/lender_payable/l")
     assert amount == Decimal("2511.65")
 
-    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_interest/e")
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.loan_id}/card/lender_interest/e")
     assert amount == Decimal("11.65")
 
     swipe = create_card_swipe(
@@ -1600,9 +1600,9 @@ def test_lender_incur(session: Session) -> None:
     lender_interest_incur(
         session, from_date=parse_date("2020-07-01").date(), to_date=parse_date("2020-07-31").date()
     )
-    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_interest/e")
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.loan_id}/card/lender_interest/e")
     assert amount == Decimal("51.81")
-    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.loan_id}/card/lender_payable/l")
     assert amount == Decimal("4051.81")
 
 
@@ -1645,28 +1645,28 @@ def test_lender_incur_two(session: Session) -> None:
     lender_interest_incur(
         session, from_date=parse_date("2020-07-01").date(), to_date=parse_date("2020-07-31").date()
     )
-    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_payable/l")
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.loan_id}/card/lender_payable/l")
     assert amount == Decimal("1000.99")
 
-    _, amount = get_account_balance_from_str(session, book_string=f"{uc.id}/card/lender_interest/e")
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.loan_id}/card/lender_interest/e")
     assert amount == Decimal("0.99")
 
 
 def test_prepayment(session: Session) -> None:
     test_generate_bill_1(session)
     uc = get_user_card(session, 99)
-    user_card_id = uc.id
+    user_card_id = uc.loan_id
 
     # Check if amount is adjusted correctly in schedule
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.loan_id == uc.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == uc.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
 
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{uc.id}/card/lender_payable/l"
+        session, book_string=f"{uc.loan_id}/card/lender_payable/l"
     )
     assert lender_payable == Decimal("1000")
 
@@ -1684,14 +1684,14 @@ def test_prepayment(session: Session) -> None:
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{uc.id}/card/lender_payable/l"
+        session, book_string=f"{uc.loan_id}/card/lender_payable/l"
     )
     assert lender_payable == Decimal("-999.5")
 
     # Check if amount is adjusted correctly in schedule
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.loan_id == uc.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == uc.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
@@ -1752,7 +1752,7 @@ def test_prepayment(session: Session) -> None:
 #         session=session, user_id=a.id, card_activation_date=parse_date("2020-03-02"), card_type="ruby", lender_id = 62311,
 #     )
 #
-#     user_card_id = uc.id
+#     user_card_id = uc.loan_id
 #
 #     swipe = create_card_swipe(
 #         session=session,
@@ -1821,7 +1821,7 @@ def test_prepayment(session: Session) -> None:
 #         payment_date=parse_date("2020-07-01"),
 #         payment_request_id="abcde",
 #     )
-#     user_card_id = uc.id
+#     user_card_id = uc.loan_id
 #     _, writeoff_amount = get_account_balance_from_str(
 #         session, book_string=f"{user_card_id}/card/writeoff_expenses/e"
 #     )
@@ -1837,7 +1837,7 @@ def test_prepayment(session: Session) -> None:
 # def test_writeoff_recovery_two(session: Session) -> None:
 #     test_writeoff(session)
 #     uc = get_user_card(session, 99)
-#     user_card_id = uc.id
+#     user_card_id = uc.loan_id
 #
 #     payment_received(
 #         session, uc, Decimal("3000"), payment_date=parse_date("2020-07-01"), payment_request_id="abcde",
@@ -1901,7 +1901,7 @@ def test_moratorium(session: Session) -> None:
     # Check if amount is adjusted correctly in schedule
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.loan_id == uc.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == uc.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
@@ -1913,7 +1913,7 @@ def test_moratorium(session: Session) -> None:
     # Check if scehdule has been updated according to moratorium
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.loan_id == uc.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == uc.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
@@ -1952,7 +1952,7 @@ def test_refresh_schedule(session: Session) -> None:
     bill_april = bill_generate(user_card)
 
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{uc.id}/card/lender_payable/l"
+        session, book_string=f"{uc.loan_id}/card/lender_payable/l"
     )
     assert lender_payable == Decimal("6000")
 
@@ -1969,7 +1969,7 @@ def test_refresh_schedule(session: Session) -> None:
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{uc.id}/card/lender_payable/l"
+        session, book_string=f"{uc.loan_id}/card/lender_payable/l"
     )
     assert lender_payable == Decimal("4000.5")
 
@@ -1996,7 +1996,7 @@ def test_refresh_schedule(session: Session) -> None:
     # Get emi list post few bill creations
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.loan_id == uc.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == uc.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
@@ -2035,7 +2035,7 @@ def test_moratorium_schedule(session: Session) -> None:
     bill_april = bill_generate(user_card)
 
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{uc.id}/card/lender_payable/l"
+        session, book_string=f"{uc.loan_id}/card/lender_payable/l"
     )
     assert lender_payable == Decimal("6000")
 
@@ -2052,7 +2052,7 @@ def test_moratorium_schedule(session: Session) -> None:
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{uc.id}/card/lender_payable/l"
+        session, book_string=f"{uc.loan_id}/card/lender_payable/l"
     )
     assert lender_payable == Decimal("4000.5")
 
@@ -2091,7 +2091,7 @@ def test_moratorium_schedule(session: Session) -> None:
     # Get list post refresh
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.loan_id == uc.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == uc.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]

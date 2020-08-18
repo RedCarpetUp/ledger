@@ -49,7 +49,7 @@ def disburse_money_to_card(session: Session, user_card: BaseCard, event: LedgerT
         session,
         event_id=event.id,
         debit_book_str=f"{user_card.table.id}/card/card_balance/a",
-        credit_book_str=f"{user_card.table.lender_id}/lender/pool_balance/a",
+        credit_book_str=f"{user_card.lender_id}/lender/pool_balance/a",
         amount=event.amount,
     )
 
@@ -65,7 +65,7 @@ def card_transaction_event(
         .filter(LoanData.id == CardTransaction.loan_id, CardTransaction.id == swipe_id)
         .scalar()
     )
-    lender_id = bill.lender_id
+    lender_id = user_card.lender_id
     bill_id = bill.id
 
     user_books_prefix_str = f"{user_card_id}/card/{user_card.get_limit_type(mcc=mcc)}"

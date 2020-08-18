@@ -1,10 +1,10 @@
 interest_on_dmi_portfolio = """
 with recursive all_cards AS (
   select 
-    loan_id, 
-    1 + lender_rate_of_interest_annual / 100 / 365 as per_day_interest 
+    v3_user_cards.loan_id, 
+    1 + loan.lender_rate_of_interest_annual / 100 / 365 as per_day_interest 
   from 
-    v3_user_cards
+    v3_user_cards join loan on v3_user_cards.loan_id = loan.id
 ), 
 lender_payable_balance_change_dates as (
   select 

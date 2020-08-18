@@ -201,7 +201,9 @@ class Loan(AuditMixin):
     amortization_date = Column(TIMESTAMP, nullable=False)
     loan_status = Column(String(), nullable=False)
     product_id = Column(Integer, ForeignKey(Product.id))
-    row_status = Column(String(50), nullable=False, default="active")
+    lender_id = Column(Integer, ForeignKey(Lenders.id), nullable=False)
+    rc_rate_of_interest_monthly = Column(Numeric, nullable=True)
+    lender_rate_of_interest_annual = Column(Numeric, nullable=True)
 
 
 @py_dataclass
@@ -355,7 +357,6 @@ class CardKitNumbers(AuditMixin):
 class UserCard(AuditMixin):
     __tablename__ = "v3_user_cards"
     user_id = Column(Integer, ForeignKey(User.id), index=True, nullable=False)
-    lender_id = Column(Integer, ForeignKey(Lenders.id), nullable=False)
     kit_number = Column(
         String(12), ForeignKey(CardKitNumbers.kit_number), nullable=False, default="00000"
     )
@@ -376,8 +377,7 @@ class UserCard(AuditMixin):
     card_activation_date = Column(Date, nullable=True)
     statement_period_in_days = Column(Integer, default=30, nullable=True)  # 30 days
     interest_free_period_in_days = Column(Integer, default=45, nullable=True)
-    rc_rate_of_interest_monthly = Column(Numeric, nullable=True)
-    lender_rate_of_interest_annual = Column(Numeric, nullable=True)
+
     dpd = Column(Integer, nullable=True)
     ever_dpd = Column(Integer, nullable=True)
 
@@ -419,7 +419,6 @@ class LedgerEntry(AuditMixin):
 class LoanData(AuditMixin):
     __tablename__ = "loan_data"
     user_id = Column(Integer, ForeignKey(User.id))
-    lender_id = Column(Integer, ForeignKey(Lenders.id), nullable=False)
     bill_start_date = Column(Date, nullable=False)
     bill_close_date = Column(Date, nullable=False)
     bill_due_date = Column(Date, nullable=False)

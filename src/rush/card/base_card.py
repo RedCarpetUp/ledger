@@ -22,6 +22,7 @@ from rush.ledger_utils import (
 )
 from rush.models import (
     CardTransaction,
+    Loan,
     LoanData,
     LoanMoratorium,
     UserCard,
@@ -93,13 +94,15 @@ class BaseCard:
     session: Session = None
     table: UserCard = None
 
-    def __init__(self, session: Session, bill_class: Type[B], user_card: UserCard):
+    def __init__(self, session: Session, bill_class: Type[B], user_card: UserCard, loan: Loan):
         self.session = session
         self.bill_class = bill_class
         self.table = user_card
         self.__dict__.update(user_card.__dict__)
         self.multiple_limits = False
         self.loan_id = user_card.loan_id
+        self.lender_id = loan.lender_id
+        self.rc_rate_of_interest_monthly = loan.rc_rate_of_interest_monthly
 
     @staticmethod
     def get_limit_type(mcc: str) -> str:
@@ -132,7 +135,7 @@ class BaseCard:
         new_bill = LoanData(
             user_id=self.user_id,
             loan_id=self.loan_id,
-            lender_id=lender_id,
+            # lender_id=lender_id,
             bill_start_date=bill_start_date,
             bill_close_date=bill_close_date,
             bill_due_date=bill_due_date,

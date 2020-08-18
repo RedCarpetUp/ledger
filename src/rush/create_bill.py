@@ -26,7 +26,7 @@ def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -
     # Get the most recent bill
     last_bill = user_card.get_latest_bill()
     txn_date = txn_time.date()
-    lender_id = user_card.table.lender_id
+    lender_id = user_card.lender_id
     if last_bill:
         does_swipe_belong_to_current_bill = txn_date < last_bill.bill_close_date
         if does_swipe_belong_to_current_bill:
@@ -87,9 +87,7 @@ def bill_generate(user_card: BaseCard) -> BaseBill:
     # Update the bill row here.
     bill.table.principal = billed_amount
     bill.table.principal_instalment = principal_instalment
-    bill.table.interest_to_charge = bill.get_interest_to_charge(
-        user_card.table.rc_rate_of_interest_monthly
-    )
+    bill.table.interest_to_charge = bill.get_interest_to_charge(user_card.rc_rate_of_interest_monthly)
 
     bill_closing_date = bill.bill_start_date + relativedelta(months=+1)
     # Don't add in min if user is in moratorium.
@@ -118,7 +116,7 @@ def extend_tenure(session: Session, user_card: BaseCard, new_tenure: int) -> Non
         # Update the bill rows here
         bill.table.principal_instalment = principal_instalment
         bill.table.interest_to_charge = bill.get_interest_to_charge(
-            user_card.table.rc_rate_of_interest_monthly
+            user_card.rc_rate_of_interest_monthly
         )
     session.flush()
     # Refresh the schedule
