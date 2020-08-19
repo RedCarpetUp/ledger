@@ -48,7 +48,7 @@ def disburse_money_to_card(session: Session, user_card: BaseCard, event: LedgerT
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
-        debit_book_str=f"{user_card.loan_id}/loan/card_balance/a",
+        debit_book_str=f"{user_card.loan_id}/card/card_balance/a",
         credit_book_str=f"{user_card.lender_id}/lender/pool_balance/a",
         amount=event.amount,
     )
@@ -92,7 +92,7 @@ def card_transaction_event(
         session,
         event_id=event.id,
         debit_book_str=f"{bill_id}/bill/unbilled/a",
-        credit_book_str=f"{user_card.loan_id}/loan/card_balance/a",
+        credit_book_str=f"{user_card.loan_id}/card/card_balance/a",
         amount=amount,
     )
 
@@ -467,8 +467,8 @@ def limit_assignment_event(session: Session, loan_id: int, event: LedgerTriggerE
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
-        debit_book_str=f"{loan_id}/loan/available_limit/a",
-        credit_book_str=f"{loan_id}/loan/available_limit/l",
+        debit_book_str=f"{loan_id}/card/available_limit/a",
+        credit_book_str=f"{loan_id}/card/available_limit/l",
         amount=Decimal(event.amount),
     )
 

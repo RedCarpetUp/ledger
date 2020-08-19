@@ -65,7 +65,7 @@ def get_account_balance_from_str(
 def breakdown_account_variables_from_str(book_string: str) -> dict:
     identifier, identifier_type, name, account_type = book_string.split("/")
     assert account_type in ("a", "l", "r", "e", "ca")
-    assert identifier_type in ("user", "lender", "bill", "redcarpet", "loan")
+    assert identifier_type in ("user", "lender", "bill", "redcarpet", "card", "loan")
     return {
         "identifier": identifier,
         "identifier_type": identifier_type,

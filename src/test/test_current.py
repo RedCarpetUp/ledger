@@ -184,7 +184,7 @@ def test_card_swipe(session: Session) -> None:
     _, unbilled_balance = get_account_balance_from_str(session, f"{bill_id}/bill/unbilled/a")
     assert unbilled_balance == 900
     # remaining card balance should be -900 because we've not loaded it yet and it's going in negative.
-    _, card_balance = get_account_balance_from_str(session, f"{uc.loan_id}/loan/available_limit/l")
+    _, card_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/available_limit/l")
     assert card_balance == -900
 
     _, lender_payable = get_account_balance_from_str(session, f"{uc.loan_id}/loan/lender_payable/l")
@@ -544,7 +544,7 @@ def _generate_bill_2(session: Session) -> None:
     )
 
     _, user_card_balance = get_account_balance_from_str(
-        session=session, book_string=f"{uc.loan_id}/loan/available_limit/a"
+        session=session, book_string=f"{uc.loan_id}/card/available_limit/a"
     )
     assert user_card_balance == Decimal(-3000)
 

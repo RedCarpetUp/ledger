@@ -46,11 +46,11 @@ class HealthCard(BaseCard):
     def get_split_payment(self, session: Session, payment_amount: Decimal) -> Dict[str, Decimal]:
         # TODO: change negative due calculation logic, once @raghav adds limit addition logic.
         _, non_medical_due = get_account_balance_from_str(
-            session, book_string=f"{self.loan_id}/loan/available_limit/l"
+            session, book_string=f"{self.loan_id}/card/available_limit/l"
         )
 
         _, medical_due = get_account_balance_from_str(
-            session, book_string=f"{self.loan_id}/loan/health_limit/l"
+            session, book_string=f"{self.loan_id}/card/health_limit/l"
         )
 
         medical_settlement = Decimal(Decimal(0.9) * payment_amount)
