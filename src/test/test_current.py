@@ -267,7 +267,7 @@ def test_generate_bill_1(session: Session) -> None:
         .order_by(LedgerTriggerEvent.post_date.desc())
         .first()
     )
-    # assert interest_event.post_date.date() == parse_date("2020-05-18").date()
+    assert interest_event is not None
 
 
 def _partial_payment_bill_1(session: Session) -> None:
@@ -1750,13 +1750,11 @@ def test_prepayment(session: Session) -> None:
     assert lender_payable == Decimal("1000")
 
     # prepayment of rs 2000 done
-    payment_date = parse_date("2020-05-03")
-    amount = Decimal(2000)
     payment_received(
         session=session,
         user_card=uc,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_amount=Decimal(2000),
+        payment_date=parse_date("2020-05-03"),
         payment_request_id="a123",
     )
 
@@ -1778,7 +1776,10 @@ def test_prepayment(session: Session) -> None:
     _, prepayment_amount = get_account_balance_from_str(
         session, book_string=f"{uc.loan_id}/loan/pre_payment/l"
     )
-    assert prepayment_amount == Decimal("969.33")
+    # since payment is made earlier than due_date, that is, 2020-05-15,
+    # run_anomaly is reversing interest charged entry and adding it into prepayment amount.
+    # assert prepayment_amount == Decimal("969.33")
+    assert prepayment_amount == Decimal("1000")
 
     swipe = create_card_swipe(
         session=session,
@@ -1822,7 +1823,10 @@ def test_prepayment(session: Session) -> None:
     _, billed_amount = get_account_balance_from_str(
         session, book_string=f"{bill_id}/bill/principal_receivable/a"
     )
-    assert billed_amount == Decimal("30.67")
+    # since payment is made earlier than due_date, that is 2020-05-15,
+    # run_anomaly is reversing interest charged entry and adding it into prepayment amount.
+    # assert billed_amount == Decimal("30.67")
+    assert billed_amount == Decimal("0")
 
 
 #

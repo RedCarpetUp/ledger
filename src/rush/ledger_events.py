@@ -67,7 +67,7 @@ def card_transaction_event(
     lender_id = user_card.lender_id
     bill_id = bill.id
 
-    user_books_prefix_str = f"{user_card.loan_id}/loan/{user_card.get_limit_type(mcc=mcc)}"
+    user_books_prefix_str = f"{user_card.loan_id}/card/{user_card.get_limit_type(mcc=mcc)}"
 
     # Reduce user's card balance
     create_ledger_entry_from_str(
@@ -396,6 +396,9 @@ def _adjust_for_complete_bill(
 def _adjust_for_prepayment(
     session: Session, loan_id: int, event_id: int, amount: Decimal, debit_book_str: str
 ) -> None:
+    print("####################")
+    print(loan_id, amount)
+    print("####################")
     create_ledger_entry_from_str(
         session,
         event_id=event_id,
@@ -489,7 +492,7 @@ def health_limit_assignment_event(
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
-        debit_book_str=f"{loan_id}/loan/{limit_str}/a",
-        credit_book_str=f"{loan_id}/loan/{limit_str}/l",
+        debit_book_str=f"{loan_id}/card/{limit_str}/a",
+        credit_book_str=f"{loan_id}/card/{limit_str}/l",
         amount=amount,
     )
