@@ -60,7 +60,7 @@ from rush.payments import (
     refund_payment,
 )
 
-v3_conn = "postgresql://productionuser:9EEs6ZeFLSCANkSL@localhost:5013/production"
+v3_conn = "postgresql://nishant:SAkrlF5WeR@localhost:5013/production"
 v3_conn_local = "postgresql://alem_user:password@localhost:5680/alem_db"
 
 open_loans = [
@@ -129,7 +129,7 @@ open_loans = [
     1115199,
     1205549,
     1080908,
-    1072233,-- bill amount diff
+    1072233,
     1149344,
     1107604,
     1193703,
@@ -186,7 +186,7 @@ tables_to_insert = [
     {"ledger": "fee", "db": "fee"},
 ]
 
-# open_loans = [1157616]
+open_loans = [1157616]
 
 
 def create_all_users(session: Session, loan_ids: List[Integer]) -> pd.DataFrame:
