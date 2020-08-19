@@ -243,7 +243,7 @@ def reverse_interest_charges(
                 continue
             _adjust_for_prepayment(
                 session=session,
-                loan_id=user_card.user_id,
+                loan_id=user_card.loan_id,
                 event_id=event.id,
                 amount=entry["amount"],
                 debit_book_str=entry["acc_to_remove_from"],
@@ -306,7 +306,7 @@ def reverse_late_charges(
                 # TODO maybe just call the entire payment received event here?
                 _adjust_for_prepayment(
                     session=session,
-                    loan_id=user_card.user_id,
+                    loan_id=user_card.loan_id,
                     event_id=event.id,
                     amount=acc["amount"],
                     debit_book_str=acc["acc_to_remove_from"],
