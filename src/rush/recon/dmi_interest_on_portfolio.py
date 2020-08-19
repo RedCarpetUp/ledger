@@ -1,14 +1,14 @@
 interest_on_dmi_portfolio = """
 with recursive all_cards AS (
   select 
-    v3_user_cards.loan_id, 
-    1 + loan.lender_rate_of_interest_annual / 100 / 365 as per_day_interest 
+    id as loan_id, 
+    1 + lender_rate_of_interest_annual / 100 / 365 as per_day_interest 
   from 
-    v3_user_cards join loan on v3_user_cards.loan_id = loan.id
+    loan
 ), 
 lender_payable_balance_change_dates as (
   select 
-    distinct loan_id, 
+    distinct loan_id,
     post_date :: date as portfolio_balance_change_date 
   from 
     ledger_trigger_event 
@@ -58,7 +58,7 @@ days_wise_balance AS (
 -- Getting the balance at the end of that day. So adding 23:59:59.
     coalesce(
       get_account_balance(
-        loan_id, 'card', 'lender_payable', 
+        loan_id, 'loan', 'lender_payable', 
         'l', portfolio_balance_change_date + interval '23 hours' + interval '59 minutes' + interval '59 seconds'
       ), 
       0

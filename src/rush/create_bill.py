@@ -22,7 +22,6 @@ from rush.utils import (
 
 
 def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -> BaseBill:
-    session = user_card.session
     # Get the most recent bill
     last_bill = user_card.get_latest_bill()
     txn_date = txn_time.date()

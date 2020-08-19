@@ -608,7 +608,7 @@ def add_moratorium_to_loan_emi(
                     # late fine and interest will be handled through events
                     if i != months_to_be_inserted:
                         new_emi = CardEmis(
-                            loan_id=user_card.table.loan_id,
+                            loan_id=user_card.loan_id,
                             emi_number=(emi.emi_number + i),
                             total_closing_balance=emi.total_closing_balance,
                             total_closing_balance_post_due_date=emi.total_closing_balance_post_due_date,
@@ -696,7 +696,7 @@ def refresh_schedule(user_card: BaseCard):
     # Set all previous emis as inactive
     all_emis = (
         session.query(CardEmis)
-        .filter(CardEmis.loan_id == user_card.table.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
         .all()
     )
@@ -706,9 +706,7 @@ def refresh_schedule(user_card: BaseCard):
 
     all_payment_mappings = (
         session.query(EmiPaymentMapping)
-        .filter(
-            EmiPaymentMapping.loan_id == user_card.table.id, EmiPaymentMapping.row_status == "active"
-        )
+        .filter(EmiPaymentMapping.loan_id == user_card.loan_id, EmiPaymentMapping.row_status == "active")
         .all()
     )
     for mapping in all_payment_mappings:
@@ -758,7 +756,7 @@ def refresh_schedule(user_card: BaseCard):
 
     # Check if user has opted for moratorium and adjust that in schedule
     moratorium = (
-        session.query(LoanMoratorium).filter(LoanMoratorium.loan_id == user_card.table.id).first()
+        session.query(LoanMoratorium).filter(LoanMoratorium.loan_id == user_card.loan_id).first()
     )
     if moratorium:
         start_date = moratorium.start_date

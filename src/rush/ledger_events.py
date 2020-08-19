@@ -424,9 +424,6 @@ def lender_interest_incur_event(
         interest_on_dmi_portfolio, params={"from_date": from_date, "to_date": to_date}
     )
     for loan_id, interest_to_incur in interest_on_each_card:
-        print("$$$$$$$$$$$$$$$$$$$")
-        print(loan_id, interest_to_incur)
-        print("$$$$$$$$$$$$$$$$$$$")
         create_ledger_entry_from_str(
             session,
             event_id=event.id,
