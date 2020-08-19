@@ -5,6 +5,7 @@ import pandas as pd
 import psycopg2 as pg
 from dateutil.relativedelta import relativedelta
 from pendulum import parse as parse_date  # type: ignore
+from sqlalchemy import types
 from sqlalchemy.orm import (
     Session,
     session,
@@ -54,7 +55,8 @@ from rush.payments import (
     refund_payment,
 )
 
-v3_conn = "postgresql://nishant:SAkrlF5WeR@localhost:5013/production"
+v3_conn = "postgresql://productionuser:9EEs6ZeFLSCANkSL@localhost:5013/production"
+v3_conn_local = "postgresql://alem_user:password@localhost:5680/alem_db"
 
 open_loans = [
     1079788,
@@ -272,6 +274,57 @@ def get_all_late_fee(session: Session, loan_id: Decimal) -> pd.DataFrame:
     return fees
 
 
+def dump_data(session: Session) -> None:
+
+    tables_to_insert = [
+        {"ledger": "book_account", "db": "book_account"},
+        {"ledger": "rc_lenders", "db": "rc_lenders"},
+        {"ledger": "v3_card_types", "db": "ledger_card_types"},
+        {"ledger": "v3_card_names", "db": "ledger_card_names"},
+        {"ledger": "v3_card_kit_numbers", "db": "ledger_card_kit_numbers"},
+        {"ledger": "v3_loans", "db": "ledger_loans"},
+        {"ledger": "v3_roles", "db": "ledger_roles"},
+        {"ledger": "v3_users", "db": "ledger_users"},
+        {"ledger": "v3_user_roles", "db": "ledger_user_roles"},
+        {"ledger": "v3_user_data", "db": "ledger_user_data"},
+        {"ledger": "v3_user_identities", "db": "ledger_user_identities"},
+        {"ledger": "v3_user_cards", "db": "ledger_user_cards"},
+        {"ledger": "loan_data", "db": "loan_data"},
+        {"ledger": "loan_emis", "db": "loan_emis"},
+        {"ledger": "loan_moratorium", "db": "loan_moratorium"},
+        {"ledger": "card_emis", "db": "card_emis"},
+        {"ledger": "card_transaction", "db": "card_transaction"},
+        {"ledger": "emi_payment_mapping", "db": "emi_payment_mapping"},
+        {"ledger": "event_dpd", "db": "event_dpd"},
+        {"ledger": "ledger_trigger_event", "db": "ledger_trigger_event"},
+        {"ledger": "ledger_entry", "db": "ledger_entry"},
+        {"ledger": "fee", "db": "fee"},
+    ]
+
+    # Clear all tables
+    conn = pg.connect(v3_conn)
+    cursor = conn.cursor()
+    for i in range(len(tables_to_insert) - 1, -1, -1):
+        cursor.execute(f"delete from {tables_to_insert[i]['db']}")
+    conn.commit()
+
+    for table in tables_to_insert:
+        df = pd.read_sql_query(f"select * from {table['ledger']}", con=v3_conn_local)
+
+        df.to_sql(
+            table["db"],
+            con=v3_conn,
+            if_exists="append",
+            index=False,
+            dtype={
+                "extra_details": types.JSON,
+                "details": types.JSON,
+                "data": types.JSON,
+                "view_tags": types.JSON,
+            },
+        )
+
+
 def test_drawdown_open(session: Session) -> None:
 
     # create all users
@@ -327,7 +380,6 @@ def test_drawdown_open(session: Session) -> None:
             elif event["type"] == "late_fee":
                 accrue_late_charges(session, user_card, event["date"], Decimal(event["data"]["amount"]))
             elif event["type"] == "payment":
-                continue
                 payment_received(
                     session=session,
                     user_card=user_card,
@@ -336,10 +388,7 @@ def test_drawdown_open(session: Session) -> None:
                     payment_request_id=event["data"]["payment_request_id"],
                 )
 
-    # conn = pg.connect(v3_conn)
-    # cursor = conn.cursor()
-    # cursor.execute("select * from alembic_version")
-    # r = cursor.fetchone()
-    # print(r)
-
     session.commit()
+
+    # Dump all data to backup db
+    dump_data(session)
