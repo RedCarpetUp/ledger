@@ -26,6 +26,11 @@ from rush.create_bill import (
     extend_tenure,
 )
 from rush.create_card_swipe import create_card_swipe
+from rush.create_emi import (
+    check_moratorium_eligibility,
+    refresh_schedule,
+    update_event_with_dpd,
+)
 from rush.ledger_utils import (
     get_account_balance_from_str,
     is_bill_closed,
@@ -109,9 +114,6 @@ open_loans = [
     1105685,
     1107458,
     1157616,
-]
-
-closed_loans = [
     1132128,
     1074083,
     1134433,
@@ -127,12 +129,7 @@ closed_loans = [
     1115199,
     1205549,
     1080908,
-    1072233,
-    1075869,
-    1076760,
-    1081022,
-    1119345,
-    1167865,
+    1072233,-- bill amount diff
     1149344,
     1107604,
     1193703,
@@ -164,7 +161,32 @@ closed_loans = [
     1191901,
 ]
 
-open_loans = [1157616]
+tables_to_insert = [
+    {"ledger": "book_account", "db": "book_account"},
+    {"ledger": "rc_lenders", "db": "rc_lenders"},
+    {"ledger": "v3_card_types", "db": "ledger_card_types"},
+    {"ledger": "v3_card_names", "db": "ledger_card_names"},
+    {"ledger": "v3_card_kit_numbers", "db": "ledger_card_kit_numbers"},
+    {"ledger": "v3_loans", "db": "ledger_loans"},
+    {"ledger": "v3_roles", "db": "ledger_roles"},
+    {"ledger": "v3_users", "db": "ledger_users"},
+    {"ledger": "v3_user_roles", "db": "ledger_user_roles"},
+    {"ledger": "v3_user_data", "db": "ledger_user_data"},
+    {"ledger": "v3_user_identities", "db": "ledger_user_identities"},
+    {"ledger": "v3_user_cards", "db": "ledger_user_cards"},
+    {"ledger": "loan_data", "db": "loan_data"},
+    {"ledger": "loan_emis", "db": "loan_emis"},
+    {"ledger": "loan_moratorium", "db": "loan_moratorium"},
+    {"ledger": "card_emis", "db": "card_emis"},
+    {"ledger": "card_transaction", "db": "card_transaction"},
+    {"ledger": "emi_payment_mapping", "db": "emi_payment_mapping"},
+    {"ledger": "event_dpd", "db": "event_dpd"},
+    {"ledger": "ledger_trigger_event", "db": "ledger_trigger_event"},
+    {"ledger": "ledger_entry", "db": "ledger_entry"},
+    {"ledger": "fee", "db": "fee"},
+]
+
+# open_loans = [1157616]
 
 
 def create_all_users(session: Session, loan_ids: List[Integer]) -> pd.DataFrame:
@@ -274,32 +296,23 @@ def get_all_late_fee(session: Session, loan_id: Decimal) -> pd.DataFrame:
     return fees
 
 
-def dump_data(session: Session) -> None:
+def get_moratorium_details(session: Session, loan_id: Decimal) -> pd.DataFrame:
 
-    tables_to_insert = [
-        {"ledger": "book_account", "db": "book_account"},
-        {"ledger": "rc_lenders", "db": "rc_lenders"},
-        {"ledger": "v3_card_types", "db": "ledger_card_types"},
-        {"ledger": "v3_card_names", "db": "ledger_card_names"},
-        {"ledger": "v3_card_kit_numbers", "db": "ledger_card_kit_numbers"},
-        {"ledger": "v3_loans", "db": "ledger_loans"},
-        {"ledger": "v3_roles", "db": "ledger_roles"},
-        {"ledger": "v3_users", "db": "ledger_users"},
-        {"ledger": "v3_user_roles", "db": "ledger_user_roles"},
-        {"ledger": "v3_user_data", "db": "ledger_user_data"},
-        {"ledger": "v3_user_identities", "db": "ledger_user_identities"},
-        {"ledger": "v3_user_cards", "db": "ledger_user_cards"},
-        {"ledger": "loan_data", "db": "loan_data"},
-        {"ledger": "loan_emis", "db": "loan_emis"},
-        {"ledger": "loan_moratorium", "db": "loan_moratorium"},
-        {"ledger": "card_emis", "db": "card_emis"},
-        {"ledger": "card_transaction", "db": "card_transaction"},
-        {"ledger": "emi_payment_mapping", "db": "emi_payment_mapping"},
-        {"ledger": "event_dpd", "db": "event_dpd"},
-        {"ledger": "ledger_trigger_event", "db": "ledger_trigger_event"},
-        {"ledger": "ledger_entry", "db": "ledger_entry"},
-        {"ledger": "fee", "db": "fee"},
-    ]
+    mora = pd.read_sql_query(
+        """
+        select moratorium_start_due_dt::date, moratorium_month
+        from kv_dmi_moratorium_loan_info
+        where row_status = 'active' 
+        and order_id = %(loan_id)s
+    """,
+        con=v3_conn,
+        params={"loan_id": loan_id},
+    )
+
+    return mora
+
+
+def dump_data(session: Session) -> None:
 
     # Clear all tables
     conn = pg.connect(v3_conn)
@@ -358,6 +371,13 @@ def test_drawdown_open(session: Session) -> None:
         for index, row in late_fee.iterrows():
             all_events.append({"type": "late_fee", "data": row, "date": row["fee_date"]})
 
+        # check for moratorium
+        mora = get_moratorium_details(session, loan_id)
+        for index, row in mora.iterrows():
+            all_events.append(
+                {"type": "moratorium", "data": row, "date": row["moratorium_start_due_dt"]}
+            )
+
         # sort events on post date
         all_events = sorted(all_events, key=lambda i: i["date"])
 
@@ -386,6 +406,15 @@ def test_drawdown_open(session: Session) -> None:
                     payment_amount=Decimal(event["data"]["payment_request_amount"]),
                     payment_date=event["data"]["intermediary_payment_date"],
                     payment_request_id=event["data"]["payment_request_id"],
+                )
+            elif event["type"] == "moratorium":
+                check_moratorium_eligibility(
+                    session,
+                    {
+                        "user_id": user_id,
+                        "start_date": event["data"]["moratorium_start_due_dt"].strftime("%Y-%m-%d"),
+                        "months_to_be_inserted": event["data"]["moratorium_month"],
+                    },
                 )
 
     session.commit()
