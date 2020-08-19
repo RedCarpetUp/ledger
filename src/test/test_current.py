@@ -2332,11 +2332,13 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
 
     last_emi = all_emis[-1]
     second_last_emi = all_emis[-2]
-    # 110/18 = 6.11 + 56/18 = 3.11 == 9.22
+    # 110-18.34 = 91.66, 91.66/16 = 5.73
+    # 56-4.67 = 51.33, 51.33/16 = 3.21
+    # 5.73+3.21 = 8.94
     assert second_last_emi.due_amount == Decimal("8.94")
-    # 56/18 = 3.11
+    # 56-4.67 = 51.33, 51.33/16 = 3.21
     assert last_emi.due_amount == Decimal("3.21")
-    # First cycle 18 emis, next bill 19 emis, 2 because of moratorium == 21
+    # First cycle 18 emis, next bill 19 emis
     assert last_emi.emi_number == 19
 
 
