@@ -202,8 +202,8 @@ class Loan(AuditMixin):
     loan_status = Column(String(), nullable=False)
     product_id = Column(Integer, ForeignKey(Product.id))
     lender_id = Column(Integer, ForeignKey(Lenders.id), nullable=False)
-    rc_rate_of_interest_monthly = Column(Numeric, nullable=True)
-    lender_rate_of_interest_annual = Column(Numeric, nullable=True)
+    rc_rate_of_interest_monthly = Column(Numeric, nullable=False)
+    lender_rate_of_interest_annual = Column(Numeric, nullable=False)
 
 
 @py_dataclass

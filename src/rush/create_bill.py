@@ -75,7 +75,7 @@ def bill_generate(user_card: BaseCard) -> BaseBill:
     session.add(lt)
     session.flush()
 
-    bill_generate_event(session=session, bill=bill, loan_id=user_card.loan_id, event=lt)
+    bill_generate_event(session=session, bill=bill, user_card=user_card, event=lt)
 
     bill.table.is_generated = True
 

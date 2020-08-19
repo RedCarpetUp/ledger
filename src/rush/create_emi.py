@@ -637,7 +637,7 @@ def add_moratorium_to_loan_emi(
             # Need to just update emi related fields because
             # late fine and interest will be handled through events
             new_emi = CardEmis(
-                card_id=user_card.table.id,
+                loan_id=user_card.loan_id,
                 emi_number=(emi_number_to_begin_insertion_from + i + 1),
                 total_closing_balance=last_emi.total_closing_balance,
                 total_closing_balance_post_due_date=last_emi.total_closing_balance_post_due_date,

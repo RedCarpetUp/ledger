@@ -91,11 +91,15 @@ def transaction_refund_event(
 
         if refund_amount > 0:  # if there's payment left to be adjusted.
             _adjust_for_prepayment(
-                session, user_card.loan_id, event.id, refund_amount, debit_book_str=m2p_pool_account
+                session=session,
+                loan_id=user_card.loan_id,
+                event_id=event.id,
+                amount=refund_amount,
+                debit_book_str=m2p_pool_account,
             )
     #
     # _, writeoff_balance = get_account_balance_from_str(
-    #     session, book_string=f"{user_card.loan_id}/card/writeoff_expenses/e"
+    #     session, book_string=f"{user_card.loan_id}/loan/writeoff_expenses/e"
     # )
     # if writeoff_balance > 0:
     #     amount = min(writeoff_balance, event.amount)
@@ -106,8 +110,8 @@ def transaction_refund_event(
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
-        debit_book_str=f"{user_card.loan_id}/card/lender_payable/l",
-        credit_book_str=f"{user_card.loan_id}/card/refund_off_balance/l",  # Couldn't find anything relevant.
+        debit_book_str=f"{user_card.loan_id}/loan/lender_payable/l",
+        credit_book_str=f"{user_card.loan_id}/loan/refund_off_balance/l",  # Couldn't find anything relevant.
         amount=Decimal(event.amount),
     )
 

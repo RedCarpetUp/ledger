@@ -110,7 +110,7 @@ def _create_user_raghav_and_do_swipes(session: Session) -> BaseCard:
     assert unbilled_bal_raghav_bill_1 == 1100
 
     _, lender_payable_raghav = get_account_balance_from_str(
-        session, f"{user_card_raghav.id}/card/lender_payable/l"
+        session, f"{user_card_raghav.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable_raghav == 1100
     return user_card_raghav
@@ -172,7 +172,7 @@ def _create_user_ananth_and_do_swipes(session: Session) -> BaseCard:
     assert unbilled_bal_ananth_bill_1 == Decimal("6500.75")
 
     _, lender_payable_ananth = get_account_balance_from_str(
-        session, f"{user_card_ananth.id}/card/lender_payable/l"
+        session, f"{user_card_ananth.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable_ananth == Decimal("6500.75")
     return user_card_ananth
@@ -190,12 +190,12 @@ def test_dmi_recon_process_1(session: Session) -> None:
     )
 
     _, lender_payable_raghav = get_account_balance_from_str(
-        session, f"{user_card_raghav.id}/card/lender_payable/l"
+        session, f"{user_card_raghav.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable_raghav == Decimal("1114.90")
 
     _, lender_payable_ananth = get_account_balance_from_str(
-        session, f"{user_card_ananth.id}/card/lender_payable/l"
+        session, f"{user_card_ananth.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable_ananth == Decimal("6557.24")
 
@@ -294,6 +294,6 @@ def test_dmi_recon_process_1(session: Session) -> None:
     lender_interest_incur(session, from_date=from_date, to_date=to_date)
 
     _, lender_payable_raghav = get_account_balance_from_str(
-        session, f"{user_card_raghav.id}/card/lender_payable/l"
+        session, f"{user_card_raghav.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable_raghav == Decimal("829.51")

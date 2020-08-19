@@ -18,6 +18,7 @@ from rush.card import (
     create_user_card,
     get_user_card,
 )
+from rush.card.base_card import BaseBill
 from rush.create_bill import (
     bill_generate,
     extend_tenure,
@@ -158,7 +159,6 @@ def test_card_swipe(session: Session) -> None:
         card_type="ruby",
         lender_id=62311,
     )
-    user_card_id = uc.loan_id
 
     swipe1 = create_card_swipe(
         session=session,
@@ -184,10 +184,10 @@ def test_card_swipe(session: Session) -> None:
     _, unbilled_balance = get_account_balance_from_str(session, f"{bill_id}/bill/unbilled/a")
     assert unbilled_balance == 900
     # remaining card balance should be -900 because we've not loaded it yet and it's going in negative.
-    _, card_balance = get_account_balance_from_str(session, f"{user_card_id}/card/available_limit/l")
+    _, card_balance = get_account_balance_from_str(session, f"{uc.loan_id}/loan/available_limit/l")
     assert card_balance == -900
 
-    _, lender_payable = get_account_balance_from_str(session, f"{user_card_id}/card/lender_payable/l")
+    _, lender_payable = get_account_balance_from_str(session, f"{uc.loan_id}/loan/lender_payable/l")
     assert lender_payable == 900
 
 
@@ -223,6 +223,12 @@ def test_generate_bill_1(session: Session) -> None:
     user_card = get_user_card(session, a.id)
     bill = bill_generate(user_card)
     # Interest event to be fired separately now
+
+    # check latest bill method
+    latest_bill = user_card.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
     accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), user_card)
 
     assert bill.bill_start_date == parse_date("2020-04-02").date()
@@ -270,7 +276,7 @@ def _partial_payment_bill_1(session: Session) -> None:
     amount = Decimal(100)
     unpaid_bills = user_card.get_unpaid_bills()
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable == Decimal("1000")
     payment_received(
@@ -303,7 +309,7 @@ def _partial_payment_bill_1(session: Session) -> None:
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable == Decimal("900.5")
 
@@ -368,7 +374,7 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
     unpaid_bills = user_card.get_unpaid_bills()
 
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable == Decimal("900.5")
 
@@ -412,7 +418,7 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
     _, pg_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert pg_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable == Decimal("769.0")
 
@@ -434,7 +440,7 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
     unpaid_bills = user_card.get_unpaid_bills()
 
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable == Decimal("900.5")
 
@@ -468,7 +474,7 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable == Decimal("769.0")
 
@@ -491,7 +497,7 @@ def test_is_bill_paid_bill_1(session: Session) -> None:
     is_it_paid = is_bill_closed(session, bill)
     assert is_it_paid is False
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable == Decimal("769")
 
@@ -510,7 +516,7 @@ def test_is_bill_paid_bill_1(session: Session) -> None:
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable == Decimal("-147.17")  # negative that implies prepaid
 
@@ -538,11 +544,17 @@ def _generate_bill_2(session: Session) -> None:
     )
 
     _, user_card_balance = get_account_balance_from_str(
-        session=session, book_string=f"{uc.loan_id}/card/available_limit/a"
+        session=session, book_string=f"{uc.loan_id}/loan/available_limit/a"
     )
     assert user_card_balance == Decimal(-3000)
 
     bill_2 = bill_generate(user_card=uc)
+
+    # check latest bill method
+    latest_bill = uc.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(session, bill_2.table.bill_due_date + relativedelta(days=1), uc)
     assert bill_2.bill_start_date == parse_date("2020-05-01").date()
@@ -623,6 +635,12 @@ def test_generate_bill_3(session: Session) -> None:
     generate_date = parse_date("2020-06-01").date()
     user_card = get_user_card(session, a.id)
     bill = bill_generate(user_card)
+
+    # check latest bill method
+    latest_bill = user_card.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), user_card)
 
@@ -668,6 +686,12 @@ def test_emi_creation(session: Session) -> None:
     user_card = get_user_card(session, a.id)
     # Generate bill
     bill_april = bill_generate(user_card)
+
+    # check latest bill method
+    latest_bill = user_card.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(
         session, bill_april.table.bill_due_date + relativedelta(days=1), user_card
@@ -713,6 +737,11 @@ def test_subsequent_emi_creation(session: Session) -> None:
     user_card = get_user_card(session, a.id)
     bill_april = bill_generate(user_card)
 
+    # check latest bill method
+    latest_bill = user_card.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
     create_card_swipe(
         session=session,
         user_card=uc,
@@ -728,6 +757,12 @@ def test_subsequent_emi_creation(session: Session) -> None:
 
     generate_date = parse_date("2020-06-01").date()
     bill_may = bill_generate(user_card)
+
+    # check latest bill method
+    latest_bill = user_card.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(
         session, bill_may.table.bill_due_date + relativedelta(days=1), user_card
@@ -778,6 +813,12 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     generate_date = parse_date("2020-06-01").date()
     user_card = get_user_card(session, a.id)
     bill_may = bill_generate(user_card)
+
+    # check latest bill method
+    latest_bill = user_card.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(
         session, bill_may.table.bill_due_date + relativedelta(days=1), user_card
@@ -801,7 +842,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     assert first_emi["interest_next_month"] == 96
 
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{uc.loan_id}/card/lender_payable/l"
+        session, book_string=f"{uc.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable == Decimal("6000")
 
@@ -819,7 +860,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{uc.loan_id}/card/lender_payable/l"
+        session, book_string=f"{uc.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable == Decimal("-359.5")
 
@@ -1082,6 +1123,11 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     user_card = get_user_card(session, a.id)
     bill_may = bill_generate(user_card)
 
+    # check latest bill method
+    latest_bill = user_card.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
     # Check for atm fee.
     atm_fee_due = (
         session.query(Fee).filter(Fee.bill_id == bill_may.id, Fee.name == "atm_fee").one_or_none()
@@ -1254,7 +1300,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
 
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{uc.loan_id}/card/lender_payable/l"
+        session, book_string=f"{uc.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable == Decimal("20672.03")
 
@@ -1263,12 +1309,27 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
 
     bill_june = bill_generate(user_card)
 
+    # check latest bill method
+    latest_bill = user_card.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
+    # check latest bill method
+    latest_bill = user_card.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(
         session, bill_june.table.bill_due_date + relativedelta(days=1), user_card
     )
 
     bill_july = bill_generate(user_card)
+
+    # check latest bill method
+    latest_bill = user_card.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
 
     # Do Partial Payment
     payment_date = parse_date("2020-08-02 14:25:52")
@@ -1326,7 +1387,7 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
     user_card = get_user_card(session, 99)
 
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable == Decimal("769")
 
@@ -1344,7 +1405,7 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable == Decimal("-116.5")
 
@@ -1405,7 +1466,7 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable == Decimal("-238.84")
 
@@ -1435,7 +1496,7 @@ def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
     user_card = get_user_card(session, 99)
 
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable == Decimal("2769")
 
@@ -1455,7 +1516,7 @@ def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable == Decimal("-147.17")
 
@@ -1480,7 +1541,7 @@ def _pay_minimum_amount_bill_2(session: Session) -> None:
     user_card = get_user_card(session, 99)
 
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable == Decimal("1500")
 
@@ -1496,7 +1557,7 @@ def _pay_minimum_amount_bill_2(session: Session) -> None:
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{user_card.loan_id}/card/lender_payable/l"
+        session, book_string=f"{user_card.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable == Decimal("1390.5")
 
@@ -1517,7 +1578,7 @@ def test_refund_1(session: Session) -> None:
     refund_payment(session, user_card, 100, parse_date("2020-05-05 15:24:34"), "asd23g2", refunded_swipe)
 
     _, merchant_refund_off_balance = get_account_balance_from_str(
-        session, book_string=f"{user_card.loan_id}/card/refund_off_balance/l"
+        session, book_string=f"{user_card.loan_id}/loan/refund_off_balance/l"
     )
     assert merchant_refund_off_balance == Decimal("100")  # 1000 refunded with interest 60
 
@@ -1532,7 +1593,7 @@ def test_refund_1(session: Session) -> None:
     refund_payment(session, user_card, 1500, parse_date("2020-05-15 15:24:34"), "af423g2", swipe["data"])
 
     _, merchant_refund_off_balance = get_account_balance_from_str(
-        session, book_string=f"{user_card.loan_id}/card/refund_off_balance/l"
+        session, book_string=f"{user_card.loan_id}/loan/refund_off_balance/l"
     )
     assert merchant_refund_off_balance == Decimal("1600")  # 1000 refunded with interest 60
 
@@ -1565,6 +1626,12 @@ def test_lender_incur(session: Session) -> None:
     assert unbilled_amount == 1000
     user_card = get_user_card(session, a.id)
     bill = bill_generate(user_card)
+
+    # check latest bill method
+    latest_bill = user_card.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), user_card)
     assert bill.table.is_generated is True
@@ -1577,6 +1644,12 @@ def test_lender_incur(session: Session) -> None:
         description="BigBasket.com",
     )
     bill = bill_generate(user_card)
+
+    # check latest bill method
+    latest_bill = user_card.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), user_card)
     assert bill.table.is_generated is True
@@ -1584,10 +1657,10 @@ def test_lender_incur(session: Session) -> None:
     lender_interest_incur(
         session, from_date=parse_date("2020-06-01").date(), to_date=parse_date("2020-06-30").date()
     )
-    _, amount = get_account_balance_from_str(session, book_string=f"{uc.loan_id}/card/lender_payable/l")
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.loan_id}/loan/lender_payable/l")
     assert amount == Decimal("2511.65")
 
-    _, amount = get_account_balance_from_str(session, book_string=f"{uc.loan_id}/card/lender_interest/e")
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.loan_id}/loan/lender_interest/e")
     assert amount == Decimal("11.65")
 
     swipe = create_card_swipe(
@@ -1600,9 +1673,9 @@ def test_lender_incur(session: Session) -> None:
     lender_interest_incur(
         session, from_date=parse_date("2020-07-01").date(), to_date=parse_date("2020-07-31").date()
     )
-    _, amount = get_account_balance_from_str(session, book_string=f"{uc.loan_id}/card/lender_interest/e")
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.loan_id}/loan/lender_interest/e")
     assert amount == Decimal("51.81")
-    _, amount = get_account_balance_from_str(session, book_string=f"{uc.loan_id}/card/lender_payable/l")
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.loan_id}/loan/lender_payable/l")
     assert amount == Decimal("4051.81")
 
 
@@ -1638,6 +1711,12 @@ def test_lender_incur_two(session: Session) -> None:
     )
     user_card = get_user_card(session, a.id)
     bill = bill_generate(user_card)
+
+    # check latest bill method
+    latest_bill = user_card.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), user_card)
     assert bill.table.is_generated is True
@@ -1645,17 +1724,16 @@ def test_lender_incur_two(session: Session) -> None:
     lender_interest_incur(
         session, from_date=parse_date("2020-07-01").date(), to_date=parse_date("2020-07-31").date()
     )
-    _, amount = get_account_balance_from_str(session, book_string=f"{uc.loan_id}/card/lender_payable/l")
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.loan_id}/loan/lender_payable/l")
     assert amount == Decimal("1000.99")
 
-    _, amount = get_account_balance_from_str(session, book_string=f"{uc.loan_id}/card/lender_interest/e")
+    _, amount = get_account_balance_from_str(session, book_string=f"{uc.loan_id}/loan/lender_interest/e")
     assert amount == Decimal("0.99")
 
 
 def test_prepayment(session: Session) -> None:
     test_generate_bill_1(session)
     uc = get_user_card(session, 99)
-    user_card_id = uc.loan_id
 
     # Check if amount is adjusted correctly in schedule
     all_emis_query = (
@@ -1663,10 +1741,11 @@ def test_prepayment(session: Session) -> None:
         .filter(CardEmis.loan_id == uc.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
-    emis_dict = [u.as_dict() for u in all_emis_query.all()]
+
+    _ = [u.as_dict() for u in all_emis_query.all()]
 
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{uc.loan_id}/card/lender_payable/l"
+        session, book_string=f"{uc.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable == Decimal("1000")
 
@@ -1684,7 +1763,7 @@ def test_prepayment(session: Session) -> None:
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{uc.loan_id}/card/lender_payable/l"
+        session, book_string=f"{uc.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable == Decimal("-999.5")
 
@@ -1694,10 +1773,10 @@ def test_prepayment(session: Session) -> None:
         .filter(CardEmis.loan_id == uc.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
-    emis_dict = [u.as_dict() for u in all_emis_query.all()]
+    _ = [u.as_dict() for u in all_emis_query.all()]
 
     _, prepayment_amount = get_account_balance_from_str(
-        session, book_string=f"{user_card_id}/card/pre_payment/l"
+        session, book_string=f"{uc.loan_id}/loan/pre_payment/l"
     )
     assert prepayment_amount == Decimal("969.33")
 
@@ -1711,7 +1790,7 @@ def test_prepayment(session: Session) -> None:
     bill_id = swipe["data"].loan_id
 
     emi_payment_mapping = (
-        session.query(EmiPaymentMapping).filter(EmiPaymentMapping.loan_id == user_card_id).all()
+        session.query(EmiPaymentMapping).filter(EmiPaymentMapping.loan_id == uc.loan_id).all()
     )
     first_payment_mapping = emi_payment_mapping[0]
     assert first_payment_mapping.emi_number == 1
@@ -1721,12 +1800,18 @@ def test_prepayment(session: Session) -> None:
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 1000
     bill = bill_generate(user_card=uc)
+
+    # check latest bill method
+    latest_bill = uc.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), uc)
     assert bill.table.is_generated is True
 
     _, prepayment_amount = get_account_balance_from_str(
-        session, book_string=f"{user_card_id}/card/pre_payment/l"
+        session, book_string=f"{uc.loan_id}/loan/pre_payment/l"
     )
     assert prepayment_amount == Decimal("0")
 
@@ -1752,7 +1837,6 @@ def test_prepayment(session: Session) -> None:
 #         session=session, user_id=a.id, card_activation_date=parse_date("2020-03-02"), card_type="ruby", lender_id = 62311,
 #     )
 #
-#     user_card_id = uc.loan_id
 #
 #     swipe = create_card_swipe(
 #         session=session,
@@ -1773,7 +1857,7 @@ def test_prepayment(session: Session) -> None:
 #     )
 #
 #     _, prepayment_amount = get_account_balance_from_str(
-#         session, book_string=f"{user_card_id}/card/pre_payment/l"
+#         session, book_string=f"{uc.loan_id}/loan/pre_payment/l"
 #     )
 #     bill = bill_generate(user_card=uc)
 #     assert bill.table.is_generated is True
@@ -1794,19 +1878,19 @@ def test_prepayment(session: Session) -> None:
 #     write_off_payment(session, uc)
 #
 #     _, lender_payable_amount = get_account_balance_from_str(
-#         session, book_string=f"{user_card_id}/card/lender_payable/l"
+#         session, book_string=f"{uc.loan_id}/loan/lender_payable/l"
 #     )
 #     assert lender_payable_amount == Decimal("0")
 #     _, redcarpet_amount = get_account_balance_from_str(
-#         session, book_string=f"{user_card_id}/redcarpet/redcarpet_account/a"
+#         session, book_string=f"{uc.loan_id}/redcarpet/redcarpet_account/a"
 #     )
 #     assert redcarpet_amount == Decimal("-3748.68")
 #     _, writeoff_amount = get_account_balance_from_str(
-#         session, book_string=f"{user_card_id}/card/writeoff_expenses/e"
+#         session, book_string=f"{uc.loan_id}/loan/writeoff_expenses/e"
 #     )
 #     assert writeoff_amount == Decimal("3748.68")
 #     _, bad_amount = get_account_balance_from_str(
-#         session, book_string=f"{user_card_id}/card/bad_debt_allowance/ca"
+#         session, book_string=f"{uc.loan_id}/loan/bad_debt_allowance/ca"
 #     )
 #     assert bad_amount == Decimal("3748.68")
 #
@@ -1821,13 +1905,12 @@ def test_prepayment(session: Session) -> None:
 #         payment_date=parse_date("2020-07-01"),
 #         payment_request_id="abcde",
 #     )
-#     user_card_id = uc.loan_id
 #     _, writeoff_amount = get_account_balance_from_str(
-#         session, book_string=f"{user_card_id}/card/writeoff_expenses/e"
+#         session, book_string=f"{uc.loan_id}/loan/writeoff_expenses/e"
 #     )
 #     assert writeoff_amount == Decimal("0")
 #     _, bad_amount = get_account_balance_from_str(
-#         session, book_string=f"{user_card_id}/card/bad_debt_allowance/ca"
+#         session, book_string=f"{uc.loan_id}/loan/bad_debt_allowance/ca"
 #     )
 #     assert bad_amount == Decimal("0")
 #     _, pg_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
@@ -1837,17 +1920,16 @@ def test_prepayment(session: Session) -> None:
 # def test_writeoff_recovery_two(session: Session) -> None:
 #     test_writeoff(session)
 #     uc = get_user_card(session, 99)
-#     user_card_id = uc.loan_id
 #
 #     payment_received(
 #         session, uc, Decimal("3000"), payment_date=parse_date("2020-07-01"), payment_request_id="abcde",
 #     )
 #     _, writeoff_amount = get_account_balance_from_str(
-#         session, book_string=f"{user_card_id}/card/writeoff_expenses/e"
+#         session, book_string=f"{uc.loan_id}/loan/writeoff_expenses/e"
 #     )
 #     assert writeoff_amount == Decimal("748.68")
 #     _, bad_amount = get_account_balance_from_str(
-#         session, book_string=f"{user_card_id}/card/bad_debt_allowance/ca"
+#         session, book_string=f"{uc.loan_id}/loan/bad_debt_allowance/ca"
 #     )
 #     assert bad_amount == Decimal("748.68")
 #     _, pg_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
@@ -1893,6 +1975,12 @@ def test_moratorium(session: Session) -> None:
     generate_date = parse_date("2020-02-01").date()
     user_card = get_user_card(session, a.id)
     bill_may = bill_generate(user_card)
+
+    # check latest bill method
+    latest_bill = user_card.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(
         session, bill_may.table.bill_due_date + relativedelta(days=1), user_card
@@ -1951,8 +2039,13 @@ def test_refresh_schedule(session: Session) -> None:
     user_card = get_user_card(session, a.id)
     bill_april = bill_generate(user_card)
 
+    # check latest bill method
+    latest_bill = user_card.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{uc.loan_id}/card/lender_payable/l"
+        session, book_string=f"{uc.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable == Decimal("6000")
 
@@ -1969,7 +2062,7 @@ def test_refresh_schedule(session: Session) -> None:
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{uc.loan_id}/card/lender_payable/l"
+        session, book_string=f"{uc.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable == Decimal("4000.5")
 
@@ -1988,6 +2081,12 @@ def test_refresh_schedule(session: Session) -> None:
 
     generate_date = parse_date("2020-06-01").date()
     bill_may = bill_generate(user_card)
+
+    # check latest bill method
+    latest_bill = user_card.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(
         session, bill_may.table.bill_due_date + relativedelta(days=1), user_card
@@ -2034,8 +2133,13 @@ def test_moratorium_schedule(session: Session) -> None:
     user_card = get_user_card(session, a.id)
     bill_april = bill_generate(user_card)
 
+    # check latest bill method
+    latest_bill = user_card.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{uc.loan_id}/card/lender_payable/l"
+        session, book_string=f"{uc.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable == Decimal("6000")
 
@@ -2052,7 +2156,7 @@ def test_moratorium_schedule(session: Session) -> None:
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
-        session, book_string=f"{uc.loan_id}/card/lender_payable/l"
+        session, book_string=f"{uc.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable == Decimal("4000.5")
 
@@ -2072,6 +2176,12 @@ def test_moratorium_schedule(session: Session) -> None:
     generate_date = parse_date("2020-06-01").date()
     user_card = get_user_card(session, a.id)
     bill_may = bill_generate(user_card)
+
+    # check latest bill method
+    latest_bill = user_card.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(
         session, bill_may.table.bill_due_date + relativedelta(days=1), user_card
@@ -2135,6 +2245,12 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
     uc = get_user_card(session, a.id)
     # Generate bill
     bill = bill_generate(uc)
+
+    # check latest bill method
+    latest_bill = uc.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), uc)
 
@@ -2224,6 +2340,11 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
     uc = get_user_card(session, a.id)
     bill_march = bill_generate(uc)
 
+    # check latest bill method
+    latest_bill = uc.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
     create_card_swipe(
         session=session,
         user_card=user_card,
@@ -2244,6 +2365,12 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
     accrue_interest_on_all_bills(session, bill_march.table.bill_due_date + relativedelta(days=1), uc)
 
     bill_april = bill_generate(uc)
+
+    # check latest bill method
+    latest_bill = uc.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(session, bill_april.table.bill_due_date + relativedelta(days=1), uc)
 
@@ -2291,6 +2418,12 @@ def test_intermediate_bill_generation(session: Session) -> None:
     test_card_swipe(session)
     user_card = get_user_card(session, 2)
     bill_1 = bill_generate(user_card)
+
+    # check latest bill method
+    latest_bill = user_card.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(session, bill_1.table.bill_due_date + relativedelta(days=1), user_card)
 
@@ -2304,6 +2437,12 @@ def test_intermediate_bill_generation(session: Session) -> None:
     )
 
     bill_2 = bill_generate(user_card)
+
+    # check latest bill method
+    latest_bill = user_card.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(session, bill_2.table.bill_due_date + relativedelta(days=1), user_card)
 

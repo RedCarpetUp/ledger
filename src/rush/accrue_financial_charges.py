@@ -242,7 +242,11 @@ def reverse_interest_charges(
             if entry["amount"] == 0:
                 continue
             _adjust_for_prepayment(
-                session, user_card.user_id, event.id, entry["amount"], entry["acc_to_remove_from"]
+                session=session,
+                loan_id=user_card.user_id,
+                event_id=event.id,
+                amount=entry["amount"],
+                debit_book_str=entry["acc_to_remove_from"],
             )
 
     from rush.create_emi import refresh_schedule
@@ -301,7 +305,11 @@ def reverse_late_charges(
                     continue
                 # TODO maybe just call the entire payment received event here?
                 _adjust_for_prepayment(
-                    session, user_card.user_id, event.id, acc["amount"], acc["acc_to_remove_from"]
+                    session=session,
+                    loan_id=user_card.user_id,
+                    event_id=event.id,
+                    amount=acc["amount"],
+                    debit_book_str=acc["acc_to_remove_from"],
                 )
     fee.fee_status = "REVERSED"
 

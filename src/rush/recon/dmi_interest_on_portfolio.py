@@ -98,7 +98,7 @@ interst_calc AS (
     d.rn = i.rn + 1
 ) 
 select 
-  loan_id as card_id, 
+  loan_id, 
   round(
     sum(interest), 
     2

@@ -100,8 +100,8 @@ def upgrade() -> None:
         sa.Column("loan_status", sa.String(50), nullable=True),  # TODO: change back to nullable=False
         sa.Column("product_id", sa.Integer(), nullable=False),
         sa.Column("lender_id", sa.Integer(), nullable=False),
-        sa.Column("rc_rate_of_interest_monthly", sa.Numeric(), nullable=True),
-        sa.Column("lender_rate_of_interest_annual", sa.Numeric(), nullable=True),
+        sa.Column("rc_rate_of_interest_monthly", sa.Numeric(), nullable=False),
+        sa.Column("lender_rate_of_interest_annual", sa.Numeric(), nullable=False),
         sa.ForeignKeyConstraint(["lender_id"], ["rc_lenders.id"], name="fk_v3_user_cards_lender_id"),
         sa.ForeignKeyConstraint(["product_id"], ["product.id"], name="fk_loan_product_id"),
         sa.PrimaryKeyConstraint("id"),
@@ -338,7 +338,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
-        sa.ForeignKeyConstraint(["loan_id"], ["loan.id"], name="fk_fee_card_id"),
+        sa.ForeignKeyConstraint(["loan_id"], ["loan.id"], name="fk_fee_loan_id"),
         sa.ForeignKeyConstraint(["bill_id"], ["loan_data.id"], name="fk_fee_bill_id"),
         sa.ForeignKeyConstraint(["event_id"], ["ledger_trigger_event.id"], name="fk_fee_event_id"),
     )
@@ -358,7 +358,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
-        sa.ForeignKeyConstraint(["loan_id"], ["loan.id"], name="fk_event_dpd_card_id"),
+        sa.ForeignKeyConstraint(["loan_id"], ["loan.id"], name="fk_event_dpd_loan_id"),
         sa.ForeignKeyConstraint(["event_id"], ["ledger_trigger_event.id"], name="fk_event_dpd_event_id"),
         sa.ForeignKeyConstraint(["bill_id"], ["loan_data.id"], name="fk_event_dpd_bill_id"),
     )
