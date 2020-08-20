@@ -68,7 +68,6 @@ from rush.views import (
     user_view,
 )
 
-
 # def test_current(get_alembic: alembic.config.Config) -> None:
 #     """Test that the alembic current command does not erorr"""
 #     # Runs with no error

@@ -20,7 +20,6 @@ from rush.models import (
 )
 from rush.payments import payment_received
 
-
 # def create_lenders(session: Session) -> None:
 #     dmi = Lenders(id=62311, performed_by=123, lender_name="DMI")
 #     session.add(dmi)

@@ -23,7 +23,6 @@ from rush.models import (
 from rush.payments import payment_received
 from rush.recon.revenue_earned import get_revenue_earned_in_a_period
 
-
 # def create_products(session: Session) -> None:
 #     ruby_product = Product(product_name="ruby")
 #     session.add(ruby_product)
