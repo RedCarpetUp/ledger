@@ -7,7 +7,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Session
 
 from rush.card import (
-    BaseCard,
+    BaseLoan,
     get_user_card,
 )
 from rush.ledger_utils import (
@@ -24,7 +24,7 @@ from rush.models import (
 )
 
 
-def user_view(session, user_card: BaseCard) -> dict:
+def user_view(session, user_card: BaseLoan) -> dict:
     index = 0
     total_due, min_amount, current_bill_principal_amount, current_bill_principal_interest = 0, 0, 0, 0
     unpaid_bills = user_card.get_unpaid_bills()
@@ -49,7 +49,7 @@ def user_view(session, user_card: BaseCard) -> dict:
     }
 
 
-def bill_view(session: Session, user_card: BaseCard) -> list:
+def bill_view(session: Session, user_card: BaseLoan) -> list:
 
     bill_details = []
     all_bills = (

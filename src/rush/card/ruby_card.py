@@ -1,10 +1,10 @@
 from rush.card.base_card import (
     BaseBill,
-    BaseCard,
+    BaseLoan,
 )
 
 
-class RubyCard(BaseCard):
+class RubyCard(BaseLoan):
     pass
 
 

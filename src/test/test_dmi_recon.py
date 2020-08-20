@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from rush.accrue_financial_charges import accrue_interest_on_all_bills
 from rush.card import (
-    BaseCard,
+    BaseLoan,
     create_user_card,
 )
 from rush.create_bill import bill_generate
@@ -54,7 +54,7 @@ def test_lenders(session: Session) -> None:
     a = session.query(Lenders).first()
 
 
-def _create_user_raghav_and_do_swipes(session: Session) -> BaseCard:
+def _create_user_raghav_and_do_swipes(session: Session) -> BaseLoan:
     # Create user
     user_raghav = User(
         performed_by=123,
@@ -116,7 +116,7 @@ def _create_user_raghav_and_do_swipes(session: Session) -> BaseCard:
     return user_card_raghav
 
 
-def _create_user_ananth_and_do_swipes(session: Session) -> BaseCard:
+def _create_user_ananth_and_do_swipes(session: Session) -> BaseLoan:
     # Create user
     user_ananth = User(
         performed_by=123,

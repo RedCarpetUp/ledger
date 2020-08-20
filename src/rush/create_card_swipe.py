@@ -9,7 +9,7 @@ from pendulum import DateTime
 from sqlalchemy.orm.session import Session
 
 from rush.card import (
-    BaseCard,
+    BaseLoan,
     RubyCard,
 )
 from rush.create_bill import get_or_create_bill_for_card_swipe
@@ -25,7 +25,7 @@ from rush.models import (
 
 def create_card_swipe(
     session: Session,
-    user_card: BaseCard,
+    user_card: BaseLoan,
     txn_time: DateTime,
     amount: Decimal,
     description: str,

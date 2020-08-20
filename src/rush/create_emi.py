@@ -13,7 +13,7 @@ from sqlalchemy.sql import func
 
 from rush.anomaly_detection import get_payment_events
 from rush.card import (
-    BaseCard,
+    BaseLoan,
     get_user_card,
 )
 from rush.card.base_card import BaseBill
@@ -195,7 +195,7 @@ def add_emi_on_new_bill(
     session.flush()
 
 
-def slide_payments(user_card: BaseCard, payment_event: LedgerTriggerEvent = None) -> None:
+def slide_payments(user_card: BaseLoan, payment_event: LedgerTriggerEvent = None) -> None:
     def slide_payments_repeated_logic(
         all_emis,
         payment_received_and_adjusted,
@@ -446,7 +446,7 @@ def slide_payments(user_card: BaseCard, payment_event: LedgerTriggerEvent = None
     session.flush()
 
 
-def adjust_interest_in_emis(session: Session, user_card: BaseCard, post_date: DateTime) -> None:
+def adjust_interest_in_emis(session: Session, user_card: BaseLoan, post_date: DateTime) -> None:
     latest_bill = (
         session.query(LoanData)
         .filter(
@@ -483,7 +483,7 @@ def adjust_interest_in_emis(session: Session, user_card: BaseCard, post_date: Da
             # session.bulk_update_mappings(CardEmis, emis_dict)
 
 
-def adjust_late_fee_in_emis(session: Session, user_card: BaseCard, post_date: DateTime) -> None:
+def adjust_late_fee_in_emis(session: Session, user_card: BaseLoan, post_date: DateTime) -> None:
     latest_bill = (
         session.query(LoanData)
         .filter(
@@ -520,7 +520,7 @@ def adjust_late_fee_in_emis(session: Session, user_card: BaseCard, post_date: Da
         session.flush()
 
 
-def adjust_atm_fee_in_emis(session: Session, user_card: BaseCard, post_date: DateTime) -> None:
+def adjust_atm_fee_in_emis(session: Session, user_card: BaseLoan, post_date: DateTime) -> None:
     latest_bill = (
         session.query(LoanData)
         .filter(
@@ -688,7 +688,7 @@ def check_moratorium_eligibility(session: Session, data):
         return resp
 
 
-def refresh_schedule(user_card: BaseCard):
+def refresh_schedule(user_card: BaseLoan):
     session = user_card.session
     # Get all generated bills of the user
     all_bills = user_card.get_all_bills()
@@ -820,7 +820,7 @@ def entry_checks(
     return verdict
 
 
-def update_event_with_dpd(user_card: BaseCard, post_date: DateTime = None) -> None:
+def update_event_with_dpd(user_card: BaseLoan, post_date: DateTime = None) -> None:
     def actual_event_update(
         session: Session, is_debit: bool, ledger_trigger_event, ledger_entry, account
     ):

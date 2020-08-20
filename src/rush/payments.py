@@ -4,7 +4,7 @@ from pendulum import DateTime
 from sqlalchemy.orm import Session
 
 from rush.anomaly_detection import run_anomaly
-from rush.card import BaseCard
+from rush.card import BaseLoan
 from rush.ledger_events import (
     _adjust_for_complete_bill,
     _adjust_for_min,
@@ -21,7 +21,7 @@ from rush.models import (
 
 def payment_received(
     session: Session,
-    user_card: BaseCard,
+    user_card: BaseLoan,
     payment_amount: Decimal,
     payment_date: DateTime,
     payment_request_id: str,
@@ -42,7 +42,7 @@ def payment_received(
 
 def refund_payment(
     session: Session,
-    user_card: BaseCard,
+    user_card: BaseLoan,
     payment_amount: Decimal,
     payment_date: DateTime,
     payment_request_id: str,
@@ -67,7 +67,7 @@ def refund_payment(
 
 
 def transaction_refund_event(
-    session: Session, user_card: BaseCard, event: LedgerTriggerEvent, bill: LoanData
+    session: Session, user_card: BaseLoan, event: LedgerTriggerEvent, bill: LoanData
 ) -> None:
     refund_amount = Decimal(event.amount)
     m2p_pool_account = f"{user_card.lender_id}/lender/pool_balance/a"

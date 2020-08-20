@@ -87,7 +87,7 @@ class BaseBill:
 B = TypeVar("B", bound=BaseBill)
 
 
-class BaseCard:
+class BaseLoan:
     session: Session = None
     table: UserCard = None
 

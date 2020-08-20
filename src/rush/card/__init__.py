@@ -4,7 +4,7 @@ from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
-from rush.card.base_card import BaseCard
+from rush.card.base_card import BaseLoan
 from rush.card.health_card import (
     HealthBill,
     HealthCard,
@@ -21,7 +21,7 @@ from rush.models import (
 )
 
 
-def get_user_card(session: Session, user_id: int, card_type: str = "ruby") -> BaseCard:
+def get_user_card(session: Session, user_id: int, card_type: str = "ruby") -> BaseLoan:
     user_card, loan = (
         session.query(UserCard, Loan)
         .join(Product, and_(Product.product_name == card_type, Product.id == Loan.product_id))
@@ -40,7 +40,7 @@ def get_user_card(session: Session, user_id: int, card_type: str = "ruby") -> Ba
         return HealthCard(session=session, bill_class=HealthBill, user_card=user_card, loan=loan)
 
 
-def create_user_card(session: Session, **kwargs) -> BaseCard:
+def create_user_card(session: Session, **kwargs) -> BaseLoan:
     loan = Loan(
         user_id=kwargs["user_id"],
         product_id=get_product_id_from_card_type(session=session, card_type=kwargs["card_type"]),

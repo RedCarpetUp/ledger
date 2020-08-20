@@ -7,7 +7,7 @@ from typing import (
 from sqlalchemy import Date
 from sqlalchemy.orm import Session
 
-from rush.card import BaseCard
+from rush.card import BaseLoan
 from rush.card.base_card import BaseBill
 from rush.ledger_utils import (
     create_ledger_entry_from_str,
@@ -44,7 +44,7 @@ def m2p_transfer_event(session: Session, event: LedgerTriggerEvent, lender_id: i
     )
 
 
-def disburse_money_to_card(session: Session, user_card: BaseCard, event: LedgerTriggerEvent) -> None:
+def disburse_money_to_card(session: Session, user_card: BaseLoan, event: LedgerTriggerEvent) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
@@ -55,7 +55,7 @@ def disburse_money_to_card(session: Session, user_card: BaseCard, event: LedgerT
 
 
 def card_transaction_event(
-    session: Session, user_card: BaseCard, event: LedgerTriggerEvent, mcc: Optional[str] = None
+    session: Session, user_card: BaseLoan, event: LedgerTriggerEvent, mcc: Optional[str] = None
 ) -> None:
     amount = Decimal(event.amount)
     swipe_id = event.extra_details["swipe_id"]
@@ -98,7 +98,7 @@ def card_transaction_event(
 
 
 def bill_generate_event(
-    session: Session, bill: BaseBill, user_card: BaseCard, event: LedgerTriggerEvent
+    session: Session, bill: BaseBill, user_card: BaseLoan, event: LedgerTriggerEvent
 ) -> None:
     bill_id = bill.id
 
@@ -142,7 +142,7 @@ def add_min_amount_event(
 
 
 def payment_received_event(
-    session: Session, user_card: BaseCard, debit_book_str: str, event: LedgerTriggerEvent,
+    session: Session, user_card: BaseLoan, debit_book_str: str, event: LedgerTriggerEvent,
 ) -> None:
     payment_received = Decimal(event.amount)
     gateway_charges = event.extra_details.get("gateway_charges")
@@ -476,7 +476,7 @@ def limit_assignment_event(session: Session, loan_id: int, event: LedgerTriggerE
     )
 
 
-def daily_dpd_event(session: Session, user_card: BaseCard) -> None:
+def daily_dpd_event(session: Session, user_card: BaseLoan) -> None:
     from rush.utils import get_current_ist_time
 
     event = LedgerTriggerEvent(

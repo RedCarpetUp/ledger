@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from rush.card.base_card import (
     B,
     BaseBill,
-    BaseCard,
+    BaseLoan,
 )
 from rush.ledger_utils import get_account_balance_from_str
 from rush.models import (
@@ -33,7 +33,7 @@ HEALTH_TXN_MCC = [
 ]
 
 
-class HealthCard(BaseCard):
+class HealthCard(BaseLoan):
     # todo: add implementation for health card.
     def __init__(self, session: Session, bill_class: Type[B], user_card: UserCard, loan: Loan):
         super().__init__(session=session, bill_class=bill_class, user_card=user_card, loan=loan)
