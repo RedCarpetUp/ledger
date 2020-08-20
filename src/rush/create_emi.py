@@ -819,13 +819,13 @@ def refresh_schedule(user_card: BaseCard, post_date: DateTime = None):
                 late_fine_due,
                 interest_due,
                 atm_fee_due,
-                post_date,
                 last_bill_tenure,
+                post_date,
                 bill_accumalation_till_date,
                 # The last old bill emi number can only exist in case of post date existence
                 pre_post_date_emis[-1].emi_number if post_date else 0,
             )
-        last_bill_tenure = bill.table.tenure
+        last_bill_tenure = bill.table.bill_tenure
         bill_number += 1
 
     # Check if user has opted for moratorium and adjust that in schedule
