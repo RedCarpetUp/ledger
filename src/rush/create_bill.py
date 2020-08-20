@@ -25,14 +25,10 @@ from rush.utils import (
 
 
 def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -> BaseBill:
-    session = user_card.session
     # Get the most recent bill
     last_bill = user_card.get_latest_bill()
-    if isinstance(txn_time, Date):
-        txn_date = txn_time
-    else:
-        txn_date = txn_time.date()
-    lender_id = user_card.table.lender_id
+    txn_date = txn_time.date()
+    lender_id = user_card.lender_id
     if last_bill:
         does_swipe_belong_to_current_bill = txn_date < last_bill.bill_close_date
         if does_swipe_belong_to_current_bill:
@@ -74,29 +70,31 @@ def bill_generate(user_card: BaseCard, post_date: Optional[DateTime] = None) -> 
         if bill["result"] == "error":
             return bill
         bill = bill["bill"]
-    lt = LedgerTriggerEvent(name="bill_generate", card_id=user_card.id, post_date=bill.bill_close_date)
+    lt = LedgerTriggerEvent(
+        name="bill_generate", loan_id=user_card.loan_id, post_date=bill.bill_close_date
+    )
     session.add(lt)
     session.flush()
 
-    bill_generate_event(session, bill, user_card.id, lt)
+    bill_generate_event(session=session, bill=bill, user_card=user_card, event=lt)
 
     bill.table.is_generated = True
 
     _, billed_amount = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/principal_receivable/a"
+        session=session, book_string=f"{bill.id}/bill/principal_receivable/a"
     )
     principal_instalment = div(billed_amount, bill.table.bill_tenure)
 
     # Update the bill row here.
     bill.table.principal = billed_amount
     bill.table.principal_instalment = principal_instalment
-    bill.table.interest_to_charge = bill.get_interest_to_charge(
-        user_card.table.rc_rate_of_interest_monthly
-    )
+    bill.table.interest_to_charge = bill.get_interest_to_charge(user_card.rc_rate_of_interest_monthly)
 
     bill_closing_date = bill.bill_start_date + relativedelta(months=+1)
     # Don't add in min if user is in moratorium.
-    if not LoanMoratorium.is_in_moratorium(session, user_card.id, bill_closing_date):
+    if not LoanMoratorium.is_in_moratorium(
+        session=session, loan_id=user_card.loan_id, date_to_check_against=bill_closing_date
+    ):
         # After the bill has generated. Call the min generation event on all unpaid bills.
         add_min_to_all_bills(session, bill_closing_date, user_card)
 
@@ -119,7 +117,7 @@ def extend_tenure(session: Session, user_card: BaseCard, new_tenure: int) -> Non
         # Update the bill rows here
         bill.table.principal_instalment = principal_instalment
         bill.table.interest_to_charge = bill.get_interest_to_charge(
-            user_card.table.rc_rate_of_interest_monthly
+            user_card.rc_rate_of_interest_monthly
         )
     session.flush()
     # Refresh the schedule
@@ -134,7 +132,7 @@ def add_atm_fee(
     atm_fee_perc = Decimal(2)
     atm_fee_without_gst = mul(atm_transactions_amount / 100, atm_fee_perc)
 
-    event = LedgerTriggerEvent(name="atm_fee_added", card_id=bill.table.card_id, post_date=post_date)
+    event = LedgerTriggerEvent(name="atm_fee_added", loan_id=bill.table.loan_id, post_date=post_date)
     session.add(event)
     session.flush()
 

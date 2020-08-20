@@ -17,12 +17,22 @@ from rush.models import (
     CardKitNumbers,
     CardNames,
     Lenders,
+    Product,
     User,
 )
 from rush.payments import payment_received
 from rush.recon.revenue_earned import get_revenue_earned_in_a_period
 
+
+# def create_products(session: Session) -> None:
+#     ruby_product = Product(product_name="ruby")
+#     session.add(ruby_product)
+#     session.flush()
+
+
 # def card_db_updates(session: Session) -> None:
+#     create_products(session=session)
+
 #     cn = CardNames(name="ruby")
 #     session.add(cn)
 #     session.flush()
@@ -100,7 +110,7 @@ from rush.recon.revenue_earned import get_revenue_earned_in_a_period
 #     assert unbilled_bal_raghav_bill_1 == 1100
 
 #     _, lender_payable_raghav = get_account_balance_from_str(
-#         session, f"{user_card_raghav.id}/card/lender_payable/l"
+#         session, f"{user_card_raghav.loan_id}/loan/lender_payable/l"
 #     )
 #     assert lender_payable_raghav == 1100
 #     return user_card_raghav
@@ -162,7 +172,7 @@ from rush.recon.revenue_earned import get_revenue_earned_in_a_period
 #     assert unbilled_bal_ananth_bill_1 == Decimal("6500.75")
 
 #     _, lender_payable_ananth = get_account_balance_from_str(
-#         session, f"{user_card_ananth.id}/card/lender_payable/l"
+#         session, f"{user_card_ananth.loan_id}/loan/lender_payable/l"
 #     )
 #     assert lender_payable_ananth == Decimal("6500.75")
 #     return user_card_ananth
@@ -180,12 +190,12 @@ from rush.recon.revenue_earned import get_revenue_earned_in_a_period
 #     )
 
 #     _, lender_payable_raghav = get_account_balance_from_str(
-#         session, f"{user_card_raghav.id}/card/lender_payable/l"
+#         session, f"{user_card_raghav.loan_id}/loan/lender_payable/l"
 #     )
 #     assert lender_payable_raghav == Decimal("1114.90")
 
 #     _, lender_payable_ananth = get_account_balance_from_str(
-#         session, f"{user_card_ananth.id}/card/lender_payable/l"
+#         session, f"{user_card_ananth.loan_id}/loan/lender_payable/l"
 #     )
 #     assert lender_payable_ananth == Decimal("6557.24")
 
@@ -284,6 +294,6 @@ from rush.recon.revenue_earned import get_revenue_earned_in_a_period
 #     lender_interest_incur(session, from_date=from_date, to_date=to_date)
 
 #     _, lender_payable_raghav = get_account_balance_from_str(
-#         session, f"{user_card_raghav.id}/card/lender_payable/l"
+#         session, f"{user_card_raghav.loan_id}/loan/lender_payable/l"
 #     )
 #     assert lender_payable_raghav == Decimal("829.51")

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from rush.accrue_financial_charges import accrue_interest_on_all_bills
 from rush.card import create_user_card
+from rush.card.base_card import BaseBill
 from rush.card.health_card import HealthCard
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
@@ -14,9 +15,11 @@ from rush.models import (
     CardNames,
     CardTransaction,
     Lenders,
+    Product,
     User,
 )
 from rush.payments import payment_received
+
 
 # def create_lenders(session: Session) -> None:
 #     dmi = Lenders(id=62311, performed_by=123, lender_name="DMI")
@@ -27,7 +30,15 @@ from rush.payments import payment_received
 #     session.flush()
 
 
+# def create_products(session: Session) -> None:
+#     hc_product = Product(product_name="health_card")
+#     session.add(hc_product)
+#     session.flush()
+
+
 # def card_db_updates(session: Session) -> None:
+#     create_products(session=session)
+
 #     cn = CardNames(name="ruby")
 #     session.add(cn)
 #     session.flush()
@@ -92,15 +103,15 @@ from rush.payments import payment_received
 #     _, unbilled_balance = get_account_balance_from_str(session, f"{swipe_loan_id}/bill/unbilled/a")
 #     assert unbilled_balance == 700
 
-#     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.id}/card/health_limit/l")
+#     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")
 #     assert medical_limit_balance == -700
 
 #     _, non_medical_limit_balance = get_account_balance_from_str(
-#         session, f"{uc.id}/card/available_limit/l"
+#         session, f"{uc.loan_id}/card/available_limit/l"
 #     )
 #     assert non_medical_limit_balance == 0
 
-#     _, lender_payable = get_account_balance_from_str(session, f"{uc.id}/card/lender_payable/l")
+#     _, lender_payable = get_account_balance_from_str(session, f"{uc.loan_id}/loan/lender_payable/l")
 #     assert lender_payable == 700
 
 
@@ -136,15 +147,15 @@ from rush.payments import payment_received
 #     _, unbilled_balance = get_account_balance_from_str(session, f"{swipe_loan_id}/bill/unbilled/a")
 #     assert unbilled_balance == 2200
 
-#     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.id}/card/health_limit/l")
+#     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")
 #     assert medical_limit_balance == -1500
 
 #     _, non_medical_limit_balance = get_account_balance_from_str(
-#         session, f"{uc.id}/card/available_limit/l"
+#         session, f"{uc.loan_id}/card/available_limit/l"
 #     )
 #     assert non_medical_limit_balance == -700
 
-#     _, lender_payable = get_account_balance_from_str(session, f"{uc.id}/card/lender_payable/l")
+#     _, lender_payable = get_account_balance_from_str(session, f"{uc.loan_id}/loan/lender_payable/l")
 #     assert lender_payable == 2200
 
 
@@ -169,6 +180,12 @@ from rush.payments import payment_received
 #     assert unbilled_amount == 1000
 
 #     bill = bill_generate(uc)
+
+#     # check latest bill method
+#     latest_bill = uc.get_latest_bill()
+#     assert latest_bill is not None
+#     assert isinstance(latest_bill, BaseBill) == True
+
 #     # Interest event to be fired separately now
 #     accrue_interest_on_all_bills(session, parse_date("2020-07-31"), uc)
 
@@ -217,6 +234,12 @@ from rush.payments import payment_received
 #     assert unbilled_amount == 1000
 
 #     bill = bill_generate(uc)
+
+#     # check latest bill method
+#     latest_bill = uc.get_latest_bill()
+#     assert latest_bill is not None
+#     assert isinstance(latest_bill, BaseBill) == True
+
 #     # Interest event to be fired separately now
 #     accrue_interest_on_all_bills(session, parse_date("2020-07-31"), uc)
 
@@ -279,6 +302,12 @@ from rush.payments import payment_received
 #     assert unbilled_amount == 2500
 
 #     bill = bill_generate(uc)
+
+#     # check latest bill method
+#     latest_bill = uc.get_latest_bill()
+#     assert latest_bill is not None
+#     assert isinstance(latest_bill, BaseBill) == True
+
 #     # Interest event to be fired separately now
 #     accrue_interest_on_all_bills(session, parse_date("2020-07-31"), uc)
 
@@ -341,6 +370,12 @@ from rush.payments import payment_received
 #     assert unbilled_amount == 2500
 
 #     bill = bill_generate(uc)
+
+#     # check latest bill method
+#     latest_bill = uc.get_latest_bill()
+#     assert latest_bill is not None
+#     assert isinstance(latest_bill, BaseBill) == True
+
 #     # Interest event to be fired separately now
 #     accrue_interest_on_all_bills(session, parse_date("2020-07-31"), uc)
 
@@ -369,11 +404,11 @@ from rush.payments import payment_received
 #     )
 #     assert interest_due == Decimal("75.67")
 
-#     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.id}/card/health_limit/l")
+#     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")
 #     assert medical_limit_balance == -1000
 
 #     _, non_medical_limit_balance = get_account_balance_from_str(
-#         session, f"{uc.id}/card/available_limit/l"
+#         session, f"{uc.loan_id}/card/available_limit/l"
 #     )
 #     assert non_medical_limit_balance == -1500
 
@@ -388,11 +423,11 @@ from rush.payments import payment_received
 #         payment_request_id="mixed_payment",
 #     )
 
-#     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.id}/card/health_limit/l")
+#     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")
 #     assert medical_limit_balance == Decimal(0)
 
 #     _, non_medical_limit_balance = get_account_balance_from_str(
-#         session, f"{uc.id}/card/available_limit/l"
+#         session, f"{uc.loan_id}/card/available_limit/l"
 #     )
 #     assert non_medical_limit_balance == -500
 
@@ -417,6 +452,12 @@ from rush.payments import payment_received
 #     assert unbilled_amount == 1000
 
 #     bill = bill_generate(uc)
+
+#     # check latest bill method
+#     latest_bill = uc.get_latest_bill()
+#     assert latest_bill is not None
+#     assert isinstance(latest_bill, BaseBill) == True
+
 #     # Interest event to be fired separately now
 #     accrue_interest_on_all_bills(session, parse_date("2020-07-31"), uc)
 
@@ -445,11 +486,11 @@ from rush.payments import payment_received
 #     )
 #     assert interest_due == Decimal("30.67")
 
-#     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.id}/card/health_limit/l")
+#     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")
 #     assert medical_limit_balance == -1000
 
 #     _, non_medical_limit_balance = get_account_balance_from_str(
-#         session, f"{uc.id}/card/available_limit/l"
+#         session, f"{uc.loan_id}/card/available_limit/l"
 #     )
 #     assert non_medical_limit_balance == Decimal(0)
 
@@ -461,11 +502,11 @@ from rush.payments import payment_received
 #         payment_request_id="medical_payment",
 #     )
 
-#     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.id}/card/health_limit/l")
+#     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")
 #     assert medical_limit_balance == Decimal(-300)
 
 #     _, non_medical_limit_balance = get_account_balance_from_str(
-#         session, f"{uc.id}/card/available_limit/l"
+#         session, f"{uc.loan_id}/card/available_limit/l"
 #     )
 #     assert non_medical_limit_balance == Decimal(0)
 
@@ -489,6 +530,12 @@ from rush.payments import payment_received
 #     assert unbilled_amount == 1500
 
 #     bill = bill_generate(uc)
+
+#     # check latest bill method
+#     latest_bill = uc.get_latest_bill()
+#     assert latest_bill is not None
+#     assert isinstance(latest_bill, BaseBill) == True
+
 #     # Interest event to be fired separately now
 #     accrue_interest_on_all_bills(session, parse_date("2020-07-31"), uc)
 
@@ -517,11 +564,11 @@ from rush.payments import payment_received
 #     )
 #     assert interest_due == Decimal("45")
 
-#     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.id}/card/health_limit/l")
+#     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")
 #     assert medical_limit_balance == Decimal(0)
 
 #     _, non_medical_limit_balance = get_account_balance_from_str(
-#         session, f"{uc.id}/card/available_limit/l"
+#         session, f"{uc.loan_id}/card/available_limit/l"
 #     )
 #     assert non_medical_limit_balance == -1500
 
@@ -536,10 +583,10 @@ from rush.payments import payment_received
 #         payment_request_id="non_medical_payment",
 #     )
 
-#     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.id}/card/health_limit/l")
+#     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")
 #     assert medical_limit_balance == Decimal(0)
 
 #     _, non_medical_limit_balance = get_account_balance_from_str(
-#         session, f"{uc.id}/card/available_limit/l"
+#         session, f"{uc.loan_id}/card/available_limit/l"
 #     )
 #     assert non_medical_limit_balance == -300
