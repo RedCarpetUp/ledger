@@ -408,13 +408,9 @@ def test_drawdown_open(session: Session) -> None:
                     payment_request_id=event["data"]["payment_request_id"],
                 )
             elif event["type"] == "moratorium":
-                check_moratorium_eligibility(
-                    session,
-                    {
-                        "user_id": user_id,
-                        "start_date": event["data"]["moratorium_start_due_dt"].strftime("%Y-%m-%d"),
-                        "months_to_be_inserted": event["data"]["moratorium_month"],
-                    },
+                # Give moratorium to user
+                LoanMoratorium.new(
+                    session, card_id=user_card.id, start_date=parse_date("2020-03-01"), end_date=parse_date("2020-06-01"),
                 )
 
     session.commit()

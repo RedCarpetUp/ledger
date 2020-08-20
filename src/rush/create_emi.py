@@ -109,11 +109,12 @@ def add_emi_on_new_bill(
     interest: Decimal = None,
     atm_fee_due: Decimal = None,
     bill_tenure: Decimal = 12,
+    last_bill_tenure: Decimal = 12,
 ) -> None:
-    if bill_tenure < last_emi_number:
+    if bill_tenure < last_bill_tenure:
         emis_to_be_inserted = 0
     else:
-        emis_to_be_inserted = (bill_tenure - last_emi_number) + 1
+        emis_to_be_inserted = (bill_tenure - last_bill_tenure) + 1
     principal_due = Decimal(last_bill.table.principal)
     due_amount = last_bill.table.principal_instalment
     all_emis = (
@@ -717,6 +718,7 @@ def refresh_schedule(user_card: BaseCard):
 
     # Re-Create schedule from all the bills
     bill_number = 1
+    last_bill_tenure = 0
     for bill in all_bills:
         fees = session.query(Fee).filter(Fee.bill_id == bill.id, Fee.fee_status != "REVERSED").all()
         late_fine_due = atm_fee_due = 0
@@ -753,7 +755,9 @@ def refresh_schedule(user_card: BaseCard):
                 interest_due,
                 atm_fee_due,
                 bill.table.bill_tenure,
+                last_bill_tenure,
             )
+        last_bill_tenure = bill.table.bill_tenure
         bill_number += 1
 
     # Check if user has opted for moratorium and adjust that in schedule
