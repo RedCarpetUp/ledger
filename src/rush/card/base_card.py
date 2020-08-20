@@ -1,4 +1,3 @@
-from datetime import timedelta
 from decimal import Decimal
 from typing import (
     List,
@@ -7,7 +6,6 @@ from typing import (
     TypeVar,
 )
 
-from dateutil.relativedelta import relativedelta
 from pendulum import (
     Date,
     DateTime,
@@ -16,7 +14,6 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from rush.ledger_utils import (
-    get_account_balance_from_str,
     get_remaining_bill_balance,
     is_bill_closed,
 )
@@ -148,7 +145,7 @@ class BaseCard:
     def get_unpaid_bills(self) -> List[BaseBill]:
         all_bills = (
             self.session.query(LoanData)
-            .filter(LoanData.user_id == self.user_id, LoanData.is_generated.is_(True))
+            .filter(LoanData.loan_id == self.loan_id, LoanData.is_generated.is_(True))
             .order_by(LoanData.bill_start_date)
             .all()
         )
@@ -159,7 +156,7 @@ class BaseCard:
     def get_all_bills(self) -> List[BaseBill]:
         all_bills = (
             self.session.query(LoanData)
-            .filter(LoanData.user_id == self.user_id, LoanData.is_generated.is_(True))
+            .filter(LoanData.loan_id == self.loan_id, LoanData.is_generated.is_(True))
             .order_by(LoanData.bill_start_date)
             .all()
         )
@@ -169,7 +166,7 @@ class BaseCard:
     def get_last_unpaid_bill(self) -> BaseBill:
         all_bills = (
             self.session.query(LoanData)
-            .filter(LoanData.user_id == self.user_id)
+            .filter(LoanData.loan_id == self.loan_id)
             .order_by(LoanData.bill_start_date)
             .all()
         )

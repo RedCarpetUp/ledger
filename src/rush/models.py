@@ -302,40 +302,9 @@ class LedgerEntryPy(AuditMixinPy):
     debit_account: int
     credit_account: int
     amount: Decimal
-    business_date: DateTime
-
-    # class UserCard(AuditMixin):
-    #     __tablename__ = "user_card"
-    #     user_id = Column(Integer, ForeignKey(User.id), nullable=False)
-    #     lender_id = Column(Integer, ForeignKey(Lenders.id), nullable=False)
-    #     card_type = Column(String, nullable=False)
-    #     card_activation_date = Column(Date, nullable=True)
-    #     statement_period_in_days = Column(Integer, default=30, nullable=False)  # 30 days
-    #     interest_free_period_in_days = Column(Integer, default=45, nullable=False)
-    #     rc_rate_of_interest_monthly = Column(Numeric, nullable=False)
-    #     lender_rate_of_interest_annual = Column(Numeric, nullable=False)
-    #     dpd = Column(Integer, nullable=True)
-
-    # class Loan(AuditMixin):
-    #     __tablename__ = "v3_loans"
-
+    business_date: DateTime    
     user_id = Column(Integer, ForeignKey(User.id), nullable=False)
     is_deleted = Column(Boolean, nullable=True)
-
-    # histories = relationship("LoanData", foreign_keys="LoanData.loan_id")
-    # latest = relationship(
-    #     "LoanData",
-    #     lazy="joined",
-    #     uselist=False,
-    #     primaryjoin="and_(Loan.id==LoanData.loan_id, LoanData.row_status=='active')",
-    # )
-
-    # emi_histories = relationship("EmiData")
-    # emis_latest = relationship(
-    #     "EmiData", primaryjoin="and_(Loan.id==EmiData.loan_id, EmiData.row_status=='active')"
-    # )
-
-    # __table_args__ = (Index("index_on_v3_loans_user_id_and_id", user_id, "id"),)
 
 
 class CardNames(AuditMixin):
