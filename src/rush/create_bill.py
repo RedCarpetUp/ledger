@@ -108,26 +108,9 @@ def bill_generate(user_card: BaseCard) -> BaseBill:
 
 
 def extend_tenure(
-    session: Session, user_card: BaseCard, new_tenure: int, post_date: DateTime, bill_id: int = None
+    session: Session, user_card: BaseCard, new_tenure: int, post_date: DateTime, bill: BaseBill = None
 ) -> None:
-    list_of_bills = []
-    if not bill_id:
-        unpaid_bills = user_card.get_unpaid_bills()
-        for bill in unpaid_bills:
-            list_of_bills.append(bill.id)
-            bill.table.bill_tenure = new_tenure
-            principal_instalment = div(bill.table.principal, bill.table.bill_tenure)
-            # Update the bill rows here
-            bill.table.principal_instalment = principal_instalment
-            bill.table.interest_to_charge = bill.get_interest_to_charge(
-                user_card.table.rc_rate_of_interest_monthly
-            )
-    else:
-        bill = (
-            session.query(LoanData)
-            .filter(LoanData.card_id == user_card.id, LoanData.id == bill_id)
-            .first()
-        )
+    def extension(bill: BaseBill):
         list_of_bills.append(bill.id)
         bill.table.bill_tenure = new_tenure
         principal_instalment = div(bill.table.principal, bill.table.bill_tenure)
@@ -136,6 +119,14 @@ def extend_tenure(
         bill.table.interest_to_charge = bill.get_interest_to_charge(
             user_card.table.rc_rate_of_interest_monthly
         )
+
+    list_of_bills = []
+    if not bill:
+        unpaid_bills = user_card.get_unpaid_bills()
+        for unpaid_bill in unpaid_bills:
+            extension(unpaid_bill)
+    else:
+        extension(bill)
 
     event = LedgerTriggerEvent(
         name="tenure_extended",
