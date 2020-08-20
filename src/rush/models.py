@@ -302,7 +302,7 @@ class LedgerEntryPy(AuditMixinPy):
     debit_account: int
     credit_account: int
     amount: Decimal
-    business_date: DateTime    
+    business_date: DateTime
     user_id = Column(Integer, ForeignKey(User.id), nullable=False)
     is_deleted = Column(Boolean, nullable=True)
 
