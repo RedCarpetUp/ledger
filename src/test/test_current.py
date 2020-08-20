@@ -2457,7 +2457,7 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
     # Get emi list post few bill creations
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == user_card.id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
         .all()
     )

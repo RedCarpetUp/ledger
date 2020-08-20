@@ -131,7 +131,7 @@ def extend_tenure(
 
     event = LedgerTriggerEvent(
         name="tenure_extended",
-        card_id=user_card.id,
+        loan_id=user_card.id,
         post_date=post_date,
         extra_details={"bills": list_of_bills},
     )
