@@ -318,7 +318,7 @@ def dump_data(session: Session) -> None:
     conn = pg.connect(v3_conn)
     cursor = conn.cursor()
     for i in range(len(tables_to_insert) - 1, -1, -1):
-        cursor.execute(f"delete from {tables_to_insert[i]['db']}")
+        cursor.execute(f"truncate table {tables_to_insert[i]['db']}")
     conn.commit()
 
     for table in tables_to_insert:
@@ -336,6 +336,10 @@ def dump_data(session: Session) -> None:
                 "view_tags": types.JSON,
             },
         )
+
+    cursor.execute(f"refresh MATERIALIZED view bill_amount_diff")
+    cursor.execute(f"refresh MATERIALIZED view emi_diff")
+    conn.commit()
 
 
 def test_drawdown_open(session: Session) -> None:
