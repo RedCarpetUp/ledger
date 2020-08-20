@@ -420,6 +420,7 @@ class CardTransaction(AuditMixin):
     amount = Column(Numeric, nullable=False)
     source = Column(String(30), nullable=False)
     description = Column(String(100), nullable=False)
+    mcc = Column(String(10), nullable=True)
 
 
 class CardEmis(AuditMixin):

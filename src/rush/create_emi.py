@@ -1,4 +1,3 @@
-from datetime import timedelta
 from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
@@ -41,26 +40,18 @@ from rush.utils import (
 
 def create_emis_for_card(
     session: Session,
-    user_card: UserCard,
-    last_bill: BaseBill,
+    user_card: BaseCard,
+    bill: BaseBill,
     late_fee: Decimal = None,
     interest: Decimal = None,
     atm_fee: Decimal = None,
-    bill_tenure: Decimal = 12,
 ) -> None:
-    first_emi_due_date = user_card.card_activation_date + timedelta(
-        days=user_card.interest_free_period_in_days + 1
-    )
-    principal_due = Decimal(last_bill.table.principal)
-    due_amount = last_bill.table.principal_instalment
-    due_date = new_emi = None
+    due_date = user_card.card_activation_date
+    principal_due = Decimal(bill.table.principal)
+    due_amount = bill.table.principal_instalment
     late_fine = total_interest = current_interest = next_interest = Decimal(0)
-    for i in range(1, bill_tenure + 1):
-        due_date = (
-            first_emi_due_date
-            if i == 1
-            else due_date + timedelta(days=user_card.statement_period_in_days + 1)
-        )
+    for i in range(1, bill.table.bill_tenure + 1):
+        due_date += relativedelta(months=1, day=15)
         # A bill's late fee/atm fee will only go on first emi.
         late_fine = late_fee if late_fee and i == 1 else Decimal(0)
         atm_fine = atm_fee if atm_fee and i == 1 else Decimal(0)
@@ -101,22 +92,23 @@ def create_emis_for_card(
 
 def add_emi_on_new_bill(
     session: Session,
-    user_card: UserCard,
-    last_bill: BaseBill,
-    last_emi_number: int,
+    user_card: BaseCard,
+    bill: BaseBill,
+    last_emi: CardEmis,
     bill_number: int,
     late_fee: Decimal = None,
     interest: Decimal = None,
     atm_fee_due: Decimal = None,
-    bill_tenure: Decimal = 12,
     last_bill_tenure: Decimal = 12,
 ) -> None:
+    last_emi_number = last_emi.emi_number
+    bill_tenure = bill.table.bill_tenure
     if bill_tenure < last_bill_tenure:
         emis_to_be_inserted = 0
     else:
         emis_to_be_inserted = (bill_tenure - last_bill_tenure) + 1
-    principal_due = Decimal(last_bill.table.principal)
-    due_amount = last_bill.table.principal_instalment
+    principal_due = Decimal(bill.table.principal)
+    due_amount = bill.table.principal_instalment
     all_emis = (
         session.query(CardEmis)
         .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
@@ -158,11 +150,9 @@ def add_emi_on_new_bill(
             last_emi_due_date = None
             second_last_emi = all_emis[-1]
             if not last_emi_due_date:
-                last_emi_due_date = second_last_emi.due_date + timedelta(
-                    days=user_card.statement_period_in_days + 1
-                )
+                last_emi_due_date = second_last_emi.due_date + relativedelta(months=1, day=15)
             else:
-                last_emi_due_date += timedelta(days=user_card.statement_period_in_days + 1)
+                last_emi_due_date += relativedelta(months=1, day=15)
             total_due_amount = due_amount
             total_closing_balance = (
                 (principal_due - mul(due_amount, (last_emi_number + i)))
@@ -736,25 +726,18 @@ def refresh_schedule(user_card: BaseCard):
         )
         if not last_emi:
             create_emis_for_card(
-                session,
-                user_card.table,
-                bill,
-                late_fine_due,
-                interest_due,
-                atm_fee_due,
-                bill.table.bill_tenure,
+                session, user_card, bill, late_fine_due, interest_due, atm_fee_due,
             )
         else:
             add_emi_on_new_bill(
                 session,
-                user_card.table,
+                user_card,
                 bill,
-                last_emi.emi_number,
+                last_emi,
                 bill_number,
                 late_fine_due,
                 interest_due,
                 atm_fee_due,
-                bill.table.bill_tenure,
                 last_bill_tenure,
             )
         last_bill_tenure = bill.table.bill_tenure

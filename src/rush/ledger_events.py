@@ -1,5 +1,8 @@
 from decimal import Decimal
-from typing import List
+from typing import (
+    List,
+    Optional,
+)
 
 from sqlalchemy import Date
 from sqlalchemy.orm import Session
@@ -18,10 +21,7 @@ from rush.models import (
     UserCard,
 )
 from rush.recon.dmi_interest_on_portfolio import interest_on_dmi_portfolio
-from rush.utils import (
-    div,
-    get_gst_split_from_amount,
-)
+from rush.utils import get_gst_split_from_amount
 
 
 def lender_disbursal_event(session: Session, event: LedgerTriggerEvent, lender_id: int) -> None:
@@ -44,7 +44,19 @@ def m2p_transfer_event(session: Session, event: LedgerTriggerEvent, lender_id: i
     )
 
 
-def card_transaction_event(session: Session, user_card: BaseCard, event: LedgerTriggerEvent) -> None:
+def disburse_money_to_card(session: Session, user_card: BaseCard, event: LedgerTriggerEvent) -> None:
+    create_ledger_entry_from_str(
+        session,
+        event_id=event.id,
+        debit_book_str=f"{user_card.table.id}/card/card_balance/a",
+        credit_book_str=f"{user_card.table.lender_id}/lender/pool_balance/a",
+        amount=event.amount,
+    )
+
+
+def card_transaction_event(
+    session: Session, user_card: BaseCard, event: LedgerTriggerEvent, mcc: Optional[str] = None
+) -> None:
     amount = Decimal(event.amount)
     user_card_id = user_card.id
     swipe_id = event.extra_details["swipe_id"]
@@ -56,12 +68,14 @@ def card_transaction_event(session: Session, user_card: BaseCard, event: LedgerT
     lender_id = bill.lender_id
     bill_id = bill.id
 
+    user_books_prefix_str = f"{user_card_id}/card/{user_card.get_limit_type(mcc=mcc)}"
+
     # Reduce user's card balance
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
-        debit_book_str=f"{user_card_id}/card/available_limit/l",
-        credit_book_str=f"{user_card_id}/card/available_limit/a",
+        debit_book_str=f"{user_books_prefix_str}/l",
+        credit_book_str=f"{user_books_prefix_str}/a",
         amount=amount,
     )
 
@@ -79,7 +93,7 @@ def card_transaction_event(session: Session, user_card: BaseCard, event: LedgerT
         session,
         event_id=event.id,
         debit_book_str=f"{bill_id}/bill/unbilled/a",
-        credit_book_str=f"{lender_id}/lender/pool_balance/a",
+        credit_book_str=f"{user_card.table.id}/card/card_balance/a",
         amount=amount,
     )
 
@@ -137,12 +151,37 @@ def payment_received_event(
         pass
     elif event.name == "payment_received":
         unpaid_bills = user_card.get_unpaid_bills()
+        actual_payment = payment_received
         payment_received = _adjust_for_min(
             session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str,
         )
         payment_received = _adjust_for_complete_bill(
             session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str,
         )
+
+        if user_card.multiple_limits:
+            if user_card.card_type == "health_card":
+                settlement_limit = user_card.get_split_payment(
+                    session=session, payment_amount=actual_payment
+                )
+
+                # settling medical limit
+                health_limit_assignment_event(
+                    session=session,
+                    card_id=user_card.id,
+                    event=event,
+                    amount=settlement_limit["medical"],
+                    limit_str="health_limit",
+                )
+
+                # settling non medical limit
+                health_limit_assignment_event(
+                    session=session,
+                    card_id=user_card.id,
+                    event=event,
+                    amount=settlement_limit["non_medical"],
+                    limit_str="available_limit",
+                )
 
     if payment_received > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
@@ -431,3 +470,15 @@ def daily_dpd_event(session: Session, user_card: BaseCard) -> None:
     )
     session.add(event)
     session.flush()
+
+
+def health_limit_assignment_event(
+    session: Session, card_id: int, event: LedgerTriggerEvent, amount: Decimal, limit_str: str
+) -> None:
+    create_ledger_entry_from_str(
+        session,
+        event_id=event.id,
+        debit_book_str=f"{card_id}/card/{limit_str}/a",
+        credit_book_str=f"{card_id}/card/{limit_str}/l",
+        amount=amount,
+    )

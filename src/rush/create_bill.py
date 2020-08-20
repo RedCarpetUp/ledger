@@ -15,9 +15,7 @@ from rush.ledger_events import bill_generate_event
 from rush.ledger_utils import get_account_balance_from_str
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
-    CardEmis,
     LedgerTriggerEvent,
-    LoanData,
     LoanMoratorium,
 )
 from rush.utils import (

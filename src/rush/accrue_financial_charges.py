@@ -29,9 +29,7 @@ from rush.models import (
 )
 from rush.utils import (
     add_gst_split_to_amount,
-    div,
     get_current_ist_time,
-    mul,
 )
 
 
@@ -127,9 +125,9 @@ def create_fee_entry(
         card_id=bill.table.card_id,
         name=fee_name,
         net_amount=net_fee_amount,
-        sgst_rate=Decimal(9),
-        cgst_rate=Decimal(9),
-        igst_rate=Decimal(0),
+        sgst_rate=Decimal(0),
+        cgst_rate=Decimal(0),
+        igst_rate=Decimal(18),
     )
     d = add_gst_split_to_amount(
         net_fee_amount, sgst_rate=f.sgst_rate, cgst_rate=f.cgst_rate, igst_rate=f.igst_rate
