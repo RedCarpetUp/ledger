@@ -13,6 +13,7 @@ from rush.card.base_card import (
 )
 from rush.ledger_utils import get_account_balance_from_str
 from rush.models import (
+    LedgerTriggerEvent,
     Loan,
     UserCard,
 )
@@ -38,6 +39,7 @@ class HealthCard(BaseCard):
     def __init__(self, session: Session, bill_class: Type[B], user_card: UserCard, loan: Loan):
         super().__init__(session=session, bill_class=bill_class, user_card=user_card, loan=loan)
         self.multiple_limits = True
+        self.should_reinstate_limit_on_payment = True
 
     @staticmethod
     def get_limit_type(mcc: str) -> str:
@@ -68,6 +70,31 @@ class HealthCard(BaseCard):
             "medical": Decimal(round(medical_settlement)),
             "non_medical": Decimal(round(non_medical_settlement)),
         }
+
+    def reinstate_limit_on_payment(
+        self, session: Session, event: LedgerTriggerEvent, amount: Decimal
+    ) -> None:
+        settlement_limit = self.get_split_payment(session=session, payment_amount=amount)
+
+        from rush.ledger_events import health_limit_assignment_event
+
+        # settling medical limit
+        health_limit_assignment_event(
+            session=session,
+            loan_id=self.loan_id,
+            event=event,
+            amount=settlement_limit["medical"],
+            limit_str="health_limit",
+        )
+
+        # settling non medical limit
+        health_limit_assignment_event(
+            session=session,
+            loan_id=self.loan_id,
+            event=event,
+            amount=settlement_limit["non_medical"],
+            limit_str="available_limit",
+        )
 
 
 class HealthBill(BaseBill):

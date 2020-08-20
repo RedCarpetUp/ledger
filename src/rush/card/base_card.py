@@ -22,6 +22,7 @@ from rush.ledger_utils import (
 )
 from rush.models import (
     CardTransaction,
+    LedgerTriggerEvent,
     Loan,
     LoanData,
     LoanMoratorium,
@@ -103,10 +104,16 @@ class BaseCard:
         self.loan_id = user_card.loan_id
         self.lender_id = loan.lender_id
         self.rc_rate_of_interest_monthly = loan.rc_rate_of_interest_monthly
+        self.should_reinstate_limit_on_payment = False
 
     @staticmethod
     def get_limit_type(mcc: str) -> str:
         return "available_limit"
+
+    def reinstate_limit_on_payment(
+        self, session: Session, event: LedgerTriggerEvent, amount: Decimal
+    ) -> None:
+        pass
 
     def _convert_to_bill_class_decorator(func) -> BaseBill:
         def f(self):
