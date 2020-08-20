@@ -37,7 +37,7 @@ def _get_total_outstanding(session, user_card):
     # Temp func.
     all_bills = (
         session.query(LoanData)
-        .filter(LoanData.card_id == user_card.id, LoanData.is_generated.is_(True))
+        .filter(LoanData.loan_id == user_card.loan_id, LoanData.is_generated.is_(True))
         .all()
     )
     total_outstanding = sum(get_remaining_bill_balance(session, bill)["total_due"] for bill in all_bills)
@@ -81,7 +81,7 @@ def can_remove_interest(
 def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_card: BaseCard) -> None:
     unpaid_bills = user_card.get_unpaid_bills()
     accrue_event = LedgerTriggerEvent(
-        name="accrue_interest", card_id=user_card.id, post_date=post_date, amount=0
+        name="accrue_interest", loan_id=user_card.loan_id, post_date=post_date, amount=0
     )
     session.add(accrue_event)
     session.flush()
@@ -122,7 +122,7 @@ def create_fee_entry(
     f = Fee(
         bill_id=bill.id,
         event_id=event.id,
-        card_id=bill.table.card_id,
+        loan_id=bill.table.loan_id,
         name=fee_name,
         net_amount=net_fee_amount,
         sgst_rate=Decimal(0),
@@ -151,7 +151,9 @@ def accrue_late_charges(
     if can_charge_fee:  # if min isn't paid charge late fine.
         # TODO get correct date here.
         # Adjust for rounding because total due amount has to be rounded
-        event = LedgerTriggerEvent(name="charge_late_fine", post_date=post_date, card_id=user_card.id)
+        event = LedgerTriggerEvent(
+            name="charge_late_fine", post_date=post_date, loan_id=user_card.loan_id
+        )
         session.add(event)
         session.flush()
         fee = create_fee_entry(session, latest_bill, event, "late_fee", late_fee_to_charge_without_tax)
@@ -173,7 +175,7 @@ def reverse_interest_charges(
     is more convenient than adding it on 16th.
     """
     event = LedgerTriggerEvent(
-        name="reverse_interest_charges", card_id=user_card.id, post_date=payment_date
+        name="reverse_interest_charges", loan_id=user_card.loan_id, post_date=payment_date
     )
     session.add(event)
     session.flush()
@@ -240,7 +242,11 @@ def reverse_interest_charges(
             if entry["amount"] == 0:
                 continue
             _adjust_for_prepayment(
-                session, user_card.user_id, event.id, entry["amount"], entry["acc_to_remove_from"]
+                session=session,
+                loan_id=user_card.loan_id,
+                event_id=event.id,
+                amount=entry["amount"],
+                debit_book_str=entry["acc_to_remove_from"],
             )
 
     from rush.create_emi import refresh_schedule
@@ -254,7 +260,7 @@ def reverse_late_charges(
 ) -> None:
     event = LedgerTriggerEvent(
         name="reverse_late_charges",
-        card_id=user_card.id,
+        loan_id=user_card.loan_id,
         post_date=get_current_ist_time(),
         amount=event_to_reverse.amount,
     )
@@ -299,7 +305,11 @@ def reverse_late_charges(
                     continue
                 # TODO maybe just call the entire payment received event here?
                 _adjust_for_prepayment(
-                    session, user_card.user_id, event.id, acc["amount"], acc["acc_to_remove_from"]
+                    session=session,
+                    loan_id=user_card.loan_id,
+                    event_id=event.id,
+                    amount=acc["amount"],
+                    debit_book_str=acc["acc_to_remove_from"],
                 )
     fee.fee_status = "REVERSED"
 

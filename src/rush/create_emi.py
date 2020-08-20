@@ -86,7 +86,7 @@ def create_emis_for_card(
             total_closing_balance_post_due_date += interest
         extra_details = {str(bill.id): str(due_amount)}
         new_emi = CardEmis(
-            card_id=user_card.id,
+            loan_id=user_card.loan_id,
             emi_number=i,
             total_closing_balance=total_closing_balance,
             total_closing_balance_post_due_date=total_closing_balance_post_due_date,
@@ -130,7 +130,7 @@ def add_emi_on_new_bill(
         emis_to_be_inserted = (bill_tenure - last_emi_number) + 1
     all_emis = (
         session.query(CardEmis)
-        .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
         .all()
     )
@@ -205,7 +205,7 @@ def add_emi_on_new_bill(
                 total_closing_balance_post_due_date += interest
             extra_details = {str(bill.id): str(due_amount)}
             new_emi = CardEmis(
-                card_id=user_card.id,
+                loan_id=user_card.loan_id,
                 emi_number=(last_emi_number + i + 1),
                 due_amount=due_amount,
                 interest=total_interest,
@@ -430,7 +430,7 @@ def slide_payments(user_card: BaseCard, payment_event: LedgerTriggerEvent = None
     session = user_card.session
     all_emis = (
         session.query(CardEmis)
-        .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
         .all()
     )
@@ -476,7 +476,7 @@ def adjust_interest_in_emis(session: Session, user_card: BaseCard, post_date: Da
     latest_bill = (
         session.query(LoanData)
         .filter(
-            LoanData.card_id == user_card.id,
+            LoanData.loan_id == user_card.loan_id,
             LoanData.bill_start_date <= post_date,
             LoanData.is_generated.is_(True),
         )
@@ -486,7 +486,7 @@ def adjust_interest_in_emis(session: Session, user_card: BaseCard, post_date: Da
     emis_for_this_bill = (
         session.query(CardEmis)
         .filter(
-            CardEmis.card_id == user_card.id,
+            CardEmis.loan_id == user_card.loan_id,
             CardEmis.due_date >= post_date,
             CardEmis.row_status == "active",
         )
@@ -513,7 +513,7 @@ def adjust_late_fee_in_emis(session: Session, user_card: BaseCard, post_date: Da
     latest_bill = (
         session.query(LoanData)
         .filter(
-            LoanData.card_id == user_card.id,
+            LoanData.loan_id == user_card.loan_id,
             LoanData.bill_start_date < post_date,
             LoanData.is_generated.is_(True),
         )
@@ -523,7 +523,7 @@ def adjust_late_fee_in_emis(session: Session, user_card: BaseCard, post_date: Da
     emi = (
         session.query(CardEmis)
         .filter(
-            CardEmis.card_id == user_card.id,
+            CardEmis.loan_id == user_card.loan_id,
             CardEmis.due_date < post_date,
             CardEmis.row_status == "active",
         )
@@ -534,7 +534,7 @@ def adjust_late_fee_in_emis(session: Session, user_card: BaseCard, post_date: Da
     if not emi:
         emi = (
             session.query(CardEmis)
-            .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
+            .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
             .order_by(CardEmis.emi_number.asc())
             .first()
         )
@@ -550,7 +550,7 @@ def adjust_atm_fee_in_emis(session: Session, user_card: BaseCard, post_date: Dat
     latest_bill = (
         session.query(LoanData)
         .filter(
-            LoanData.card_id == user_card.id,
+            LoanData.loan_id == user_card.loan_id,
             LoanData.bill_start_date < post_date,
             LoanData.is_generated.is_(True),
         )
@@ -560,7 +560,7 @@ def adjust_atm_fee_in_emis(session: Session, user_card: BaseCard, post_date: Dat
     emi = (
         session.query(CardEmis)
         .filter(
-            CardEmis.card_id == user_card.id,
+            CardEmis.loan_id == user_card.loan_id,
             CardEmis.due_date < post_date,
             CardEmis.row_status == "active",
         )
@@ -571,7 +571,7 @@ def adjust_atm_fee_in_emis(session: Session, user_card: BaseCard, post_date: Dat
     if not emi:
         emi = (
             session.query(CardEmis)
-            .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
+            .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
             .order_by(CardEmis.emi_number.asc())
             .first()
         )
@@ -595,7 +595,7 @@ def create_emi_payment_mapping(
     principal_received: Decimal,
 ) -> None:
     new_payment_mapping = EmiPaymentMapping(
-        card_id=user_card.id,
+        loan_id=user_card.loan_id,
         emi_number=emi_number,
         payment_date=payment_date,
         payment_request_id=payment_request_id,
@@ -634,7 +634,7 @@ def add_moratorium_to_loan_emi(
                     # late fine and interest will be handled through events
                     if i != months_to_be_inserted:
                         new_emi = CardEmis(
-                            card_id=user_card.table.id,
+                            loan_id=user_card.loan_id,
                             emi_number=(emi.emi_number + i),
                             total_closing_balance=emi.total_closing_balance,
                             total_closing_balance_post_due_date=emi.total_closing_balance_post_due_date,
@@ -663,7 +663,7 @@ def add_moratorium_to_loan_emi(
             # Need to just update emi related fields because
             # late fine and interest will be handled through events
             new_emi = CardEmis(
-                card_id=user_card.table.id,
+                loan_id=user_card.loan_id,
                 emi_number=(emi_number_to_begin_insertion_from + i + 1),
                 total_closing_balance=last_emi.total_closing_balance,
                 total_closing_balance_post_due_date=last_emi.total_closing_balance_post_due_date,
@@ -698,7 +698,7 @@ def check_moratorium_eligibility(session: Session, data):
     user_card = get_user_card(session, user_id)
     emis = (
         session.query(CardEmis)
-        .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
         .all()
     )
@@ -762,9 +762,7 @@ def refresh_schedule(user_card: BaseCard, post_date: DateTime = None):
 
     all_payment_mappings = (
         session.query(EmiPaymentMapping)
-        .filter(
-            EmiPaymentMapping.card_id == user_card.table.id, EmiPaymentMapping.row_status == "active"
-        )
+        .filter(EmiPaymentMapping.loan_id == user_card.loan_id, EmiPaymentMapping.row_status == "active")
         .all()
     )
     for mapping in all_payment_mappings:
@@ -794,7 +792,7 @@ def refresh_schedule(user_card: BaseCard, post_date: DateTime = None):
         interest_due = bill.table.interest_to_charge
         last_emi = (
             session.query(CardEmis)
-            .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
+            .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
             .order_by(CardEmis.due_date.desc())
             .first()
         )
@@ -830,7 +828,7 @@ def refresh_schedule(user_card: BaseCard, post_date: DateTime = None):
 
     # Check if user has opted for moratorium and adjust that in schedule
     moratorium = (
-        session.query(LoanMoratorium).filter(LoanMoratorium.card_id == user_card.table.id).first()
+        session.query(LoanMoratorium).filter(LoanMoratorium.loan_id == user_card.loan_id).first()
     )
     if moratorium:
         start_date = moratorium.start_date
@@ -907,13 +905,13 @@ def update_event_with_dpd(user_card: BaseCard, post_date: DateTime = None) -> No
         bills_touched.append(account.identifier)
         bill = (
             session.query(LoanData)
-            .filter(LoanData.card_id == user_card.id, LoanData.id == account.identifier,)
+            .filter(LoanData.loan_id == user_card.loan_id, LoanData.id == account.identifier,)
             .first()
         )
         dpd = (event_post_date - bill.bill_due_date).days
         new_event = EventDpd(
             bill_id=account.identifier,
-            card_id=user_card.id,
+            loan_id=user_card.loan_id,
             event_id=ledger_trigger_event.id,
             credit=credit_amount,
             debit=debit_amount,
@@ -1015,7 +1013,7 @@ def update_event_with_dpd(user_card: BaseCard, post_date: DateTime = None) -> No
     # TODO Introduce schedule level updation when this converts to a DAG system
     # all_emis = (
     #     session.query(CardEmis)
-    #     .filter(CardEmis.card_id == user_card.id, CardEmis.row_status == "active")
+    #     .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
     #     .order_by(CardEmis.emi_number.asc())
     #     .all()
     # )

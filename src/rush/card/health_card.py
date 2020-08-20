@@ -12,7 +12,10 @@ from rush.card.base_card import (
     BaseCard,
 )
 from rush.ledger_utils import get_account_balance_from_str
-from rush.models import UserCard
+from rush.models import (
+    Loan,
+    UserCard,
+)
 
 HEALTH_TXN_MCC = [
     "8011",
@@ -32,8 +35,8 @@ HEALTH_TXN_MCC = [
 
 class HealthCard(BaseCard):
     # todo: add implementation for health card.
-    def __init__(self, session: Session, bill_class: Type[B], user_card: UserCard):
-        super().__init__(session=session, bill_class=bill_class, user_card=user_card)
+    def __init__(self, session: Session, bill_class: Type[B], user_card: UserCard, loan: Loan):
+        super().__init__(session=session, bill_class=bill_class, user_card=user_card, loan=loan)
         self.multiple_limits = True
 
     @staticmethod
@@ -43,11 +46,11 @@ class HealthCard(BaseCard):
     def get_split_payment(self, session: Session, payment_amount: Decimal) -> Dict[str, Decimal]:
         # TODO: change negative due calculation logic, once @raghav adds limit addition logic.
         _, non_medical_due = get_account_balance_from_str(
-            session, book_string=f"{self.id}/card/available_limit/l"
+            session, book_string=f"{self.loan_id}/card/available_limit/l"
         )
 
         _, medical_due = get_account_balance_from_str(
-            session, book_string=f"{self.id}/card/health_limit/l"
+            session, book_string=f"{self.loan_id}/card/health_limit/l"
         )
 
         medical_settlement = Decimal(Decimal(0.9) * payment_amount)

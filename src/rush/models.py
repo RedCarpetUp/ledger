@@ -101,6 +101,16 @@ class LenderPy(AuditMixinPy):
 #     nickname = Column(String(12))
 
 
+class Product(AuditMixin):
+    __tablename__ = "product"
+    product_name = Column(String(), nullable=False)
+
+
+@py_dataclass
+class ProductPy(AuditMixinPy):
+    product_name: str
+
+
 class UserData(AuditMixin):
     __tablename__ = "v3_user_data"
 
@@ -183,6 +193,25 @@ class User(AuditMixin):
     )
 
     data_class = UserData
+
+
+class Loan(AuditMixin):
+    __tablename__ = "loan"
+    user_id = Column(Integer, ForeignKey(User.id))
+    amortization_date = Column(TIMESTAMP, nullable=False)
+    loan_status = Column(String(), nullable=False)
+    product_id = Column(Integer, ForeignKey(Product.id))
+    lender_id = Column(Integer, ForeignKey(Lenders.id), nullable=False)
+    rc_rate_of_interest_monthly = Column(Numeric, nullable=False)
+    lender_rate_of_interest_annual = Column(Numeric, nullable=False)
+
+
+@py_dataclass
+class LoanPy(AuditMixinPy):
+    user_id: int
+    amortization_date: DateTime
+    loan_status: str
+    product_id: int
 
 
 class UserIdentities(AuditMixin):
@@ -275,22 +304,20 @@ class LedgerEntryPy(AuditMixinPy):
     amount: Decimal
     business_date: DateTime
 
+    # class UserCard(AuditMixin):
+    #     __tablename__ = "user_card"
+    #     user_id = Column(Integer, ForeignKey(User.id), nullable=False)
+    #     lender_id = Column(Integer, ForeignKey(Lenders.id), nullable=False)
+    #     card_type = Column(String, nullable=False)
+    #     card_activation_date = Column(Date, nullable=True)
+    #     statement_period_in_days = Column(Integer, default=30, nullable=False)  # 30 days
+    #     interest_free_period_in_days = Column(Integer, default=45, nullable=False)
+    #     rc_rate_of_interest_monthly = Column(Numeric, nullable=False)
+    #     lender_rate_of_interest_annual = Column(Numeric, nullable=False)
+    #     dpd = Column(Integer, nullable=True)
 
-# class UserCard(AuditMixin):
-#     __tablename__ = "user_card"
-#     user_id = Column(Integer, ForeignKey(User.id), nullable=False)
-#     lender_id = Column(Integer, ForeignKey(Lenders.id), nullable=False)
-#     card_type = Column(String, nullable=False)
-#     card_activation_date = Column(Date, nullable=True)
-#     statement_period_in_days = Column(Integer, default=30, nullable=False)  # 30 days
-#     interest_free_period_in_days = Column(Integer, default=45, nullable=False)
-#     rc_rate_of_interest_monthly = Column(Numeric, nullable=False)
-#     lender_rate_of_interest_annual = Column(Numeric, nullable=False)
-#     dpd = Column(Integer, nullable=True)
-
-
-class Loan(AuditMixin):
-    __tablename__ = "v3_loans"
+    # class Loan(AuditMixin):
+    #     __tablename__ = "v3_loans"
 
     user_id = Column(Integer, ForeignKey(User.id), nullable=False)
     is_deleted = Column(Boolean, nullable=True)
@@ -308,7 +335,7 @@ class Loan(AuditMixin):
     #     "EmiData", primaryjoin="and_(Loan.id==EmiData.loan_id, EmiData.row_status=='active')"
     # )
 
-    __table_args__ = (Index("index_on_v3_loans_user_id_and_id", user_id, "id"),)
+    # __table_args__ = (Index("index_on_v3_loans_user_id_and_id", user_id, "id"),)
 
 
 class CardNames(AuditMixin):
@@ -330,13 +357,12 @@ class CardKitNumbers(AuditMixin):
 class UserCard(AuditMixin):
     __tablename__ = "v3_user_cards"
     user_id = Column(Integer, ForeignKey(User.id), index=True, nullable=False)
-    lender_id = Column(Integer, ForeignKey(Lenders.id), nullable=False)
     kit_number = Column(
         String(12), ForeignKey(CardKitNumbers.kit_number), nullable=False, default="00000"
     )
     credit_limit = Column(Numeric, nullable=False, default=1000)  # limit in rupees
     cash_withdrawal_limit = Column(Numeric, nullable=False, default=1000)
-    drawdown_id = Column(Integer, ForeignKey(Loan.id), nullable=True)  # to detect payments
+    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=True)  # to detect payments
     details = Column(JSON, nullable=True, server_default="{}")
     activation_type = Column(String(12), nullable=False, default="P")
     row_status = Column(String(20), nullable=False, default="active")
@@ -351,8 +377,7 @@ class UserCard(AuditMixin):
     card_activation_date = Column(Date, nullable=True)
     statement_period_in_days = Column(Integer, default=30, nullable=True)  # 30 days
     interest_free_period_in_days = Column(Integer, default=45, nullable=True)
-    rc_rate_of_interest_monthly = Column(Numeric, nullable=True)
-    lender_rate_of_interest_annual = Column(Numeric, nullable=True)
+
     dpd = Column(Integer, nullable=True)
     ever_dpd = Column(Integer, nullable=True)
 
@@ -365,9 +390,9 @@ class UserCard(AuditMixin):
             postgresql_where=row_status == "active",
         ),
         Index(
-            "idx_user_cards_uniq_user_id_drawdown_id_row_status",
+            "idx_user_cards_uniq_user_id_loan_id_row_status",
             user_id,
-            drawdown_id,
+            loan_id,
             unique=True,
             postgresql_where=row_status == "active",
         ),
@@ -377,7 +402,7 @@ class UserCard(AuditMixin):
 class LedgerTriggerEvent(AuditMixin):
     __tablename__ = "ledger_trigger_event"
     name = Column(String(50))
-    card_id = Column(Integer, ForeignKey(UserCard.id))
+    loan_id = Column(Integer, ForeignKey(Loan.id))
     post_date = Column(TIMESTAMP)
     amount = Column(Numeric)
     extra_details = Column(JSON, default="{}")
@@ -394,12 +419,11 @@ class LedgerEntry(AuditMixin):
 class LoanData(AuditMixin):
     __tablename__ = "loan_data"
     user_id = Column(Integer, ForeignKey(User.id))
-    lender_id = Column(Integer, ForeignKey(Lenders.id), nullable=False)
     bill_start_date = Column(Date, nullable=False)
     bill_close_date = Column(Date, nullable=False)
     bill_due_date = Column(Date, nullable=False)
     bill_tenure = Column(Integer, nullable=False, default=12)
-    card_id = Column(Integer, ForeignKey(UserCard.id))
+    loan_id = Column(Integer, ForeignKey(Loan.id))
     is_generated = Column(Boolean, nullable=False, server_default="false")
     principal = Column(Numeric, nullable=True)
     principal_instalment = Column(Numeric, nullable=True)
@@ -425,7 +449,7 @@ class CardTransaction(AuditMixin):
 
 class CardEmis(AuditMixin):
     __tablename__ = "card_emis"
-    card_id = Column(Integer, ForeignKey(UserCard.id))
+    loan_id = Column(Integer, ForeignKey(Loan.id))
     due_date = Column(TIMESTAMP, nullable=False)
     due_amount = Column(Numeric, nullable=False, default=Decimal(0))
     total_due_amount = Column(Numeric, nullable=False, default=Decimal(0))
@@ -450,7 +474,7 @@ class CardEmis(AuditMixin):
 
 class EmiPaymentMapping(AuditMixin):
     __tablename__ = "emi_payment_mapping"
-    card_id = Column(Integer, ForeignKey(UserCard.id), nullable=False)
+    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
     emi_number = Column(Integer, nullable=False)
     payment_date = Column(TIMESTAMP, nullable=False)
     payment_request_id = Column(String(), nullable=False)
@@ -464,16 +488,16 @@ class EmiPaymentMapping(AuditMixin):
 class LoanMoratorium(AuditMixin):
     __tablename__ = "loan_moratorium"
 
-    card_id = Column(Integer, ForeignKey(UserCard.id), nullable=False)
+    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
 
     @classmethod
-    def is_in_moratorium(cls, session: Session, card_id: int, date_to_check_against: PythonDate) -> bool:
+    def is_in_moratorium(cls, session: Session, loan_id: int, date_to_check_against: PythonDate) -> bool:
         v = (
             session.query(cls)
             .filter(
-                cls.card_id == card_id,
+                cls.loan_id == loan_id,
                 date_to_check_against >= cls.start_date,
                 date_to_check_against <= cls.end_date,
             )
@@ -487,7 +511,7 @@ class Fee(AuditMixin):
 
     bill_id = Column(Integer, ForeignKey(LoanData.id), nullable=True)
     event_id = Column(Integer, ForeignKey(LedgerTriggerEvent.id), nullable=False)
-    card_id = Column(Integer, ForeignKey(UserCard.id), nullable=False)
+    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
     name = Column(String(30), nullable=False)
     net_amount = Column(Numeric, nullable=False)
     sgst_rate = Column(Numeric, nullable=False)
@@ -506,7 +530,7 @@ class EventDpd(AuditMixin):
     __tablename__ = "event_dpd"
 
     bill_id = Column(Integer, ForeignKey(LoanData.id), nullable=False)
-    card_id = Column(Integer, ForeignKey(UserCard.id), nullable=False)
+    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
     event_id = Column(Integer, ForeignKey(LedgerTriggerEvent.id), nullable=False)
     debit = Column(Numeric, nullable=True, default=Decimal(0))
     credit = Column(Numeric, nullable=True, default=Decimal(0))

@@ -22,6 +22,7 @@ from rush.ledger_utils import (
 )
 from rush.models import (
     CardTransaction,
+    Loan,
     LoanData,
     LoanMoratorium,
     UserCard,
@@ -58,7 +59,7 @@ class BaseBill:
         self, date_to_check_against: DateTime = get_current_ist_time().date()
     ) -> Decimal:
         # Don't add in min if user is in moratorium.
-        if LoanMoratorium.is_in_moratorium(self.session, self.card_id, date_to_check_against):
+        if LoanMoratorium.is_in_moratorium(self.session, self.loan_id, date_to_check_against):
             min_scheduled = self.table.interest_to_charge  # only charge interest if in moratorium.
         else:
             min_scheduled = self.table.principal_instalment + self.table.interest_to_charge
@@ -93,12 +94,15 @@ class BaseCard:
     session: Session = None
     table: UserCard = None
 
-    def __init__(self, session: Session, bill_class: Type[B], user_card: UserCard):
+    def __init__(self, session: Session, bill_class: Type[B], user_card: UserCard, loan: Loan):
         self.session = session
         self.bill_class = bill_class
         self.table = user_card
         self.__dict__.update(user_card.__dict__)
         self.multiple_limits = False
+        self.loan_id = user_card.loan_id
+        self.lender_id = loan.lender_id
+        self.rc_rate_of_interest_monthly = loan.rc_rate_of_interest_monthly
 
     @staticmethod
     def get_limit_type(mcc: str) -> str:
@@ -130,8 +134,8 @@ class BaseCard:
     ) -> BaseBill:
         new_bill = LoanData(
             user_id=self.user_id,
-            card_id=self.id,
-            lender_id=lender_id,
+            loan_id=self.loan_id,
+            # lender_id=lender_id,
             bill_start_date=bill_start_date,
             bill_close_date=bill_close_date,
             bill_due_date=bill_due_date,
@@ -179,7 +183,7 @@ class BaseCard:
     def get_latest_generated_bill(self) -> BaseBill:
         latest_bill = (
             self.session.query(LoanData)
-            .filter(LoanData.card_id == self.id, LoanData.is_generated.is_(True))
+            .filter(LoanData.loan_id == self.loan_id, LoanData.is_generated.is_(True))
             .order_by(LoanData.bill_start_date.desc())
             .first()
         )
@@ -189,7 +193,7 @@ class BaseCard:
     def get_latest_bill_to_generate(self) -> BaseBill:
         loan_data = (
             self.session.query(LoanData)
-            .filter(LoanData.card_id == self.id, LoanData.is_generated.is_(False))
+            .filter(LoanData.loan_id == self.loan_id, LoanData.is_generated.is_(False))
             .order_by(LoanData.bill_start_date)
             .first()
         )
@@ -199,7 +203,7 @@ class BaseCard:
     def get_latest_bill(self) -> BaseBill:
         loan_data = (
             self.session.query(LoanData)
-            .filter(LoanData.card_id == self.id)
+            .filter(LoanData.loan_id == self.id)
             .order_by(LoanData.bill_start_date.desc())
             .first()
         )
@@ -209,7 +213,7 @@ class BaseCard:
         self, date_to_check_against: DateTime = get_current_ist_time().date()
     ) -> Decimal:
         # if user is in moratorium then return 0
-        if LoanMoratorium.is_in_moratorium(self.session, self.id, date_to_check_against):
+        if LoanMoratorium.is_in_moratorium(self.session, self.loan_id, date_to_check_against):
             return Decimal(0)
         unpaid_bills = self.get_unpaid_bills()
         min_of_all_bills = sum(bill.get_min_for_schedule() for bill in unpaid_bills)
