@@ -13,9 +13,11 @@ from rush.card.ruby_card import (
     RubyBill,
     RubyCard,
 )
+from rush.card.term_loan import TermLoan
 from rush.card.utils import get_product_id_from_card_type
 from rush.models import (
     Loan,
+    LoanData,
     Product,
     UserCard,
 )
@@ -62,3 +64,19 @@ def create_user_card(session: Session, **kwargs) -> BaseLoan:
     elif uc.card_type == "health_card":
         return HealthCard(session=session, bill_class=HealthBill, user_card=uc, loan=loan)
     return uc
+
+
+def create_term_loan(session: Session, loan_class: TermLoan, **kwargs) -> LoanData:
+    return loan_class.create(session=session, **kwargs)
+
+
+def get_term_loan(session: Session, user_id: int, product_type: str) -> LoanData:
+    term_loan = (
+        session.query(LoanData)
+        .join(Loan, and_(Loan.id == LoanData.loan_id, Loan.user_id == LoanData.user_id,))
+        .join(Product, and_(Product.product_name == product_type, Loan.product_id == Product.id))
+        .filter(LoanData.user_id == user_id,)
+        .one()
+    )
+
+    return term_loan
