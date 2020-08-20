@@ -113,12 +113,17 @@ def add_emi_on_new_bill(
     late_fee: Decimal = None,
     interest: Decimal = None,
     atm_fee_due: Decimal = None,
+    last_bill_tenure: Decimal = 12,
     post_date: DateTime = None,
     bill_accumalation_till_date: Decimal = None,
     last_old_bill_emi_number: int = None,
 ) -> None:
     last_emi_number = last_emi.emi_number
     bill_tenure = bill.table.bill_tenure
+    if bill_tenure < last_bill_tenure:
+        emis_to_be_inserted = 0
+    else:
+        emis_to_be_inserted = (bill_tenure - last_bill_tenure) + 1
     if bill_tenure < last_emi_number:
         emis_to_be_inserted = 0
     else:
@@ -768,6 +773,7 @@ def refresh_schedule(user_card: BaseCard, post_date: DateTime = None):
 
     # Re-Create schedule from all the bills
     bill_number = 1
+    last_bill_tenure = 0
     for bill in all_bills:
         bill_accumalation_till_date = Decimal(0)
         if post_date and pre_post_date_emis:
@@ -814,10 +820,12 @@ def refresh_schedule(user_card: BaseCard, post_date: DateTime = None):
                 interest_due,
                 atm_fee_due,
                 post_date,
+                last_bill_tenure,
                 bill_accumalation_till_date,
                 # The last old bill emi number can only exist in case of post date existence
                 pre_post_date_emis[-1].emi_number if post_date else 0,
             )
+        last_bill_tenure = bill.table.tenure
         bill_number += 1
 
     # Check if user has opted for moratorium and adjust that in schedule
