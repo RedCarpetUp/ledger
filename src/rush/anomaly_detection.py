@@ -23,7 +23,7 @@ def get_affected_events(session: Session, user_card: BaseCard) -> List[LedgerTri
     events = (
         session.query(LedgerTriggerEvent, rank_func)
         .filter(
-            LedgerTriggerEvent.card_id == user_card.id,
+            LedgerTriggerEvent.loan_id == user_card.loan_id,
             # These are the only events which can be affected by a payment.
             LedgerTriggerEvent.name.in_(["accrue_interest", "charge_late_fine"]),
         )
@@ -38,7 +38,7 @@ def get_payment_events(session: Session, user_card: BaseCard) -> List[LedgerTrig
     events = (
         session.query(LedgerTriggerEvent)
         .filter(
-            LedgerTriggerEvent.card_id == user_card.id,
+            LedgerTriggerEvent.loan_id == user_card.loan_id,
             LedgerTriggerEvent.name.in_(["payment_received"]),
         )
         .all()
