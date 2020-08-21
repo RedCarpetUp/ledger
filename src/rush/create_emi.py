@@ -786,7 +786,11 @@ def refresh_schedule(user_card: BaseCard, post_date: DateTime = None):
             elif fee.name == "atm_fee":
                 atm_fee_due = fee.gross_amount
         _, interest_due = get_account_balance_from_str(
-            session, book_string=f"{bill.id}/bill/interest_accrued/r"
+            session,
+            f"{bill.id}/bill/interest_accrued/r",
+            from_date=bill.table.bill_close_date,
+            # Should be getting to date from next bills start date
+            to_date=bill.table.bill_close_date + relativedelta(months=1),
         )
         last_emi = (
             session.query(CardEmis)
