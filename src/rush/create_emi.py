@@ -721,7 +721,7 @@ def refresh_schedule(user_card: BaseCard, post_date: DateTime = None):
         # Set all previous emis as inactive
         all_emis = (
             session.query(CardEmis)
-            .filter(CardEmis.card_id == user_card.table.id, CardEmis.row_status == "active")
+            .filter(CardEmis.loan_id == user_card.table.id, CardEmis.row_status == "active")
             .order_by(CardEmis.emi_number.asc())
             .all()
         )
@@ -730,7 +730,7 @@ def refresh_schedule(user_card: BaseCard, post_date: DateTime = None):
         all_emis = (
             session.query(CardEmis)
             .filter(
-                CardEmis.card_id == user_card.table.id,
+                CardEmis.loan_id == user_card.table.id,
                 CardEmis.row_status == "active",
                 CardEmis.due_date >= post_date,
             )
@@ -741,7 +741,7 @@ def refresh_schedule(user_card: BaseCard, post_date: DateTime = None):
         pre_post_date_emis = (
             session.query(CardEmis)
             .filter(
-                CardEmis.card_id == user_card.table.id,
+                CardEmis.loan_id == user_card.table.id,
                 CardEmis.row_status == "active",
                 CardEmis.due_date < post_date,
             )
@@ -785,7 +785,9 @@ def refresh_schedule(user_card: BaseCard, post_date: DateTime = None):
                 late_fine_due = fee.gross_amount
             elif fee.name == "atm_fee":
                 atm_fee_due = fee.gross_amount
-        interest_due = bill.table.interest_to_charge
+        _, interest_due = get_account_balance_from_str(
+            session, book_string=f"{bill.id}/bill/interest_accrued/r"
+        )
         last_emi = (
             session.query(CardEmis)
             .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
