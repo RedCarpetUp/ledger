@@ -78,7 +78,7 @@ def can_remove_interest(
     return False
 
 
-def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_card: BaseCard) -> None:
+def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_card: BaseCard, refresh_date: DateTime = None) -> None:
     unpaid_bills = user_card.get_unpaid_bills()
     accrue_event = LedgerTriggerEvent(
         name="accrue_interest", loan_id=user_card.loan_id, post_date=post_date, amount=0
@@ -91,7 +91,7 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_car
 
     from rush.create_emi import refresh_schedule
 
-    refresh_schedule(user_card)
+    refresh_schedule(user_card, refresh_date=refresh_date)
 
 
 def is_late_fee_valid(session: Session, user_card: BaseCard) -> bool:
@@ -144,6 +144,7 @@ def accrue_late_charges(
     user_card: BaseCard,
     post_date: DateTime,
     late_fee_to_charge_without_tax: Decimal = Decimal(100),
+    refresh_date: DateTime = None,
 ) -> BaseBill:
     latest_bill = user_card.get_latest_generated_bill()
     can_charge_fee = latest_bill.get_remaining_min() > 0
@@ -161,7 +162,7 @@ def accrue_late_charges(
 
         from rush.create_emi import refresh_schedule
 
-        refresh_schedule(user_card)
+        refresh_schedule(user_card, refresh_date=refresh_date)
     return latest_bill
 
 

@@ -710,14 +710,17 @@ def check_moratorium_eligibility(session: Session, data):
         return resp
 
 
-def refresh_schedule(user_card: BaseCard, post_date: DateTime = None):
+def refresh_schedule(user_card: BaseCard, extension_date: DateTime = None, refresh_date: DateTime = None):
     session = user_card.session
     # Get all generated bills of the user
-    all_bills = user_card.get_all_bills()
+    if not refresh_date:
+        all_bills = user_card.get_all_bills()
+    else:
+        all_bills = user_card.get_all_bills_post_date(refresh_date)
 
     pre_post_date_emis = None
     # Considering the post_date case only for extension
-    if not post_date:
+    if not extension_date:
         # Set all previous emis as inactive
         all_emis = (
             session.query(CardEmis)
@@ -732,7 +735,7 @@ def refresh_schedule(user_card: BaseCard, post_date: DateTime = None):
             .filter(
                 CardEmis.loan_id == user_card.table.id,
                 CardEmis.row_status == "active",
-                CardEmis.due_date >= post_date,
+                CardEmis.due_date >= extension_date,
             )
             .order_by(CardEmis.emi_number.asc())
             .all()
@@ -743,7 +746,7 @@ def refresh_schedule(user_card: BaseCard, post_date: DateTime = None):
             .filter(
                 CardEmis.loan_id == user_card.table.id,
                 CardEmis.row_status == "active",
-                CardEmis.due_date < post_date,
+                CardEmis.due_date < extension_date,
             )
             .order_by(CardEmis.emi_number.asc())
             .all()
@@ -770,7 +773,7 @@ def refresh_schedule(user_card: BaseCard, post_date: DateTime = None):
     last_bill_tenure = 0
     for bill in all_bills:
         bill_accumalation_till_date = Decimal(0)
-        if post_date and pre_post_date_emis:
+        if extension_date and pre_post_date_emis:
             for emi in pre_post_date_emis:
                 if not emi.extra_details.get("moratorium"):
                     bill_accumalation_till_date += (
@@ -820,10 +823,10 @@ def refresh_schedule(user_card: BaseCard, post_date: DateTime = None):
                 interest_due,
                 atm_fee_due,
                 last_bill_tenure,
-                post_date,
+                extension_date,
                 bill_accumalation_till_date,
                 # The last old bill emi number can only exist in case of post date existence
-                pre_post_date_emis[-1].emi_number if post_date else 0,
+                pre_post_date_emis[-1].emi_number if extension_date else 0,
             )
         last_bill_tenure = bill.table.bill_tenure
         bill_number += 1
