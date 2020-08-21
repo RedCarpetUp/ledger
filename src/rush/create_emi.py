@@ -720,6 +720,9 @@ def refresh_schedule(
     else:
         all_bills = user_card.get_all_bills_post_date(refresh_date)
 
+    if not all_bills:
+        return
+
     pre_post_date_emis = None
     # Considering the post_date case only for extension
     if not extension_date:
