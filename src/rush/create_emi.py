@@ -8,8 +8,8 @@ from sqlalchemy.orm import (
     Session,
     aliased,
 )
-from sqlalchemy.sql import func
 from sqlalchemy.orm.attributes import flag_modified
+from sqlalchemy.sql import func
 
 from rush.anomaly_detection import get_payment_events
 from rush.card import (
@@ -124,10 +124,6 @@ def add_emi_on_new_bill(
         emis_to_be_inserted = 0
     else:
         emis_to_be_inserted = (bill_tenure - last_bill_tenure) + 1
-    if bill_tenure < last_emi_number:
-        emis_to_be_inserted = 0
-    else:
-        emis_to_be_inserted = (bill_tenure - last_emi_number) + 1
     all_emis = (
         session.query(CardEmis)
         .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
