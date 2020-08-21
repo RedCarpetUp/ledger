@@ -76,7 +76,7 @@ def test_create_health_card(session: Session) -> None:
     assert uc.card_type == "health_card"
     assert uc.get_limit_type(mcc="8011") == "health_limit"
     assert uc.get_limit_type(mcc="5555") == "available_limit"
-    assert uc.multiple_limits == True
+    assert uc.should_reinstate_limit_on_payment == True
 
 
 def test_medical_health_card_swipe(session: Session) -> None:

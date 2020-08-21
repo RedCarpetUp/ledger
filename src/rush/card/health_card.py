@@ -41,7 +41,6 @@ class HealthCard(BaseCard):
     # todo: add implementation for health card.
     def __init__(self, session: Session, bill_class: Type[B], user_card: UserCard, loan: Loan):
         super().__init__(session=session, bill_class=bill_class, user_card=user_card, loan=loan)
-        self.multiple_limits = True
         self.should_reinstate_limit_on_payment = True
 
     @staticmethod
@@ -89,12 +88,9 @@ class HealthCard(BaseCard):
         )
 
         # settling non medical limit
-        create_ledger_entry_from_str(
-            session,
-            event_id=event.id,
-            debit_book_str=f"{self.loan_id}/card/available_limit/a",
-            credit_book_str=f"{self.loan_id}/card/available_limit/l",
-            amount=settlement_limit["non_medical"],
+        # this creates available_limit account entry
+        super().reinstate_limit_on_payment(
+            session=session, event=event, amount=settlement_limit["non_medical"]
         )
 
 

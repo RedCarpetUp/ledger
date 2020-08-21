@@ -375,9 +375,6 @@ def _adjust_for_complete_bill(
 def _adjust_for_prepayment(
     session: Session, loan_id: int, event_id: int, amount: Decimal, debit_book_str: str
 ) -> None:
-    print("####################")
-    print(loan_id, amount)
-    print("####################")
     create_ledger_entry_from_str(
         session,
         event_id=event_id,
@@ -445,13 +442,15 @@ def customer_refund_event(
     )
 
 
-def limit_assignment_event(session: Session, loan_id: int, event: LedgerTriggerEvent) -> None:
+def limit_assignment_event(
+    session: Session, loan_id: int, event: LedgerTriggerEvent, amount: Decimal
+) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
         debit_book_str=f"{loan_id}/card/available_limit/a",
         credit_book_str=f"{loan_id}/card/available_limit/l",
-        amount=Decimal(event.amount),
+        amount=amount,
     )
 
 
