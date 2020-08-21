@@ -68,7 +68,9 @@ v3_conn = "postgresql://nishant:SAkrlF5WeR@localhost:5013/production"
 v3_conn_local = "postgresql://alem_user:password@localhost:5680/alem_db"
 
 
-open_loans = [1157616,]
+open_loans = [
+    1157616,
+]
 # open_loans = [
 #     1079788,
 #     1131509,
