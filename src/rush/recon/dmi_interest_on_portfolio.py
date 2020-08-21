@@ -15,7 +15,7 @@ lender_payable_balance_change_dates as (
     join all_cards using(loan_id) 
   where 
     name in (
-      'card_transaction', 'payment_received', 
+      'card_transaction', 'payment_settled', 
       'merchant_refund'
     ) 
     and post_date::date >= :from_date
