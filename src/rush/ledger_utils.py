@@ -40,10 +40,22 @@ def create_ledger_entry_from_str(
 
 
 def get_account_balance_from_str(
-    session: Session, book_string: str, to_date: Optional[DateTime] = None
+    session: Session,
+    book_string: str,
+    to_date: Optional[DateTime] = None,
+    from_date: Optional[DateTime] = None,
 ) -> Tuple[int, Decimal]:
     book_variables = breakdown_account_variables_from_str(book_string)
-    if to_date:
+    if from_date and to_date:
+        f = func.get_account_balance_between_periods(
+            book_variables["identifier"],
+            book_variables["identifier_type"],
+            book_variables["name"],
+            book_variables["account_type"],
+            from_date,
+            to_date,
+        )
+    elif to_date:
         f = func.get_account_balance(
             book_variables["identifier"],
             book_variables["identifier_type"],
