@@ -190,6 +190,7 @@ tables_to_insert = [
     {"ledger": "fee", "db": "fee"},
 ]
 
+
 def create_all_users(session: Session, loan_ids: List[Integer]) -> pd.DataFrame:
 
     ruby_product = Product(product_name="ruby")
