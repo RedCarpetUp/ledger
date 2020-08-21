@@ -157,29 +157,8 @@ def payment_received_event(
             session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str,
         )
 
-        if user_card.multiple_limits:
-            if user_card.card_type == "health_card":
-                settlement_limit = user_card.get_split_payment(
-                    session=session, payment_amount=actual_payment
-                )
-
-                # settling medical limit
-                health_limit_assignment_event(
-                    session=session,
-                    loan_id=user_card.loan_id,
-                    event=event,
-                    amount=settlement_limit["medical"],
-                    limit_str="health_limit",
-                )
-
-                # settling non medical limit
-                health_limit_assignment_event(
-                    session=session,
-                    loan_id=user_card.loan_id,
-                    event=event,
-                    amount=settlement_limit["non_medical"],
-                    limit_str="available_limit",
-                )
+        if user_card.should_reinstate_limit_on_payment:
+            user_card.reinstate_limit_on_payment(event=event, amount=actual_payment)
 
     if payment_received > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
@@ -336,9 +315,6 @@ def _adjust_for_complete_bill(
 def _adjust_for_prepayment(
     session: Session, loan_id: int, event_id: int, amount: Decimal, debit_book_str: str
 ) -> None:
-    print("####################")
-    print(loan_id, amount)
-    print("####################")
     create_ledger_entry_from_str(
         session,
         event_id=event_id,
@@ -406,13 +382,15 @@ def customer_refund_event(
     )
 
 
-def limit_assignment_event(session: Session, loan_id: int, event: LedgerTriggerEvent) -> None:
+def limit_assignment_event(
+    session: Session, loan_id: int, event: LedgerTriggerEvent, amount: Decimal
+) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
         debit_book_str=f"{loan_id}/card/available_limit/a",
         credit_book_str=f"{loan_id}/card/available_limit/l",
-        amount=Decimal(event.amount),
+        amount=amount,
     )
 
 
@@ -424,15 +402,3 @@ def daily_dpd_event(session: Session, user_card: BaseCard) -> None:
     )
     session.add(event)
     session.flush()
-
-
-def health_limit_assignment_event(
-    session: Session, loan_id: int, event: LedgerTriggerEvent, amount: Decimal, limit_str: str
-) -> None:
-    create_ledger_entry_from_str(
-        session,
-        event_id=event.id,
-        debit_book_str=f"{loan_id}/card/{limit_str}/a",
-        credit_book_str=f"{loan_id}/card/{limit_str}/l",
-        amount=amount,
-    )
