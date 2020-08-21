@@ -1,4 +1,3 @@
-from datetime import timedelta
 from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
@@ -9,6 +8,7 @@ from sqlalchemy.orm import (
     Session,
     aliased,
 )
+from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.sql import func
 
 from rush.anomaly_detection import get_payment_events
@@ -41,38 +41,41 @@ from rush.utils import (
 
 def create_emis_for_card(
     session: Session,
-    user_card: UserCard,
-    last_bill: BaseBill,
+    user_card: BaseLoan,
+    bill: BaseBill,
     late_fee: Decimal = None,
     interest: Decimal = None,
     atm_fee: Decimal = None,
-    bill_tenure: Decimal = 12,
+    last_emi: CardEmis = None,
+    bill_accumalation_till_date: Decimal = None,
 ) -> None:
-    first_emi_due_date = user_card.card_activation_date + timedelta(
-        days=user_card.interest_free_period_in_days + 1
-    )
-    principal_due = Decimal(last_bill.table.principal)
-    due_amount = last_bill.table.principal_instalment
-    due_date = new_emi = None
+    bill_tenure = bill.table.bill_tenure
+    if not last_emi:
+        due_date = user_card.card_activation_date
+        principal_due = Decimal(bill.table.principal)
+        due_amount = bill.table.principal_instalment
+        start_emi_number = difference_counter = 1
+    else:
+        due_date = last_emi.due_date
+        principal_due = Decimal(bill.table.principal - bill_accumalation_till_date)
+        due_amount = div(principal_due, bill_tenure - last_emi.emi_number)
+        start_emi_number = last_emi.emi_number + 1
+        difference_counter = last_emi.emi_number
     late_fine = total_interest = current_interest = next_interest = Decimal(0)
-    for i in range(1, bill_tenure + 1):
-        due_date = (
-            first_emi_due_date
-            if i == 1
-            else due_date + timedelta(days=user_card.statement_period_in_days + 1)
-        )
+    for i in range(start_emi_number, bill_tenure + 1):
+        due_date += relativedelta(months=1, day=15)
         # A bill's late fee/atm fee will only go on first emi.
         late_fine = late_fee if late_fee and i == 1 else Decimal(0)
         atm_fine = atm_fee if atm_fee and i == 1 else Decimal(0)
         total_due_amount = due_amount
         total_closing_balance = (
-            principal_due - mul(due_amount, (i - 1))
-            if principal_due - mul(due_amount, (i - 1)) > 0
+            principal_due - mul(due_amount, (i - difference_counter))
+            if principal_due - mul(due_amount, (i - difference_counter)) > 0
             else due_amount
         )
         total_closing_balance_post_due_date = (
-            principal_due - mul(due_amount, (i - 1))
-            if principal_due - mul(due_amount, (i - 1)) > 0
+            principal_due - mul(due_amount, (i - difference_counter))
+            if principal_due - mul(due_amount, (i - difference_counter)) > 0
             else due_amount
         )
         if interest:
@@ -81,6 +84,7 @@ def create_emis_for_card(
             total_interest = current_interest + next_interest
             total_due_amount += interest
             total_closing_balance_post_due_date += interest
+        extra_details = {str(bill.id): str(due_amount)}
         new_emi = CardEmis(
             loan_id=user_card.loan_id,
             emi_number=i,
@@ -94,6 +98,7 @@ def create_emis_for_card(
             interest_next_month=next_interest,
             total_due_amount=total_due_amount,
             due_date=due_date,
+            extra_details=extra_details,
         )
         session.add(new_emi)
     session.flush()
@@ -101,33 +106,46 @@ def create_emis_for_card(
 
 def add_emi_on_new_bill(
     session: Session,
-    user_card: UserCard,
-    last_bill: BaseBill,
-    last_emi_number: int,
+    user_card: BaseLoan,
+    bill: BaseBill,
+    last_emi: CardEmis,
     bill_number: int,
     late_fee: Decimal = None,
     interest: Decimal = None,
     atm_fee_due: Decimal = None,
-    bill_tenure: Decimal = 12,
+    last_bill_tenure: Decimal = 12,
+    post_date: DateTime = None,
+    bill_accumalation_till_date: Decimal = None,
+    last_old_bill_emi_number: int = None,
 ) -> None:
-    if bill_tenure < last_emi_number:
+    last_emi_number = last_emi.emi_number
+    bill_tenure = bill.table.bill_tenure
+    if bill_tenure < last_bill_tenure:
         emis_to_be_inserted = 0
     else:
-        emis_to_be_inserted = (bill_tenure - last_emi_number) + 1
-    principal_due = Decimal(last_bill.table.principal)
-    due_amount = last_bill.table.principal_instalment
+        emis_to_be_inserted = (bill_tenure - last_bill_tenure) + 1
     all_emis = (
         session.query(CardEmis)
         .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
         .all()
     )
-    user_card_wrapped = get_user_card(session, user_card.user_id)
     total_interest = current_interest = next_interest = Decimal(0)
-    min_due = user_card_wrapped.get_min_for_schedule()
+    min_due = user_card.get_min_for_schedule()
+
+    # Adjust due in accordance with extension
+    if not post_date:
+        principal_due = Decimal(bill.table.principal)
+        due_amount = bill.table.principal_instalment
+        difference_counter = bill_number
+    else:
+        principal_due = Decimal(bill.table.principal - bill_accumalation_till_date)
+        due_amount = div(principal_due, bill_tenure - last_old_bill_emi_number)
+        difference_counter = last_old_bill_emi_number + 1
+
     for emi in all_emis:
         # We consider 12 because the first insertion had 12 emis
-        if emi.emi_number < bill_number:
+        if emi.emi_number < bill_number or (post_date and emi.due_date < post_date.date()):
             continue
         elif late_fee and emi.emi_number == bill_number:
             emi.late_fee += late_fee
@@ -137,11 +155,15 @@ def add_emi_on_new_bill(
         emi.total_due_amount = (
             min_due if emi.emi_number == bill_number else emi.total_due_amount + due_amount
         )
-        emi.total_closing_balance += principal_due - (mul(due_amount, (emi.emi_number - bill_number)))
+        emi.total_closing_balance += principal_due - (
+            mul(due_amount, (emi.emi_number - difference_counter))
+        )
         emi.total_closing_balance_post_due_date += principal_due - (
-            mul(due_amount, (emi.emi_number - bill_number))
+            mul(due_amount, (emi.emi_number - difference_counter))
         )
         emi.payment_status = "UnPaid"
+        emi.extra_details[str(bill.id)] = str(due_amount)
+        flag_modified(emi, "extra_details")
         if interest:
             emi.total_closing_balance_post_due_date += interest
             emi.total_due_amount = (
@@ -157,11 +179,9 @@ def add_emi_on_new_bill(
             last_emi_due_date = None
             second_last_emi = all_emis[-1]
             if not last_emi_due_date:
-                last_emi_due_date = second_last_emi.due_date + timedelta(
-                    days=user_card.statement_period_in_days + 1
-                )
+                last_emi_due_date = second_last_emi.due_date + relativedelta(months=1, day=15)
             else:
-                last_emi_due_date += timedelta(days=user_card.statement_period_in_days + 1)
+                last_emi_due_date += relativedelta(months=1, day=15)
             total_due_amount = due_amount
             total_closing_balance = (
                 (principal_due - mul(due_amount, (last_emi_number + i)))
@@ -179,6 +199,7 @@ def add_emi_on_new_bill(
                 total_interest = current_interest + next_interest
                 total_due_amount += interest
                 total_closing_balance_post_due_date += interest
+            extra_details = {str(bill.id): str(due_amount)}
             new_emi = CardEmis(
                 loan_id=user_card.loan_id,
                 emi_number=(last_emi_number + i + 1),
@@ -190,6 +211,7 @@ def add_emi_on_new_bill(
                 total_closing_balance=total_closing_balance,
                 total_closing_balance_post_due_date=total_closing_balance_post_due_date,
                 due_date=last_emi_due_date,
+                extra_details=extra_details,
             )
             session.add(new_emi)
     session.flush()
@@ -688,18 +710,48 @@ def check_moratorium_eligibility(session: Session, data):
         return resp
 
 
-def refresh_schedule(user_card: BaseLoan):
+def refresh_schedule(user_card: BaseLoan, post_date: DateTime = None):
     session = user_card.session
     # Get all generated bills of the user
     all_bills = user_card.get_all_bills()
 
-    # Set all previous emis as inactive
-    all_emis = (
-        session.query(CardEmis)
-        .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
-        .order_by(CardEmis.emi_number.asc())
-        .all()
-    )
+    pre_post_date_emis = None
+    # Considering the post_date case only for extension
+    if not post_date:
+        # Set all previous emis as inactive
+        all_emis = (
+            session.query(CardEmis)
+            .filter(CardEmis.loan_id == user_card.table.id, CardEmis.row_status == "active")
+            .order_by(CardEmis.emi_number.asc())
+            .all()
+        )
+    else:
+        # Set all emis after post date as inactive
+        all_emis = (
+            session.query(CardEmis)
+            .filter(
+                CardEmis.loan_id == user_card.table.id,
+                CardEmis.row_status == "active",
+                CardEmis.due_date >= post_date,
+            )
+            .order_by(CardEmis.emi_number.asc())
+            .all()
+        )
+        # Get emis pre post date and set payments to zero. This is done to get per bill amount as well
+        pre_post_date_emis = (
+            session.query(CardEmis)
+            .filter(
+                CardEmis.loan_id == user_card.table.id,
+                CardEmis.row_status == "active",
+                CardEmis.due_date < post_date,
+            )
+            .order_by(CardEmis.emi_number.asc())
+            .all()
+        )
+        for emi in pre_post_date_emis:
+            emi.atm_fee_received = (
+                emi.interest_received
+            ) = emi.late_fee_received = emi.principal_received = Decimal(0)
     for emi in all_emis:
         emi.row_status = "inactive"
         session.flush()
@@ -715,7 +767,17 @@ def refresh_schedule(user_card: BaseLoan):
 
     # Re-Create schedule from all the bills
     bill_number = 1
+    last_bill_tenure = 0
     for bill in all_bills:
+        bill_accumalation_till_date = Decimal(0)
+        if post_date and pre_post_date_emis:
+            for emi in pre_post_date_emis:
+                if not emi.extra_details.get("moratorium"):
+                    bill_accumalation_till_date += (
+                        Decimal(emi.extra_details.get(str(bill.id)))
+                        if emi.extra_details.get(str(bill.id))
+                        else Decimal(0)
+                    )
         fees = session.query(Fee).filter(Fee.bill_id == bill.id, Fee.fee_status != "REVERSED").all()
         late_fine_due = atm_fee_due = 0
         for fee in fees:
@@ -723,35 +785,47 @@ def refresh_schedule(user_card: BaseLoan):
                 late_fine_due = fee.gross_amount
             elif fee.name == "atm_fee":
                 atm_fee_due = fee.gross_amount
-        interest_due = bill.table.interest_to_charge
+        _, interest_due = get_account_balance_from_str(
+            session,
+            f"{bill.id}/bill/interest_accrued/r",
+            from_date=bill.table.bill_close_date,
+            # Should be getting to date from next bills start date
+            to_date=bill.table.bill_close_date + relativedelta(months=1),
+        )
         last_emi = (
             session.query(CardEmis)
             .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
             .order_by(CardEmis.due_date.desc())
             .first()
         )
-        if not last_emi:
+        if not last_emi or (last_emi and last_emi.emi_number < bill.bill_tenure):
             create_emis_for_card(
                 session,
-                user_card.table,
+                user_card,
                 bill,
                 late_fine_due,
                 interest_due,
                 atm_fee_due,
-                bill.table.bill_tenure,
+                last_emi,
+                bill_accumalation_till_date,
             )
         else:
             add_emi_on_new_bill(
                 session,
-                user_card.table,
+                user_card,
                 bill,
-                last_emi.emi_number,
+                last_emi,
                 bill_number,
                 late_fine_due,
                 interest_due,
                 atm_fee_due,
-                bill.table.bill_tenure,
+                last_bill_tenure,
+                post_date,
+                bill_accumalation_till_date,
+                # The last old bill emi number can only exist in case of post date existence
+                pre_post_date_emis[-1].emi_number if post_date else 0,
             )
+        last_bill_tenure = bill.table.bill_tenure
         bill_number += 1
 
     # Check if user has opted for moratorium and adjust that in schedule

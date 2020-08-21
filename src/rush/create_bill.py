@@ -107,9 +107,11 @@ def bill_generate(user_card: BaseLoan) -> BaseBill:
     return bill
 
 
-def extend_tenure(session: Session, user_card: BaseLoan, new_tenure: int) -> None:
-    unpaid_bills = user_card.get_unpaid_bills()
-    for bill in unpaid_bills:
+def extend_tenure(
+    session: Session, user_card: BaseLoan, new_tenure: int, post_date: DateTime, bill: BaseBill = None
+) -> None:
+    def extension(bill: BaseBill):
+        list_of_bills.append(bill.id)
         bill.table.bill_tenure = new_tenure
         principal_instalment = div(bill.table.principal, bill.table.bill_tenure)
         # Update the bill rows here
@@ -117,11 +119,28 @@ def extend_tenure(session: Session, user_card: BaseLoan, new_tenure: int) -> Non
         bill.table.interest_to_charge = bill.get_interest_to_charge(
             user_card.rc_rate_of_interest_monthly
         )
+
+    list_of_bills = []
+    if not bill:
+        unpaid_bills = user_card.get_unpaid_bills()
+        for unpaid_bill in unpaid_bills:
+            extension(unpaid_bill)
+    else:
+        extension(bill)
+
+    event = LedgerTriggerEvent(
+        name="tenure_extended",
+        loan_id=user_card.id,
+        post_date=post_date,
+        extra_details={"bills": list_of_bills},
+    )
+    session.add(event)
     session.flush()
+
     # Refresh the schedule
     from rush.create_emi import refresh_schedule
 
-    refresh_schedule(user_card)
+    refresh_schedule(user_card, post_date)
 
 
 def add_atm_fee(

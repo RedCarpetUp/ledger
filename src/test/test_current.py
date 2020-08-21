@@ -782,7 +782,7 @@ def test_subsequent_emi_creation(session: Session) -> None:
     assert last_emi.due_amount == 500
     assert second_emi.due_amount == 1000
     assert last_emi.emi_number == 13
-    assert last_emi.due_date.strftime("%Y-%m-%d") == "2021-05-25"
+    assert last_emi.due_date.strftime("%Y-%m-%d") == "2021-05-15"
 
 
 def test_schedule_for_interest_and_payment(session: Session) -> None:
@@ -838,8 +838,8 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
     first_emi = emis_dict[0]
-    assert first_emi["interest_current_month"] == 84
-    assert first_emi["interest_next_month"] == 96
+    assert first_emi["interest_current_month"] == 90
+    assert first_emi["interest_next_month"] == 90
 
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{uc.loan_id}/loan/lender_payable/l"
@@ -875,7 +875,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
 
-    assert emis_dict[0]["due_date"] == parse_date("2020-06-16").date()
+    assert emis_dict[0]["due_date"] == parse_date("2020-06-15").date()
     assert emis_dict[0]["total_due_amount"] == 680
     assert emis_dict[0]["due_amount"] == 500
     assert emis_dict[0]["total_closing_balance"] == 6000
@@ -883,9 +883,9 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     assert emis_dict[0]["interest_received"] == 180
     assert emis_dict[0]["payment_received"] == 500
     assert emis_dict[0]["interest"] == 180
-    assert emis_dict[0]["interest_current_month"] == 84
-    assert emis_dict[0]["interest_next_month"] == 96
-    assert emis_dict[1]["due_date"] == parse_date("2020-07-17").date()
+    assert emis_dict[0]["interest_current_month"] == 90
+    assert emis_dict[0]["interest_next_month"] == 90
+    assert emis_dict[1]["due_date"] == parse_date("2020-07-15").date()
     assert emis_dict[1]["total_due_amount"] == 680
     assert emis_dict[1]["due_amount"] == 500
     assert emis_dict[1]["total_closing_balance"] == 5500
@@ -893,9 +893,9 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     assert emis_dict[1]["interest_received"] == 180
     assert emis_dict[1]["payment_received"] == 500
     assert emis_dict[1]["interest"] == 180
-    assert emis_dict[1]["interest_current_month"] == 78
-    assert emis_dict[1]["interest_next_month"] == 102
-    assert emis_dict[2]["due_date"] == parse_date("2020-08-17").date()
+    assert emis_dict[1]["interest_current_month"] == 90
+    assert emis_dict[1]["interest_next_month"] == 90
+    assert emis_dict[2]["due_date"] == parse_date("2020-08-15").date()
     assert emis_dict[2]["total_due_amount"] == 5000
     assert emis_dict[2]["due_amount"] == 5000
     assert emis_dict[2]["total_closing_balance"] == 0
@@ -905,7 +905,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     assert emis_dict[2]["interest"] == 0
     assert emis_dict[2]["interest_current_month"] == 0
     assert emis_dict[2]["interest_next_month"] == 0
-    assert emis_dict[3]["due_date"] == parse_date("2020-09-17").date()
+    assert emis_dict[3]["due_date"] == parse_date("2020-09-15").date()
     assert emis_dict[3]["total_due_amount"] == 0
     assert emis_dict[3]["due_amount"] == 0
     assert emis_dict[3]["total_closing_balance"] == 0
@@ -2395,10 +2395,75 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
 
 
 def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
-    test_moratorium_live_user_1836540(session)
-    user_card = get_user_card(session, 1836540)
+    test_lenders(session)
+    card_db_updates(session)
+
+    a = User(id=1836540, performed_by=123,)
+    session.add(a)
+    session.flush()
+
+    # assign card
+    user_card = create_user_card(
+        session=session,
+        card_type="ruby",
+        user_id=a.id,
+        # 16th March actual
+        card_activation_date=parse_date("2020-03-01").date(),
+        lender_id=62311,
+    )
+
+    create_card_swipe(
+        session=session,
+        user_card=user_card,
+        txn_time=parse_date("2020-03-19 21:33:53"),
+        amount=Decimal(10),
+        description="TRUEBALANCE IO         GURGAON       IND",
+    )
+
+    create_card_swipe(
+        session=session,
+        user_card=user_card,
+        txn_time=parse_date("2020-03-24 14:01:35"),
+        amount=Decimal(100),
+        description="PAY*TRUEBALANCE IO     GURGAON       IND",
+    )
+
+    uc = get_user_card(session, a.id)
+    bill_march = bill_generate(uc)
+
+    create_card_swipe(
+        session=session,
+        user_card=user_card,
+        txn_time=parse_date("2020-04-03 17:41:43"),
+        amount=Decimal(4),
+        description="TRUEBALANCE IO         GURGAON       IND",
+    )
+
+    create_card_swipe(
+        session=session,
+        user_card=user_card,
+        txn_time=parse_date("2020-04-12 22:02:47"),
+        amount=Decimal(52),
+        description="PAYU PAYMENTS PVT LTD  0001243054000 IND",
+    )
+
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(session, bill_march.table.bill_due_date + relativedelta(days=1), uc)
+
+    bill_april = bill_generate(uc)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(session, bill_april.table.bill_due_date + relativedelta(days=1), uc)
+
+    # Get emi list post few bill creations
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.loan_id == user_card.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.emi_number.asc())
+        .all()
+    )
+
     # Extend tenure to 18 months
-    extend_tenure(session, user_card, 18)
+    extend_tenure(session, uc, 18, parse_date("2020-05-22 22:02:47"))
 
     # Get emi list post tenure extension
     all_emis = (
@@ -2410,12 +2475,14 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
 
     last_emi = all_emis[-1]
     second_last_emi = all_emis[-2]
-    # 110/18 = 6.11 + 56/18 = 3.11 == 9.22
-    assert second_last_emi.due_amount == Decimal("9.22")
-    # 56/18 = 3.11
-    assert last_emi.due_amount == Decimal("3.11")
-    # First cycle 18 emis, next bill 19 emis, 2 because of moratorium == 21
-    assert last_emi.emi_number == 21
+    # 110-18.34 = 91.66, 91.66/16 = 5.73
+    # 56-4.67 = 51.33, 51.33/16 = 3.21
+    # 5.73+3.21 = 8.94
+    assert second_last_emi.due_amount == Decimal("8.94")
+    # 56-4.67 = 51.33, 51.33/16 = 3.21
+    assert last_emi.due_amount == Decimal("3.21")
+    # First cycle 18 emis, next bill 19 emis
+    assert last_emi.emi_number == 19
 
 
 def test_intermediate_bill_generation(session: Session) -> None:
