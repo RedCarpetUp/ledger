@@ -48,7 +48,7 @@ def payment_received(
         payment_request_id,
         gateway_charges,
         payment_amount,
-        payment_date + relativedelta(day=2),
+        payment_date + relativedelta(days=2),
         user_card,
     )
 
