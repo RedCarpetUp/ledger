@@ -785,7 +785,13 @@ def refresh_schedule(user_card: BaseCard, post_date: DateTime = None):
                 late_fine_due = fee.gross_amount
             elif fee.name == "atm_fee":
                 atm_fee_due = fee.gross_amount
-        interest_due = bill.table.interest_to_charge
+        _, interest_due = get_account_balance_from_str(
+            session,
+            f"{bill.id}/bill/interest_accrued/r",
+            from_date=bill.table.bill_close_date,
+            # Should be getting to date from next bills start date
+            to_date=bill.table.bill_close_date + relativedelta(months=1),
+        )
         last_emi = (
             session.query(CardEmis)
             .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
