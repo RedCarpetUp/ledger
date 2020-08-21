@@ -8,8 +8,8 @@ from sqlalchemy.orm import (
     Session,
     aliased,
 )
-from sqlalchemy.sql import func
 from sqlalchemy.orm.attributes import flag_modified
+from sqlalchemy.sql import func
 
 from rush.anomaly_detection import get_payment_events
 from rush.card import (
