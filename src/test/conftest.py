@@ -112,7 +112,7 @@ def postgres_server(docker_client: docker.DockerClient) -> Iterator[Dict[str, st
     if "GITHUB_SHA" not in os.environ:
         # this line needed otherwise mypy will cry
         assert cont is not None
-        cont.stop(timeout=1)
+        # cont.stop(timeout=1)
 
 
 @pytest.fixture(scope="session")
