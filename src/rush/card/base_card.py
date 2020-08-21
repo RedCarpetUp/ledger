@@ -113,7 +113,15 @@ class BaseCard:
     def reinstate_limit_on_payment(
         self, session: Session, event: LedgerTriggerEvent, amount: Decimal
     ) -> None:
-        pass
+        if self.should_reinstate_limit_on_payment:
+            return
+
+        if self.multiple_limits:
+            raise Exception("MultipleLimitsSettlementNotImplemented")
+
+        from rush.ledger_events import limit_assignment_event
+
+        limit_assignment_event(session=session, loan_id=self.loan_id, event=event)
 
     def _convert_to_bill_class_decorator(func) -> BaseBill:
         def f(self):

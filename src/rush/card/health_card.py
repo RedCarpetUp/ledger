@@ -11,7 +11,10 @@ from rush.card.base_card import (
     BaseBill,
     BaseCard,
 )
-from rush.ledger_utils import get_account_balance_from_str
+from rush.ledger_utils import (
+    create_ledger_entry_from_str,
+    get_account_balance_from_str,
+)
 from rush.models import (
     LedgerTriggerEvent,
     Loan,
@@ -76,24 +79,22 @@ class HealthCard(BaseCard):
     ) -> None:
         settlement_limit = self.get_split_payment(session=session, payment_amount=amount)
 
-        from rush.ledger_events import health_limit_assignment_event
-
         # settling medical limit
-        health_limit_assignment_event(
-            session=session,
-            loan_id=self.loan_id,
-            event=event,
+        create_ledger_entry_from_str(
+            session,
+            event_id=event.id,
+            debit_book_str=f"{self.loan_id}/card/health_limit/a",
+            credit_book_str=f"{self.loan_id}/card/health_limit/l",
             amount=settlement_limit["medical"],
-            limit_str="health_limit",
         )
 
         # settling non medical limit
-        health_limit_assignment_event(
-            session=session,
-            loan_id=self.loan_id,
-            event=event,
+        create_ledger_entry_from_str(
+            session,
+            event_id=event.id,
+            debit_book_str=f"{self.loan_id}/card/available_limit/a",
+            credit_book_str=f"{self.loan_id}/card/available_limit/l",
             amount=settlement_limit["non_medical"],
-            limit_str="available_limit",
         )
 
 

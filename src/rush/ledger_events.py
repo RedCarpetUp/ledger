@@ -463,15 +463,3 @@ def daily_dpd_event(session: Session, user_card: BaseCard) -> None:
     )
     session.add(event)
     session.flush()
-
-
-def health_limit_assignment_event(
-    session: Session, loan_id: int, event: LedgerTriggerEvent, amount: Decimal, limit_str: str
-) -> None:
-    create_ledger_entry_from_str(
-        session,
-        event_id=event.id,
-        debit_book_str=f"{loan_id}/card/{limit_str}/a",
-        credit_book_str=f"{loan_id}/card/{limit_str}/l",
-        amount=amount,
-    )
