@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
 from sqlalchemy.orm import Session
 
@@ -11,7 +12,10 @@ from rush.ledger_events import (
     _adjust_for_prepayment,
     payment_received_event,
 )
-from rush.ledger_utils import create_ledger_entry_from_str
+from rush.ledger_utils import (
+    create_ledger_entry_from_str,
+    get_account_balance_from_str,
+)
 from rush.models import (
     CardTransaction,
     LedgerTriggerEvent,
@@ -31,13 +35,29 @@ def payment_received(
         loan_id=user_card.loan_id,
         amount=payment_amount,
         post_date=payment_date,
-        extra_details={"payment_request_id": payment_request_id, "gateway_charges": 0.5},
+        extra_details={"payment_request_id": payment_request_id},
     )
     session.add(lt)
     session.flush()
 
     payment_received_event(session, user_card, f"{user_card.lender_id}/lender/pg_account/a", lt)
     run_anomaly(session, user_card, payment_date)
+    gateway_charges = Decimal("0.5")
+    settle_payment_in_bank(
+        session,
+        payment_request_id,
+        gateway_charges,
+        payment_amount,
+        payment_date + relativedelta(day=2),
+        user_card,
+    )
+
+
+#     payment_request_id: str,
+#     gateway_expenses: Decimal,
+#     gross_payment_amount: Decimal,
+#     settlement_date: DateTime,
+#     user_card: BaseCard,
 
 
 def refund_payment(
@@ -97,16 +117,7 @@ def transaction_refund_event(
                 amount=refund_amount,
                 debit_book_str=m2p_pool_account,
             )
-    #
-    # _, writeoff_balance = get_account_balance_from_str(
-    #     session, book_string=f"{user_card.loan_id}/loan/writeoff_expenses/e"
-    # )
-    # if writeoff_balance > 0:
-    #     amount = min(writeoff_balance, event.amount)
-    #     _adjust_for_recovery(session, user_card.loan_id, event.id, amount)
-    #
-    # else:
-    # Lender has received money, so we reduce our liability now.
+
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
@@ -119,3 +130,58 @@ def transaction_refund_event(
     from rush.create_emi import refresh_schedule
 
     refresh_schedule(user_card=user_card)
+
+
+def settle_payment_in_bank(
+    session: Session,
+    payment_request_id: str,
+    gateway_expenses: Decimal,
+    gross_payment_amount: Decimal,
+    settlement_date: DateTime,
+    user_card: BaseCard,
+) -> None:
+    settled_amount = gross_payment_amount - gateway_expenses
+    event = LedgerTriggerEvent(
+        name="payment_settled",
+        loan_id=user_card.loan_id,
+        amount=settled_amount,
+        post_date=settlement_date,
+    )
+    session.add(event)
+    session.flush()
+
+    payment_settlement_event(session, gateway_expenses, user_card, event)
+
+
+def payment_settlement_event(
+    session: Session, gateway_expenses: Decimal, user_card: BaseCard, event: LedgerTriggerEvent
+) -> None:
+    if gateway_expenses > 0:  # Adjust for gateway expenses.
+        create_ledger_entry_from_str(
+            session,
+            event_id=event.id,
+            debit_book_str="12345/redcarpet/gateway_expenses/e",
+            credit_book_str=f"{user_card.lender_id}/lender/pg_account/a",
+            amount=gateway_expenses,
+        )
+    _, writeoff_balance = get_account_balance_from_str(
+        session, book_string=f"{user_card.loan_id}/loan/writeoff_expenses/e"
+    )
+    if writeoff_balance > 0:
+        amount = min(writeoff_balance, event.amount)
+        create_ledger_entry_from_str(
+            session,
+            event_id=event.id,
+            debit_book_str=f"{user_card.loan_id}/loan/bad_debt_allowance/ca",
+            credit_book_str=f"{user_card.loan_id}/loan/writeoff_expenses/e",
+            amount=amount,
+        )
+
+    # Lender has received money, so we reduce our liability now.
+    create_ledger_entry_from_str(
+        session,
+        event_id=event.id,
+        debit_book_str=f"{user_card.loan_id}/loan/lender_payable/l",
+        credit_book_str=f"{user_card.lender_id}/lender/pg_account/a",
+        amount=event.amount,
+    )
