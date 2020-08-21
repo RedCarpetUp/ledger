@@ -47,14 +47,14 @@ class HealthCard(BaseCard):
     def get_limit_type(mcc: str) -> str:
         return "available_limit" if mcc not in HEALTH_TXN_MCC else "health_limit"
 
-    def get_split_payment(self, session: Session, payment_amount: Decimal) -> Dict[str, Decimal]:
+    def get_split_payment(self, payment_amount: Decimal) -> Dict[str, Decimal]:
         # TODO: change negative due calculation logic, once @raghav adds limit addition logic.
         _, non_medical_due = get_account_balance_from_str(
-            session, book_string=f"{self.loan_id}/card/available_limit/l"
+            session=self.session, book_string=f"{self.loan_id}/card/available_limit/l"
         )
 
         _, medical_due = get_account_balance_from_str(
-            session, book_string=f"{self.loan_id}/card/health_limit/l"
+            session=self.session, book_string=f"{self.loan_id}/card/health_limit/l"
         )
 
         medical_settlement = Decimal(Decimal(0.9) * payment_amount)
@@ -73,14 +73,12 @@ class HealthCard(BaseCard):
             "non_medical": Decimal(round(non_medical_settlement)),
         }
 
-    def reinstate_limit_on_payment(
-        self, session: Session, event: LedgerTriggerEvent, amount: Decimal
-    ) -> None:
-        settlement_limit = self.get_split_payment(session=session, payment_amount=amount)
+    def reinstate_limit_on_payment(self, event: LedgerTriggerEvent, amount: Decimal) -> None:
+        settlement_limit = self.get_split_payment(payment_amount=amount)
 
         # settling medical limit
         create_ledger_entry_from_str(
-            session,
+            session=self.session,
             event_id=event.id,
             debit_book_str=f"{self.loan_id}/card/health_limit/a",
             credit_book_str=f"{self.loan_id}/card/health_limit/l",
@@ -89,9 +87,7 @@ class HealthCard(BaseCard):
 
         # settling non medical limit
         # this creates available_limit account entry
-        super().reinstate_limit_on_payment(
-            session=session, event=event, amount=settlement_limit["non_medical"]
-        )
+        super().reinstate_limit_on_payment(event=event, amount=settlement_limit["non_medical"])
 
 
 class HealthBill(BaseBill):

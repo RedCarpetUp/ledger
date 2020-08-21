@@ -159,7 +159,7 @@ def payment_received_event(
         )
 
         if user_card.should_reinstate_limit_on_payment:
-            user_card.reinstate_limit_on_payment(session=session, event=event, amount=actual_payment)
+            user_card.reinstate_limit_on_payment(event=event, amount=actual_payment)
 
     if payment_received > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
