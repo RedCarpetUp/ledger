@@ -169,7 +169,11 @@ class BaseCard:
     def get_all_bills_post_date(self, post_date: DateTime) -> List[BaseBill]:
         all_bills = (
             self.session.query(LoanData)
-            .filter(LoanData.user_id == self.user_id, LoanData.is_generated.is_(True), LoanData.bill_start_date >= post_date)
+            .filter(
+                LoanData.user_id == self.user_id,
+                LoanData.is_generated.is_(True),
+                LoanData.bill_start_date >= post_date,
+            )
             .order_by(LoanData.bill_start_date)
             .all()
         )

@@ -710,7 +710,9 @@ def check_moratorium_eligibility(session: Session, data):
         return resp
 
 
-def refresh_schedule(user_card: BaseCard, extension_date: DateTime = None, refresh_date: DateTime = None):
+def refresh_schedule(
+    user_card: BaseCard, extension_date: DateTime = None, refresh_date: DateTime = None
+):
     session = user_card.session
     # Get all generated bills of the user
     if not refresh_date:
