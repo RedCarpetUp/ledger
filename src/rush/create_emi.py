@@ -728,7 +728,11 @@ def refresh_schedule(user_card: BaseCard, extension_date: DateTime = None):
     )
     for emi in all_emis:
         emi.row_status = "inactive"
-        session.flush()
+        emi.payment_status = "UnPaid"
+        emi.atm_fee_received = (
+            emi.interest_received
+        ) = emi.late_fee_received = emi.principal_received = Decimal(0)
+    session.flush()
 
     pre_post_date_emis = None
     if extension_date:
@@ -736,10 +740,7 @@ def refresh_schedule(user_card: BaseCard, extension_date: DateTime = None):
         pre_post_date_emis = [emi for emi in all_emis if emi.due_date < extension_date.date()]
         for emi in pre_post_date_emis:
             emi.row_status = "active"
-            emi.payment_status = "UnPaid"
-            emi.atm_fee_received = (
-                emi.interest_received
-            ) = emi.late_fee_received = emi.principal_received = Decimal(0)
+        session.flush()
 
     all_payment_mappings = (
         session.query(EmiPaymentMapping)
@@ -832,6 +833,22 @@ def refresh_schedule(user_card: BaseCard, extension_date: DateTime = None):
                 "months_to_be_inserted": months_to_be_inserted,
             },
         )
+
+    # Replace all emis till August with pre fed now inactive emis to be equal to the old system.
+    # Date considered to be 31st august right now, Nishant change if required
+    new_emis = (
+        session.query(CardEmis)
+        .filter(CardEmis.loan_id == user_card.table.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.emi_number.asc())
+        .all()
+    )
+    count = 0
+    if all_emis:
+        for emi in new_emis:
+            if emi.due_date < parse_date("2020-08-31 00:00:00").date():
+                emi = all_emis[count]
+                emi.row_status = "active"
+            count += 1
 
     # Slide all payments
     slide_payments(user_card=user_card)
