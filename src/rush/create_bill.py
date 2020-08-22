@@ -32,7 +32,7 @@ def get_or_create_bill_for_card_swipe(user_card: BaseLoan, txn_time: DateTime) -
             return {"result": "success", "bill": last_bill}
         new_bill_date = last_bill.bill_close_date
     else:
-        new_bill_date = user_card.table.card_activation_date
+        new_bill_date = user_card.amortization_date
     new_closing_date = new_bill_date + relativedelta(months=1)
     # Check if some months of bill generation were skipped and if they were then generate their bills
     months_diff = (txn_date.year - new_closing_date.year) * 12 + txn_date.month - new_closing_date.month

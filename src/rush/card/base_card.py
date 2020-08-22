@@ -11,6 +11,7 @@ from pendulum import (
     DateTime,
 )
 from sqlalchemy import func
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Session
 
 from rush.ledger_utils import (
@@ -23,7 +24,6 @@ from rush.models import (
     Loan,
     LoanData,
     LoanMoratorium,
-    UserCard,
 )
 from rush.utils import (
     div,
@@ -88,23 +88,32 @@ class BaseBill:
 B = TypeVar("B", bound=BaseBill)
 
 
-class BaseLoan:
+class BaseLoan(Loan):
+    should_reinstate_limit_on_payment = False
     session: Session = None
-    table: UserCard = None
 
-    def __init__(self, session: Session, bill_class: Type[B], user_card: UserCard, loan: Loan):
+    __mapper_args__ = {"polymorphic_identity": "base_loan"}
+
+    def __init__(self, session: Session, bill_class: Type[B], **kwargs):
         self.session = session
         self.bill_class = bill_class
-        self.table = user_card
-        self.__dict__.update(user_card.__dict__)
-        self.loan_id = user_card.loan_id
-        self.lender_id = loan.lender_id
-        self.rc_rate_of_interest_monthly = loan.rc_rate_of_interest_monthly
-        self.should_reinstate_limit_on_payment = False
+        super().__init__(**kwargs)
+
+    @hybrid_property
+    def loan_id(self):
+        return self.id
+
+    @hybrid_property
+    def card_activation_date(self):
+        return self.amortization_date
 
     @staticmethod
     def get_limit_type(mcc: str) -> str:
         return "available_limit"
+
+    def prepare(self, session: Session, bill_class: Type[B]) -> None:
+        self.session = session
+        self.bill_class = bill_class
 
     def reinstate_limit_on_payment(self, event: LedgerTriggerEvent, amount: Decimal) -> None:
         assert self.should_reinstate_limit_on_payment == True

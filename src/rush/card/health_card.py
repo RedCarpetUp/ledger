@@ -38,10 +38,9 @@ HEALTH_TXN_MCC = [
 
 
 class HealthCard(BaseLoan):
-    # todo: add implementation for health card.
-    def __init__(self, session: Session, bill_class: Type[B], user_card: UserCard, loan: Loan):
-        super().__init__(session=session, bill_class=bill_class, user_card=user_card, loan=loan)
-        self.should_reinstate_limit_on_payment = True
+    should_reinstate_limit_on_payment = True
+
+    __mapper_args__ = {"polymorphic_identity": "health_card"}
 
     @staticmethod
     def get_limit_type(mcc: str) -> str:

@@ -6,7 +6,10 @@ from sqlalchemy.orm import Session
 from rush.accrue_financial_charges import accrue_interest_on_all_bills
 from rush.card import create_user_card
 from rush.card.base_card import BaseBill
-from rush.card.health_card import HealthCard
+from rush.card.health_card import (
+    HealthBill,
+    HealthCard,
+)
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import get_account_balance_from_str
@@ -73,7 +76,7 @@ def test_create_health_card(session: Session) -> None:
     create_user(session=session)
     uc = create_test_user_card(session=session)
 
-    assert uc.card_type == "health_card"
+    assert uc.product_type == "health_card"
     assert uc.get_limit_type(mcc="8011") == "health_limit"
     assert uc.get_limit_type(mcc="5555") == "available_limit"
     assert uc.should_reinstate_limit_on_payment == True
@@ -590,3 +593,32 @@ def test_non_medical_payment_received(session: Session) -> None:
         session, f"{uc.loan_id}/card/available_limit/l"
     )
     assert non_medical_limit_balance == -300
+
+
+def test_health_card_loan(session: Session) -> None:
+    create_lenders(session=session)
+    card_db_updates(session=session)
+    create_user(session=session)
+
+    from rush.card.utils import get_product_id_from_card_type
+
+    loan = HealthCard(
+        session=session,
+        user_id=3,
+        product_id=get_product_id_from_card_type(session=session, card_type="health_card"),
+        lender_id=62311,
+        rc_rate_of_interest_monthly=Decimal(3),
+        lender_rate_of_interest_annual=Decimal(18),
+        bill_class=HealthBill,
+    )
+
+    session.add(loan)
+    session.flush()
+
+    assert loan.id is not None
+    assert loan.product_type == "health_card"
+
+    new_loan = session.query(HealthCard).filter(HealthCard.id == loan.id).one()
+
+    assert new_loan is not None
+    assert new_loan.product_type == "health_card"

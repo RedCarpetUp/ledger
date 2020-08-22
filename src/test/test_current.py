@@ -2527,14 +2527,7 @@ def test_intermediate_bill_generation(session: Session) -> None:
 def test_transaction_before_activation(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
-    # a = User(
-    #     id=1836540,
-    #     performed_by=123,
-    #     name="Mohammad Shahbaz Mohammad Shafi Qureshi",
-    #     fullname="Mohammad Shahbaz Mohammad Shafi Qureshi",
-    #     nickname="Mohammad Shahbaz Mohammad Shafi Qureshi",
-    #     email="shahbazq797@gmail.com",
-    # )
+
     a = User(id=1836540, performed_by=123,)
     session.add(a)
     session.flush()

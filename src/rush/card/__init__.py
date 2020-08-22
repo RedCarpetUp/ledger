@@ -3,8 +3,12 @@ from decimal import Decimal
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.functions import user
 
-from rush.card.base_card import BaseLoan
+from rush.card.base_card import (
+    BaseBill,
+    BaseLoan,
+)
 from rush.card.health_card import (
     HealthBill,
     HealthCard,
@@ -21,49 +25,55 @@ from rush.models import (
     Product,
     UserCard,
 )
+from rush.utils import get_current_ist_time
+
+PRODUCT_TO_CLASS_MAPPING = {
+    "ruby": (RubyCard, RubyBill),
+    "health_card": (HealthCard, HealthBill),
+    "base": (BaseLoan, BaseBill),
+}
 
 
 def get_user_card(session: Session, user_id: int, card_type: str = "ruby") -> BaseLoan:
-    user_card, loan = (
-        session.query(UserCard, Loan)
+    klass, bill_class = PRODUCT_TO_CLASS_MAPPING.get(card_type) or PRODUCT_TO_CLASS_MAPPING["base"]
+    user_card = (
+        session.query(klass)
         .join(Product, and_(Product.product_name == card_type, Product.id == Loan.product_id))
-        .filter(
-            Loan.id == UserCard.loan_id,
-            Loan.user_id == UserCard.user_id,
-            UserCard.user_id == user_id,
-            UserCard.card_type == card_type,
-        )
+        .filter(Loan.user_id == user_id)
         .one()
     )
 
-    if user_card.card_type == "ruby":
-        return RubyCard(session=session, bill_class=RubyBill, user_card=user_card, loan=loan)
-    elif user_card.card_type == "health_card":
-        return HealthCard(session=session, bill_class=HealthBill, user_card=user_card, loan=loan)
+    user_card.prepare(session=session, bill_class=bill_class)
+    return user_card
 
 
 def create_user_card(session: Session, **kwargs) -> BaseLoan:
-    loan = Loan(
+    klass, bill_class = (
+        PRODUCT_TO_CLASS_MAPPING.get(kwargs["card_type"]) or PRODUCT_TO_CLASS_MAPPING["base"]
+    )
+
+    loan = klass(
+        session=session,
+        bill_class=bill_class,
         user_id=kwargs["user_id"],
         product_id=get_product_id_from_card_type(session=session, card_type=kwargs["card_type"]),
         lender_id=kwargs.pop("lender_id"),
         rc_rate_of_interest_monthly=Decimal(3),
         lender_rate_of_interest_annual=Decimal(18),
+        amortization_date=kwargs.get(
+            "card_activation_date", get_current_ist_time().date()
+        ),  # TODO: change this later.
     )
     session.add(loan)
     session.flush()
 
     kwargs["loan_id"] = loan.id
 
-    uc = UserCard(**kwargs)
-    session.add(uc)
+    user_card = UserCard(**kwargs)
+    session.add(user_card)
     session.flush()
 
-    if uc.card_type == "ruby":
-        return RubyCard(session=session, bill_class=RubyBill, user_card=uc, loan=loan)
-    elif uc.card_type == "health_card":
-        return HealthCard(session=session, bill_class=HealthBill, user_card=uc, loan=loan)
-    return uc
+    return loan
 
 
 def create_term_loan(session: Session, loan_class: TermLoan, **kwargs) -> LoanData:

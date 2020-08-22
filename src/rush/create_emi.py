@@ -721,7 +721,7 @@ def refresh_schedule(user_card: BaseLoan, post_date: DateTime = None):
         # Set all previous emis as inactive
         all_emis = (
             session.query(CardEmis)
-            .filter(CardEmis.loan_id == user_card.table.id, CardEmis.row_status == "active")
+            .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
             .order_by(CardEmis.emi_number.asc())
             .all()
         )
@@ -730,7 +730,7 @@ def refresh_schedule(user_card: BaseLoan, post_date: DateTime = None):
         all_emis = (
             session.query(CardEmis)
             .filter(
-                CardEmis.loan_id == user_card.table.id,
+                CardEmis.loan_id == user_card.loan_id,
                 CardEmis.row_status == "active",
                 CardEmis.due_date >= post_date,
             )
@@ -741,7 +741,7 @@ def refresh_schedule(user_card: BaseLoan, post_date: DateTime = None):
         pre_post_date_emis = (
             session.query(CardEmis)
             .filter(
-                CardEmis.loan_id == user_card.table.id,
+                CardEmis.loan_id == user_card.loan_id,
                 CardEmis.row_status == "active",
                 CardEmis.due_date < post_date,
             )
@@ -1024,8 +1024,8 @@ def update_event_with_dpd(user_card: BaseLoan, post_date: DateTime = None) -> No
     #         emi.dpd = (post_date.date() - emi.due_date).days
 
     max_dpd = session.query(func.max(EventDpd.dpd).label("max_dpd")).one()
-    user_card.table.dpd = max_dpd.max_dpd
-    if not user_card.table.ever_dpd or max_dpd.max_dpd > user_card.table.ever_dpd:
-        user_card.table.ever_dpd = max_dpd.max_dpd
+    user_card.dpd = max_dpd.max_dpd
+    if not user_card.ever_dpd or max_dpd.max_dpd > user_card.ever_dpd:
+        user_card.ever_dpd = max_dpd.max_dpd
 
     session.flush()
