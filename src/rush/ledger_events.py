@@ -6,6 +6,7 @@ from typing import (
 
 from sqlalchemy import Date
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.sqltypes import DateTime
 
 from rush.card import BaseCard
 from rush.card.base_card import BaseBill
@@ -142,10 +143,9 @@ def add_min_amount_event(
 
 
 def payment_received_event(
-    session: Session, user_card: BaseCard, debit_book_str: str, event: LedgerTriggerEvent,
+    session: Session, user_card: BaseCard, debit_book_str: str, event: LedgerTriggerEvent
 ) -> None:
     payment_received = Decimal(event.amount)
-    gateway_charges = event.extra_details.get("gateway_charges")
     if event.name == "merchant_refund":
         pass
     elif event.name == "payment_received":
@@ -158,29 +158,8 @@ def payment_received_event(
             session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str,
         )
 
-        if user_card.multiple_limits:
-            if user_card.card_type == "health_card":
-                settlement_limit = user_card.get_split_payment(
-                    session=session, payment_amount=actual_payment
-                )
-
-                # settling medical limit
-                health_limit_assignment_event(
-                    session=session,
-                    loan_id=user_card.loan_id,
-                    event=event,
-                    amount=settlement_limit["medical"],
-                    limit_str="health_limit",
-                )
-
-                # settling non medical limit
-                health_limit_assignment_event(
-                    session=session,
-                    loan_id=user_card.loan_id,
-                    event=event,
-                    amount=settlement_limit["non_medical"],
-                    limit_str="available_limit",
-                )
+        if user_card.should_reinstate_limit_on_payment:
+            user_card.reinstate_limit_on_payment(event=event, amount=actual_payment)
 
     if payment_received > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
@@ -191,68 +170,9 @@ def payment_received_event(
             debit_book_str=debit_book_str,
         )
 
-    if gateway_charges > 0:  # Adjust for gateway expenses.
-        _adjust_for_gateway_expenses(session, event, debit_book_str)
-
-    _, writeoff_balance = get_account_balance_from_str(
-        session, book_string=f"{user_card.loan_id}/loan/writeoff_expenses/e"
-    )
-    if writeoff_balance > 0:
-        amount = min(writeoff_balance, event.amount)
-        _adjust_for_recovery(
-            session=session, loan_id=user_card.loan_id, event_id=event.id, amount=amount
-        )
-
-    else:
-        _adjust_lender_payable(
-            session=session,
-            loan_id=user_card.loan_id,
-            credit_book_str=debit_book_str,
-            gateway_charges=gateway_charges,
-            event=event,
-        )
-
     from rush.create_emi import slide_payments
 
-    # Slide payment
     slide_payments(user_card=user_card, payment_event=event)
-
-
-def _adjust_for_gateway_expenses(session: Session, event: LedgerTriggerEvent, credit_book_str: str):
-    create_ledger_entry_from_str(
-        session,
-        event_id=event.id,
-        debit_book_str="12345/redcarpet/gateway_expenses/e",
-        credit_book_str=credit_book_str,
-        amount=event.extra_details["gateway_charges"],
-    )
-
-
-def _adjust_for_recovery(session: Session, loan_id: int, event_id: int, amount: Decimal) -> None:
-    create_ledger_entry_from_str(
-        session,
-        event_id=event_id,
-        debit_book_str=f"{loan_id}/loan/bad_debt_allowance/ca",
-        credit_book_str=f"{loan_id}/loan/writeoff_expenses/e",
-        amount=Decimal(amount),
-    )
-
-
-def _adjust_lender_payable(
-    session: Session,
-    loan_id: int,
-    credit_book_str: str,
-    gateway_charges: Decimal,
-    event: LedgerTriggerEvent,
-) -> None:
-    # Lender has received money, so we reduce our liability now.
-    create_ledger_entry_from_str(
-        session,
-        event_id=event.id,
-        debit_book_str=f"{loan_id}/loan/lender_payable/l",
-        credit_book_str=credit_book_str,
-        amount=Decimal(event.amount) - Decimal(gateway_charges),
-    )
 
 
 def _adjust_bill(
@@ -396,9 +316,6 @@ def _adjust_for_complete_bill(
 def _adjust_for_prepayment(
     session: Session, loan_id: int, event_id: int, amount: Decimal, debit_book_str: str
 ) -> None:
-    print("####################")
-    print(loan_id, amount)
-    print("####################")
     create_ledger_entry_from_str(
         session,
         event_id=event_id,
@@ -466,13 +383,15 @@ def customer_refund_event(
     )
 
 
-def limit_assignment_event(session: Session, loan_id: int, event: LedgerTriggerEvent) -> None:
+def limit_assignment_event(
+    session: Session, loan_id: int, event: LedgerTriggerEvent, amount: Decimal
+) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
         debit_book_str=f"{loan_id}/card/available_limit/a",
         credit_book_str=f"{loan_id}/card/available_limit/l",
-        amount=Decimal(event.amount),
+        amount=amount,
     )
 
 
@@ -484,15 +403,3 @@ def daily_dpd_event(session: Session, user_card: BaseCard) -> None:
     )
     session.add(event)
     session.flush()
-
-
-def health_limit_assignment_event(
-    session: Session, loan_id: int, event: LedgerTriggerEvent, amount: Decimal, limit_str: str
-) -> None:
-    create_ledger_entry_from_str(
-        session,
-        event_id=event.id,
-        debit_book_str=f"{loan_id}/card/{limit_str}/a",
-        credit_book_str=f"{loan_id}/card/{limit_str}/l",
-        amount=amount,
-    )

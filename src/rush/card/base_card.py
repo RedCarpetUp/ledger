@@ -22,6 +22,7 @@ from rush.ledger_utils import (
 )
 from rush.models import (
     CardTransaction,
+    LedgerTriggerEvent,
     Loan,
     LoanData,
     LoanMoratorium,
@@ -99,14 +100,21 @@ class BaseCard:
         self.bill_class = bill_class
         self.table = user_card
         self.__dict__.update(user_card.__dict__)
-        self.multiple_limits = False
         self.loan_id = user_card.loan_id
         self.lender_id = loan.lender_id
         self.rc_rate_of_interest_monthly = loan.rc_rate_of_interest_monthly
+        self.should_reinstate_limit_on_payment = False
 
     @staticmethod
     def get_limit_type(mcc: str) -> str:
         return "available_limit"
+
+    def reinstate_limit_on_payment(self, event: LedgerTriggerEvent, amount: Decimal) -> None:
+        assert self.should_reinstate_limit_on_payment == True
+
+        from rush.ledger_events import limit_assignment_event
+
+        limit_assignment_event(session=self.session, loan_id=self.loan_id, event=event, amount=amount)
 
     def _convert_to_bill_class_decorator(func) -> BaseBill:
         def f(self):
@@ -160,6 +168,20 @@ class BaseCard:
         all_bills = (
             self.session.query(LoanData)
             .filter(LoanData.user_id == self.user_id, LoanData.is_generated.is_(True))
+            .order_by(LoanData.bill_start_date)
+            .all()
+        )
+        all_bills = [self.convert_to_bill_class(bill) for bill in all_bills]
+        return all_bills
+
+    def get_all_bills_post_date(self, post_date: DateTime) -> List[BaseBill]:
+        all_bills = (
+            self.session.query(LoanData)
+            .filter(
+                LoanData.user_id == self.user_id,
+                LoanData.is_generated.is_(True),
+                LoanData.bill_start_date >= post_date,
+            )
             .order_by(LoanData.bill_start_date)
             .all()
         )

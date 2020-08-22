@@ -710,51 +710,36 @@ def check_moratorium_eligibility(session: Session, data):
         return resp
 
 
-def refresh_schedule(user_card: BaseCard, post_date: DateTime = None):
+def refresh_schedule(user_card: BaseCard, extension_date: DateTime = None):
     session = user_card.session
     # Get all generated bills of the user
     all_bills = user_card.get_all_bills()
 
-    pre_post_date_emis = None
-    # Considering the post_date case only for extension
-    if not post_date:
-        # Set all previous emis as inactive
-        all_emis = (
-            session.query(CardEmis)
-            .filter(CardEmis.loan_id == user_card.table.id, CardEmis.row_status == "active")
-            .order_by(CardEmis.emi_number.asc())
-            .all()
-        )
-    else:
-        # Set all emis after post date as inactive
-        all_emis = (
-            session.query(CardEmis)
-            .filter(
-                CardEmis.loan_id == user_card.table.id,
-                CardEmis.row_status == "active",
-                CardEmis.due_date >= post_date,
-            )
-            .order_by(CardEmis.emi_number.asc())
-            .all()
-        )
-        # Get emis pre post date and set payments to zero. This is done to get per bill amount as well
-        pre_post_date_emis = (
-            session.query(CardEmis)
-            .filter(
-                CardEmis.loan_id == user_card.table.id,
-                CardEmis.row_status == "active",
-                CardEmis.due_date < post_date,
-            )
-            .order_by(CardEmis.emi_number.asc())
-            .all()
-        )
-        for emi in pre_post_date_emis:
-            emi.atm_fee_received = (
-                emi.interest_received
-            ) = emi.late_fee_received = emi.principal_received = Decimal(0)
+    # If the user does not have any bill, we cannot refresh
+    if not all_bills:
+        return
+
+    # Get all emis of the user
+    all_emis = (
+        session.query(CardEmis)
+        .filter(CardEmis.loan_id == user_card.table.id, CardEmis.row_status == "active")
+        .order_by(CardEmis.emi_number.asc())
+        .all()
+    )
     for emi in all_emis:
         emi.row_status = "inactive"
         session.flush()
+
+    pre_post_date_emis = None
+    if extension_date:
+        # Get emis pre post date and set payments to zero. This is done to get per bill amount as well
+        pre_post_date_emis = [emi for emi in all_emis if emi.due_date < extension_date.date()]
+        for emi in pre_post_date_emis:
+            emi.row_status = "active"
+            emi.payment_status = "UnPaid"
+            emi.atm_fee_received = (
+                emi.interest_received
+            ) = emi.late_fee_received = emi.principal_received = Decimal(0)
 
     all_payment_mappings = (
         session.query(EmiPaymentMapping)
@@ -770,7 +755,7 @@ def refresh_schedule(user_card: BaseCard, post_date: DateTime = None):
     last_bill_tenure = 0
     for bill in all_bills:
         bill_accumalation_till_date = Decimal(0)
-        if post_date and pre_post_date_emis:
+        if extension_date and pre_post_date_emis:
             for emi in pre_post_date_emis:
                 if not emi.extra_details.get("moratorium"):
                     bill_accumalation_till_date += (
@@ -820,10 +805,10 @@ def refresh_schedule(user_card: BaseCard, post_date: DateTime = None):
                 interest_due,
                 atm_fee_due,
                 last_bill_tenure,
-                post_date,
+                extension_date,
                 bill_accumalation_till_date,
                 # The last old bill emi number can only exist in case of post date existence
-                pre_post_date_emis[-1].emi_number if post_date else 0,
+                pre_post_date_emis[-1].emi_number if extension_date else 0,
             )
         last_bill_tenure = bill.table.bill_tenure
         bill_number += 1

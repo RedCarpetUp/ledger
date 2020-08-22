@@ -296,4 +296,4 @@
 #     _, lender_payable_raghav = get_account_balance_from_str(
 #         session, f"{user_card_raghav.loan_id}/loan/lender_payable/l"
 #     )
-#     assert lender_payable_raghav == Decimal("829.51")
+#     assert lender_payable_raghav == Decimal("829.82")

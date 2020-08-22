@@ -141,7 +141,7 @@ def extend_tenure(
     # Refresh the schedule
     from rush.create_emi import refresh_schedule
 
-    refresh_schedule(user_card, post_date)
+    refresh_schedule(user_card, extension_date=post_date)
 
 
 def add_atm_fee(
