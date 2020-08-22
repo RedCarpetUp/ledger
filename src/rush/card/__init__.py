@@ -35,26 +35,24 @@ PRODUCT_TO_CLASS_MAPPING = {
 
 
 def get_user_card(session: Session, user_id: int, card_type: str = "ruby") -> BaseLoan:
-    klass, bill_class = PRODUCT_TO_CLASS_MAPPING.get(card_type) or PRODUCT_TO_CLASS_MAPPING["base"]
     user_card = (
-        session.query(klass)
-        .join(Product, and_(Product.product_name == card_type, Product.id == Loan.product_id))
-        .filter(Loan.user_id == user_id)
+        session.query(BaseLoan)
+        .join(Product, and_(Product.product_name == card_type, Product.id == BaseLoan.product_id))
+        .filter(BaseLoan.user_id == user_id, BaseLoan.product_type == card_type)
         .one()
     )
 
-    user_card.prepare(session=session, bill_class=bill_class)
+    user_card.prepare(session=session)
     return user_card
 
 
 def create_user_card(session: Session, **kwargs) -> BaseLoan:
-    klass, bill_class = (
+    klass, _ = (
         PRODUCT_TO_CLASS_MAPPING.get(kwargs["card_type"]) or PRODUCT_TO_CLASS_MAPPING["base"]
     )
 
     loan = klass(
         session=session,
-        bill_class=bill_class,
         user_id=kwargs["user_id"],
         product_id=get_product_id_from_card_type(session=session, card_type=kwargs["card_type"]),
         lender_id=kwargs.pop("lender_id"),

@@ -90,13 +90,13 @@ B = TypeVar("B", bound=BaseBill)
 
 class BaseLoan(Loan):
     should_reinstate_limit_on_payment = False
+    bill_class: Type[B] = BaseBill
     session: Session = None
 
     __mapper_args__ = {"polymorphic_identity": "base_loan"}
 
-    def __init__(self, session: Session, bill_class: Type[B], **kwargs):
+    def __init__(self, session: Session, **kwargs):
         self.session = session
-        self.bill_class = bill_class
         super().__init__(**kwargs)
 
     @hybrid_property
@@ -111,9 +111,8 @@ class BaseLoan(Loan):
     def get_limit_type(mcc: str) -> str:
         return "available_limit"
 
-    def prepare(self, session: Session, bill_class: Type[B]) -> None:
+    def prepare(self, session: Session) -> None:
         self.session = session
-        self.bill_class = bill_class
 
     def reinstate_limit_on_payment(self, event: LedgerTriggerEvent, amount: Decimal) -> None:
         assert self.should_reinstate_limit_on_payment == True

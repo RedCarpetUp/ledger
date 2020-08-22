@@ -36,9 +36,13 @@ HEALTH_TXN_MCC = [
     "5912",
 ]
 
+class HealthBill(BaseBill):
+    # todo: add implementation for health card bills.
+    pass
 
 class HealthCard(BaseLoan):
-    should_reinstate_limit_on_payment = True
+    should_reinstate_limit_on_payment: bool = True
+    bill_class: Type[B] = HealthBill
 
     __mapper_args__ = {"polymorphic_identity": "health_card"}
 
@@ -88,7 +92,3 @@ class HealthCard(BaseLoan):
         # this creates available_limit account entry
         super().reinstate_limit_on_payment(event=event, amount=settlement_limit["non_medical"])
 
-
-class HealthBill(BaseBill):
-    # todo: add implementation for health card bills.
-    pass

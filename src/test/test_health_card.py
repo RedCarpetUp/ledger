@@ -4,7 +4,10 @@ from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
 from rush.accrue_financial_charges import accrue_interest_on_all_bills
-from rush.card import create_user_card
+from rush.card import (
+    create_user_card,
+    get_user_card,
+)
 from rush.card.base_card import BaseBill
 from rush.card.health_card import (
     HealthBill,
@@ -80,6 +83,9 @@ def test_create_health_card(session: Session) -> None:
     assert uc.get_limit_type(mcc="8011") == "health_limit"
     assert uc.get_limit_type(mcc="5555") == "available_limit"
     assert uc.should_reinstate_limit_on_payment == True
+
+    user_card = get_user_card(session=session, user_id=uc.user_id, card_type="health_card")
+    assert isinstance(user_card, HealthCard) == True
 
 
 def test_medical_health_card_swipe(session: Session) -> None:
