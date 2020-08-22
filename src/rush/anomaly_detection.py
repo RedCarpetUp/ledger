@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 from rush.accrue_financial_charges import (
     can_remove_interest,
     is_late_fee_valid,
+    reverse_incorrect_late_charges,
     reverse_interest_charges,
-    reverse_late_charges,
 )
 from rush.card import BaseCard
 from rush.models import LedgerTriggerEvent
@@ -62,4 +62,4 @@ def run_anomaly(session: Session, user_card: BaseCard, event_date: DateTime) -> 
         elif event.name == "accrue_late_fine":
             is_charge_valid = is_late_fee_valid(session, user_card)
             if not is_charge_valid:
-                reverse_late_charges(session, user_card=user_card, event_to_reverse=event)
+                reverse_incorrect_late_charges(session, user_card=user_card, event_to_reverse=event)

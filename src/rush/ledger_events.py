@@ -377,23 +377,6 @@ def lender_interest_incur_event(
         event.amount += interest_to_incur
 
 
-def writeoff_event(session: Session, user_card: UserCard, event: LedgerTriggerEvent) -> None:
-    create_ledger_entry_from_str(
-        session,
-        event_id=event.id,
-        debit_book_str=f"{user_card.loan_id}/loan/lender_payable/l",
-        credit_book_str=f"{user_card.loan_id}/loan/bad_debt_allowance/ca",
-        amount=event.amount,
-    )
-    create_ledger_entry_from_str(
-        session,
-        event_id=event.id,
-        debit_book_str=f"{user_card.loan_id}/loan/writeoff_expenses/e",
-        credit_book_str=f"{user_card.loan_id}/redcarpet/redcarpet_account/a",
-        amount=event.amount,
-    )
-
-
 def customer_refund_event(
     session: Session, loan_id: int, lender_id: int, event: LedgerTriggerEvent
 ) -> None:
