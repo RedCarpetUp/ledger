@@ -6,6 +6,7 @@ from typing import (
 
 from sqlalchemy import Date
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.sqltypes import DateTime
 
 from rush.card import BaseCard
 from rush.card.base_card import BaseBill
@@ -142,7 +143,7 @@ def add_min_amount_event(
 
 
 def payment_received_event(
-    session: Session, user_card: BaseCard, debit_book_str: str, event: LedgerTriggerEvent,
+    session: Session, user_card: BaseCard, debit_book_str: str, event: LedgerTriggerEvent
 ) -> None:
     payment_received = Decimal(event.amount)
     if event.name == "merchant_refund":
