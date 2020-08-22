@@ -726,21 +726,20 @@ def refresh_schedule(user_card: BaseCard, extension_date: DateTime = None):
         .order_by(CardEmis.emi_number.asc())
         .all()
     )
+    for emi in all_emis:
+        emi.row_status = "inactive"
+        session.flush()
 
     pre_post_date_emis = None
     if extension_date:
         # Get emis pre post date and set payments to zero. This is done to get per bill amount as well
         pre_post_date_emis = [emi for emi in all_emis if emi.due_date < extension_date.date()]
-        # Set all emis after post date as inactive
-        all_emis = [emi for emi in all_emis if emi.due_date >= extension_date.date()]
         for emi in pre_post_date_emis:
+            emi.row_status = "active"
             emi.payment_status = "UnPaid"
             emi.atm_fee_received = (
                 emi.interest_received
             ) = emi.late_fee_received = emi.principal_received = Decimal(0)
-    for emi in all_emis:
-        emi.row_status = "inactive"
-        session.flush()
 
     all_payment_mappings = (
         session.query(EmiPaymentMapping)
