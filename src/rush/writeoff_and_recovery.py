@@ -1,5 +1,3 @@
-from sqlalchemy.orm import Session
-
 from rush.card import BaseCard
 from rush.ledger_utils import create_ledger_entry_from_str
 from rush.models import (
@@ -20,6 +18,7 @@ def write_off_loan(user_card: BaseCard) -> None:
         name="loan_written_off", amount=total_outstanding, post_date=get_current_ist_time(),
     )
     write_off_event(user_card, event)
+    # user_card.loan_status = 'WRITTEN_OFF'  # uncomment after user_loan PR is merged.
 
 
 def write_off_event(user_card: BaseCard, event: LedgerTriggerEvent) -> None:

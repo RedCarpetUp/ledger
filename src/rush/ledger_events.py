@@ -300,10 +300,10 @@ def _adjust_for_min(
     for bill in bills:
         min_due = bill.get_remaining_min()
         amount_to_adjust_in_this_bill = min(min_due, payment_received)
-        # Remove amount from the original variable.
-        payment_received -= amount_to_adjust_in_this_bill
         if amount_to_adjust_in_this_bill == 0:
             continue
+        # Remove amount from the original variable.
+        payment_received -= amount_to_adjust_in_this_bill
         # Reduce min amount
         create_ledger_entry_from_str(
             session,
