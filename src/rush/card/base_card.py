@@ -179,6 +179,20 @@ class BaseLoan(Loan):
         all_bills = [self.convert_to_bill_class(bill) for bill in all_bills]
         return all_bills
 
+    def get_all_bills_post_date(self, post_date: DateTime) -> List[BaseBill]:
+        all_bills = (
+            self.session.query(LoanData)
+            .filter(
+                LoanData.user_id == self.user_id,
+                LoanData.is_generated.is_(True),
+                LoanData.bill_start_date >= post_date,
+            )
+            .order_by(LoanData.bill_start_date)
+            .all()
+        )
+        all_bills = [self.convert_to_bill_class(bill) for bill in all_bills]
+        return all_bills
+
     def get_last_unpaid_bill(self) -> BaseBill:
         all_bills = (
             self.session.query(LoanData)
