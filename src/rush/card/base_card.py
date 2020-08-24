@@ -248,3 +248,10 @@ class BaseCard:
         unpaid_bills = self.get_unpaid_bills()
         remaining_min_of_all_bills = sum(bill.get_remaining_min() for bill in unpaid_bills)
         return remaining_min_of_all_bills
+
+    def get_total_outstanding(self) -> Decimal:
+        all_bills = self.get_all_bills()
+        total_outstanding = sum(
+            get_remaining_bill_balance(self.session, bill)["total_due"] for bill in all_bills
+        )
+        return total_outstanding
