@@ -14,7 +14,7 @@ from sqlalchemy.sql import func
 from rush.anomaly_detection import get_payment_events
 from rush.card import (
     BaseLoan,
-    get_user_card,
+    get_user_product,
 )
 from rush.card.base_card import BaseBill
 from rush.ledger_utils import (
@@ -691,7 +691,7 @@ def check_moratorium_eligibility(session: Session, data):
     user_id = int(data["user_id"])
     start_date = parse_date(data["start_date"]).date()
     months_to_be_inserted = int(data["months_to_be_inserted"])
-    user_card = get_user_card(session, user_id)
+    user_card = get_user_product(session, user_id)
     emis = (
         session.query(CardEmis)
         .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")

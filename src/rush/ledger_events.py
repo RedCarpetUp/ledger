@@ -406,13 +406,13 @@ def daily_dpd_event(session: Session, user_card: BaseLoan) -> None:
 
 
 def term_loan_creation_event(
-    session: Session, loan: LoanData, event: LedgerTriggerEvent, lender_id: int
+    session: Session, loan_id: int, event: LedgerTriggerEvent, lender_id: int
 ) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
         debit_book_str=f"12345/redcarpet/rc_cash/a",  # TODO: confirm if this right.
-        credit_book_str=f"{loan.loan_id}/bill/principal_receivable/l",
+        credit_book_str=f"{loan_id}/bill/principal_receivable/l",
         amount=event.amount,
     )
 
@@ -421,6 +421,6 @@ def term_loan_creation_event(
         session,
         event_id=event.id,
         debit_book_str=f"{lender_id}/lender/lender_capital/l",
-        credit_book_str=f"{loan.loan_id}/loan/lender_payable/l",
+        credit_book_str=f"{loan_id}/loan/lender_payable/l",
         amount=event.amount,
     )

@@ -1,17 +1,11 @@
-import json
-
 from sqlalchemy import (
     String,
     cast,
 )
 from sqlalchemy.orm import Session
 
-from rush.card import (
-    BaseLoan,
-    get_user_card,
-)
+from rush.card import BaseLoan
 from rush.ledger_utils import (
-    get_account_balance_from_str,
     get_remaining_bill_balance,
     is_bill_closed,
 )

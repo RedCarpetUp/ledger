@@ -1,7 +1,6 @@
 from dateutil.relativedelta import relativedelta
 from sqlalchemy.orm import Session
 
-from rush.card.utils import get_product_id_from_card_type
 from rush.ledger_events import term_loan_creation_event
 from rush.models import (
     LedgerTriggerEvent,
@@ -11,23 +10,19 @@ from rush.models import (
 from rush.utils import div
 
 
-class TermLoan:
+class TermLoan(Loan):
     session: Session = None
 
-    def __init__(self, session: Session):
+    __mapper_args__ = {"polymorphic_identity": "term_loan"}
+
+    def __init__(self, session: Session, **kwargs):
+        self.session = session
+        super().__init__(**kwargs)
+
+    def prepare(self, session: Session) -> None:
         self.session = session
 
-    @staticmethod
-    def create(session: Session, **kwargs) -> LoanData:
-        loan = Loan(
-            user_id=kwargs["user_id"],
-            product_id=get_product_id_from_card_type(session=session, card_type=kwargs["product_type"]),
-        )
-        session.add(loan)
-        session.flush()
-
-        kwargs["loan_id"] = loan.id
-
+    def set_loan_data(self, **kwargs):
         loan_data = LoanData(
             user_id=kwargs["user_id"],
             loan_id=kwargs["loan_id"],
@@ -41,9 +36,10 @@ class TermLoan:
             principal=kwargs["amount"],
             principal_instalment=div(kwargs["amount"], kwargs["tenure"]),
         )
-        session.add(loan_data)
-        session.flush()
+        self.session.add(loan_data)
+        self.session.flush()
 
+    def trigger_loan_creation_event(self, **kwargs) -> None:
         event = LedgerTriggerEvent(
             performed_by=kwargs["user_id"],
             name="termloan_disbursal_event",
@@ -51,11 +47,9 @@ class TermLoan:
             post_date=kwargs["bill_start_date"],
             amount=kwargs["amount"],
         )
-        session.add(event)
-        session.flush()
+        self.session.add(event)
+        self.session.flush()
 
         term_loan_creation_event(
-            session=session, loan=loan_data, event=event, lender_id=kwargs["lender_id"]
+            session=self.session, loan_id=self.loan_id, event=event, lender_id=self.lender_id
         )
-
-        return loan_data

@@ -16,7 +16,7 @@ from rush.accrue_financial_charges import (
 from rush.anomaly_detection import run_anomaly
 from rush.card import (
     create_user_card,
-    get_user_card,
+    get_user_product,
 )
 from rush.card.base_card import BaseBill
 from rush.create_bill import (
@@ -31,7 +31,6 @@ from rush.create_emi import (
 )
 from rush.ledger_utils import (
     get_account_balance_from_str,
-    get_remaining_bill_balance,
     is_bill_closed,
 )
 from rush.lender_funds import (
@@ -40,7 +39,6 @@ from rush.lender_funds import (
     m2p_transfer,
 )
 from rush.models import (
-    BookAccount,
     CardEmis,
     CardKitNumbers,
     CardNames,
@@ -48,7 +46,6 @@ from rush.models import (
     EmiPaymentMapping,
     EventDpd,
     Fee,
-    LedgerEntry,
     LedgerTriggerEvent,
     LenderPy,
     Lenders,
@@ -63,10 +60,6 @@ from rush.payments import (
     refund_payment,
 )
 from rush.recon.revenue_earned import get_revenue_earned_in_a_period
-from rush.views import (
-    bill_view,
-    user_view,
-)
 
 
 def test_current(get_alembic: alembic.config.Config) -> None:
@@ -220,7 +213,7 @@ def test_generate_bill_1(session: Session) -> None:
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 1000
 
-    user_card = get_user_card(session, a.id)
+    user_card = get_user_product(session, a.id)
     bill = bill_generate(user_card)
     # Interest event to be fired separately now
 
@@ -271,7 +264,7 @@ def test_generate_bill_1(session: Session) -> None:
 
 
 def _partial_payment_bill_1(session: Session) -> None:
-    user_card = get_user_card(session, 99)
+    user_card = get_user_product(session, 99)
     payment_date = parse_date("2020-05-03")
     amount = Decimal(100)
     unpaid_bills = user_card.get_unpaid_bills()
@@ -320,7 +313,7 @@ def test_partial_payment_bill_1(session: Session) -> None:
 
 
 def _accrue_late_fine_bill_1(session: Session) -> None:
-    user_card = get_user_card(session, 99)
+    user_card = get_user_product(session, 99)
     event_date = parse_date("2020-05-16 00:00:00")
     bill = accrue_late_charges(session, user_card, event_date)
 
@@ -345,7 +338,7 @@ def _accrue_late_fine_bill_1(session: Session) -> None:
 def _accrue_late_fine_bill_2(session: Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
     event_date = parse_date("2020-05-16 00:00:00")
-    user_card = get_user_card(session, 99)
+    user_card = get_user_product(session, 99)
     bill = accrue_late_charges(session, user_card, event_date)
 
     fee_due = (
@@ -369,7 +362,7 @@ def test_accrue_late_fine_bill_1(session: Session) -> None:
 
 
 def _pay_minimum_amount_bill_1(session: Session) -> None:
-    user_card = get_user_card(session, 99)
+    user_card = get_user_product(session, 99)
 
     unpaid_bills = user_card.get_unpaid_bills()
 
@@ -435,7 +428,7 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
     _partial_payment_bill_1(session)
     _accrue_late_fine_bill_1(session)
 
-    user_card = get_user_card(session, 99)
+    user_card = get_user_product(session, 99)
 
     unpaid_bills = user_card.get_unpaid_bills()
 
@@ -485,7 +478,7 @@ def test_is_bill_paid_bill_1(session: Session) -> None:
     _accrue_late_fine_bill_1(session)
     _pay_minimum_amount_bill_1(session)
 
-    user_card = get_user_card(session, 99)
+    user_card = get_user_product(session, 99)
 
     bill = (
         session.query(LoanData)
@@ -523,7 +516,7 @@ def test_is_bill_paid_bill_1(session: Session) -> None:
 
 def _generate_bill_2(session: Session) -> None:
     user = session.query(User).filter(User.id == 99).one()
-    uc = get_user_card(session, 99)
+    uc = get_user_product(session, 99)
 
     previous_bill = (  # get last generated bill.
         session.query(LoanData)
@@ -633,7 +626,7 @@ def test_generate_bill_3(session: Session) -> None:
     )
 
     generate_date = parse_date("2020-06-01").date()
-    user_card = get_user_card(session, a.id)
+    user_card = get_user_product(session, a.id)
     bill = bill_generate(user_card)
 
     # check latest bill method
@@ -683,7 +676,7 @@ def test_emi_creation(session: Session) -> None:
         description="BigBasket.com",
     )
 
-    user_card = get_user_card(session, a.id)
+    user_card = get_user_product(session, a.id)
     # Generate bill
     bill_april = bill_generate(user_card)
 
@@ -734,7 +727,7 @@ def test_subsequent_emi_creation(session: Session) -> None:
     )
 
     generate_date = parse_date("2020-05-01").date()
-    user_card = get_user_card(session, a.id)
+    user_card = get_user_product(session, a.id)
     bill_april = bill_generate(user_card)
 
     # check latest bill method
@@ -811,7 +804,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     )
 
     generate_date = parse_date("2020-06-01").date()
-    user_card = get_user_card(session, a.id)
+    user_card = get_user_product(session, a.id)
     bill_may = bill_generate(user_card)
 
     # check latest bill method
@@ -1120,7 +1113,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
 
     # Generate bill
     generate_date = parse_date("2020-06-01").date()
-    user_card = get_user_card(session, a.id)
+    user_card = get_user_product(session, a.id)
     bill_may = bill_generate(user_card)
 
     # check latest bill method
@@ -1384,7 +1377,7 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
     _pay_minimum_amount_bill_1(session)
 
     #  Pay 500 rupees
-    user_card = get_user_card(session, 99)
+    user_card = get_user_product(session, 99)
 
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{user_card.loan_id}/loan/lender_payable/l"
@@ -1438,7 +1431,7 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
     _generate_bill_2(session)
 
     #  Pay 500 rupees
-    user_card = get_user_card(session, 99)
+    user_card = get_user_product(session, 99)
     payment_date = parse_date("2020-06-14 19:23:11")
     amount = Decimal("3008.34")
     unpaid_bills = user_card.get_unpaid_bills()
@@ -1493,7 +1486,7 @@ def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
     _pay_minimum_amount_bill_1(session)
     _generate_bill_2(session)
 
-    user_card = get_user_card(session, 99)
+    user_card = get_user_product(session, 99)
 
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{user_card.loan_id}/loan/lender_payable/l"
@@ -1538,7 +1531,7 @@ def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
 
 
 def _pay_minimum_amount_bill_2(session: Session) -> None:
-    user_card = get_user_card(session, 99)
+    user_card = get_user_product(session, 99)
 
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{user_card.loan_id}/loan/lender_payable/l"
@@ -1572,7 +1565,7 @@ def _pay_minimum_amount_bill_2(session: Session) -> None:
 
 def test_refund_1(session: Session) -> None:
     test_generate_bill_1(session)
-    user_card = get_user_card(session, 99)
+    user_card = get_user_product(session, 99)
     refunded_swipe = session.query(CardTransaction).filter_by(description="BigB.com").one()
 
     refund_payment(session, user_card, 100, parse_date("2020-05-05 15:24:34"), "asd23g2", refunded_swipe)
@@ -1624,7 +1617,7 @@ def test_lender_incur(session: Session) -> None:
     bill_id = swipe["data"].loan_id
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 1000
-    user_card = get_user_card(session, a.id)
+    user_card = get_user_product(session, a.id)
     bill = bill_generate(user_card)
 
     # check latest bill method
@@ -1709,7 +1702,7 @@ def test_lender_incur_two(session: Session) -> None:
         amount=Decimal(500),
         description="BigBasket.com",
     )
-    user_card = get_user_card(session, a.id)
+    user_card = get_user_product(session, a.id)
     bill = bill_generate(user_card)
 
     # check latest bill method
@@ -1733,7 +1726,7 @@ def test_lender_incur_two(session: Session) -> None:
 
 def test_prepayment(session: Session) -> None:
     test_generate_bill_1(session)
-    uc = get_user_card(session, 99)
+    uc = get_user_product(session, 99)
 
     # Check if amount is adjusted correctly in schedule
     all_emis_query = (
@@ -1901,7 +1894,7 @@ def test_prepayment(session: Session) -> None:
 #
 # def test_writeoff_recovery_one(session: Session) -> None:
 #     test_writeoff(session)
-#     uc = get_user_card(session, 99)
+#     uc = get_user_product(session, 99)
 #     payment_received(
 #         session,
 #         uc,
@@ -1923,7 +1916,7 @@ def test_prepayment(session: Session) -> None:
 #
 # def test_writeoff_recovery_two(session: Session) -> None:
 #     test_writeoff(session)
-#     uc = get_user_card(session, 99)
+#     uc = get_user_product(session, 99)
 #
 #     payment_received(
 #         session, uc, Decimal("3000"), payment_date=parse_date("2020-07-01"), payment_request_id="abcde",
@@ -1977,7 +1970,7 @@ def test_moratorium(session: Session) -> None:
 
     # Generate bill
     generate_date = parse_date("2020-02-01").date()
-    user_card = get_user_card(session, a.id)
+    user_card = get_user_product(session, a.id)
     bill_may = bill_generate(user_card)
 
     # check latest bill method
@@ -2040,7 +2033,7 @@ def test_refresh_schedule(session: Session) -> None:
     )
 
     generate_date = parse_date("2020-05-01").date()
-    user_card = get_user_card(session, a.id)
+    user_card = get_user_product(session, a.id)
     bill_april = bill_generate(user_card)
 
     # check latest bill method
@@ -2134,7 +2127,7 @@ def test_moratorium_schedule(session: Session) -> None:
     )
 
     generate_date = parse_date("2020-05-01").date()
-    user_card = get_user_card(session, a.id)
+    user_card = get_user_product(session, a.id)
     bill_april = bill_generate(user_card)
 
     # check latest bill method
@@ -2178,7 +2171,7 @@ def test_moratorium_schedule(session: Session) -> None:
     )
 
     generate_date = parse_date("2020-06-01").date()
-    user_card = get_user_card(session, a.id)
+    user_card = get_user_product(session, a.id)
     bill_may = bill_generate(user_card)
 
     # check latest bill method
@@ -2200,7 +2193,7 @@ def test_moratorium_schedule(session: Session) -> None:
     )
 
     # Refresh schedule
-    refresh_schedule(get_user_card(session, a.id))
+    refresh_schedule(get_user_product(session, a.id))
 
     # Get list post refresh
     all_emis_query = (
@@ -2246,7 +2239,7 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
         description="WWW YESBANK IN         GURGAON       IND",
     )
 
-    uc = get_user_card(session, a.id)
+    uc = get_user_product(session, a.id)
     # Generate bill
     bill = bill_generate(uc)
 
@@ -2341,7 +2334,7 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
         description="PAY*TRUEBALANCE IO     GURGAON       IND",
     )
 
-    uc = get_user_card(session, a.id)
+    uc = get_user_product(session, a.id)
     bill_march = bill_generate(uc)
 
     # check latest bill method
@@ -2428,7 +2421,7 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
         description="PAY*TRUEBALANCE IO     GURGAON       IND",
     )
 
-    uc = get_user_card(session, a.id)
+    uc = get_user_product(session, a.id)
     bill_march = bill_generate(uc)
 
     create_card_swipe(
@@ -2487,7 +2480,7 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
 
 def test_intermediate_bill_generation(session: Session) -> None:
     test_card_swipe(session)
-    user_card = get_user_card(session, 2)
+    user_card = get_user_product(session, 2)
     bill_1 = bill_generate(user_card)
 
     # check latest bill method
