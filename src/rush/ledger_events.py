@@ -22,6 +22,7 @@ from rush.models import (
 )
 from rush.recon.dmi_interest_on_portfolio import interest_on_dmi_portfolio
 from rush.utils import get_gst_split_from_amount
+from rush.writeoff_and_recovery import recovery_event
 
 
 def lender_disbursal_event(session: Session, event: LedgerTriggerEvent, lender_id: int) -> None:
@@ -190,6 +191,12 @@ def payment_received_event(
             debit_book_str=debit_book_str,
         )
 
+    is_in_write_off = (
+        get_account_balance_from_str(session, f"{user_card.loan_id}/loan/write_off_expenses/e")[1] > 0
+    )
+    if is_in_write_off:
+        recovery_event(user_card, event)
+        # TODO set loan status to recovered.
     from rush.create_emi import slide_payments
 
     slide_payments(user_card=user_card, payment_event=event)
