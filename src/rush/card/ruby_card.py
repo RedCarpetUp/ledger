@@ -10,6 +10,7 @@ from rush.card.base_card import (
 class RubyBill(BaseBill):
     pass
 
+
 class RubyCard(BaseLoan):
     bill_class: Type[B] = RubyBill
 

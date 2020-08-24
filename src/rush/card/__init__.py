@@ -1,9 +1,7 @@
 from decimal import Decimal
 
-from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
-from sqlalchemy.sql.functions import user
 
 from rush.card.base_card import (
     BaseBill,
@@ -36,9 +34,9 @@ PRODUCT_TO_CLASS_MAPPING = {
 
 def get_user_card(session: Session, user_id: int, card_type: str = "ruby") -> BaseLoan:
     user_card = (
-        session.query(BaseLoan)
-        .join(Product, and_(Product.product_name == card_type, Product.id == BaseLoan.product_id))
-        .filter(BaseLoan.user_id == user_id, BaseLoan.product_type == card_type)
+        session.query(Loan)
+        .join(Product, and_(Product.product_name == card_type, Product.id == Loan.product_id))
+        .filter(Loan.user_id == user_id, Loan.product_type == card_type)
         .one()
     )
 
@@ -47,9 +45,7 @@ def get_user_card(session: Session, user_id: int, card_type: str = "ruby") -> Ba
 
 
 def create_user_card(session: Session, **kwargs) -> BaseLoan:
-    klass, _ = (
-        PRODUCT_TO_CLASS_MAPPING.get(kwargs["card_type"]) or PRODUCT_TO_CLASS_MAPPING["base"]
-    )
+    klass, _ = PRODUCT_TO_CLASS_MAPPING.get(kwargs["card_type"]) or PRODUCT_TO_CLASS_MAPPING["base"]
 
     loan = klass(
         session=session,

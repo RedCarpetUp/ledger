@@ -4,8 +4,6 @@ from typing import (
     Type,
 )
 
-from sqlalchemy.orm import Session
-
 from rush.card.base_card import (
     B,
     BaseBill,
@@ -15,11 +13,7 @@ from rush.ledger_utils import (
     create_ledger_entry_from_str,
     get_account_balance_from_str,
 )
-from rush.models import (
-    LedgerTriggerEvent,
-    Loan,
-    UserCard,
-)
+from rush.models import LedgerTriggerEvent
 
 HEALTH_TXN_MCC = [
     "8011",
@@ -36,9 +30,11 @@ HEALTH_TXN_MCC = [
     "5912",
 ]
 
+
 class HealthBill(BaseBill):
     # todo: add implementation for health card bills.
     pass
+
 
 class HealthCard(BaseLoan):
     should_reinstate_limit_on_payment: bool = True
@@ -91,4 +87,3 @@ class HealthCard(BaseLoan):
         # settling non medical limit
         # this creates available_limit account entry
         super().reinstate_limit_on_payment(event=event, amount=settlement_limit["non_medical"])
-
