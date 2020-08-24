@@ -4,7 +4,7 @@ import sys
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
-# for now, this import is required by get_product_class method to fetch all class within card module.
+# for now, these imports are required by get_product_class method to fetch all class within card module.
 from rush.card.base_card import BaseLoan
 from rush.card.health_card import HealthCard
 from rush.card.ruby_card import RubyCard

@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.hybrid import hybrid_property
 
 from rush.card.utils import get_product_id_from_card_type
 from rush.ledger_events import loan_disbursement_event
@@ -20,6 +21,10 @@ class TermLoan(Loan):
     session: Session = None
 
     __mapper_args__ = {"polymorphic_identity": "term_loan"}
+
+    @hybrid_property
+    def loan_id(self):
+        return self.id
 
     def __init__(self, session: Session, **kwargs):
         self.session = session
@@ -46,13 +51,9 @@ class TermLoan(Loan):
 
         kwargs["loan_id"] = loan.id
 
-        loan.set_loan_data(**kwargs)
-        loan.trigger_loan_creation_event(**kwargs)
-
         loan_data = LoanData(
             user_id=kwargs["user_id"],
             loan_id=kwargs["loan_id"],
-            lender_id=kwargs["lender_id"],
             bill_start_date=kwargs["bill_start_date"],
             bill_close_date=kwargs["bill_close_date"],
             bill_due_date=kwargs["bill_start_date"]
