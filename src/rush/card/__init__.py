@@ -45,8 +45,8 @@ def create_user_card(session: Session, **kwargs) -> BaseCard:
         user_id=kwargs["user_id"],
         product_id=get_product_id_from_card_type(session=session, card_type=kwargs["card_type"]),
         lender_id=kwargs.pop("lender_id"),
-        rc_rate_of_interest_monthly=Decimal(3),
-        lender_rate_of_interest_annual=Decimal(18),
+        rc_rate_of_interest_monthly=kwargs.get('rc_rate_of_interest_monthly', Decimal(3)),
+        lender_rate_of_interest_annual=kwargs.get('lender_rate_of_interest_annual', Decimal(18)),
     )
     session.add(loan)
     session.flush()
