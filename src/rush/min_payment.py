@@ -15,8 +15,12 @@ def add_min_to_all_bills(session: Session, post_date: DateTime, user_card: BaseC
     session.add(min_event)
     session.flush()
     for bill in unpaid_bills:
-        min_amount = bill.get_min_for_schedule()
         max_remaining_amount = get_remaining_bill_balance(session, bill)["total_due"]
+        min_balance = bill.get_remaining_min()
+        if min_balance == max_remaining_amount:  # min account is full. so no need to add it more.
+            continue
+        min_amount = bill.get_min_for_schedule()
         max_min_amount_to_add = min(min_amount, max_remaining_amount)
+
         add_min_amount_event(session, bill, min_event, max_min_amount_to_add)
         min_event.amount += max_min_amount_to_add
