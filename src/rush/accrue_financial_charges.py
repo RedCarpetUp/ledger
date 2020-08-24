@@ -5,8 +5,10 @@ from typing import Optional
 from pendulum import DateTime
 from sqlalchemy.orm import Session
 
-from rush.card import BaseLoan
-from rush.card.base_card import BaseBill
+from rush.card.base_card import (
+    BaseBill,
+    BaseLoan,
+)
 from rush.ledger_events import (
     _adjust_bill,
     _adjust_for_prepayment,

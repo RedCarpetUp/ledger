@@ -14,6 +14,7 @@ from sqlalchemy import func
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Session
 
+from rush.card.utils import get_product_id_from_card_type
 from rush.ledger_utils import (
     get_remaining_bill_balance,
     is_bill_closed,
@@ -24,6 +25,7 @@ from rush.models import (
     Loan,
     LoanData,
     LoanMoratorium,
+    UserCard,
 )
 from rush.utils import (
     div,
@@ -113,6 +115,30 @@ class BaseLoan(Loan):
 
     def prepare(self, session: Session) -> None:
         self.session = session
+
+    @classmethod
+    def create(cls, session: Session, **kwargs) -> Loan:
+        loan = cls(
+            session=session,
+            user_id=kwargs["user_id"],
+            product_id=get_product_id_from_card_type(session=session, card_type=kwargs["card_type"]),
+            lender_id=kwargs.pop("lender_id"),
+            rc_rate_of_interest_monthly=Decimal(3),
+            lender_rate_of_interest_annual=Decimal(18),  # this is hardcoded for one lender.
+            amortization_date=kwargs.get(
+                "card_activation_date", get_current_ist_time().date()
+            ),  # TODO: change this later.
+        )
+        session.add(loan)
+        session.flush()
+
+        kwargs["loan_id"] = loan.id
+
+        user_card = UserCard(**kwargs)
+        session.add(user_card)
+        session.flush()
+
+        return loan
 
     def reinstate_limit_on_payment(self, event: LedgerTriggerEvent, amount: Decimal) -> None:
         assert self.should_reinstate_limit_on_payment == True

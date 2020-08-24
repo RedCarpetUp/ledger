@@ -10,7 +10,7 @@ from rush.accrue_financial_charges import (
     reverse_interest_charges,
     reverse_late_charges,
 )
-from rush.card import BaseLoan
+from rush.card.base_card import BaseLoan
 from rush.models import LedgerTriggerEvent
 
 

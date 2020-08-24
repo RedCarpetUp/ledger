@@ -1,13 +1,19 @@
+from decimal import Decimal
+
 from dateutil.relativedelta import relativedelta
 from sqlalchemy.orm import Session
 
-from rush.ledger_events import term_loan_creation_event
+from rush.card.utils import get_product_id_from_card_type
+from rush.ledger_events import loan_disbursement_event
 from rush.models import (
     LedgerTriggerEvent,
     Loan,
     LoanData,
 )
-from rush.utils import div
+from rush.utils import (
+    div,
+    get_current_ist_time,
+)
 
 
 class TermLoan(Loan):
@@ -22,7 +28,27 @@ class TermLoan(Loan):
     def prepare(self, session: Session) -> None:
         self.session = session
 
-    def set_loan_data(self, **kwargs):
+    @classmethod
+    def create(cls, session: Session, **kwargs) -> Loan:
+        loan = cls(
+            session=session,
+            user_id=kwargs["user_id"],
+            product_id=get_product_id_from_card_type(session=session, card_type=kwargs["card_type"]),
+            lender_id=kwargs["lender_id"],
+            rc_rate_of_interest_monthly=Decimal(3),
+            lender_rate_of_interest_annual=Decimal(18),
+            amortization_date=kwargs.get(
+                "loan_creation_date", get_current_ist_time().date()
+            ),  # TODO: change this later.
+        )
+        session.add(loan)
+        session.flush()
+
+        kwargs["loan_id"] = loan.id
+
+        loan.set_loan_data(**kwargs)
+        loan.trigger_loan_creation_event(**kwargs)
+
         loan_data = LoanData(
             user_id=kwargs["user_id"],
             loan_id=kwargs["loan_id"],
@@ -36,10 +62,9 @@ class TermLoan(Loan):
             principal=kwargs["amount"],
             principal_instalment=div(kwargs["amount"], kwargs["tenure"]),
         )
-        self.session.add(loan_data)
-        self.session.flush()
+        session.add(loan_data)
+        session.flush()
 
-    def trigger_loan_creation_event(self, **kwargs) -> None:
         event = LedgerTriggerEvent(
             performed_by=kwargs["user_id"],
             name="termloan_disbursal_event",
@@ -47,9 +72,12 @@ class TermLoan(Loan):
             post_date=kwargs["bill_start_date"],
             amount=kwargs["amount"],
         )
-        self.session.add(event)
-        self.session.flush()
 
-        term_loan_creation_event(
-            session=self.session, loan_id=self.loan_id, event=event, lender_id=self.lender_id
+        session.add(event)
+        session.flush()
+
+        loan_disbursement_event(
+            session=session, loan=loan, event=event,
         )
+
+        return loan

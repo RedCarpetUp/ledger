@@ -5,7 +5,7 @@ from pendulum import DateTime
 from sqlalchemy.orm import Session
 
 from rush.anomaly_detection import run_anomaly
-from rush.card import BaseLoan
+from rush.card.base_card import BaseLoan
 from rush.ledger_events import (
     _adjust_for_complete_bill,
     _adjust_for_min,

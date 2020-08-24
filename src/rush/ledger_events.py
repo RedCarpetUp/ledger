@@ -6,10 +6,11 @@ from typing import (
 
 from sqlalchemy import Date
 from sqlalchemy.orm import Session
-from sqlalchemy.sql.sqltypes import DateTime
 
-from rush.card import BaseLoan
-from rush.card.base_card import BaseBill
+from rush.card.base_card import (
+    BaseBill,
+    BaseLoan,
+)
 from rush.ledger_utils import (
     create_ledger_entry_from_str,
     get_account_balance_from_str,
@@ -18,6 +19,7 @@ from rush.models import (
     CardTransaction,
     Fee,
     LedgerTriggerEvent,
+    Loan,
     LoanData,
     UserCard,
 )
@@ -405,22 +407,19 @@ def daily_dpd_event(session: Session, user_card: BaseLoan) -> None:
     session.flush()
 
 
-def term_loan_creation_event(
-    session: Session, loan_id: int, event: LedgerTriggerEvent, lender_id: int
-) -> None:
+def loan_disbursement_event(session: Session, loan: Loan, event: LedgerTriggerEvent) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
-        debit_book_str=f"12345/redcarpet/rc_cash/a",  # TODO: confirm if this right.
-        credit_book_str=f"{loan_id}/bill/principal_receivable/l",
+        debit_book_str=f"{loan.loan_id}/bill/principal_receivable/a",
+        credit_book_str=f"12345/redcarpet/rc_cash/a",  # TODO: confirm if this right.
         amount=event.amount,
     )
 
-    # should there be this entry?
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
-        debit_book_str=f"{lender_id}/lender/lender_capital/l",
-        credit_book_str=f"{loan_id}/loan/lender_payable/l",
+        debit_book_str=f"{loan.lender_id}/lender/lender_capital/l",
+        credit_book_str=f"{loan.loan_id}/loan/lender_payable/l",
         amount=event.amount,
     )

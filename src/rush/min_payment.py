@@ -1,7 +1,7 @@
 from pendulum import DateTime
 from sqlalchemy.orm import Session
 
-from rush.card import BaseLoan
+from rush.card.base_card import BaseLoan
 from rush.ledger_events import add_min_amount_event
 from rush.models import LedgerTriggerEvent
 

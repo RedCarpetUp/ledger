@@ -4,7 +4,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session
 
-from rush.card import BaseLoan
+from rush.card.base_card import BaseLoan
 from rush.ledger_utils import (
     get_remaining_bill_balance,
     is_bill_closed,

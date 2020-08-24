@@ -13,9 +13,8 @@ from rush.accrue_financial_charges import (
     accrue_interest_on_all_bills,
     accrue_late_charges,
 )
-from rush.anomaly_detection import run_anomaly
 from rush.card import (
-    create_user_card,
+    create_user_product,
     get_user_product,
 )
 from rush.card.base_card import BaseBill
@@ -145,7 +144,7 @@ def test_m2p_transfer(session: Session) -> None:
 def test_card_swipe(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
-    uc = create_user_card(
+    uc = create_user_product(
         session=session,
         user_id=2,
         card_activation_date=parse_date("2020-05-01").date(),
@@ -193,7 +192,7 @@ def test_generate_bill_1(session: Session) -> None:
     session.flush()
 
     # assign card
-    uc = create_user_card(
+    uc = create_user_product(
         session=session,
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
@@ -609,7 +608,7 @@ def test_generate_bill_3(session: Session) -> None:
     session.flush()
 
     # assign card
-    uc = create_user_card(
+    uc = create_user_product(
         session=session,
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
@@ -660,7 +659,7 @@ def test_emi_creation(session: Session) -> None:
     session.flush()
 
     # assign card
-    uc = create_user_card(
+    uc = create_user_product(
         session=session,
         card_type="ruby",
         user_id=a.id,
@@ -710,7 +709,7 @@ def test_subsequent_emi_creation(session: Session) -> None:
     session.flush()
 
     # assign card
-    uc = create_user_card(
+    uc = create_user_product(
         session=session,
         card_type="ruby",
         user_id=a.id,
@@ -787,7 +786,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     session.flush()
 
     # assign card
-    uc = create_user_card(
+    uc = create_user_product(
         session=session,
         card_type="ruby",
         user_id=a.id,
@@ -926,7 +925,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     session.flush()
 
     # assign card
-    uc = create_user_card(
+    uc = create_user_product(
         session=session,
         card_type="ruby",
         user_id=a.id,
@@ -1600,7 +1599,7 @@ def test_lender_incur(session: Session) -> None:
     session.flush()
 
     # assign card
-    uc = create_user_card(
+    uc = create_user_product(
         session=session,
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
@@ -1681,7 +1680,7 @@ def test_lender_incur_two(session: Session) -> None:
     session.flush()
 
     # assign card
-    uc = create_user_card(
+    uc = create_user_product(
         session=session,
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
@@ -1830,7 +1829,7 @@ def test_prepayment(session: Session) -> None:
 #     session.flush()
 #
 #     # assign card
-#     uc = create_user_card(
+#     uc = create_user_product(
 #         session=session, user_id=a.id, card_activation_date=parse_date("2020-03-02"), card_type="ruby", lender_id = 62311,
 #     )
 #
@@ -1951,7 +1950,7 @@ def test_moratorium(session: Session) -> None:
 
     # assign card
     # 25 days to enforce 15th june as first due date
-    uc = create_user_card(
+    uc = create_user_product(
         session=session,
         card_type="ruby",
         user_id=a.id,
@@ -2016,7 +2015,7 @@ def test_refresh_schedule(session: Session) -> None:
     session.flush()
 
     # assign card
-    uc = create_user_card(
+    uc = create_user_product(
         session=session,
         card_type="ruby",
         user_id=a.id,
@@ -2110,7 +2109,7 @@ def test_moratorium_schedule(session: Session) -> None:
     session.flush()
 
     # assign card
-    uc = create_user_card(
+    uc = create_user_product(
         session=session,
         card_type="ruby",
         user_id=a.id,
@@ -2222,7 +2221,7 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
     session.add(a)
     session.flush()
 
-    user_card = create_user_card(
+    user_card = create_user_product(
         session,
         user_id=a.id,
         card_type="ruby",
@@ -2301,7 +2300,7 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
     session.flush()
 
     # assign card
-    user_card = create_user_card(
+    user_card = create_user_product(
         session=session,
         card_type="ruby",
         user_id=a.id,
@@ -2396,7 +2395,7 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
     session.flush()
 
     # assign card
-    user_card = create_user_card(
+    user_card = create_user_product(
         session=session,
         card_type="ruby",
         user_id=a.id,
@@ -2526,7 +2525,7 @@ def test_transaction_before_activation(session: Session) -> None:
     session.flush()
 
     # assign card
-    user_card = create_user_card(session=session, card_type="ruby", user_id=a.id, lender_id=62311,)
+    user_card = create_user_product(session=session, card_type="ruby", user_id=a.id, lender_id=62311,)
 
     # Swipe before activation
     swipe = create_card_swipe(

@@ -8,10 +8,8 @@ from typing import (
 from pendulum import DateTime
 from sqlalchemy.orm.session import Session
 
-from rush.card import (
-    BaseLoan,
-    RubyCard,
-)
+from rush.card.base_card import BaseLoan
+from rush.card.ruby_card import RubyCard
 from rush.create_bill import get_or_create_bill_for_card_swipe
 from rush.ledger_events import (
     card_transaction_event,

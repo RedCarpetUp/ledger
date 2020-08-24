@@ -5,8 +5,10 @@ from pendulum import DateTime
 from sqlalchemy.orm import Session
 
 from rush.accrue_financial_charges import create_fee_entry
-from rush.card import BaseLoan
-from rush.card.base_card import BaseBill
+from rush.card.base_card import (
+    BaseBill,
+    BaseLoan,
+)
 from rush.ledger_events import bill_generate_event
 from rush.ledger_utils import get_account_balance_from_str
 from rush.min_payment import add_min_to_all_bills
