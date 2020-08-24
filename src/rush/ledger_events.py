@@ -407,11 +407,13 @@ def daily_dpd_event(session: Session, user_card: BaseLoan) -> None:
     session.flush()
 
 
-def loan_disbursement_event(session: Session, loan: Loan, event: LedgerTriggerEvent) -> None:
+def loan_disbursement_event(
+    session: Session, loan: Loan, event: LedgerTriggerEvent, bill_id: int
+) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
-        debit_book_str=f"{loan.loan_id}/bill/principal_receivable/a",
+        debit_book_str=f"{bill_id}/bill/principal_receivable/a",
         credit_book_str=f"12345/redcarpet/rc_cash/a",  # TODO: confirm if this right.
         amount=event.amount,
     )

@@ -1,8 +1,8 @@
 from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy.orm import Session
 from sqlalchemy.ext.hybrid import hybrid_property
+from sqlalchemy.orm import Session
 
 from rush.card.utils import get_product_id_from_card_type
 from rush.ledger_events import loan_disbursement_event
@@ -77,8 +77,6 @@ class TermLoan(Loan):
         session.add(event)
         session.flush()
 
-        loan_disbursement_event(
-            session=session, loan=loan, event=event,
-        )
+        loan_disbursement_event(session=session, loan=loan, event=event, bill_id=loan_data.id)
 
         return loan
