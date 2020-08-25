@@ -69,7 +69,18 @@ def create_emis_for_card(
         deltas_for_due_date = bill.get_relative_delta_for_emi(
             emi_number=i, amortization_date=user_card.amortization_date
         )
-        due_date += relativedelta(months=deltas_for_due_date["months"], days=deltas_for_due_date["days"])
+
+        # in relativedelta, `days` arg is for interval
+        # whereas `day` arg gives is for functionality.
+        if deltas_for_due_date["days"] < 0:
+            due_date += relativedelta(
+                months=deltas_for_due_date["months"], days=deltas_for_due_date["days"]
+            )
+        else:
+            due_date += relativedelta(
+                months=deltas_for_due_date["months"], day=deltas_for_due_date["days"]
+            )
+
         # A bill's late fee/atm fee will only go on first emi.
         late_fine = late_fee if late_fee and i == 1 else Decimal(0)
         atm_fine = atm_fee if atm_fee and i == 1 else Decimal(0)
