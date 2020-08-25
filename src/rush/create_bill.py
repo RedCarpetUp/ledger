@@ -5,15 +5,16 @@ from pendulum import DateTime
 from sqlalchemy.orm import Session
 
 from rush.accrue_financial_charges import create_fee_entry
-from rush.card import BaseCard
-from rush.card.base_card import BaseBill
+from rush.card.base_card import (
+    BaseBill,
+    BaseLoan,
+)
 from rush.ledger_events import bill_generate_event
 from rush.ledger_utils import get_account_balance_from_str
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
     CardEmis,
     LedgerTriggerEvent,
-    LoanData,
     LoanMoratorium,
 )
 from rush.utils import (
@@ -23,7 +24,7 @@ from rush.utils import (
 )
 
 
-def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -> BaseBill:
+def get_or_create_bill_for_card_swipe(user_card: BaseLoan, txn_time: DateTime) -> BaseBill:
     # Get the most recent bill
     last_bill = user_card.get_latest_bill()
     txn_date = txn_time.date()
@@ -34,7 +35,7 @@ def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -
             return {"result": "success", "bill": last_bill}
         new_bill_date = last_bill.bill_close_date
     else:
-        new_bill_date = user_card.table.card_activation_date
+        new_bill_date = user_card.amortization_date
     new_closing_date = new_bill_date + relativedelta(months=1)
     # Check if some months of bill generation were skipped and if they were then generate their bills
     months_diff = (txn_date.year - new_closing_date.year) * 12 + txn_date.month - new_closing_date.month
@@ -60,7 +61,7 @@ def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -
     return {"result": "success", "bill": new_bill}
 
 
-def bill_generate(user_card: BaseCard) -> BaseBill:
+def bill_generate(user_card: BaseLoan) -> BaseBill:
     session = user_card.session
     bill = user_card.get_latest_bill_to_generate()  # Get the first bill which is not generated.
     if not bill:
@@ -110,7 +111,7 @@ def bill_generate(user_card: BaseCard) -> BaseBill:
 
 
 def extend_tenure(
-    session: Session, user_card: BaseCard, new_tenure: int, post_date: DateTime, bill: BaseBill = None
+    session: Session, user_card: BaseLoan, new_tenure: int, post_date: DateTime, bill: BaseBill = None
 ) -> None:
     def extension(bill: BaseBill):
         list_of_bills.append(bill.id)

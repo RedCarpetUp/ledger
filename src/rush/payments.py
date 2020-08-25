@@ -5,7 +5,7 @@ from pendulum import DateTime
 from sqlalchemy.orm import Session
 
 from rush.anomaly_detection import run_anomaly
-from rush.card import BaseCard
+from rush.card.base_card import BaseLoan
 from rush.ledger_events import (
     _adjust_for_complete_bill,
     _adjust_for_min,
@@ -25,7 +25,7 @@ from rush.models import (
 
 def payment_received(
     session: Session,
-    user_card: BaseCard,
+    user_card: BaseLoan,
     payment_amount: Decimal,
     payment_date: DateTime,
     payment_request_id: str,
@@ -57,12 +57,12 @@ def payment_received(
 #     gateway_expenses: Decimal,
 #     gross_payment_amount: Decimal,
 #     settlement_date: DateTime,
-#     user_card: BaseCard,
+#     user_card: BaseLoan,
 
 
 def refund_payment(
     session: Session,
-    user_card: BaseCard,
+    user_card: BaseLoan,
     payment_amount: Decimal,
     payment_date: DateTime,
     payment_request_id: str,
@@ -87,7 +87,7 @@ def refund_payment(
 
 
 def transaction_refund_event(
-    session: Session, user_card: BaseCard, event: LedgerTriggerEvent, bill: LoanData
+    session: Session, user_card: BaseLoan, event: LedgerTriggerEvent, bill: LoanData
 ) -> None:
     refund_amount = Decimal(event.amount)
     m2p_pool_account = f"{user_card.lender_id}/lender/pool_balance/a"
@@ -138,7 +138,7 @@ def settle_payment_in_bank(
     gateway_expenses: Decimal,
     gross_payment_amount: Decimal,
     settlement_date: DateTime,
-    user_card: BaseCard,
+    user_card: BaseLoan,
 ) -> None:
     settled_amount = gross_payment_amount - gateway_expenses
     event = LedgerTriggerEvent(
@@ -154,7 +154,7 @@ def settle_payment_in_bank(
 
 
 def payment_settlement_event(
-    session: Session, gateway_expenses: Decimal, user_card: BaseCard, event: LedgerTriggerEvent
+    session: Session, gateway_expenses: Decimal, user_card: BaseLoan, event: LedgerTriggerEvent
 ) -> None:
     if gateway_expenses > 0:  # Adjust for gateway expenses.
         create_ledger_entry_from_str(

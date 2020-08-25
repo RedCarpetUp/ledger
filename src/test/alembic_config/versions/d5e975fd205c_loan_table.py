@@ -100,6 +100,10 @@ def upgrade() -> None:
         sa.Column("loan_status", sa.String(50), nullable=True),  # TODO: change back to nullable=False
         sa.Column("product_id", sa.Integer(), nullable=False),
         sa.Column("lender_id", sa.Integer(), nullable=False),
+        sa.Column("product_type", sa.String(), nullable=False),
+        sa.Column("dpd", sa.Integer, nullable=True),
+        sa.Column("ever_dpd", sa.Integer, nullable=True),
+        sa.Column("interest_free_period_in_days", sa.Integer, nullable=True),
         sa.Column("rc_rate_of_interest_monthly", sa.Numeric(), nullable=False),
         sa.Column("lender_rate_of_interest_annual", sa.Numeric(), nullable=False),
         sa.ForeignKeyConstraint(["lender_id"], ["rc_lenders.id"], name="fk_v3_user_cards_lender_id"),

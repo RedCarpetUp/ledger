@@ -1,4 +1,5 @@
 from decimal import Decimal
+from typing import Union
 
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
@@ -12,11 +13,11 @@ from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.sql import func
 
 from rush.anomaly_detection import get_payment_events
-from rush.card import (
-    BaseCard,
-    get_user_card,
+from rush.card import BaseCard
+from rush.card.base_card import (
+    BaseBill,
+    BaseLoan,
 )
-from rush.card.base_card import BaseBill
 from rush.ledger_utils import (
     get_account_balance_from_str,
     get_remaining_bill_balance,
@@ -46,7 +47,11 @@ def create_emis_for_bill(
     last_emi: CardEmis = None,
     bill_accumalation_till_date: Decimal = None,
 ) -> None:
-    bill_tenure = bill.table.bill_tenure
+    # In case of term loan, bill_class is set to None.
+    # Therefore need to pass LoanData as bill instead of BaseBill class.
+    bill_data = bill if user_card.bill_class is None else bill.table
+
+    bill_tenure = bill_data.bill_tenure
     if not last_emi:
         due_date = bill.table.bill_start_date
         principal_due = Decimal(bill.table.principal)
@@ -54,7 +59,7 @@ def create_emis_for_bill(
         start_emi_number = difference_counter = 1
     else:
         due_date = last_emi.due_date
-        principal_due = Decimal(bill.table.principal - bill_accumalation_till_date)
+        principal_due = Decimal(bill_data.principal - bill_accumalation_till_date)
         due_amount = div(principal_due, bill_tenure - last_emi.emi_number)
         start_emi_number = last_emi.emi_number + 1
         difference_counter = last_emi.emi_number
@@ -100,7 +105,7 @@ def create_emis_for_bill(
     group_bills_to_create_loan_schedule(user_card)
 
 
-def slide_payments(user_card: BaseCard, payment_event: LedgerTriggerEvent = None) -> None:
+def slide_payments(user_card: BaseLoan, payment_event: LedgerTriggerEvent = None) -> None:
     def slide_payments_repeated_logic(
         all_emis,
         payment_received_and_adjusted,
@@ -682,7 +687,7 @@ def entry_checks(
     return verdict
 
 
-def update_event_with_dpd(user_card: BaseCard, post_date: DateTime = None) -> None:
+def update_event_with_dpd(user_card: BaseLoan, post_date: DateTime = None) -> None:
     def actual_event_update(
         session: Session, is_debit: bool, ledger_trigger_event, ledger_entry, account
     ):
@@ -804,8 +809,8 @@ def update_event_with_dpd(user_card: BaseCard, post_date: DateTime = None) -> No
     #         emi.dpd = (post_date.date() - emi.due_date).days
 
     max_dpd = session.query(func.max(EventDpd.dpd).label("max_dpd")).one()
-    user_card.table.dpd = max_dpd.max_dpd
-    if not user_card.table.ever_dpd or max_dpd.max_dpd > user_card.table.ever_dpd:
-        user_card.table.ever_dpd = max_dpd.max_dpd
+    user_card.dpd = max_dpd.max_dpd
+    if not user_card.ever_dpd or max_dpd.max_dpd > user_card.ever_dpd:
+        user_card.ever_dpd = max_dpd.max_dpd
 
     session.flush()
