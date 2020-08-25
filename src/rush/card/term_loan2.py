@@ -1,3 +1,4 @@
+from calendar import month
 from decimal import Decimal
 from typing import (
     Dict,
@@ -7,6 +8,7 @@ from typing import (
 from dateutil.relativedelta import relativedelta
 from pendulum import Date
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.operators import empty_in_op
 
 from rush.card.base_card import (
     B,
@@ -27,10 +29,35 @@ class TermLoan2Bill(BaseBill):
     def sum_of_atm_transactions(self) -> Decimal:
         return Decimal(0)
 
-    def get_relative_delta_for_emi(self, emi_number: int) -> Dict[str, int]:
+    def get_relative_delta_for_emi(self, emi_number: int, amortization_date: Date) -> Dict[str, int]:
+        """
+            Sample for TenureLoan2:
+            +-----------+--------------+----------------------+---------------------+--------------+---------------------+
+            | loan_id   | loan_type    | product_order_date   | agreement_date      | emi_number   | due_date            |
+            |-----------+--------------+----------------------+---------------------+--------------+---------------------|
+            | 1015092   | Tenure Loan2 | 2018-12-22 00:00:00  | 2018-12-22 00:00:00 | 1            | 2018-12-22 00:00:00 |
+            | 1015092   | Tenure Loan2 | 2018-12-22 00:00:00  | 2018-12-22 00:00:00 | 2            | 2019-01-15 00:00:00 |
+            | 1015092   | Tenure Loan2 | 2018-12-22 00:00:00  | 2018-12-22 00:00:00 | 3            | 2019-02-15 00:00:00 |
+            +-----------+--------------+----------------------+---------------------+--------------+---------------------+
+
+        """
+
         if emi_number == 1:
             return {"months": 0, "days": 0}
-        return {"months": 1, "days": 0}
+        elif emi_number == 2:
+            if amortization_date.day < 15:
+                months = 1
+                days = 1 - amortization_date.day
+            elif amortization_date.day >= 15 and amortization_date.day < 25:
+                months = 1
+                days = 15 - amortization_date.day
+            else:
+                months = 2
+                days = 1 - amortization_date.day
+
+            return {"months": months, "days": days}
+        else:
+            return {"months": 1, "days": 0}
 
 
 class TermLoan2(BaseLoan):
@@ -41,12 +68,7 @@ class TermLoan2(BaseLoan):
 
     @staticmethod
     def calculate_amortization_date(product_order_date: Date) -> Date:
-        if product_order_date.day < 15:
-            return product_order_date.replace(day=1)
-        elif product_order_date.day >= 15 and product_order_date.day < 25:
-            return product_order_date.replace(day=15)
-        else:
-            return product_order_date.add(months=1).replace(day=1)
+        return product_order_date
 
     @classmethod
     def create(cls, session: Session, **kwargs) -> Loan:
@@ -68,7 +90,15 @@ class TermLoan2(BaseLoan):
 
         bill_start_date = loan.amortization_date
         # not sure about bill close date.
-        bill_close_date = bill_start_date.add(months=kwargs["tenure"] - 1).add(
+
+        if bill_start_date.day < 15:
+            normalized_amortization_date = bill_start_date.replace(day=1)
+        elif bill_start_date.day >= 15 and bill_start_date.day < 25:
+            normalized_amortization_date = bill_start_date.replace(day=15)
+        else:
+            normalized_amortization_date = bill_start_date.add(months=1).replace(day=1)
+
+        bill_close_date = normalized_amortization_date.add(months=kwargs["tenure"] - 1).add(
             days=kwargs["interest_free_period_in_days"]
         )
 

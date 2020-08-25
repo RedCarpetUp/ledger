@@ -27,7 +27,18 @@ class TermLoanProBill(BaseBill):
     def sum_of_atm_transactions(self) -> Decimal:
         return Decimal(0)
 
-    def get_relative_delta_for_emi(self, emi_number: int) -> Dict[str, int]:
+    def get_relative_delta_for_emi(self, emi_number: int, amortization_date: Date) -> Dict[str, int]:
+        """
+            Sample Tenure Loan Pro:
+            +-----------+-----------------+----------------------+---------------------+--------------+---------------------+
+            | loan_id   | loan_type       | product_order_date   | agreement_date      | emi_number   | due_date            |
+            |-----------+-----------------+----------------------+---------------------+--------------+---------------------|
+            | 646104    | Tenure Loan Pro | 2018-10-22 00:00:00  | 2018-10-20 00:00:00 | 1            | 2018-11-22 00:00:00 |
+            | 646104    | Tenure Loan Pro | 2018-10-22 00:00:00  | 2018-10-20 00:00:00 | 2            | 2018-12-22 00:00:00 |
+            | 646104    | Tenure Loan Pro | 2018-10-22 00:00:00  | 2018-10-20 00:00:00 | 3            | 2019-01-22 00:00:00 |
+            +-----------+-----------------+----------------------+---------------------+--------------+---------------------+
+
+        """
         if emi_number == 1:
             return {"months": 0, "days": 0}
         return {"months": 1, "days": 0}

@@ -89,7 +89,7 @@ class BaseBill:
         )
         return atm_transactions_sum or 0
 
-    def get_relative_delta_for_emi(self, emi_number: int) -> Dict[str, int]:
+    def get_relative_delta_for_emi(self, emi_number: int, amortization_date: Date) -> Dict[str, int]:
         return {"months": 1, "days": 15}
 
 
