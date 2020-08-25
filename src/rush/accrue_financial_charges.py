@@ -168,7 +168,7 @@ def accrue_late_charges(
 
 
 def reverse_interest_charges(
-    session: Session, event_to_reverse: LedgerTriggerEvent, user_card: UserCards, payment_date: DateTime
+    session: Session, event_to_reverse: LedgerTriggerEvent, user_loan: BaseLoan, payment_date: DateTime
 ) -> None:
     """
     This event is intended only when the complete amount has been paid and we need to remove the
@@ -177,7 +177,7 @@ def reverse_interest_charges(
     is more convenient than adding it on 16th.
     """
     event = LedgerTriggerEvent(
-        name="reverse_interest_charges", loan_id=user_card.loan_id, post_date=payment_date
+        name="reverse_interest_charges", loan_id=user_loan.loan_id, post_date=payment_date
     )
     session.add(event)
     session.flush()
@@ -245,7 +245,7 @@ def reverse_interest_charges(
                 continue
             _adjust_for_prepayment(
                 session=session,
-                loan_id=user_card.loan_id,
+                loan_id=user_loan.loan_id,
                 event_id=event.id,
                 amount=entry["amount"],
                 debit_book_str=entry["acc_to_remove_from"],
@@ -254,7 +254,7 @@ def reverse_interest_charges(
     from rush.create_emi import refresh_schedule
 
     # Slide payment in emi
-    refresh_schedule(user_card=user_card)
+    refresh_schedule(user_card=user_loan)
 
 
 def reverse_incorrect_late_charges(

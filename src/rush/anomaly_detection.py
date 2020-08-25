@@ -57,7 +57,7 @@ def run_anomaly(session: Session, user_card: BaseLoan, event_date: DateTime) -> 
         if event.name == "accrue_interest":
             if can_remove_interest(session, user_card, event, event_date):
                 reverse_interest_charges(
-                    session, event_to_reverse=event, user_card=user_card, payment_date=event_date
+                    session, event_to_reverse=event, user_loan=user_card, payment_date=event_date
                 )
         elif event.name == "accrue_late_fine":
             is_charge_valid = is_late_fee_valid(session, user_card)
