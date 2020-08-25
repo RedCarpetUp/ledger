@@ -27,7 +27,6 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import (
     Session,
     relationship,
-    session,
 )
 from sqlalchemy.schema import Index
 
