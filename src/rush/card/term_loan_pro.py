@@ -41,7 +41,7 @@ class TermLoanPro(BaseLoan):
 
     @staticmethod
     def calculate_amortization_date(product_order_date: Date) -> Date:
-        return product_order_date
+        return product_order_date.add(months=1)
 
     @classmethod
     def create(cls, session: Session, **kwargs) -> Loan:

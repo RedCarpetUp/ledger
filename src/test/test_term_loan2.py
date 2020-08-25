@@ -56,6 +56,48 @@ def create_test_term_loan(session: Session) -> TermLoan2:
     return loan
 
 
+def test_product_amortization_1() -> None:
+    amortization_date = TermLoan2.calculate_amortization_date(
+        product_order_date=parse_date("2020-08-01").date()
+    )
+    assert amortization_date == parse_date("2020-08-01").date()
+
+
+def test_product_amortization_2() -> None:
+    amortization_date = TermLoan2.calculate_amortization_date(
+        product_order_date=parse_date("2020-08-05").date()
+    )
+    assert amortization_date == parse_date("2020-08-01").date()
+
+
+def test_product_amortization_3() -> None:
+    amortization_date = TermLoan2.calculate_amortization_date(
+        product_order_date=parse_date("2020-08-12").date()
+    )
+    assert amortization_date == parse_date("2020-08-01").date()
+
+
+def test_product_amortization_4() -> None:
+    amortization_date = TermLoan2.calculate_amortization_date(
+        product_order_date=parse_date("2020-08-15").date()
+    )
+    assert amortization_date == parse_date("2020-08-15").date()
+
+
+def test_product_amortization_5() -> None:
+    amortization_date = TermLoan2.calculate_amortization_date(
+        product_order_date=parse_date("2020-08-24").date()
+    )
+    assert amortization_date == parse_date("2020-08-15").date()
+
+
+def test_product_amortization_6() -> None:
+    amortization_date = TermLoan2.calculate_amortization_date(
+        product_order_date=parse_date("2020-08-26").date()
+    )
+    assert amortization_date == parse_date("2020-09-01").date()
+
+
 def test_create_term_loan(session: Session) -> None:
     create_lenders(session=session)
     create_products(session=session)

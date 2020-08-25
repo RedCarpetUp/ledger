@@ -42,11 +42,11 @@ class TermLoan2(BaseLoan):
     @staticmethod
     def calculate_amortization_date(product_order_date: Date) -> Date:
         if product_order_date.day < 15:
-            return product_order_date.add(months=1).replace(day=1)
+            return product_order_date.replace(day=1)
         elif product_order_date.day >= 15 and product_order_date.day < 25:
-            return product_order_date.add(months=1).replace(day=15)
+            return product_order_date.replace(day=15)
         else:
-            return product_order_date.add(months=2).replace(day=1)
+            return product_order_date.add(months=1).replace(day=1)
 
     @classmethod
     def create(cls, session: Session, **kwargs) -> Loan:
