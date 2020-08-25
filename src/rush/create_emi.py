@@ -1,4 +1,5 @@
 from decimal import Decimal
+from typing import Union
 
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
@@ -12,11 +13,11 @@ from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.sql import func
 
 from rush.anomaly_detection import get_payment_events
-from rush.card import (
-    BaseCard,
-    get_user_card,
+from rush.card import get_user_product
+from rush.card.base_card import (
+    BaseBill,
+    BaseLoan,
 )
-from rush.card.base_card import BaseBill
 from rush.ledger_utils import (
     get_account_balance_from_str,
     get_remaining_bill_balance,
@@ -41,23 +42,27 @@ from rush.utils import (
 
 def create_emis_for_card(
     session: Session,
-    user_card: BaseCard,
-    bill: BaseBill,
+    user_card: BaseLoan,
+    bill: Union[BaseBill, LoanData],
     late_fee: Decimal = None,
     interest: Decimal = None,
     atm_fee: Decimal = None,
     last_emi: CardEmis = None,
     bill_accumalation_till_date: Decimal = None,
 ) -> None:
-    bill_tenure = bill.table.bill_tenure
+    # In case of term loan, bill_class is set to None.
+    # Therefore need to pass LoanData as bill instead of BaseBill class.
+    bill_data = bill if user_card.bill_class is None else bill.table
+
+    bill_tenure = bill_data.bill_tenure
     if not last_emi:
         due_date = user_card.card_activation_date
-        principal_due = Decimal(bill.table.principal)
-        due_amount = bill.table.principal_instalment
+        principal_due = Decimal(bill_data.principal)
+        due_amount = bill_data.principal_instalment
         start_emi_number = difference_counter = 1
     else:
         due_date = last_emi.due_date
-        principal_due = Decimal(bill.table.principal - bill_accumalation_till_date)
+        principal_due = Decimal(bill_data.principal - bill_accumalation_till_date)
         due_amount = div(principal_due, bill_tenure - last_emi.emi_number)
         start_emi_number = last_emi.emi_number + 1
         difference_counter = last_emi.emi_number
@@ -106,7 +111,7 @@ def create_emis_for_card(
 
 def add_emi_on_new_bill(
     session: Session,
-    user_card: BaseCard,
+    user_card: BaseLoan,
     bill: BaseBill,
     last_emi: CardEmis,
     bill_number: int,
@@ -217,7 +222,7 @@ def add_emi_on_new_bill(
     session.flush()
 
 
-def slide_payments(user_card: BaseCard, payment_event: LedgerTriggerEvent = None) -> None:
+def slide_payments(user_card: BaseLoan, payment_event: LedgerTriggerEvent = None) -> None:
     def slide_payments_repeated_logic(
         all_emis,
         payment_received_and_adjusted,
@@ -468,7 +473,7 @@ def slide_payments(user_card: BaseCard, payment_event: LedgerTriggerEvent = None
     session.flush()
 
 
-def adjust_interest_in_emis(session: Session, user_card: BaseCard, post_date: DateTime) -> None:
+def adjust_interest_in_emis(session: Session, user_card: BaseLoan, post_date: DateTime) -> None:
     latest_bill = (
         session.query(LoanData)
         .filter(
@@ -505,7 +510,7 @@ def adjust_interest_in_emis(session: Session, user_card: BaseCard, post_date: Da
             # session.bulk_update_mappings(CardEmis, emis_dict)
 
 
-def adjust_late_fee_in_emis(session: Session, user_card: BaseCard, post_date: DateTime) -> None:
+def adjust_late_fee_in_emis(session: Session, user_card: BaseLoan, post_date: DateTime) -> None:
     latest_bill = (
         session.query(LoanData)
         .filter(
@@ -542,7 +547,7 @@ def adjust_late_fee_in_emis(session: Session, user_card: BaseCard, post_date: Da
         session.flush()
 
 
-def adjust_atm_fee_in_emis(session: Session, user_card: BaseCard, post_date: DateTime) -> None:
+def adjust_atm_fee_in_emis(session: Session, user_card: BaseLoan, post_date: DateTime) -> None:
     latest_bill = (
         session.query(LoanData)
         .filter(
@@ -691,7 +696,7 @@ def check_moratorium_eligibility(session: Session, data):
     user_id = int(data["user_id"])
     start_date = parse_date(data["start_date"]).date()
     months_to_be_inserted = int(data["months_to_be_inserted"])
-    user_card = get_user_card(session, user_id)
+    user_card = get_user_product(session, user_id)
     emis = (
         session.query(CardEmis)
         .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
@@ -710,7 +715,7 @@ def check_moratorium_eligibility(session: Session, data):
         return resp
 
 
-def refresh_schedule(user_card: BaseCard, extension_date: DateTime = None):
+def refresh_schedule(user_card: BaseLoan, extension_date: DateTime = None):
     session = user_card.session
     # Get all generated bills of the user
     all_bills = user_card.get_all_bills()
@@ -722,7 +727,7 @@ def refresh_schedule(user_card: BaseCard, extension_date: DateTime = None):
     # Get all emis of the user
     all_emis = (
         session.query(CardEmis)
-        .filter(CardEmis.loan_id == user_card.table.id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
         .all()
     )
@@ -879,7 +884,7 @@ def entry_checks(
     return verdict
 
 
-def update_event_with_dpd(user_card: BaseCard, post_date: DateTime = None) -> None:
+def update_event_with_dpd(user_card: BaseLoan, post_date: DateTime = None) -> None:
     def actual_event_update(
         session: Session, is_debit: bool, ledger_trigger_event, ledger_entry, account
     ):
@@ -1009,8 +1014,8 @@ def update_event_with_dpd(user_card: BaseCard, post_date: DateTime = None) -> No
     #         emi.dpd = (post_date.date() - emi.due_date).days
 
     max_dpd = session.query(func.max(EventDpd.dpd).label("max_dpd")).one()
-    user_card.table.dpd = max_dpd.max_dpd
-    if not user_card.table.ever_dpd or max_dpd.max_dpd > user_card.table.ever_dpd:
-        user_card.table.ever_dpd = max_dpd.max_dpd
+    user_card.dpd = max_dpd.max_dpd
+    if not user_card.ever_dpd or max_dpd.max_dpd > user_card.ever_dpd:
+        user_card.ever_dpd = max_dpd.max_dpd
 
     session.flush()

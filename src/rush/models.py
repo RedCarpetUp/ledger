@@ -225,10 +225,20 @@ class Loan(AuditMixin):
     user_id = Column(Integer, ForeignKey(User.id))
     amortization_date = Column(TIMESTAMP, nullable=False)
     loan_status = Column(String(), nullable=False)
+    product_type = Column(String(), nullable=False)
     product_id = Column(Integer, ForeignKey(Product.id))
     lender_id = Column(Integer, ForeignKey(Lenders.id), nullable=False)
     rc_rate_of_interest_monthly = Column(Numeric, nullable=False)
     lender_rate_of_interest_annual = Column(Numeric, nullable=False)
+    interest_free_period_in_days = Column(Integer, default=45, nullable=True)
+
+    dpd = Column(Integer, nullable=True)
+    ever_dpd = Column(Integer, nullable=True)
+
+    __mapper_args__ = {
+        "polymorphic_identity": "loan",
+        "polymorphic_on": product_type,
+    }
 
 
 @py_dataclass
@@ -346,21 +356,6 @@ class LedgerEntryPy(AuditMixinPy):
 
     # user_id = Column(Integer, ForeignKey(User.id), nullable=False)
     # is_deleted = Column(Boolean, nullable=True)
-
-    # histories = relationship("LoanData", foreign_keys="LoanData.loan_id")
-    # latest = relationship(
-    #     "LoanData",
-    #     lazy="joined",
-    #     uselist=False,
-    #     primaryjoin="and_(Loan.id==LoanData.loan_id, LoanData.row_status=='active')",
-    # )
-
-    # emi_histories = relationship("EmiData")
-    # emis_latest = relationship(
-    #     "EmiData", primaryjoin="and_(Loan.id==EmiData.loan_id, EmiData.row_status=='active')"
-    # )
-
-    # __table_args__ = (Index("index_on_v3_loans_user_id_and_id", user_id, "id"),)
 
 
 class CardNames(AuditMixin):

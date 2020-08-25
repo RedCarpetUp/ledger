@@ -1,4 +1,3 @@
-from datetime import timedelta
 from decimal import Decimal
 from typing import (
     List,
@@ -7,16 +6,16 @@ from typing import (
     TypeVar,
 )
 
-from dateutil.relativedelta import relativedelta
 from pendulum import (
     Date,
     DateTime,
 )
 from sqlalchemy import func
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Session
 
+from rush.card.utils import get_product_id_from_card_type
 from rush.ledger_utils import (
-    get_account_balance_from_str,
     get_remaining_bill_balance,
     is_bill_closed,
 )
@@ -91,23 +90,55 @@ class BaseBill:
 B = TypeVar("B", bound=BaseBill)
 
 
-class BaseCard:
+class BaseLoan(Loan):
+    should_reinstate_limit_on_payment: bool = False
+    bill_class: Type[B] = BaseBill
     session: Session = None
-    table: UserCards = None
 
-    def __init__(self, session: Session, bill_class: Type[B], user_card: UserCards, loan: Loan):
+    __mapper_args__ = {"polymorphic_identity": "base_loan"}
+
+    def __init__(self, session: Session, **kwargs):
         self.session = session
-        self.bill_class = bill_class
-        self.table = user_card
-        self.__dict__.update(user_card.__dict__)
-        self.loan_id = user_card.loan_id
-        self.lender_id = loan.lender_id
-        self.rc_rate_of_interest_monthly = loan.rc_rate_of_interest_monthly
-        self.should_reinstate_limit_on_payment = False
+        super().__init__(**kwargs)
+
+    @hybrid_property
+    def loan_id(self):
+        return self.id
+
+    @hybrid_property
+    def card_activation_date(self):
+        return self.amortization_date
 
     @staticmethod
     def get_limit_type(mcc: str) -> str:
         return "available_limit"
+
+    def prepare(self, session: Session) -> None:
+        self.session = session
+
+    @classmethod
+    def create(cls, session: Session, **kwargs) -> Loan:
+        loan = cls(
+            session=session,
+            user_id=kwargs["user_id"],
+            product_id=get_product_id_from_card_type(session=session, card_type=kwargs["card_type"]),
+            lender_id=kwargs.pop("lender_id"),
+            rc_rate_of_interest_monthly=Decimal(3),
+            lender_rate_of_interest_annual=Decimal(18),  # this is hardcoded for one lender.
+            amortization_date=kwargs.get(
+                "card_activation_date", get_current_ist_time().date()
+            ),  # TODO: change this later.
+        )
+        session.add(loan)
+        session.flush()
+
+        kwargs["loan_id"] = loan.id
+
+        user_card = UserCards(**kwargs)
+        session.add(user_card)
+        session.flush()
+
+        return loan
 
     def reinstate_limit_on_payment(self, event: LedgerTriggerEvent, amount: Decimal) -> None:
         assert self.should_reinstate_limit_on_payment == True
@@ -156,7 +187,7 @@ class BaseCard:
     def get_unpaid_bills(self) -> List[BaseBill]:
         all_bills = (
             self.session.query(LoanData)
-            .filter(LoanData.user_id == self.user_id, LoanData.is_generated.is_(True))
+            .filter(LoanData.loan_id == self.loan_id, LoanData.is_generated.is_(True))
             .order_by(LoanData.bill_start_date)
             .all()
         )
@@ -167,7 +198,7 @@ class BaseCard:
     def get_all_bills(self) -> List[BaseBill]:
         all_bills = (
             self.session.query(LoanData)
-            .filter(LoanData.user_id == self.user_id, LoanData.is_generated.is_(True))
+            .filter(LoanData.loan_id == self.loan_id, LoanData.is_generated.is_(True))
             .order_by(LoanData.bill_start_date)
             .all()
         )
@@ -191,7 +222,7 @@ class BaseCard:
     def get_last_unpaid_bill(self) -> BaseBill:
         all_bills = (
             self.session.query(LoanData)
-            .filter(LoanData.user_id == self.user_id)
+            .filter(LoanData.loan_id == self.loan_id)
             .order_by(LoanData.bill_start_date)
             .all()
         )
