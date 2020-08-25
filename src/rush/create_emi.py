@@ -50,25 +50,24 @@ def create_emis_for_card(
     last_emi: CardEmis = None,
     bill_accumalation_till_date: Decimal = None,
 ) -> None:
-    # In case of term loan, bill_class is set to None.
-    # Therefore need to pass LoanData as bill instead of BaseBill class.
-    bill_data = bill if user_card.bill_class is None else bill.table
-
-    bill_tenure = bill_data.bill_tenure
+    bill_tenure = bill.table.bill_tenure
     if not last_emi:
+        # due_date = user_card.get_first_due_date()
         due_date = user_card.card_activation_date
-        principal_due = Decimal(bill_data.principal)
-        due_amount = bill_data.principal_instalment
+        principal_due = Decimal(bill.table.principal)
+        due_amount = bill.table.principal_instalment
         start_emi_number = difference_counter = 1
     else:
         due_date = last_emi.due_date
-        principal_due = Decimal(bill_data.principal - bill_accumalation_till_date)
+        principal_due = Decimal(bill.table.principal - bill_accumalation_till_date)
         due_amount = div(principal_due, bill_tenure - last_emi.emi_number)
         start_emi_number = last_emi.emi_number + 1
         difference_counter = last_emi.emi_number
     late_fine = total_interest = current_interest = next_interest = Decimal(0)
+
     for i in range(start_emi_number, bill_tenure + 1):
-        due_date += relativedelta(months=1, day=15)
+        deltas_for_due_date = bill.get_relative_delta_for_emi(emi_number=i)
+        due_date += relativedelta(months=deltas_for_due_date["months"], day=deltas_for_due_date["days"])
         # A bill's late fee/atm fee will only go on first emi.
         late_fine = late_fee if late_fee and i == 1 else Decimal(0)
         atm_fine = atm_fee if atm_fee and i == 1 else Decimal(0)

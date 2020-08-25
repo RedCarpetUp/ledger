@@ -1,11 +1,14 @@
 from decimal import Decimal
 from typing import (
+    Any,
+    Dict,
     List,
     Optional,
     Type,
     TypeVar,
 )
 
+from dateutil.relativedelta import relativedelta
 from pendulum import (
     Date,
     DateTime,
@@ -86,6 +89,9 @@ class BaseBill:
         )
         return atm_transactions_sum or 0
 
+    def get_relative_delta_for_emi(self, emi_number: int) -> Dict[str, int]:
+        return {"months": 1, "days": 15}
+
 
 B = TypeVar("B", bound=BaseBill)
 
@@ -112,6 +118,13 @@ class BaseLoan(Loan):
     @staticmethod
     def get_limit_type(mcc: str) -> str:
         return "available_limit"
+
+    def get_relative_delta_for_due_date(self) -> Dict[str, int]:
+        return {"months": 1, "days": 15}
+
+    def get_first_due_date(self) -> Date:
+        print(self.card_activation_date)
+        return self.card_activation_date + relativedelta(month=1, day=15)
 
     def prepare(self, session: Session) -> None:
         self.session = session

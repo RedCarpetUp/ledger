@@ -1,10 +1,18 @@
 from decimal import Decimal
+from typing import (
+    Dict,
+    Type,
+)
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy.ext.hybrid import hybrid_property
+from pendulum import Date
 from sqlalchemy.orm import Session
 
-from rush.card.base_card import BaseLoan
+from rush.card.base_card import (
+    B,
+    BaseBill,
+    BaseLoan,
+)
 from rush.card.utils import get_product_id_from_card_type
 from rush.ledger_events import loan_disbursement_event
 from rush.models import (
@@ -12,17 +20,28 @@ from rush.models import (
     Loan,
     LoanData,
 )
-from rush.utils import (
-    div,
-    get_current_ist_time,
-)
+from rush.utils import div
+
+
+class TermLoanBill(BaseBill):
+    def sum_of_atm_transactions(self) -> Decimal:
+        return Decimal(0)
+
+    def get_relative_delta_for_emi(self, emi_number: int) -> Dict[str, int]:
+        if emi_number == 1:
+            return {"months": 0, "days": 0}
+        return {"months": 1, "days": 0}
 
 
 class TermLoan(BaseLoan):
-    bill_class: None = None
+    bill_class: Type[B] = TermLoanBill
     session: Session = None
 
     __mapper_args__ = {"polymorphic_identity": "term_loan"}
+
+    @staticmethod
+    def calculate_amortization_date(product_order_date: Date) -> Date:
+        return product_order_date
 
     @classmethod
     def create(cls, session: Session, **kwargs) -> Loan:
@@ -34,7 +53,7 @@ class TermLoan(BaseLoan):
             rc_rate_of_interest_monthly=Decimal(3),
             lender_rate_of_interest_annual=Decimal(18),
             amortization_date=kwargs.get(
-                "loan_creation_date", get_current_ist_time().date()
+                "loan_creation_date", cls.calculate_amortization_date(kwargs["product_order_date"])
             ),  # TODO: change this later.
         )
         session.add(loan)
@@ -73,6 +92,13 @@ class TermLoan(BaseLoan):
         # create emis for term loan.
         from rush.create_emi import create_emis_for_card
 
-        create_emis_for_card(session=session, user_card=loan, bill=loan_data)
+        bill = TermLoanBill(session=session, loan_data=loan_data)
+
+        create_emis_for_card(
+            session=session,
+            user_card=loan,
+            bill=bill,
+            interest=bill.get_interest_to_charge(rate_of_interest=loan.rc_rate_of_interest_monthly),
+        )
 
         return loan
