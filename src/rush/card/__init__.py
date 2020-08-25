@@ -1,5 +1,4 @@
-import inspect
-import sys
+from typing import Any
 
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
@@ -32,10 +31,20 @@ def create_user_product(session: Session, **kwargs) -> Loan:
     return loan
 
 
-def get_product_class(card_type: str):
-    product_class = filter(
-        lambda x: hasattr(x[1], "__mapper_args__")
-        and x[1].__mapper_args__["polymorphic_identity"] == card_type,
-        inspect.getmembers(sys.modules[__name__], inspect.isclass),
-    )
-    return next(product_class)[1]
+def get_product_class(card_type: str) -> Any:
+    """
+        Only classes imported within this file will be listed here.
+        Make sure to import every Product class.
+    """
+
+    for kls in Loan.__subclasses__():
+        if hasattr(kls, "__mapper_args__") and kls.__mapper_args__["polymorphic_identity"] == card_type:
+            return kls
+        for sub_kls in kls.__subclasses__():
+            if (
+                hasattr(sub_kls, "__mapper_args__")
+                and sub_kls.__mapper_args__["polymorphic_identity"] == card_type
+            ):
+                return sub_kls
+    else:
+        raise Exception("NoValidProductImplementation")
