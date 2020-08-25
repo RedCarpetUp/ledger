@@ -86,10 +86,7 @@ class TermLoan(Loan):
 
         # create emis for term loan.
         from rush.create_emi import create_emis_for_card
-        create_emis_for_card(
-            session=session,
-            user_card=loan,
-            bill=loan_data
-        )
+
+        create_emis_for_card(session=session, user_card=loan, bill=loan_data)
 
         return loan
