@@ -1,8 +1,14 @@
 from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Session
+
+from typing import Type
+from rush.card.base_card import (
+    B,
+    BaseBill,
+    BaseLoan,
+)
 
 from rush.card.base_card import BaseLoan
 from rush.card.utils import get_product_id_from_card_type
@@ -19,7 +25,7 @@ from rush.utils import (
 
 
 class TermLoan(BaseLoan):
-    bill_class: None = None
+    bill_class: Type[B] = BaseBill
     session: Session = None
 
     __mapper_args__ = {"polymorphic_identity": "term_loan"}
@@ -71,8 +77,8 @@ class TermLoan(BaseLoan):
         loan_disbursement_event(session=session, loan=loan, event=event, bill_id=loan_data.id)
 
         # create emis for term loan.
-        from rush.create_emi import create_emis_for_card
+        from rush.create_emi import create_emis_for_bill
 
-        create_emis_for_card(session=session, user_card=loan, bill=loan_data)
+        create_emis_for_bill(session=session, user_card=loan, bill=loan.convert_to_bill_class(loan_data))
 
         return loan

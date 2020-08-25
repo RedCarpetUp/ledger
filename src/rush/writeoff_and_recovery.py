@@ -1,4 +1,4 @@
-from rush.card import BaseCard
+from rush.card import BaseLoan
 from rush.ledger_utils import create_ledger_entry_from_str
 from rush.models import (
     Fee,
@@ -11,7 +11,7 @@ def write_off_all_loans_above_the_dpd(dpd: int = 30) -> None:
     pass
 
 
-def write_off_loan(user_card: BaseCard) -> None:
+def write_off_loan(user_card: BaseLoan) -> None:
     reverse_all_unpaid_fees(user_card)  # Remove all unpaid fees.
     total_outstanding = user_card.get_total_outstanding()
     event = LedgerTriggerEvent(
@@ -21,7 +21,7 @@ def write_off_loan(user_card: BaseCard) -> None:
     # user_card.loan_status = 'WRITTEN_OFF'  # uncomment after user_loan PR is merged.
 
 
-def write_off_event(user_card: BaseCard, event: LedgerTriggerEvent) -> None:
+def write_off_event(user_card: BaseLoan, event: LedgerTriggerEvent) -> None:
     # Add an expense for write-off. And reduce amount from the money we need to receive from lender.
     # When we raise the invoice to lender we add money to this receivable account.
     # If balance of the receivable account is in negative then we will add money from rc cash account.
@@ -34,7 +34,7 @@ def write_off_event(user_card: BaseCard, event: LedgerTriggerEvent) -> None:
     )
 
 
-def reverse_all_unpaid_fees(user_card: BaseCard) -> None:
+def reverse_all_unpaid_fees(user_card: BaseLoan) -> None:
     session = user_card.session
     fee = session.query(Fee).filter(Fee.loan_id == user_card.loan_id, Fee.fee_status == "UNPAID").all()
     fee.fee_status = "REVERSED"

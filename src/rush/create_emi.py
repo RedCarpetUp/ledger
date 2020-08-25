@@ -13,7 +13,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.sql import func
 
 from rush.anomaly_detection import get_payment_events
-from rush.card import BaseCard
+from rush.card import BaseLoan
 from rush.card.base_card import (
     BaseBill,
     BaseLoan,
@@ -42,7 +42,7 @@ from rush.utils import (
 
 def create_emis_for_bill(
     session: Session,
-    user_card: BaseCard,
+    user_card: BaseLoan,
     bill: BaseBill,
     last_emi: CardEmis = None,
     bill_accumalation_till_date: Decimal = None,
@@ -77,7 +77,7 @@ def create_emis_for_bill(
             if principal_due - mul(due_amount, (i - difference_counter)) > 0
             else due_amount
         )
-        interest = bill.table.interest_to_charge
+        interest = bill.table.interest_to_charge if bill.table.interest_to_charge else Decimal(0)
         current_interest = div(mul(interest, (30 - due_date.day)), 30)
         next_interest = interest - current_interest
         total_interest = current_interest + next_interest
@@ -360,7 +360,7 @@ def slide_payments(user_card: BaseLoan, payment_event: LedgerTriggerEvent = None
     session.flush()
 
 
-def adjust_late_fee_in_emis(session: Session, user_card: BaseCard, bill: LoanData) -> None:
+def adjust_late_fee_in_emis(session: Session, user_card: BaseLoan, bill: LoanData) -> None:
     emi = (
         session.query(CardEmis)
         .filter(
@@ -383,7 +383,7 @@ def adjust_late_fee_in_emis(session: Session, user_card: BaseCard, bill: LoanDat
     group_bills_to_create_loan_schedule(user_card)
 
 
-def adjust_atm_fee_in_emis(session: Session, user_card: BaseCard, bill: LoanData) -> None:
+def adjust_atm_fee_in_emis(session: Session, user_card: BaseLoan, bill: LoanData) -> None:
     emi = (
         session.query(CardEmis)
         .filter(
@@ -514,7 +514,7 @@ def add_moratorium_to_loan_emi(
     return {"result": "success"}
 
 
-def check_moratorium_eligibility(user_card: BaseCard):
+def check_moratorium_eligibility(user_card: BaseLoan):
     session = user_card.session
 
     # Check if user has opted for moratorium and adjust that in schedule
@@ -566,16 +566,14 @@ def check_moratorium_eligibility(user_card: BaseCard):
         group_bills_to_create_loan_schedule(user_card)
 
 
-def group_bills_to_create_loan_schedule(user_card: BaseCard):
+def group_bills_to_create_loan_schedule(user_card: BaseLoan):
     session = user_card.session
 
     # Get all loan level emis of the user
     all_emis = (
         session.query(CardEmis)
         .filter(
-            CardEmis.loan_id == user_card.table.id,
-            CardEmis.row_status == "active",
-            CardEmis.bill_id == None,
+            CardEmis.loan_id == user_card.id, CardEmis.row_status == "active", CardEmis.bill_id == None,
         )
         .order_by(CardEmis.emi_number.asc())
         .all()

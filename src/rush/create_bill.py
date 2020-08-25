@@ -178,7 +178,7 @@ def add_atm_fee(
     bill: BaseBill,
     post_date: DateTime,
     atm_transactions_amount: Decimal,
-    user_card: BaseCard,
+    user_card: BaseLoan,
 ) -> None:
     atm_fee_perc = Decimal(2)
     atm_fee_without_gst = mul(atm_transactions_amount / 100, atm_fee_perc)
