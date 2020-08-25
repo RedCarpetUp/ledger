@@ -3,8 +3,6 @@ from decimal import Decimal
 from typing import (
     Any,
     Dict,
-    Optional,
-    Tuple,
 )
 
 from pendulum import Date as PythonDate
@@ -24,6 +22,7 @@ from sqlalchemy import (
     Text,
 )
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import (
     Session,
     relationship,
@@ -363,7 +362,6 @@ class UserCards(AuditMixin):
     )
     credit_limit = Column(Numeric, nullable=False, default=1000)  # limit in rupees
     cash_withdrawal_limit = Column(Numeric, nullable=False, default=1000)
-    drawdown_id = Column(Integer, ForeignKey(Loan.id), nullable=True)  # From apiv5
     loan_id = Column(Integer, ForeignKey(Loan.id), nullable=True)  # to detect payments
     details = Column(JSON, nullable=True, server_default="{}")
     activation_type = Column(String(12), nullable=False, default="P")
@@ -399,6 +397,10 @@ class UserCards(AuditMixin):
             postgresql_where=row_status == "active",
         ),
     )
+
+    @hybrid_property
+    def drawdown_id(self):
+        return self.loan_id
 
 
 class LedgerTriggerEvent(AuditMixin):

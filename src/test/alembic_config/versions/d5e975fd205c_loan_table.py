@@ -122,7 +122,6 @@ def upgrade() -> None:
         sa.Column("credit_limit", sa.Numeric(), nullable=False),
         sa.Column("cash_withdrawal_limit", sa.Numeric(), nullable=False),
         sa.Column("loan_id", sa.Integer(), nullable=True),
-        sa.Column("drawdown_id", sa.Integer(), nullable=True),
         sa.Column("details", sa.JSON(), server_default="{}", nullable=True),
         sa.Column("row_status", sa.String(length=20), nullable=False),
         sa.ForeignKeyConstraint(["loan_id"], ["loan.id"],),
