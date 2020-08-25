@@ -18,6 +18,7 @@ from rush.utils import (
 
 
 class TermLoan(Loan):
+    bill_class: None = None
     session: Session = None
 
     __mapper_args__ = {"polymorphic_identity": "term_loan"}
@@ -25,6 +26,10 @@ class TermLoan(Loan):
     @hybrid_property
     def loan_id(self):
         return self.id
+
+    @hybrid_property
+    def card_activation_date(self):
+        return self.amortization_date
 
     def __init__(self, session: Session, **kwargs):
         self.session = session
@@ -78,5 +83,13 @@ class TermLoan(Loan):
         session.flush()
 
         loan_disbursement_event(session=session, loan=loan, event=event, bill_id=loan_data.id)
+
+        # create emis for term loan.
+        from rush.create_emi import create_emis_for_card
+        create_emis_for_card(
+            session=session,
+            user_card=loan,
+            bill=loan_data
+        )
 
         return loan

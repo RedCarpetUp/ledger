@@ -91,7 +91,7 @@ B = TypeVar("B", bound=BaseBill)
 
 
 class BaseLoan(Loan):
-    should_reinstate_limit_on_payment = False
+    should_reinstate_limit_on_payment: bool = False
     bill_class: Type[B] = BaseBill
     session: Session = None
 

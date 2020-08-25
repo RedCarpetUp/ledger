@@ -9,6 +9,7 @@ from rush.card import (
 )
 from rush.card.term_loan import TermLoan
 from rush.models import (
+    CardEmis,
     Lenders,
     Product,
     User,
@@ -63,3 +64,12 @@ def test_create_term_loan(session: Session) -> None:
 
     user_card = get_user_product(session=session, user_id=loan.user_id, card_type="term_loan")
     assert isinstance(user_card, TermLoan) == True
+
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
+        .order_by(CardEmis.emi_number.asc())
+    )
+    emis_dict = [u.as_dict() for u in all_emis_query.all()]
+
+    assert len(emis_dict) == 12

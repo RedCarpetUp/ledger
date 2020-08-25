@@ -1,4 +1,5 @@
 from decimal import Decimal
+from typing import Union
 
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
@@ -42,22 +43,26 @@ from rush.utils import (
 def create_emis_for_card(
     session: Session,
     user_card: BaseLoan,
-    bill: BaseBill,
+    bill: Union[BaseBill, LoanData],
     late_fee: Decimal = None,
     interest: Decimal = None,
     atm_fee: Decimal = None,
     last_emi: CardEmis = None,
     bill_accumalation_till_date: Decimal = None,
 ) -> None:
-    bill_tenure = bill.table.bill_tenure
+    # In case of term loan, bill_class is set to None.
+    # Therefore need to pass LoanData as bill instead of BaseBill class.
+    bill_data = bill if user_card.bill_class is None else bill.table
+
+    bill_tenure = bill_data.bill_tenure
     if not last_emi:
         due_date = user_card.card_activation_date
-        principal_due = Decimal(bill.table.principal)
-        due_amount = bill.table.principal_instalment
+        principal_due = Decimal(bill_data.principal)
+        due_amount = bill_data.principal_instalment
         start_emi_number = difference_counter = 1
     else:
         due_date = last_emi.due_date
-        principal_due = Decimal(bill.table.principal - bill_accumalation_till_date)
+        principal_due = Decimal(bill_data.principal - bill_accumalation_till_date)
         due_amount = div(principal_due, bill_tenure - last_emi.emi_number)
         start_emi_number = last_emi.emi_number + 1
         difference_counter = last_emi.emi_number
