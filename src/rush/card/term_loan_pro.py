@@ -23,7 +23,7 @@ from rush.models import (
 from rush.utils import div
 
 
-class TermLoanBill(BaseBill):
+class TermLoanProBill(BaseBill):
     def sum_of_atm_transactions(self) -> Decimal:
         return Decimal(0)
 
@@ -33,11 +33,11 @@ class TermLoanBill(BaseBill):
         return {"months": 1, "days": 0}
 
 
-class TermLoan(BaseLoan):
-    bill_class: Type[B] = TermLoanBill
+class TermLoanPro(BaseLoan):
+    bill_class: Type[B] = TermLoanProBill
     session: Session = None
 
-    __mapper_args__ = {"polymorphic_identity": "term_loan"}
+    __mapper_args__ = {"polymorphic_identity": "term_loan_pro"}
 
     @staticmethod
     def calculate_amortization_date(product_order_date: Date) -> Date:
@@ -85,7 +85,7 @@ class TermLoan(BaseLoan):
             performed_by=kwargs["user_id"],
             name="termloan_disbursal_event",
             loan_id=kwargs["loan_id"],
-            post_date=kwargs["product_order_date"],  # what is post_date?
+            post_date=kwargs["product_order_date"],
             amount=kwargs["amount"],
         )
 

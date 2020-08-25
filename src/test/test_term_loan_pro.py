@@ -7,7 +7,7 @@ from rush.card import (
     create_user_product,
     get_user_product,
 )
-from rush.card.term_loan import TermLoan
+from rush.card.term_loan_pro import TermLoanPro
 from rush.models import (
     CardEmis,
     Lenders,
@@ -27,7 +27,7 @@ def create_lenders(session: Session) -> None:
 
 
 def create_products(session: Session) -> None:
-    hc_product = Product(product_name="term_loan")
+    hc_product = Product(product_name="term_loan_pro")
     session.add(hc_product)
     session.flush()
 
@@ -38,12 +38,12 @@ def create_user(session: Session) -> None:
     session.flush()
 
 
-def create_test_term_loan(session: Session) -> TermLoan:
+def create_test_term_loan(session: Session) -> TermLoanPro:
     loan = create_user_product(
         session=session,
         user_id=4,
         loan_creation_date=parse_date("2020-08-01").date(),
-        card_type="term_loan",
+        card_type="term_loan_pro",
         lender_id=62311,
         bill_start_date=parse_date("2020-08-01").date(),
         bill_close_date=parse_date("2021-08-01").date(),
@@ -62,11 +62,11 @@ def test_create_term_loan(session: Session) -> None:
     create_user(session=session)
     loan = create_test_term_loan(session=session)
 
-    assert loan.product_type == "term_loan"
+    assert loan.product_type == "term_loan_pro"
     assert loan.amortization_date == parse_date("2020-08-01").date()
 
-    user_card = get_user_product(session=session, user_id=loan.user_id, card_type="term_loan")
-    assert isinstance(user_card, TermLoan) == True
+    user_card = get_user_product(session=session, user_id=loan.user_id, card_type="term_loan_pro")
+    assert isinstance(user_card, TermLoanPro) == True
 
     loan_data = session.query(LoanData).filter(LoanData.loan_id == user_card.loan_id).one()
 

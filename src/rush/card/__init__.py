@@ -8,6 +8,9 @@ from rush.card.base_card import BaseLoan
 from rush.card.health_card import HealthCard
 from rush.card.ruby_card import RubyCard
 from rush.card.term_loan import TermLoan
+from rush.card.term_loan2 import TermLoan2
+from rush.card.term_loan_pro import TermLoanPro
+from rush.card.term_loan_pro2 import TermLoanPro2
 from rush.models import (
     Loan,
     Product,
