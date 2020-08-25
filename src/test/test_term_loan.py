@@ -74,7 +74,11 @@ def test_create_term_loan(session: Session) -> None:
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
 
-    for emi in emis_dict:
-        print(emi["emi_number"], emi["due_date"], emi["total_due_amount"], emi["interest"])
+    assert len(emis_dict) == 12
+    assert emis_dict[0]["due_date"] == parse_date("2020-08-01").date()
+    assert emis_dict[0]["emi_number"] == 1
+    assert emis_dict[0]["interest"] == Decimal("300.67")
 
-    assert len(emis_dict) == 13
+    assert emis_dict[-1]["due_date"] == parse_date("2021-07-01").date()
+    assert emis_dict[-1]["emi_number"] == 12
+    assert emis_dict[-1]["interest"] == Decimal("300.67")
