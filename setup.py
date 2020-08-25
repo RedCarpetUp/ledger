@@ -21,7 +21,7 @@ setup(
     author_email="sss@redcarpetup.com",
     license="MIT",
     description="A starter project to create a standalone TDD project with docker based postgresql fixtures",
-    python_requires=">=3.8",
+    python_requires=">=3.7",
     packages=find_packages("src"),
     package_dir={"": "src"},
     install_requires=[
