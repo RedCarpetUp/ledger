@@ -71,7 +71,7 @@ def create_emis_for_card(
         )
 
         # in relativedelta, `days` arg is for interval
-        # whereas `day` arg gives is for functionality.
+        # whereas `day` arg is for functionality.
         if deltas_for_due_date["days"] < 0:
             due_date += relativedelta(
                 months=deltas_for_due_date["months"], days=deltas_for_due_date["days"]
