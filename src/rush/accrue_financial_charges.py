@@ -73,7 +73,7 @@ def can_remove_interest(
         return False
 
     this_month_interest = interest_event.amount  # The total interest amount which we last accrued.
-    total_outstanding = _get_total_outstanding(session, user_card)  # TODO outstanding as of due_date.
+    total_outstanding = user_card.get_total_outstanding()  # TODO outstanding as of due_date.
 
     if total_outstanding <= this_month_interest:  # the amount has been paid sans interest.
         return True
@@ -257,7 +257,7 @@ def reverse_interest_charges(
     refresh_schedule(user_card=user_card)
 
 
-def reverse_late_charges(
+def reverse_incorrect_late_charges(
     session: Session, user_card: BaseLoan, event_to_reverse: LedgerTriggerEvent
 ) -> None:
     event = LedgerTriggerEvent(
