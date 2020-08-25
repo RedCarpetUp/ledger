@@ -153,9 +153,6 @@ def test_create_term_loan_2(session: Session) -> None:
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
 
-    for emi in emis_dict:
-        print(emi["emi_number"], emi["due_date"])
-
     assert len(emis_dict) == 12
     assert emis_dict[0]["due_date"] == parse_date("2019-02-01").date()
     assert emis_dict[0]["emi_number"] == 1
