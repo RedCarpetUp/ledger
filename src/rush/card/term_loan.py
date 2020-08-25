@@ -4,6 +4,7 @@ from dateutil.relativedelta import relativedelta
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Session
 
+from rush.card.base_card import BaseLoan
 from rush.card.utils import get_product_id_from_card_type
 from rush.ledger_events import loan_disbursement_event
 from rush.models import (
@@ -17,26 +18,11 @@ from rush.utils import (
 )
 
 
-class TermLoan(Loan):
+class TermLoan(BaseLoan):
     bill_class: None = None
     session: Session = None
 
     __mapper_args__ = {"polymorphic_identity": "term_loan"}
-
-    @hybrid_property
-    def loan_id(self):
-        return self.id
-
-    @hybrid_property
-    def card_activation_date(self):
-        return self.amortization_date
-
-    def __init__(self, session: Session, **kwargs):
-        self.session = session
-        super().__init__(**kwargs)
-
-    def prepare(self, session: Session) -> None:
-        self.session = session
 
     @classmethod
     def create(cls, session: Session, **kwargs) -> Loan:

@@ -37,14 +37,8 @@ def get_product_class(card_type: str) -> Any:
         Make sure to import every Product class.
     """
 
-    for kls in Loan.__subclasses__():
+    for kls in BaseLoan.__subclasses__():
         if hasattr(kls, "__mapper_args__") and kls.__mapper_args__["polymorphic_identity"] == card_type:
             return kls
-        for sub_kls in kls.__subclasses__():
-            if (
-                hasattr(sub_kls, "__mapper_args__")
-                and sub_kls.__mapper_args__["polymorphic_identity"] == card_type
-            ):
-                return sub_kls
     else:
         raise Exception("NoValidProductImplementation")
