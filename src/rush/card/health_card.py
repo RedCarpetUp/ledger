@@ -4,22 +4,16 @@ from typing import (
     Type,
 )
 
-from sqlalchemy.orm import Session
-
 from rush.card.base_card import (
     B,
     BaseBill,
-    BaseCard,
+    BaseLoan,
 )
 from rush.ledger_utils import (
     create_ledger_entry_from_str,
     get_account_balance_from_str,
 )
-from rush.models import (
-    LedgerTriggerEvent,
-    Loan,
-    UserCard,
-)
+from rush.models import LedgerTriggerEvent
 
 HEALTH_TXN_MCC = [
     "8011",
@@ -37,11 +31,16 @@ HEALTH_TXN_MCC = [
 ]
 
 
-class HealthCard(BaseCard):
-    # todo: add implementation for health card.
-    def __init__(self, session: Session, bill_class: Type[B], user_card: UserCard, loan: Loan):
-        super().__init__(session=session, bill_class=bill_class, user_card=user_card, loan=loan)
-        self.should_reinstate_limit_on_payment = True
+class HealthBill(BaseBill):
+    # todo: add implementation for health card bills.
+    pass
+
+
+class HealthCard(BaseLoan):
+    should_reinstate_limit_on_payment: bool = True
+    bill_class: Type[B] = HealthBill
+
+    __mapper_args__ = {"polymorphic_identity": "health_card"}
 
     @staticmethod
     def get_limit_type(mcc: str) -> str:
@@ -88,8 +87,3 @@ class HealthCard(BaseCard):
         # settling non medical limit
         # this creates available_limit account entry
         super().reinstate_limit_on_payment(event=event, amount=settlement_limit["non_medical"])
-
-
-class HealthBill(BaseBill):
-    # todo: add implementation for health card bills.
-    pass
