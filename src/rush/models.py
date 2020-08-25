@@ -339,24 +339,6 @@ class LedgerEntryPy(AuditMixinPy):
     amount: Decimal
     business_date: DateTime
 
-    # class UserCard(AuditMixin):
-    #     __tablename__ = "user_card"
-    #     user_id = Column(Integer, ForeignKey(User.id), nullable=False)
-    #     lender_id = Column(Integer, ForeignKey(Lenders.id), nullable=False)
-    #     card_type = Column(String, nullable=False)
-    #     card_activation_date = Column(Date, nullable=True)
-    #     statement_period_in_days = Column(Integer, default=30, nullable=False)  # 30 days
-    #     interest_free_period_in_days = Column(Integer, default=45, nullable=False)
-    #     rc_rate_of_interest_monthly = Column(Numeric, nullable=False)
-    #     lender_rate_of_interest_annual = Column(Numeric, nullable=False)
-    #     dpd = Column(Integer, nullable=True)
-
-    # class Loan(AuditMixin):
-    #     __tablename__ = "v3_loans"
-
-    # user_id = Column(Integer, ForeignKey(User.id), nullable=False)
-    # is_deleted = Column(Boolean, nullable=True)
-
 
 class CardNames(AuditMixin):
     __tablename__ = "v3_card_names"
