@@ -26,7 +26,7 @@ from rush.models import (
     Loan,
     LoanData,
     LoanMoratorium,
-    UserCard,
+    UserCards,
 )
 from rush.utils import (
     div,
@@ -93,9 +93,9 @@ B = TypeVar("B", bound=BaseBill)
 
 class BaseCard:
     session: Session = None
-    table: UserCard = None
+    table: UserCards = None
 
-    def __init__(self, session: Session, bill_class: Type[B], user_card: UserCard, loan: Loan):
+    def __init__(self, session: Session, bill_class: Type[B], user_card: UserCards, loan: Loan):
         self.session = session
         self.bill_class = bill_class
         self.table = user_card

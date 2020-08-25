@@ -25,7 +25,7 @@ from rush.models import (
     LedgerEntry,
     LedgerTriggerEvent,
     LoanData,
-    UserCard,
+    UserCards,
 )
 from rush.utils import (
     add_gst_split_to_amount,
@@ -166,7 +166,7 @@ def accrue_late_charges(
 
 
 def reverse_interest_charges(
-    session: Session, event_to_reverse: LedgerTriggerEvent, user_card: UserCard, payment_date: DateTime
+    session: Session, event_to_reverse: LedgerTriggerEvent, user_card: UserCards, payment_date: DateTime
 ) -> None:
     """
     This event is intended only when the complete amount has been paid and we need to remove the

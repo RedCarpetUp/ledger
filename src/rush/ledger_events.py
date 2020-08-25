@@ -19,7 +19,7 @@ from rush.models import (
     Fee,
     LedgerTriggerEvent,
     LoanData,
-    UserCard,
+    UserCards,
 )
 from rush.recon.dmi_interest_on_portfolio import interest_on_dmi_portfolio
 from rush.utils import get_gst_split_from_amount

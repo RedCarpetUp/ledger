@@ -17,19 +17,19 @@ from rush.card.utils import get_product_id_from_card_type
 from rush.models import (
     Loan,
     Product,
-    UserCard,
+    UserCards,
 )
 
 
 def get_user_card(session: Session, user_id: int, card_type: str = "ruby") -> BaseCard:
     user_card, loan = (
-        session.query(UserCard, Loan)
+        session.query(UserCards, Loan)
         .join(Product, and_(Product.product_name == card_type, Product.id == Loan.product_id))
         .filter(
-            Loan.id == UserCard.loan_id,
-            Loan.user_id == UserCard.user_id,
-            UserCard.user_id == user_id,
-            UserCard.card_type == card_type,
+            Loan.id == UserCards.loan_id,
+            Loan.user_id == UserCards.user_id,
+            UserCards.user_id == user_id,
+            UserCards.card_type == card_type,
         )
         .one()
     )
@@ -53,7 +53,7 @@ def create_user_card(session: Session, **kwargs) -> BaseCard:
 
     kwargs["loan_id"] = loan.id
 
-    uc = UserCard(**kwargs)
+    uc = UserCards(**kwargs)
     session.add(uc)
     session.flush()
 

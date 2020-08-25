@@ -27,6 +27,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import (
     Session,
     relationship,
+    session,
 )
 from sqlalchemy.schema import Index
 
@@ -179,9 +180,10 @@ class UserData(AuditMixin):
     )
 
 
-class User(AuditMixin):
+class User(AuditMixin):  # In sync with apiv5
     __tablename__ = "v3_users"
-    phone_number = Column(String(20), nullable=False, default="0000000000")
+
+    # phone_number = Column(String(20), nullable=False, default='0000000000')
     histories = relationship("UserData", foreign_keys=[UserData.user_id])
     roles = relationship("UserRoles")
     identities = relationship("UserIdentities", back_populates="user")
@@ -193,6 +195,29 @@ class User(AuditMixin):
     )
 
     data_class = UserData
+
+    @classmethod
+    def new(cls, session: Session, identity, identity_type="phone", **kwargs):
+        user = User()
+        session.add(user)
+        user_identity = UserIdentities.new(
+            session=session, identity=identity, identity_type=identity_type, row_status="active"
+        )
+        history = UserData(**kwargs)
+        user.identities.append(user_identity)
+        user.histories.append(history)
+        user.latest = history
+        return user
+
+    @classmethod
+    def new_identity(cls, session, identity, identity_type="phone"):
+        user = User()
+        session.add(user)
+        user_identity = UserIdentities.new(
+            session=session, identity=identity, identity_type=identity_type, row_status="active"
+        )
+        user.identities.append(user_identity)
+        return user_identity
 
 
 class Loan(AuditMixin):
@@ -319,8 +344,8 @@ class LedgerEntryPy(AuditMixinPy):
     # class Loan(AuditMixin):
     #     __tablename__ = "v3_loans"
 
-    user_id = Column(Integer, ForeignKey(User.id), nullable=False)
-    is_deleted = Column(Boolean, nullable=True)
+    # user_id = Column(Integer, ForeignKey(User.id), nullable=False)
+    # is_deleted = Column(Boolean, nullable=True)
 
     # histories = relationship("LoanData", foreign_keys="LoanData.loan_id")
     # latest = relationship(
@@ -351,10 +376,10 @@ class CardKitNumbers(AuditMixin):
     last_5_digits = Column(String(5), nullable=False)
     status = Column(String(15), nullable=False)
     extra_details = Column(JSON, nullable=False, default={})
-    user_cards = relationship("UserCard")
+    user_cards = relationship("UserCards")
 
 
-class UserCard(AuditMixin):
+class UserCards(AuditMixin):
     __tablename__ = "v3_user_cards"
     user_id = Column(Integer, ForeignKey(User.id), index=True, nullable=False)
     kit_number = Column(
@@ -362,6 +387,7 @@ class UserCard(AuditMixin):
     )
     credit_limit = Column(Numeric, nullable=False, default=1000)  # limit in rupees
     cash_withdrawal_limit = Column(Numeric, nullable=False, default=1000)
+    drawdown_id = Column(Integer, ForeignKey(Loan.id), nullable=True)  # From apiv5
     loan_id = Column(Integer, ForeignKey(Loan.id), nullable=True)  # to detect payments
     details = Column(JSON, nullable=True, server_default="{}")
     activation_type = Column(String(12), nullable=False, default="P")

@@ -31,7 +31,7 @@ from rush.models import (
     LedgerTriggerEvent,
     LoanData,
     LoanMoratorium,
-    UserCard,
+    UserCards,
 )
 from rush.utils import (
     div,
@@ -581,7 +581,7 @@ def adjust_atm_fee_in_emis(session: Session, user_card: BaseCard, post_date: Dat
 
 def create_emi_payment_mapping(
     session: Session,
-    user_card: UserCard,
+    user_card: UserCards,
     emi_number: int,
     payment_date: DateTime,
     payment_request_id: str,
