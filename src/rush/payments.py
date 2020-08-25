@@ -127,9 +127,9 @@ def transaction_refund_event(
     )
 
     # Slide payment in emi
-    from rush.create_emi import refresh_schedule
+    # from rush.create_emi import refresh_schedule
 
-    refresh_schedule(user_card=user_card)
+    # refresh_schedule(user_card=user_card)
 
 
 def settle_payment_in_bank(

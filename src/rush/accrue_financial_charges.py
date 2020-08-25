@@ -3,6 +3,7 @@ from decimal import Decimal
 from typing import Optional
 
 from pendulum import DateTime
+from pendulum.constants import USECS_PER_SEC
 from sqlalchemy.orm import Session
 
 from rush.card import BaseCard
@@ -89,10 +90,6 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_car
         accrue_interest_event(session, bill, accrue_event, bill.table.interest_to_charge)
         accrue_event.amount += bill.table.interest_to_charge
 
-    from rush.create_emi import refresh_schedule
-
-    refresh_schedule(user_card)
-
 
 def is_late_fee_valid(session: Session, user_card: BaseCard) -> bool:
     """
@@ -159,9 +156,11 @@ def accrue_late_charges(
         fee = create_fee_entry(session, latest_bill, event, "late_fee", late_fee_to_charge_without_tax)
         event.amount = fee.gross_amount
 
-        from rush.create_emi import refresh_schedule
+        session.flush()
 
-        refresh_schedule(user_card)
+        from rush.create_emi import adjust_late_fee_in_emis
+
+        adjust_late_fee_in_emis(session, user_card, latest_bill)
     return latest_bill
 
 
@@ -249,10 +248,10 @@ def reverse_interest_charges(
                 debit_book_str=entry["acc_to_remove_from"],
             )
 
-    from rush.create_emi import refresh_schedule
+    # from rush.create_emi import refresh_schedule
 
-    # Slide payment in emi
-    refresh_schedule(user_card=user_card)
+    # # Slide payment in emi
+    # refresh_schedule(user_card=user_card)
 
 
 def reverse_incorrect_late_charges(
@@ -313,7 +312,7 @@ def reverse_incorrect_late_charges(
                 )
     fee.fee_status = "REVERSED"
 
-    from rush.create_emi import refresh_schedule
+    # from rush.create_emi import refresh_schedule
 
-    # Slide payment in emi
-    refresh_schedule(user_card=user_card)
+    # # Slide payment in emi
+    # refresh_schedule(user_card=user_card)

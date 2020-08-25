@@ -227,6 +227,7 @@ def upgrade() -> None:
     op.create_table(
         "card_emis",
         sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("bill_id", sa.Integer(), nullable=True),
         sa.Column("due_date", sa.Date(), nullable=True),
         sa.Column("due_amount", sa.DECIMAL(), nullable=False),
         sa.Column("total_due_amount", sa.DECIMAL(), nullable=False),
@@ -252,6 +253,7 @@ def upgrade() -> None:
         sa.Column("loan_id", sa.Integer(), nullable=False),
         sa.Column("extra_details", sa.JSON(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
+        sa.ForeignKeyConstraint(["bill_id"], ["loan_data.id"], name="fk_card_emis_bill_id"),
         sa.ForeignKeyConstraint(["loan_id"], ["loan.id"], name="fk_card_emis_loan_id"),
     )
 

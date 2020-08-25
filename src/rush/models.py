@@ -450,6 +450,7 @@ class CardTransaction(AuditMixin):
 class CardEmis(AuditMixin):
     __tablename__ = "card_emis"
     loan_id = Column(Integer, ForeignKey(Loan.id))
+    bill_id = Column(Integer, ForeignKey(LoanData.id), nullable=True)
     due_date = Column(TIMESTAMP, nullable=False)
     due_amount = Column(Numeric, nullable=False, default=Decimal(0))
     total_due_amount = Column(Numeric, nullable=False, default=Decimal(0))
