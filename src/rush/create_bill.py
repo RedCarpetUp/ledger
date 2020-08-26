@@ -190,8 +190,6 @@ def add_atm_fee(
     fee = create_fee_entry(session, bill, event, "atm_fee", atm_fee_without_gst)
     event.amount = fee.gross_amount
 
-    session.flush()
-
     from rush.create_emi import adjust_atm_fee_in_emis
 
     adjust_atm_fee_in_emis(session, user_card, bill)

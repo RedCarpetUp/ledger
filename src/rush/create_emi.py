@@ -116,11 +116,21 @@ def slide_payments(user_card: BaseLoan, payment_event: LedgerTriggerEvent = None
     ) -> None:
         last_emi_number = all_emis[-1].emi_number
         for emi in all_emis:
-            emi.dpd = (last_payment_date.date() - emi.due_date).days
-            if emi.emi_number <= last_paid_emi_number or emi.total_due_amount <= Decimal(0):
+            if (
+                emi.emi_number <= last_paid_emi_number
+                or emi.total_due_amount <= Decimal(0)
+                or emi.payment_status == "Paid"
+            ):
                 continue
             if last_payment_date:
                 emi.last_payment_date = last_payment_date
+            payment_received_and_adjusted += (
+                emi.payment_received
+                + emi.atm_fee_received
+                + emi.late_fee_received
+                + emi.interest_received
+            )
+            emi.dpd = (last_payment_date.date() - emi.due_date).days
             if all_paid:
                 emi.payment_received = (
                     emi.atm_fee_received
@@ -377,7 +387,6 @@ def adjust_late_fee_in_emis(session: Session, user_card: BaseLoan, bill: LoanDat
         emi.total_closing_balance_post_due_date += late_fee.gross_amount
         emi.total_due_amount += late_fee.gross_amount
         emi.late_fee += late_fee.gross_amount
-        session.flush()
 
     # Recreate loan level emis
     group_bills_to_create_loan_schedule(user_card)
@@ -588,8 +597,6 @@ def group_bills_to_create_loan_schedule(user_card: BaseLoan):
     )
     for mapping in all_payment_mappings:
         mapping.row_status = "inactive"
-
-    session.flush()
 
     grouped_values = (
         session.query(

@@ -1462,6 +1462,21 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
     )
     assert interest_earned == Decimal("60.33")
 
+    # Get emi list post few bill creations
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(
+            CardEmis.loan_id == user_card.loan_id,
+            CardEmis.row_status == "active",
+            CardEmis.bill_id == None,
+        )
+        .order_by(CardEmis.emi_number.asc())
+        .all()
+    )
+
+    second_emi = all_emis_query[1]
+    assert second_emi.interest == 91
+
     payment_received(
         session=session,
         user_card=user_card,
@@ -1487,6 +1502,21 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
         session, book_string=f"{second_bill.id}/bill/interest_accrued/r"
     )
     assert interest_earned == Decimal(0)
+
+    # Get emi list post few bill creations
+    all_emis_query = (
+        session.query(CardEmis)
+        .filter(
+            CardEmis.loan_id == user_card.loan_id,
+            CardEmis.row_status == "active",
+            CardEmis.bill_id == None,
+        )
+        .order_by(CardEmis.emi_number.asc())
+        .all()
+    )
+
+    second_emi = all_emis_query[1]
+    assert second_emi.interest == 0
 
     assert is_bill_closed(session, first_bill) is True
     # 90 got settled in new bill.
