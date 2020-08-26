@@ -125,9 +125,7 @@ class BaseLoan(Loan):
             lender_id=kwargs.pop("lender_id"),
             rc_rate_of_interest_monthly=Decimal(3),
             lender_rate_of_interest_annual=Decimal(18),  # this is hardcoded for one lender.
-            amortization_date=kwargs.get(
-                "card_activation_date", get_current_ist_time().date()
-            ),  # TODO: change this later.
+            amortization_date=kwargs.get("card_activation_date"),  # TODO: change this later.
         )
         session.add(loan)
         session.flush()
