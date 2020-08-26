@@ -4,11 +4,7 @@ from typing import Type
 from dateutil.relativedelta import relativedelta
 from sqlalchemy.orm import Session
 
-from rush.card.base_card import (
-    B,
-    BaseBill,
-    BaseLoan,
-)
+from rush.card.base_card import BaseLoan
 from rush.card.utils import get_product_id_from_card_type
 from rush.ledger_events import loan_disbursement_event
 from rush.models import (
@@ -23,7 +19,7 @@ from rush.utils import (
 
 
 class TermLoan(BaseLoan):
-    bill_class = None
+    bill_class: None = None
     session: Session = None
 
     __mapper_args__ = {"polymorphic_identity": "term_loan"}
