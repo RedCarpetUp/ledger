@@ -24,6 +24,18 @@ def round_up_decimal(val: Decimal, fp: Decimal = Decimal("1.")) -> Decimal:
     return rounded_up
 
 
+def round_up_decimal_to_nearest(val: Decimal, to_nearest: Decimal = Decimal("10")) -> Decimal:
+    rounded_val = round_up_decimal(val)
+    if to_nearest == Decimal("1"):
+        return rounded_val
+
+    remainder = rounded_val % to_nearest
+    if remainder:
+        rounded_val = rounded_val - remainder + to_nearest
+
+    return rounded_val
+
+
 def get_gst_split_from_amount(
     amount: Decimal, sgst_rate: Decimal, cgst_rate: Decimal, igst_rate: Decimal
 ) -> dict:

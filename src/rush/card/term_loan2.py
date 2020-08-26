@@ -26,6 +26,8 @@ from rush.utils import div
 
 
 class TermLoan2Bill(BaseBill):
+    round_emi_to_nearest: Decimal = Decimal("10")
+
     def sum_of_atm_transactions(self) -> Decimal:
         return Decimal(0)
 

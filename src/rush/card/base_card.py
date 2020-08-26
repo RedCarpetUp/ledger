@@ -1,6 +1,5 @@
 from decimal import Decimal
 from typing import (
-    Any,
     Dict,
     List,
     Optional,
@@ -8,7 +7,6 @@ from typing import (
     TypeVar,
 )
 
-from dateutil.relativedelta import relativedelta
 from pendulum import (
     Date,
     DateTime,
@@ -34,13 +32,14 @@ from rush.utils import (
     div,
     get_current_ist_time,
     mul,
-    round_up_decimal,
+    round_up_decimal_to_nearest,
 )
 
 
 class BaseBill:
     session: Session = None
     table: LoanData = None
+    round_emi_to_nearest: Decimal = Decimal("1")
 
     def __init__(self, session: Session, loan_data: LoanData):
         self.session = session
@@ -51,7 +50,7 @@ class BaseBill:
         # TODO get tenure from table.
         interest_on_principal = mul(self.table.principal, div(rate_of_interest, 100))
         not_rounded_emi = self.table.principal_instalment + interest_on_principal
-        rounded_emi = round_up_decimal(not_rounded_emi)
+        rounded_emi = round_up_decimal_to_nearest(not_rounded_emi, to_nearest=self.round_emi_to_nearest)
 
         rounding_difference = rounded_emi - not_rounded_emi
 
