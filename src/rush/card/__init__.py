@@ -65,7 +65,9 @@ def activate_card(session: Session, user_loan: BaseLoan, user_card: UserCard) ->
     user_card.card_activation_date = user_loan.amortization_date
 
 
-def disburse_card(session: Session, user_loan: BaseLoan, amount: Decimal, payment_request_id: str) -> None:
+def disburse_card(
+    session: Session, user_loan: BaseLoan, amount: Decimal, payment_request_id: str
+) -> None:
     event = LedgerTriggerEvent(
         name="card_disbursal",
         loan_id=user_loan.loan_id,
