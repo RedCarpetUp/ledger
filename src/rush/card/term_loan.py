@@ -1,7 +1,7 @@
 from decimal import Decimal
+from typing import Type
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Session
 
 from rush.card.base_card import BaseLoan
@@ -71,8 +71,8 @@ class TermLoan(BaseLoan):
         loan_disbursement_event(session=session, loan=loan, event=event, bill_id=loan_data.id)
 
         # create emis for term loan.
-        from rush.create_emi import create_emis_for_card
+        from rush.create_emi import create_emis_for_bill
 
-        create_emis_for_card(session=session, user_card=loan, bill=loan_data)
+        create_emis_for_bill(session=session, user_card=loan, bill=loan_data)
 
         return loan
