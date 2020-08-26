@@ -53,9 +53,9 @@ def create_emis_for_bill(
 
     bill_tenure = bill_data.bill_tenure
     if not last_emi:
-        due_date = bill.table.bill_start_date
-        principal_due = Decimal(bill.table.principal)
-        due_amount = bill.table.principal_instalment
+        due_date = bill_data.bill_start_date
+        principal_due = Decimal(bill_data.principal)
+        due_amount = bill_data.principal_instalment
         start_emi_number = difference_counter = 1
     else:
         due_date = last_emi.due_date
@@ -77,16 +77,16 @@ def create_emis_for_bill(
             if principal_due - mul(due_amount, (i - difference_counter)) > 0
             else due_amount
         )
-        interest = bill.table.interest_to_charge if bill.table.interest_to_charge else Decimal(0)
+        interest = bill_data.interest_to_charge if bill_data.interest_to_charge else Decimal(0)
         current_interest = div(mul(interest, (30 - due_date.day)), 30)
         next_interest = interest - current_interest
         total_interest = current_interest + next_interest
         total_due_amount += interest
         total_closing_balance_post_due_date += interest
-        extra_details = {str(bill.id): str(due_amount)}
+        extra_details = {str(bill_data.id): str(due_amount)}
         new_emi = CardEmis(
             loan_id=user_card.loan_id,
-            bill_id=bill.id,
+            bill_id=bill_data.id,
             emi_number=i,
             total_closing_balance=total_closing_balance,
             total_closing_balance_post_due_date=total_closing_balance_post_due_date,
@@ -458,6 +458,7 @@ def add_moratorium_to_loan_emi(
                     if i != months_to_be_inserted:
                         new_emi = CardEmis(
                             loan_id=user_card.loan_id,
+                            bill_id=emi.bill_id,
                             emi_number=(emi.emi_number + i),
                             total_closing_balance=emi.total_closing_balance,
                             total_closing_balance_post_due_date=emi.total_closing_balance_post_due_date,
@@ -487,6 +488,7 @@ def add_moratorium_to_loan_emi(
             # late fine and interest will be handled through events
             new_emi = CardEmis(
                 loan_id=user_card.loan_id,
+                bill_id=last_emi.bill_id,
                 emi_number=(emi_number_to_begin_insertion_from + i + 1),
                 total_closing_balance=last_emi.total_closing_balance,
                 total_closing_balance_post_due_date=last_emi.total_closing_balance_post_due_date,
@@ -522,8 +524,8 @@ def check_moratorium_eligibility(user_card: BaseLoan):
         session.query(LoanMoratorium).filter(LoanMoratorium.loan_id == user_card.loan_id).first()
     )
     if moratorium:
-        start_date = moratorium.start_date
-        end_date = moratorium.end_date
+        start_date = moratorium.start_date.date()
+        end_date = moratorium.end_date.date()
         months_to_be_inserted = (
             (moratorium.end_date.year - moratorium.start_date.year) * 12
             + moratorium.end_date.month
@@ -544,9 +546,7 @@ def check_moratorium_eligibility(user_card: BaseLoan):
                 .all()
             )
             has_any_emis_to_apply_moratorium = [
-                emi
-                for emi in bill_emis
-                if emi.due_date >= start_date.date() and emi.due_date < end_date.date()
+                emi for emi in bill_emis if emi.due_date >= start_date and emi.due_date < end_date
             ]
             if has_any_emis_to_apply_moratorium:
                 try:

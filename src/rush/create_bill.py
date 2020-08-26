@@ -99,13 +99,13 @@ def bill_generate(user_card: BaseLoan) -> BaseBill:
         # After the bill has generated. Call the min generation event on all unpaid bills.
         add_min_to_all_bills(session, bill_closing_date, user_card)
 
-    atm_transactions_sum = bill.sum_of_atm_transactions()
-    if atm_transactions_sum > 0:
-        add_atm_fee(session, bill, bill.table.bill_close_date, atm_transactions_sum, user_card)
-
     from rush.create_emi import create_emis_for_bill
 
     create_emis_for_bill(session, user_card, bill)
+
+    atm_transactions_sum = bill.sum_of_atm_transactions()
+    if atm_transactions_sum > 0:
+        add_atm_fee(session, bill, bill.table.bill_close_date, atm_transactions_sum, user_card)
 
     return bill
 
@@ -127,7 +127,7 @@ def extend_tenure(
         all_emis = (
             session.query(CardEmis)
             .filter(
-                CardEmis.loan_id == user_card.table.id,
+                CardEmis.loan_id == user_card.id,
                 CardEmis.row_status == "active",
                 CardEmis.bill_id == bill.id,
             )

@@ -1,16 +1,14 @@
 from decimal import Decimal
+from typing import Type
 
 from dateutil.relativedelta import relativedelta
 from sqlalchemy.orm import Session
 
-from typing import Type
 from rush.card.base_card import (
     B,
     BaseBill,
     BaseLoan,
 )
-
-from rush.card.base_card import BaseLoan
 from rush.card.utils import get_product_id_from_card_type
 from rush.ledger_events import loan_disbursement_event
 from rush.models import (
@@ -25,7 +23,7 @@ from rush.utils import (
 
 
 class TermLoan(BaseLoan):
-    bill_class: Type[B] = BaseBill
+    bill_class = None
     session: Session = None
 
     __mapper_args__ = {"polymorphic_identity": "term_loan"}
@@ -79,6 +77,6 @@ class TermLoan(BaseLoan):
         # create emis for term loan.
         from rush.create_emi import create_emis_for_bill
 
-        create_emis_for_bill(session=session, user_card=loan, bill=loan.convert_to_bill_class(loan_data))
+        create_emis_for_bill(session=session, user_card=loan, bill=loan_data)
 
         return loan
