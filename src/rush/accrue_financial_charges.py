@@ -24,6 +24,7 @@ from rush.ledger_utils import (
 )
 from rush.models import (
     BookAccount,
+    CardEmis,
     Fee,
     LedgerEntry,
     LedgerTriggerEvent,
@@ -314,7 +315,25 @@ def reverse_incorrect_late_charges(
                 )
     fee.fee_status = "REVERSED"
 
-    # from rush.create_emi import refresh_schedule
+    # Adjust reversal of late fee in bill
+    emi = (
+        session.query(CardEmis)
+        .filter(
+            CardEmis.loan_id == user_card.loan_id,
+            CardEmis.bill_id == bill.id,
+            CardEmis.emi_number == 1,
+            CardEmis.row_status == "active",
+        )
+        .order_by(CardEmis.emi_number.asc())
+        .first()
+    )
+    if fee and fee.gross_amount > 0:
+        emi.total_closing_balance_post_due_date -= fee.gross_amount
+        emi.total_due_amount -= fee.gross_amount
+        emi.late_fee -= fee.gross_amount
+        session.flush()
 
-    # # Slide payment in emi
-    # refresh_schedule(user_card=user_card)
+    from rush.create_emi import group_bills_to_create_loan_schedule
+
+    # Recreate loan level emis
+    group_bills_to_create_loan_schedule(user_card)

@@ -5,7 +5,7 @@ from pendulum import DateTime
 from sqlalchemy.orm import Session
 
 from rush.anomaly_detection import run_anomaly
-from rush.card.base_card import BaseLoan
+from rush.card import BaseLoan
 from rush.ledger_events import (
     _adjust_for_complete_bill,
     _adjust_for_min,
@@ -126,10 +126,10 @@ def transaction_refund_event(
         amount=Decimal(event.amount),
     )
 
-    # Slide payment in emi
-    # from rush.create_emi import refresh_schedule
+    from rush.create_emi import group_bills_to_create_loan_schedule
 
-    # refresh_schedule(user_card=user_card)
+    # Recreate loan level emis
+    group_bills_to_create_loan_schedule(user_card)
 
 
 def settle_payment_in_bank(
