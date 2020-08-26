@@ -15,6 +15,7 @@ from rush.ledger_events import (
 from rush.ledger_utils import (
     create_ledger_entry_from_str,
     get_account_balance_from_str,
+    get_remaining_bill_balance,
 )
 from rush.models import (
     CardTransaction,
@@ -53,13 +54,6 @@ def payment_received(
     )
 
 
-#     payment_request_id: str,
-#     gateway_expenses: Decimal,
-#     gross_payment_amount: Decimal,
-#     settlement_date: DateTime,
-#     user_card: BaseCard,
-
-
 def refund_payment(
     session: Session,
     user_card: BaseCard,
@@ -84,6 +78,18 @@ def refund_payment(
     # Checking if bill is generated or not. if not then reduce from unbilled else treat as payment.
     transaction_refund_event(session, user_card, lt, bill_of_original_transaction)
     run_anomaly(session, user_card, payment_date)
+
+
+def find_amount_to_slide_in_bills(user_card: BaseCard, total_amount_to_slide: Decimal) -> dict:
+    unpaid_bills = user_card.get_unpaid_bills()
+    bills_dict = [
+        {
+            "bill": bill,
+            "total_outstanding": get_remaining_bill_balance(user_card.session, bill)["total_due"],
+        }
+        for bill in unpaid_bills
+    ]
+    return {}
 
 
 def transaction_refund_event(

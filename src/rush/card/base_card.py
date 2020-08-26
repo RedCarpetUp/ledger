@@ -63,8 +63,12 @@ class BaseBill:
             min_scheduled = self.table.interest_to_charge  # only charge interest if in moratorium.
         else:
             min_scheduled = self.table.principal_instalment + self.table.interest_to_charge
-        total_due = get_remaining_bill_balance(self.session, self.table)["total_due"]
-        return min(min_scheduled, total_due)
+        max_remaining_amount = get_remaining_bill_balance(self.session, self.table)["total_due"]
+        amount_already_present_in_min = self.get_remaining_min()
+        if amount_already_present_in_min == max_remaining_amount:
+            return Decimal(0)
+        amount_that_can_be_added_in_min = max_remaining_amount - amount_already_present_in_min
+        return min(min_scheduled, amount_that_can_be_added_in_min)
 
     def get_remaining_min(self, to_date: Optional[DateTime] = None) -> Decimal:
         from rush.ledger_utils import get_account_balance_from_str
