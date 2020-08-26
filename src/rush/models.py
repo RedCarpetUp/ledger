@@ -61,6 +61,35 @@ class AuditMixin(Base):
         }
         return d
 
+    @classmethod
+    def snapshot(
+        cls, session: Session, primary_key, new_data, skip_columns=("id", "created_at", "updated_at")
+    ):
+        assert hasattr(cls, "row_status") == True
+
+        old_row = (
+            session.query(cls)
+            .filter(
+                getattr(cls, primary_key) == new_data[primary_key],
+                getattr(cls, "row_status") == "active",
+            )
+            .with_for_update(skip_locked=True)
+            .one_or_none()
+        )
+        if old_row:
+            old_row.row_status = "inactive"
+            session.flush()
+
+        cls_keys = cls.__table__.columns.keys()
+        keys_to_skip = [key for key in new_data.keys() if key not in cls_keys]
+        new_skip_columns = keys_to_skip + list(skip_columns)
+        for column in new_skip_columns:
+            new_data.pop(column, None)
+
+        new_obj = cls.new(**new_data)
+        session.flush()
+        return new_obj
+
 
 def get_or_create(session: Session, model: Any, defaults: Dict[Any, Any] = None, **kwargs: str) -> Any:
     instance = session.query(model).filter_by(**kwargs).first()
