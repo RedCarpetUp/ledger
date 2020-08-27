@@ -154,10 +154,18 @@ def payment_received_event(
         unpaid_bills = user_card.get_unpaid_bills()
         actual_payment = payment_received
         payment_received = _adjust_for_min(
-            session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str,
+            session,
+            unpaid_bills,
+            payment_received,
+            event.id,
+            debit_book_str=debit_book_str,
         )
         payment_received = _adjust_for_complete_bill(
-            session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str,
+            session,
+            unpaid_bills,
+            payment_received,
+            event.id,
+            debit_book_str=debit_book_str,
         )
 
         if user_card.should_reinstate_limit_on_payment:
@@ -264,10 +272,14 @@ def _adjust_bill(
         remaining_amount = adjust_for_revenue(remaining_amount, debit_acc_str, fee)
 
     remaining_amount = adjust_for_receivable(
-        remaining_amount, to_acc=debit_acc_str, from_acc=f"{bill.id}/bill/interest_receivable/a",
+        remaining_amount,
+        to_acc=debit_acc_str,
+        from_acc=f"{bill.id}/bill/interest_receivable/a",
     )
     remaining_amount = adjust_for_receivable(
-        remaining_amount, to_acc=debit_acc_str, from_acc=f"{bill.id}/bill/principal_receivable/a",
+        remaining_amount,
+        to_acc=debit_acc_str,
+        from_acc=f"{bill.id}/bill/principal_receivable/a",
     )
     return remaining_amount
 
@@ -295,7 +307,11 @@ def _adjust_for_min(
             amount=amount_to_adjust_in_this_bill,
         )
         remaining_amount = _adjust_bill(
-            session, bill, amount_to_adjust_in_this_bill, event_id, debit_acc_str=debit_book_str,
+            session,
+            bill,
+            amount_to_adjust_in_this_bill,
+            event_id,
+            debit_acc_str=debit_book_str,
         )
         assert remaining_amount == 0  # Can't be more than 0
     return payment_received  # The remaining amount goes back to the main func.
@@ -310,7 +326,11 @@ def _adjust_for_complete_bill(
 ) -> Decimal:
     for bill in bills:
         payment_received = _adjust_bill(
-            session, bill, payment_received, event_id, debit_acc_str=debit_book_str,
+            session,
+            bill,
+            payment_received,
+            event_id,
+            debit_acc_str=debit_book_str,
         )
     return payment_received  # The remaining amount goes back to the main func.
 

@@ -38,8 +38,8 @@ def create_user_product(session: Session, **kwargs) -> Loan:
 
 def get_product_class(card_type: str) -> Any:
     """
-        Only classes imported within this file will be listed here.
-        Make sure to import every Product class.
+    Only classes imported within this file will be listed here.
+    Make sure to import every Product class.
     """
 
     for kls in BaseLoan.__subclasses__():

@@ -15,7 +15,9 @@ def write_off_loan(user_card: BaseLoan) -> None:
     reverse_all_unpaid_fees(user_card)  # Remove all unpaid fees.
     total_outstanding = user_card.get_total_outstanding()
     event = LedgerTriggerEvent(
-        name="loan_written_off", amount=total_outstanding, post_date=get_current_ist_time(),
+        name="loan_written_off",
+        amount=total_outstanding,
+        post_date=get_current_ist_time(),
     )
     write_off_event(user_card, event)
     # user_card.loan_status = 'WRITTEN_OFF'  # uncomment after user_loan PR is merged.
