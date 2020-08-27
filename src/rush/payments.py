@@ -11,7 +11,6 @@ from rush.ledger_events import (
     _adjust_bill,
     _adjust_for_complete_bill,
     _adjust_for_prepayment,
-    health_limit_assignment_event,
 )
 from rush.ledger_utils import (
     create_ledger_entry_from_str,
@@ -106,7 +105,6 @@ def payment_received_event(
             payment_received -= bill_data["amount_to_adjust"]
         if user_card.should_reinstate_limit_on_payment:
             user_card.reinstate_limit_on_payment(event=event, amount=actual_payment)
-
 
     if payment_received > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
