@@ -193,3 +193,51 @@ def add_atm_fee(
     from rush.create_emi import adjust_atm_fee_in_emis
 
     adjust_atm_fee_in_emis(session, user_card, bill)
+
+
+def close_bills(user_card: BaseLoan, payment_date: DateTime):
+    session = user_card.session
+    all_bills = user_card.get_all_bills()
+
+    for bill in all_bills:
+        all_paid = False
+        bill_emis = (
+            session.query(CardEmis)
+            .filter(
+                CardEmis.loan_id == user_card.loan_id,
+                CardEmis.row_status == "active",
+                CardEmis.bill_id == bill.id,
+            )
+            .order_by(CardEmis.emi_number.asc())
+            .all()
+        )
+        last_emi_number = bill_emis[-1].emi_number
+        for emi in bill_emis:
+            if all_paid:
+                emi.payment_received = (
+                    emi.atm_fee_received
+                ) = (
+                    emi.late_fee_received
+                ) = (
+                    emi.interest_received
+                ) = (
+                    emi.due_amount
+                ) = (
+                    emi.total_due_amount
+                ) = (
+                    emi.total_closing_balance
+                ) = (
+                    emi.total_closing_balance_post_due_date
+                ) = emi.interest_current_month = emi.interest_next_month = emi.interest = Decimal(0)
+                continue
+            actual_closing_balance = emi.total_closing_balance_post_due_date
+            if payment_date.date() <= emi.due_date:
+                actual_closing_balance = emi.total_closing_balance
+            if (
+                emi.due_date >= payment_date.date() > (emi.due_date + relativedelta(months=-1))
+            ) or emi.emi_number == last_emi_number:
+                all_paid = True
+                emi.total_closing_balance = (
+                    emi.total_closing_balance_post_due_date
+                ) = emi.interest = emi.interest_current_month = emi.interest_next_month = 0
+                emi.due_amount = emi.total_due_amount = actual_closing_balance
