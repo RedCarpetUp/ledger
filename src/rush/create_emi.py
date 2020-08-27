@@ -582,7 +582,9 @@ def group_bills_to_create_loan_schedule(user_card: BaseLoan):
     all_emis = (
         session.query(CardEmis)
         .filter(
-            CardEmis.loan_id == user_card.id, CardEmis.row_status == "active", CardEmis.bill_id == None,
+            CardEmis.loan_id == user_card.id,
+            CardEmis.row_status == "active",
+            CardEmis.bill_id == None,
         )
         .order_by(CardEmis.emi_number.asc())
         .all()
@@ -705,7 +707,10 @@ def update_event_with_dpd(user_card: BaseLoan, post_date: DateTime = None) -> No
         bills_touched.append(account.identifier)
         bill = (
             session.query(LoanData)
-            .filter(LoanData.loan_id == user_card.loan_id, LoanData.id == account.identifier,)
+            .filter(
+                LoanData.loan_id == user_card.loan_id,
+                LoanData.id == account.identifier,
+            )
             .first()
         )
         dpd = (event_post_date - bill.bill_due_date).days
