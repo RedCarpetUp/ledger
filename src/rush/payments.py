@@ -9,7 +9,6 @@ from rush.card import BaseLoan
 from rush.card.base_card import BaseBill
 from rush.ledger_events import (
     _adjust_bill,
-    _adjust_for_complete_bill,
     _adjust_for_prepayment,
 )
 from rush.ledger_utils import (
@@ -82,7 +81,7 @@ def refund_payment(
 
 
 def payment_received_event(
-    session: Session, user_card: BaseCard, debit_book_str: str, event: LedgerTriggerEvent,
+    session: Session, user_card: BaseLoan, debit_book_str: str, event: LedgerTriggerEvent,
 ) -> None:
     payment_received = Decimal(event.amount)
     if event.name == "merchant_refund":
@@ -126,7 +125,7 @@ def payment_received_event(
     slide_payments(user_card=user_card, payment_event=event)
 
 
-def find_amount_to_slide_in_bills(user_card: BaseCard, total_amount_to_slide: Decimal) -> list:
+def find_amount_to_slide_in_bills(user_card: BaseLoan, total_amount_to_slide: Decimal) -> list:
     unpaid_bills = user_card.get_unpaid_bills()
     bills_dict = [
         {

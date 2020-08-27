@@ -145,39 +145,6 @@ def add_min_amount_event(
     )
 
 
-def payment_received_event(
-    session: Session, user_card: BaseLoan, debit_book_str: str, event: LedgerTriggerEvent
-) -> None:
-    payment_received = Decimal(event.amount)
-    if event.name == "merchant_refund":
-        pass
-    elif event.name == "payment_received":
-        unpaid_bills = user_card.get_unpaid_bills()
-        actual_payment = payment_received
-        payment_received = _adjust_for_min(
-            session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str,
-        )
-        payment_received = _adjust_for_complete_bill(
-            session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str,
-        )
-
-        if user_card.should_reinstate_limit_on_payment:
-            user_card.reinstate_limit_on_payment(event=event, amount=actual_payment)
-
-    if payment_received > 0:  # if there's payment left to be adjusted.
-        _adjust_for_prepayment(
-            session=session,
-            loan_id=user_card.loan_id,
-            event_id=event.id,
-            amount=payment_received,
-            debit_book_str=debit_book_str,
-        )
-
-    from rush.create_emi import slide_payments
-
-    slide_payments(user_card=user_card, payment_event=event)
-
-
 def _adjust_bill(
     session: Session,
     bill: LoanData,
@@ -271,20 +238,6 @@ def _adjust_bill(
         remaining_amount, to_acc=debit_acc_str, from_acc=f"{bill.id}/bill/principal_receivable/a",
     )
     return remaining_amount
-
-
-def _adjust_for_complete_bill(
-    session: Session,
-    bills: List[BaseBill],
-    payment_received: Decimal,
-    event_id: int,
-    debit_book_str: str,
-) -> Decimal:
-    for bill in bills:
-        payment_received = _adjust_bill(
-            session, bill, payment_received, event_id, debit_acc_str=debit_book_str,
-        )
-    return payment_received  # The remaining amount goes back to the main func.
 
 
 def _adjust_for_prepayment(
