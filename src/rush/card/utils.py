@@ -4,11 +4,11 @@ from typing import Optional
 from pendulum import Date
 from sqlalchemy.orm import Session
 
-from rush.card.base_card import BaseLoan
 from rush.models import (
     EphemeralAccount,
     Fee,
     LedgerTriggerEvent,
+    Loan,
     Product,
 )
 from rush.utils import (
@@ -58,6 +58,7 @@ def add_pre_product_fee(
         event_id=event.id,
         ephemeral_account_id=ephemeral_account_id,
         name=fee_name,
+        fee_status="UNPAID",
         net_amount=fee_amount,
         sgst_rate=Decimal(0),  # TODO: check what should be the value.
         cgst_rate=Decimal(0),  # TODO: check what should be the value.
@@ -74,7 +75,7 @@ def add_pre_product_fee(
 
 
 def add_reload_fee(
-    session: Session, user_loan: BaseLoan, fee_amount: Decimal, post_date: Optional[Date] = None,
+    session: Session, user_loan: Loan, fee_amount: Decimal, post_date: Optional[Date] = None,
 ) -> Fee:
     if post_date is None:
         post_date = get_current_ist_time().date()
@@ -87,6 +88,7 @@ def add_reload_fee(
         loan_id=user_loan.id,
         event_id=event.id,
         name="card_reload_fees",
+        fee_status="UNPAID",
         net_amount=fee_amount,
         sgst_rate=Decimal(0),  # TODO: check what should be the value.
         cgst_rate=Decimal(0),  # TODO: check what should be the value.

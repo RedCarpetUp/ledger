@@ -131,7 +131,7 @@ class LenderPy(AuditMixinPy):
 
 class Product(AuditMixin):
     __tablename__ = "product"
-    product_name = Column(String(), nullable=False)
+    product_name = Column(String(), nullable=False, unique=True)
 
 
 @py_dataclass
@@ -227,7 +227,7 @@ class EphemeralAccount(AuditMixin):
     __tablename__ = "ephemeral_account"
 
     user_id = Column(Integer, ForeignKey(User.id), nullable=False)
-    product_type = Column(String(), nullable=False)
+    product_type = Column(String(), ForeignKey(Product.product_name), nullable=False)
 
 
 class Loan(AuditMixin):
@@ -236,7 +236,7 @@ class Loan(AuditMixin):
     ephemeral_account_id = Column(Integer, ForeignKey(EphemeralAccount.id), nullable=True)
     amortization_date = Column(TIMESTAMP, nullable=False)
     loan_status = Column(String(), nullable=False)
-    product_type = Column(String(), nullable=False)
+    product_type = Column(String(), ForeignKey(Product.product_name), nullable=False)
     product_id = Column(Integer, ForeignKey(Product.id))
     lender_id = Column(Integer, ForeignKey(Lenders.id), nullable=False)
     rc_rate_of_interest_monthly = Column(Numeric, nullable=False)
