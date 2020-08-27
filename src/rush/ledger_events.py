@@ -142,66 +142,6 @@ def add_min_amount_event(
     )
 
 
-def payment_received_event(
-    session: Session, user_card: BaseCard, debit_book_str: str, event: LedgerTriggerEvent,
-) -> None:
-    payment_received = Decimal(event.amount)
-    if event.name == "merchant_refund":
-        pass
-    elif event.name == "payment_received":
-        unpaid_bills = user_card.get_unpaid_bills()
-        actual_payment = payment_received
-        payment_received = _adjust_for_min(
-            session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str,
-        )
-        payment_received = _adjust_for_complete_bill(
-            session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str,
-        )
-
-        if user_card.multiple_limits:
-            if user_card.card_type == "health_card":
-                settlement_limit = user_card.get_split_payment(
-                    session=session, payment_amount=actual_payment
-                )
-
-                # settling medical limit
-                health_limit_assignment_event(
-                    session=session,
-                    loan_id=user_card.loan_id,
-                    event=event,
-                    amount=settlement_limit["medical"],
-                    limit_str="health_limit",
-                )
-
-                # settling non medical limit
-                health_limit_assignment_event(
-                    session=session,
-                    loan_id=user_card.loan_id,
-                    event=event,
-                    amount=settlement_limit["non_medical"],
-                    limit_str="available_limit",
-                )
-
-    if payment_received > 0:  # if there's payment left to be adjusted.
-        _adjust_for_prepayment(
-            session=session,
-            loan_id=user_card.loan_id,
-            event_id=event.id,
-            amount=payment_received,
-            debit_book_str=debit_book_str,
-        )
-
-    is_in_write_off = (
-        get_account_balance_from_str(session, f"{user_card.loan_id}/loan/write_off_expenses/e")[1] > 0
-    )
-    if is_in_write_off:
-        recovery_event(user_card, event)
-        # TODO set loan status to recovered.
-    from rush.create_emi import slide_payments
-
-    slide_payments(user_card=user_card, payment_event=event)
-
-
 def _adjust_bill(
     session: Session,
     bill: LoanData,
@@ -284,6 +224,7 @@ def _adjust_bill(
         return payment_to_adjust_from
 
     remaining_amount = amount_to_adjust_in_this_bill
+
     fees = session.query(Fee).filter(Fee.bill_id == bill.id, Fee.fee_status == "UNPAID").all()
     for fee in fees:
         remaining_amount = adjust_for_revenue(remaining_amount, debit_acc_str, fee)
@@ -295,35 +236,6 @@ def _adjust_bill(
         remaining_amount, to_acc=debit_acc_str, from_acc=f"{bill.id}/bill/principal_receivable/a",
     )
     return remaining_amount
-
-
-def _adjust_for_min(
-    session: Session,
-    bills: List[BaseBill],
-    payment_received: Decimal,
-    event_id: int,
-    debit_book_str: str,
-) -> Decimal:
-    for bill in bills:
-        min_due = bill.get_remaining_min()
-        amount_to_adjust_in_this_bill = min(min_due, payment_received)
-        if amount_to_adjust_in_this_bill == 0:
-            continue
-        # Remove amount from the original variable.
-        payment_received -= amount_to_adjust_in_this_bill
-        # Reduce min amount
-        create_ledger_entry_from_str(
-            session,
-            event_id=event_id,
-            debit_book_str=f"{bill.id}/bill/min/l",
-            credit_book_str=f"{bill.id}/bill/min/a",
-            amount=amount_to_adjust_in_this_bill,
-        )
-        remaining_amount = _adjust_bill(
-            session, bill, amount_to_adjust_in_this_bill, event_id, debit_acc_str=debit_book_str,
-        )
-        assert remaining_amount == 0  # Can't be more than 0
-    return payment_received  # The remaining amount goes back to the main func.
 
 
 def _adjust_for_complete_bill(
