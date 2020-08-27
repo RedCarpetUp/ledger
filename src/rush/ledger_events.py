@@ -4,7 +4,10 @@ from typing import (
     Optional,
 )
 
-from sqlalchemy import Date
+from sqlalchemy import (
+    Date,
+    and_,
+)
 from sqlalchemy.orm import Session
 
 from rush.card.base_card import (
@@ -21,7 +24,6 @@ from rush.models import (
     LedgerTriggerEvent,
     Loan,
     LoanData,
-    UserCard,
 )
 from rush.recon.dmi_interest_on_portfolio import interest_on_dmi_portfolio
 from rush.utils import get_gst_split_from_amount
@@ -189,6 +191,10 @@ def _adjust_bill(
             credit_book_str = f"{bill_fee.bill_id}/bill/late_fine/r"
         elif bill_fee.name == "atm_fee":
             credit_book_str = f"{bill_fee.bill_id}/bill/atm_fee/r"
+        elif bill_fee.name == "card_activation_fees":
+            credit_book_str = f"{bill_fee.ephemeral_account_id}/ephemeral_account/card_activation_fees/r"
+        elif bill_fee.name == "card_reload_fees":
+            credit_book_str = f"{bill_fee.loan_id}/loan/card_reload_fees/r"
         fee_to_adjust = min(payment_to_adjust_from, bill_fee.gross_amount)
         gst_split = get_gst_split_from_amount(
             amount=fee_to_adjust,
@@ -259,6 +265,27 @@ def _adjust_bill(
         return payment_to_adjust_from
 
     remaining_amount = amount_to_adjust_in_this_bill
+
+    # settling pre loans fee first.
+    pre_loan_fees = (
+        session.query(Fee)
+        .join(Loan, and_(Loan.id == bill.loan_id, Fee.ephemeral_account_id == Loan.ephemeral_account_id))
+        .filter(Fee.bill_id.is_(None), Fee.loan_id.is_(None), Fee.fee_status == "UNPAID")
+        .all()
+    )
+    for fee in pre_loan_fees:
+        remaining_amount = adjust_for_revenue(remaining_amount, debit_acc_str, fee)
+
+    # TODO is the order right?
+    # settle reload fees
+    reload_fees = (
+        session.query(Fee)
+        .filter(Fee.bill_id.is_(None), Fee.loan_id == bill.loan_id, Fee.fee_status == "UNPAID")
+        .all()
+    )
+    for fee in reload_fees:
+        remaining_amount = adjust_for_revenue(remaining_amount, debit_acc_str, fee)
+
     fees = session.query(Fee).filter(Fee.bill_id == bill.id, Fee.fee_status == "UNPAID").all()
     for fee in fees:
         remaining_amount = adjust_for_revenue(remaining_amount, debit_acc_str, fee)

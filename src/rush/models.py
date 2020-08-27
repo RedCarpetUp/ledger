@@ -3,8 +3,6 @@ from decimal import Decimal
 from typing import (
     Any,
     Dict,
-    Optional,
-    Tuple,
 )
 
 from pendulum import Date as PythonDate
@@ -15,6 +13,7 @@ from sqlalchemy import (
     JSON,
     TIMESTAMP,
     Boolean,
+    CheckConstraint,
     Column,
     Date,
     ForeignKey,
@@ -224,9 +223,17 @@ class User(AuditMixin):
     data_class = UserData
 
 
+class EphemeralAccount(AuditMixin):
+    __tablename__ = "ephemeral_account"
+
+    user_id = Column(Integer, ForeignKey(User.id), nullable=False)
+    product_type = Column(String(), nullable=False)
+
+
 class Loan(AuditMixin):
     __tablename__ = "loan"
     user_id = Column(Integer, ForeignKey(User.id))
+    ephemeral_account_id = Column(Integer, ForeignKey(EphemeralAccount.id), nullable=True)
     amortization_date = Column(TIMESTAMP, nullable=False)
     loan_status = Column(String(), nullable=False)
     product_type = Column(String(), nullable=False)
@@ -520,7 +527,8 @@ class Fee(AuditMixin):
 
     bill_id = Column(Integer, ForeignKey(LoanData.id), nullable=True)
     event_id = Column(Integer, ForeignKey(LedgerTriggerEvent.id), nullable=False)
-    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
+    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=True)
+    ephemeral_account_id = Column(Integer, ForeignKey(EphemeralAccount.id), nullable=True)
     name = Column(String(30), nullable=False)
     net_amount = Column(Numeric, nullable=False)
     sgst_rate = Column(Numeric, nullable=False)
@@ -533,6 +541,10 @@ class Fee(AuditMixin):
     igst_paid = Column(Numeric, nullable=True)
     gross_amount_paid = Column(Numeric, nullable=True)
     fee_status = Column(String(10), nullable=False, default="UNPAID")
+
+    __table_args__ = (
+        CheckConstraint("NOT(loan_id IS NULL AND bill_id IS NULL and ephemeral_account_id IS NULL)"),
+    )
 
 
 class EventDpd(AuditMixin):
