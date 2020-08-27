@@ -5,7 +5,6 @@ from typing import (
     Tuple,
 )
 
-import sqlalchemy
 from pendulum import DateTime
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -14,7 +13,6 @@ from rush.models import (
     BookAccount,
     Fee,
     LedgerEntry,
-    LedgerTriggerEvent,
     LoanData,
     get_or_create,
 )
