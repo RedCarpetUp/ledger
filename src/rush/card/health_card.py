@@ -4,18 +4,16 @@ from typing import (
     Type,
 )
 
-from sqlalchemy.orm import Session
-
 from rush.card.base_card import (
     B,
     BaseBill,
-    BaseCard,
+    BaseLoan,
 )
-from rush.ledger_utils import get_account_balance_from_str
-from rush.models import (
-    Loan,
-    UserCard,
+from rush.ledger_utils import (
+    create_ledger_entry_from_str,
+    get_account_balance_from_str,
 )
+from rush.models import LedgerTriggerEvent
 
 HEALTH_TXN_MCC = [
     "8011",
@@ -33,24 +31,29 @@ HEALTH_TXN_MCC = [
 ]
 
 
-class HealthCard(BaseCard):
-    # todo: add implementation for health card.
-    def __init__(self, session: Session, bill_class: Type[B], user_card: UserCard, loan: Loan):
-        super().__init__(session=session, bill_class=bill_class, user_card=user_card, loan=loan)
-        self.multiple_limits = True
+class HealthBill(BaseBill):
+    # todo: add implementation for health card bills.
+    pass
+
+
+class HealthCard(BaseLoan):
+    should_reinstate_limit_on_payment: bool = True
+    bill_class: Type[B] = HealthBill
+
+    __mapper_args__ = {"polymorphic_identity": "health_card"}
 
     @staticmethod
     def get_limit_type(mcc: str) -> str:
         return "available_limit" if mcc not in HEALTH_TXN_MCC else "health_limit"
 
-    def get_split_payment(self, session: Session, payment_amount: Decimal) -> Dict[str, Decimal]:
+    def get_split_payment(self, payment_amount: Decimal) -> Dict[str, Decimal]:
         # TODO: change negative due calculation logic, once @raghav adds limit addition logic.
         _, non_medical_due = get_account_balance_from_str(
-            session, book_string=f"{self.loan_id}/card/available_limit/l"
+            session=self.session, book_string=f"{self.loan_id}/card/available_limit/l"
         )
 
         _, medical_due = get_account_balance_from_str(
-            session, book_string=f"{self.loan_id}/card/health_limit/l"
+            session=self.session, book_string=f"{self.loan_id}/card/health_limit/l"
         )
 
         medical_settlement = Decimal(Decimal(0.9) * payment_amount)
@@ -69,7 +72,18 @@ class HealthCard(BaseCard):
             "non_medical": Decimal(round(non_medical_settlement)),
         }
 
+    def reinstate_limit_on_payment(self, event: LedgerTriggerEvent, amount: Decimal) -> None:
+        settlement_limit = self.get_split_payment(payment_amount=amount)
 
-class HealthBill(BaseBill):
-    # todo: add implementation for health card bills.
-    pass
+        # settling medical limit
+        create_ledger_entry_from_str(
+            session=self.session,
+            event_id=event.id,
+            debit_book_str=f"{self.loan_id}/card/health_limit/a",
+            credit_book_str=f"{self.loan_id}/card/health_limit/l",
+            amount=settlement_limit["medical"],
+        )
+
+        # settling non medical limit
+        # this creates available_limit account entry
+        super().reinstate_limit_on_payment(event=event, amount=settlement_limit["non_medical"])

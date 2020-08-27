@@ -5,7 +5,7 @@ from pendulum import DateTime
 from sqlalchemy.orm import Session
 
 from rush.anomaly_detection import run_anomaly
-from rush.card import BaseCard
+from rush.card import BaseLoan
 from rush.card.base_card import BaseBill
 from rush.ledger_events import (
     _adjust_bill,
@@ -28,7 +28,7 @@ from rush.writeoff_and_recovery import recovery_event
 
 def payment_received(
     session: Session,
-    user_card: BaseCard,
+    user_card: BaseLoan,
     payment_amount: Decimal,
     payment_date: DateTime,
     payment_request_id: str,
@@ -58,7 +58,7 @@ def payment_received(
 
 def refund_payment(
     session: Session,
-    user_card: BaseCard,
+    user_card: BaseLoan,
     payment_amount: Decimal,
     payment_date: DateTime,
     payment_request_id: str,
@@ -104,29 +104,9 @@ def payment_received_event(
                 remaining_amount == 0
             )  # The amount to adjust is computed for this bill. It should all settle.
             payment_received -= bill_data["amount_to_adjust"]
-        if user_card.multiple_limits:
-            if user_card.card_type == "health_card":
-                settlement_limit = user_card.get_split_payment(
-                    session=session, payment_amount=actual_payment
-                )
+        if user_card.should_reinstate_limit_on_payment:
+            user_card.reinstate_limit_on_payment(event=event, amount=actual_payment)
 
-                # settling medical limit
-                health_limit_assignment_event(
-                    session=session,
-                    loan_id=user_card.loan_id,
-                    event=event,
-                    amount=settlement_limit["medical"],
-                    limit_str="health_limit",
-                )
-
-                # settling non medical limit
-                health_limit_assignment_event(
-                    session=session,
-                    loan_id=user_card.loan_id,
-                    event=event,
-                    amount=settlement_limit["non_medical"],
-                    limit_str="available_limit",
-                )
 
     if payment_received > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
@@ -175,7 +155,7 @@ def find_amount_to_slide_in_bills(user_card: BaseCard, total_amount_to_slide: De
 
 
 def transaction_refund_event(
-    session: Session, user_card: BaseCard, event: LedgerTriggerEvent, bill: LoanData
+    session: Session, user_card: BaseLoan, event: LedgerTriggerEvent, bill: LoanData
 ) -> None:
     refund_amount = Decimal(event.amount)
     m2p_pool_account = f"{user_card.lender_id}/lender/pool_balance/a"
@@ -216,10 +196,10 @@ def transaction_refund_event(
         amount=Decimal(event.amount),
     )
 
-    # Slide payment in emi
-    from rush.create_emi import refresh_schedule
+    from rush.create_emi import group_bills_to_create_loan_schedule
 
-    refresh_schedule(user_card=user_card)
+    # Recreate loan level emis
+    group_bills_to_create_loan_schedule(user_card)
 
 
 def settle_payment_in_bank(
@@ -228,7 +208,7 @@ def settle_payment_in_bank(
     gateway_expenses: Decimal,
     gross_payment_amount: Decimal,
     settlement_date: DateTime,
-    user_card: BaseCard,
+    user_card: BaseLoan,
 ) -> None:
     settled_amount = gross_payment_amount - gateway_expenses
     event = LedgerTriggerEvent(
@@ -244,7 +224,7 @@ def settle_payment_in_bank(
 
 
 def payment_settlement_event(
-    session: Session, gateway_expenses: Decimal, user_card: BaseCard, event: LedgerTriggerEvent
+    session: Session, gateway_expenses: Decimal, user_card: BaseLoan, event: LedgerTriggerEvent
 ) -> None:
     if gateway_expenses > 0:  # Adjust for gateway expenses.
         create_ledger_entry_from_str(

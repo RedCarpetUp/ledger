@@ -8,10 +8,8 @@ from typing import (
 from pendulum import DateTime
 from sqlalchemy.orm.session import Session
 
-from rush.card import (
-    BaseCard,
-    RubyCard,
-)
+from rush.card.base_card import BaseLoan
+from rush.card.ruby_card import RubyCard
 from rush.create_bill import get_or_create_bill_for_card_swipe
 from rush.ledger_events import (
     card_transaction_event,
@@ -25,16 +23,17 @@ from rush.models import (
 
 def create_card_swipe(
     session: Session,
-    user_card: BaseCard,
+    user_card: BaseLoan,
     txn_time: DateTime,
     amount: Decimal,
     description: str,
     source: Optional[str] = "ECOM",
     mcc: Optional[str] = None,
 ) -> Dict[str, Any]:
-    if not hasattr(user_card, "card_activation_date"):
+    if not hasattr(user_card, "amortization_date") or not user_card.amortization_date:
         return {"result": "error", "message": "Card has not been activated"}
-    if txn_time.date() < user_card.card_activation_date:
+
+    if txn_time.date() < user_card.amortization_date:
         return {"result": "error", "message": "Transaction cannot happen before activation"}
     card_bill = get_or_create_bill_for_card_swipe(user_card, txn_time)
     if card_bill["result"] == "error":

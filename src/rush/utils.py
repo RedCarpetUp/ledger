@@ -51,7 +51,7 @@ def add_gst_split_to_amount(
 
 
 EMI_FORMULA_DICT = {
-    "card_id": None,
+    "loan_id": None,
     "due_date": None,
     "due_amount": Decimal(0),
     "total_due_amount": Decimal(0),

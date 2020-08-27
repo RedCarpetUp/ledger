@@ -3,10 +3,13 @@ from decimal import Decimal
 from typing import Optional
 
 from pendulum import DateTime
+from pendulum.constants import USECS_PER_SEC
 from sqlalchemy.orm import Session
 
-from rush.card import BaseCard
-from rush.card.base_card import BaseBill
+from rush.card.base_card import (
+    BaseBill,
+    BaseLoan,
+)
 from rush.ledger_events import (
     _adjust_bill,
     _adjust_for_prepayment,
@@ -21,6 +24,7 @@ from rush.ledger_utils import (
 )
 from rush.models import (
     BookAccount,
+    CardEmis,
     Fee,
     LedgerEntry,
     LedgerTriggerEvent,
@@ -46,7 +50,7 @@ def _get_total_outstanding(session, user_card):
 
 def can_remove_interest(
     session: Session,
-    user_card: BaseCard,
+    user_card: BaseLoan,
     interest_event: LedgerTriggerEvent,
     event_date: Optional[DateTime] = None,
 ) -> bool:
@@ -78,7 +82,7 @@ def can_remove_interest(
     return False
 
 
-def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_card: BaseCard) -> None:
+def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_card: BaseLoan) -> None:
     unpaid_bills = user_card.get_unpaid_bills()
     accrue_event = LedgerTriggerEvent(
         name="accrue_interest", loan_id=user_card.loan_id, post_date=post_date, amount=0
@@ -89,12 +93,8 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_car
         accrue_interest_event(session, bill, accrue_event, bill.table.interest_to_charge)
         accrue_event.amount += bill.table.interest_to_charge
 
-    from rush.create_emi import refresh_schedule
 
-    refresh_schedule(user_card)
-
-
-def is_late_fee_valid(session: Session, user_card: BaseCard) -> bool:
+def is_late_fee_valid(session: Session, user_card: BaseLoan) -> bool:
     """
     Late fee gets charged if user fails to pay the minimum due before the due date.
     We check if the min was paid before due date and there's late fee charged.
@@ -141,7 +141,7 @@ def create_fee_entry(
 
 def accrue_late_charges(
     session: Session,
-    user_card: BaseCard,
+    user_card: BaseLoan,
     post_date: DateTime,
     late_fee_to_charge_without_tax: Decimal = Decimal(100),
 ) -> BaseBill:
@@ -159,9 +159,11 @@ def accrue_late_charges(
         fee = create_fee_entry(session, latest_bill, event, "late_fee", late_fee_to_charge_without_tax)
         event.amount = fee.gross_amount
 
-        from rush.create_emi import refresh_schedule
+        session.flush()
 
-        refresh_schedule(user_card)
+        from rush.create_emi import adjust_late_fee_in_emis
+
+        adjust_late_fee_in_emis(session, user_card, latest_bill)
     return latest_bill
 
 
@@ -249,14 +251,14 @@ def reverse_interest_charges(
                 debit_book_str=entry["acc_to_remove_from"],
             )
 
-    from rush.create_emi import refresh_schedule
+    # from rush.create_emi import refresh_schedule
 
-    # Slide payment in emi
-    refresh_schedule(user_card=user_card)
+    # # Slide payment in emi
+    # refresh_schedule(user_card=user_card)
 
 
 def reverse_incorrect_late_charges(
-    session: Session, user_card: BaseCard, event_to_reverse: LedgerTriggerEvent
+    session: Session, user_card: BaseLoan, event_to_reverse: LedgerTriggerEvent
 ) -> None:
     event = LedgerTriggerEvent(
         name="reverse_late_charges",
@@ -313,7 +315,25 @@ def reverse_incorrect_late_charges(
                 )
     fee.fee_status = "REVERSED"
 
-    from rush.create_emi import refresh_schedule
+    # Adjust reversal of late fee in bill
+    emi = (
+        session.query(CardEmis)
+        .filter(
+            CardEmis.loan_id == user_card.loan_id,
+            CardEmis.bill_id == bill.id,
+            CardEmis.emi_number == 1,
+            CardEmis.row_status == "active",
+        )
+        .order_by(CardEmis.emi_number.asc())
+        .first()
+    )
+    if fee and fee.gross_amount > 0:
+        emi.total_closing_balance_post_due_date -= fee.gross_amount
+        emi.total_due_amount -= fee.gross_amount
+        emi.late_fee -= fee.gross_amount
+        session.flush()
 
-    # Slide payment in emi
-    refresh_schedule(user_card=user_card)
+    from rush.create_emi import group_bills_to_create_loan_schedule
+
+    # Recreate loan level emis
+    group_bills_to_create_loan_schedule(user_card)

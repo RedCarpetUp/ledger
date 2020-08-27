@@ -61,6 +61,35 @@ class AuditMixin(Base):
         }
         return d
 
+    @classmethod
+    def snapshot(
+        cls, session: Session, primary_key, new_data, skip_columns=("id", "created_at", "updated_at")
+    ):
+        assert hasattr(cls, "row_status") == True
+
+        old_row = (
+            session.query(cls)
+            .filter(
+                getattr(cls, primary_key) == new_data[primary_key],
+                getattr(cls, "row_status") == "active",
+            )
+            .with_for_update(skip_locked=True)
+            .one_or_none()
+        )
+        if old_row:
+            old_row.row_status = "inactive"
+            session.flush()
+
+        cls_keys = cls.__table__.columns.keys()
+        keys_to_skip = [key for key in new_data.keys() if key not in cls_keys]
+        new_skip_columns = keys_to_skip + list(skip_columns)
+        for column in new_skip_columns:
+            new_data.pop(column, None)
+
+        new_obj = cls.new(**new_data)
+        session.flush()
+        return new_obj
+
 
 def get_or_create(session: Session, model: Any, defaults: Dict[Any, Any] = None, **kwargs: str) -> Any:
     instance = session.query(model).filter_by(**kwargs).first()
@@ -200,10 +229,20 @@ class Loan(AuditMixin):
     user_id = Column(Integer, ForeignKey(User.id))
     amortization_date = Column(TIMESTAMP, nullable=False)
     loan_status = Column(String(), nullable=False)
+    product_type = Column(String(), nullable=False)
     product_id = Column(Integer, ForeignKey(Product.id))
     lender_id = Column(Integer, ForeignKey(Lenders.id), nullable=False)
     rc_rate_of_interest_monthly = Column(Numeric, nullable=False)
     lender_rate_of_interest_annual = Column(Numeric, nullable=False)
+    interest_free_period_in_days = Column(Integer, default=45, nullable=True)
+
+    dpd = Column(Integer, nullable=True)
+    ever_dpd = Column(Integer, nullable=True)
+
+    __mapper_args__ = {
+        "polymorphic_identity": "loan",
+        "polymorphic_on": product_type,
+    }
 
 
 @py_dataclass
@@ -303,39 +342,8 @@ class LedgerEntryPy(AuditMixinPy):
     credit_account: int
     amount: Decimal
     business_date: DateTime
-
-    # class UserCard(AuditMixin):
-    #     __tablename__ = "user_card"
-    #     user_id = Column(Integer, ForeignKey(User.id), nullable=False)
-    #     lender_id = Column(Integer, ForeignKey(Lenders.id), nullable=False)
-    #     card_type = Column(String, nullable=False)
-    #     card_activation_date = Column(Date, nullable=True)
-    #     statement_period_in_days = Column(Integer, default=30, nullable=False)  # 30 days
-    #     interest_free_period_in_days = Column(Integer, default=45, nullable=False)
-    #     rc_rate_of_interest_monthly = Column(Numeric, nullable=False)
-    #     lender_rate_of_interest_annual = Column(Numeric, nullable=False)
-    #     dpd = Column(Integer, nullable=True)
-
-    # class Loan(AuditMixin):
-    #     __tablename__ = "v3_loans"
-
     user_id = Column(Integer, ForeignKey(User.id), nullable=False)
     is_deleted = Column(Boolean, nullable=True)
-
-    # histories = relationship("LoanData", foreign_keys="LoanData.loan_id")
-    # latest = relationship(
-    #     "LoanData",
-    #     lazy="joined",
-    #     uselist=False,
-    #     primaryjoin="and_(Loan.id==LoanData.loan_id, LoanData.row_status=='active')",
-    # )
-
-    # emi_histories = relationship("EmiData")
-    # emis_latest = relationship(
-    #     "EmiData", primaryjoin="and_(Loan.id==EmiData.loan_id, EmiData.row_status=='active')"
-    # )
-
-    # __table_args__ = (Index("index_on_v3_loans_user_id_and_id", user_id, "id"),)
 
 
 class CardNames(AuditMixin):
@@ -450,6 +458,7 @@ class CardTransaction(AuditMixin):
 class CardEmis(AuditMixin):
     __tablename__ = "card_emis"
     loan_id = Column(Integer, ForeignKey(Loan.id))
+    bill_id = Column(Integer, ForeignKey(LoanData.id), nullable=True)
     due_date = Column(TIMESTAMP, nullable=False)
     due_amount = Column(Numeric, nullable=False, default=Decimal(0))
     total_due_amount = Column(Numeric, nullable=False, default=Decimal(0))

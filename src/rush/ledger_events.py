@@ -7,8 +7,10 @@ from typing import (
 from sqlalchemy import Date
 from sqlalchemy.orm import Session
 
-from rush.card import BaseCard
-from rush.card.base_card import BaseBill
+from rush.card.base_card import (
+    BaseBill,
+    BaseLoan,
+)
 from rush.ledger_utils import (
     create_ledger_entry_from_str,
     get_account_balance_from_str,
@@ -17,6 +19,7 @@ from rush.models import (
     CardTransaction,
     Fee,
     LedgerTriggerEvent,
+    Loan,
     LoanData,
     UserCard,
 )
@@ -45,7 +48,7 @@ def m2p_transfer_event(session: Session, event: LedgerTriggerEvent, lender_id: i
     )
 
 
-def disburse_money_to_card(session: Session, user_card: BaseCard, event: LedgerTriggerEvent) -> None:
+def disburse_money_to_card(session: Session, user_card: BaseLoan, event: LedgerTriggerEvent) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
@@ -56,7 +59,7 @@ def disburse_money_to_card(session: Session, user_card: BaseCard, event: LedgerT
 
 
 def card_transaction_event(
-    session: Session, user_card: BaseCard, event: LedgerTriggerEvent, mcc: Optional[str] = None
+    session: Session, user_card: BaseLoan, event: LedgerTriggerEvent, mcc: Optional[str] = None
 ) -> None:
     amount = Decimal(event.amount)
     swipe_id = event.extra_details["swipe_id"]
@@ -99,7 +102,7 @@ def card_transaction_event(
 
 
 def bill_generate_event(
-    session: Session, bill: BaseBill, user_card: BaseCard, event: LedgerTriggerEvent
+    session: Session, bill: BaseBill, user_card: BaseLoan, event: LedgerTriggerEvent
 ) -> None:
     bill_id = bill.id
 
@@ -140,6 +143,39 @@ def add_min_amount_event(
         credit_book_str=f"{bill.id}/bill/min/l",
         amount=amount,
     )
+
+
+def payment_received_event(
+    session: Session, user_card: BaseLoan, debit_book_str: str, event: LedgerTriggerEvent
+) -> None:
+    payment_received = Decimal(event.amount)
+    if event.name == "merchant_refund":
+        pass
+    elif event.name == "payment_received":
+        unpaid_bills = user_card.get_unpaid_bills()
+        actual_payment = payment_received
+        payment_received = _adjust_for_min(
+            session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str,
+        )
+        payment_received = _adjust_for_complete_bill(
+            session, unpaid_bills, payment_received, event.id, debit_book_str=debit_book_str,
+        )
+
+        if user_card.should_reinstate_limit_on_payment:
+            user_card.reinstate_limit_on_payment(event=event, amount=actual_payment)
+
+    if payment_received > 0:  # if there's payment left to be adjusted.
+        _adjust_for_prepayment(
+            session=session,
+            loan_id=user_card.loan_id,
+            event_id=event.id,
+            amount=payment_received,
+            debit_book_str=debit_book_str,
+        )
+
+    from rush.create_emi import slide_payments
+
+    slide_payments(user_card=user_card, payment_event=event)
 
 
 def _adjust_bill(
@@ -224,7 +260,6 @@ def _adjust_bill(
         return payment_to_adjust_from
 
     remaining_amount = amount_to_adjust_in_this_bill
-
     fees = session.query(Fee).filter(Fee.bill_id == bill.id, Fee.fee_status == "UNPAID").all()
     for fee in fees:
         remaining_amount = adjust_for_revenue(remaining_amount, debit_acc_str, fee)
@@ -255,9 +290,6 @@ def _adjust_for_complete_bill(
 def _adjust_for_prepayment(
     session: Session, loan_id: int, event_id: int, amount: Decimal, debit_book_str: str
 ) -> None:
-    print("####################")
-    print(loan_id, amount)
-    print("####################")
     create_ledger_entry_from_str(
         session,
         event_id=event_id,
@@ -308,17 +340,19 @@ def customer_refund_event(
     )
 
 
-def limit_assignment_event(session: Session, loan_id: int, event: LedgerTriggerEvent) -> None:
+def limit_assignment_event(
+    session: Session, loan_id: int, event: LedgerTriggerEvent, amount: Decimal
+) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
         debit_book_str=f"{loan_id}/card/available_limit/a",
         credit_book_str=f"{loan_id}/card/available_limit/l",
-        amount=Decimal(event.amount),
+        amount=amount,
     )
 
 
-def daily_dpd_event(session: Session, user_card: BaseCard) -> None:
+def daily_dpd_event(session: Session, user_card: BaseLoan) -> None:
     from rush.utils import get_current_ist_time
 
     event = LedgerTriggerEvent(
@@ -328,13 +362,21 @@ def daily_dpd_event(session: Session, user_card: BaseCard) -> None:
     session.flush()
 
 
-def health_limit_assignment_event(
-    session: Session, loan_id: int, event: LedgerTriggerEvent, amount: Decimal, limit_str: str
+def loan_disbursement_event(
+    session: Session, loan: Loan, event: LedgerTriggerEvent, bill_id: int
 ) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
-        debit_book_str=f"{loan_id}/card/{limit_str}/a",
-        credit_book_str=f"{loan_id}/card/{limit_str}/l",
-        amount=amount,
+        debit_book_str=f"{bill_id}/bill/principal_receivable/a",
+        credit_book_str=f"12345/redcarpet/rc_cash/a",  # TODO: confirm if this right.
+        amount=event.amount,
+    )
+
+    create_ledger_entry_from_str(
+        session,
+        event_id=event.id,
+        debit_book_str=f"{loan.lender_id}/lender/lender_capital/l",
+        credit_book_str=f"{loan.loan_id}/loan/lender_payable/l",
+        amount=event.amount,
     )

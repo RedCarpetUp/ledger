@@ -103,8 +103,32 @@ def upgrade() -> None:
     """
     )
 
+    op.execute(
+        """
+    create function get_account_balance_between_periods(
+      identifier integer, identifier_type char, 
+      book_name char, account_type char, from_date timestamp, till_date timestamp DEFAULT now() at time zone 'Asia/Kolkata'
+    ) RETURNS numeric as $$ with book as (
+      select 
+        * 
+      from 
+        book_account 
+      where 
+        identifier = $1 
+        and identifier_type = $2 
+        and book_name = $3 
+        and account_type = $4
+    ) 
+    select 
+      get_account_balance_between_periods_by_book_id(id, $5, $6) as account_balance 
+    from book
+    $$ language SQL;
+    """
+    )
+
 
 def downgrade() -> None:
     op.execute("DROP FUNCTION get_account_balance_by_book_id")
     op.execute("DROP FUNCTION get_account_balance_between_periods_by_book_id")
     op.execute("DROP FUNCTION get_account_balance")
+    op.execute("DROP FUNCTION get_account_balance_between_periods")

@@ -5,12 +5,15 @@ from pendulum import DateTime
 from sqlalchemy.orm import Session
 
 from rush.accrue_financial_charges import create_fee_entry
-from rush.card import BaseCard
-from rush.card.base_card import BaseBill
+from rush.card.base_card import (
+    BaseBill,
+    BaseLoan,
+)
 from rush.ledger_events import bill_generate_event
 from rush.ledger_utils import get_account_balance_from_str
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
+    CardEmis,
     LedgerTriggerEvent,
     LoanMoratorium,
 )
@@ -21,7 +24,7 @@ from rush.utils import (
 )
 
 
-def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -> BaseBill:
+def get_or_create_bill_for_card_swipe(user_card: BaseLoan, txn_time: DateTime) -> BaseBill:
     # Get the most recent bill
     last_bill = user_card.get_latest_bill()
     txn_date = txn_time.date()
@@ -32,7 +35,7 @@ def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -
             return {"result": "success", "bill": last_bill}
         new_bill_date = last_bill.bill_close_date
     else:
-        new_bill_date = user_card.table.card_activation_date
+        new_bill_date = user_card.amortization_date
     new_closing_date = new_bill_date + relativedelta(months=1)
     # Check if some months of bill generation were skipped and if they were then generate their bills
     months_diff = (txn_date.year - new_closing_date.year) * 12 + txn_date.month - new_closing_date.month
@@ -58,7 +61,7 @@ def get_or_create_bill_for_card_swipe(user_card: BaseCard, txn_time: DateTime) -
     return {"result": "success", "bill": new_bill}
 
 
-def bill_generate(user_card: BaseCard) -> BaseBill:
+def bill_generate(user_card: BaseLoan) -> BaseBill:
     session = user_card.session
     bill = user_card.get_latest_bill_to_generate()  # Get the first bill which is not generated.
     if not bill:
@@ -96,20 +99,22 @@ def bill_generate(user_card: BaseCard) -> BaseBill:
         # After the bill has generated. Call the min generation event on all unpaid bills.
         add_min_to_all_bills(session, bill_closing_date, user_card)
 
+    from rush.create_emi import create_emis_for_bill
+
+    create_emis_for_bill(session, user_card, bill)
+
     atm_transactions_sum = bill.sum_of_atm_transactions()
     if atm_transactions_sum > 0:
-        add_atm_fee(session, bill, bill.table.bill_close_date, atm_transactions_sum)
-
-    from rush.create_emi import refresh_schedule
-
-    refresh_schedule(user_card)
+        add_atm_fee(session, bill, bill.table.bill_close_date, atm_transactions_sum, user_card)
 
     return bill
 
 
-def extend_tenure(session: Session, user_card: BaseCard, new_tenure: int) -> None:
-    unpaid_bills = user_card.get_unpaid_bills()
-    for bill in unpaid_bills:
+def extend_tenure(
+    session: Session, user_card: BaseLoan, new_tenure: int, post_date: DateTime, bill: BaseBill = None
+) -> None:
+    def extension(bill: BaseBill):
+        list_of_bills.append(bill.id)
         bill.table.bill_tenure = new_tenure
         principal_instalment = div(bill.table.principal, bill.table.bill_tenure)
         # Update the bill rows here
@@ -117,15 +122,63 @@ def extend_tenure(session: Session, user_card: BaseCard, new_tenure: int) -> Non
         bill.table.interest_to_charge = bill.get_interest_to_charge(
             user_card.rc_rate_of_interest_monthly
         )
-    session.flush()
-    # Refresh the schedule
-    from rush.create_emi import refresh_schedule
 
-    refresh_schedule(user_card)
+        # Get all emis of the bill
+        all_emis = (
+            session.query(CardEmis)
+            .filter(
+                CardEmis.loan_id == user_card.id,
+                CardEmis.row_status == "active",
+                CardEmis.bill_id == bill.id,
+            )
+            .order_by(CardEmis.emi_number.asc())
+            .all()
+        )
+        for emi in all_emis:
+            if emi.due_date >= post_date.date():
+                emi.row_status = "inactive"
+
+        # Get emis pre post date. This is done to get per bill amount till date as well
+        bill_accumalation_till_date = Decimal(0)
+        pre_post_date_emis = [emi for emi in all_emis if emi.due_date < post_date.date()]
+        for emi in pre_post_date_emis:
+            if not emi.extra_details.get("moratorium"):
+                bill_accumalation_till_date += emi.due_amount
+        last_active_emi = pre_post_date_emis[-1]
+
+        from rush.create_emi import create_emis_for_bill
+
+        create_emis_for_bill(session, user_card, bill, last_active_emi, bill_accumalation_till_date)
+
+    list_of_bills = []
+    if not bill:
+        unpaid_bills = user_card.get_unpaid_bills()
+        for unpaid_bill in unpaid_bills:
+            extension(unpaid_bill)
+    else:
+        extension(bill)
+
+    event = LedgerTriggerEvent(
+        name="tenure_extended",
+        loan_id=user_card.id,
+        post_date=post_date,
+        extra_details={"bills": list_of_bills},
+    )
+    session.add(event)
+    session.flush()
+
+    # Recreate loan level emis
+    from rush.create_emi import group_bills_to_create_loan_schedule
+
+    group_bills_to_create_loan_schedule(user_card)
 
 
 def add_atm_fee(
-    session: Session, bill: BaseBill, post_date: DateTime, atm_transactions_amount: Decimal,
+    session: Session,
+    bill: BaseBill,
+    post_date: DateTime,
+    atm_transactions_amount: Decimal,
+    user_card: BaseLoan,
 ) -> None:
     atm_fee_perc = Decimal(2)
     atm_fee_without_gst = mul(atm_transactions_amount / 100, atm_fee_perc)
@@ -136,3 +189,7 @@ def add_atm_fee(
 
     fee = create_fee_entry(session, bill, event, "atm_fee", atm_fee_without_gst)
     event.amount = fee.gross_amount
+
+    from rush.create_emi import adjust_atm_fee_in_emis
+
+    adjust_atm_fee_in_emis(session, user_card, bill)

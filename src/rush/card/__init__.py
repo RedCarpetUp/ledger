@@ -1,64 +1,79 @@
 from decimal import Decimal
+from typing import Any
 
-from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
-from rush.card.base_card import BaseCard
-from rush.card.health_card import (
-    HealthBill,
-    HealthCard,
-)
-from rush.card.ruby_card import (
-    RubyBill,
-    RubyCard,
-)
-from rush.card.utils import get_product_id_from_card_type
+# for now, these imports are required by get_product_class method to fetch all class within card module.
+from rush.card.base_card import BaseLoan
+from rush.card.health_card import HealthCard
+from rush.card.ruby_card import RubyCard
+from rush.card.term_loan import TermLoan
+from rush.ledger_events import limit_assignment_event
 from rush.models import (
+    LedgerTriggerEvent,
     Loan,
     Product,
     UserCard,
 )
+from rush.utils import get_current_ist_time
 
 
-def get_user_card(session: Session, user_id: int, card_type: str = "ruby") -> BaseCard:
-    user_card, loan = (
-        session.query(UserCard, Loan)
+def get_user_product(session: Session, user_id: int, card_type: str = "ruby") -> Loan:
+    user_card = (
+        session.query(Loan)
         .join(Product, and_(Product.product_name == card_type, Product.id == Loan.product_id))
-        .filter(
-            Loan.id == UserCard.loan_id,
-            Loan.user_id == UserCard.user_id,
-            UserCard.user_id == user_id,
-            UserCard.card_type == card_type,
-        )
+        .filter(Loan.user_id == user_id, Loan.product_type == card_type)
         .one()
     )
 
-    if user_card.card_type == "ruby":
-        return RubyCard(session=session, bill_class=RubyBill, user_card=user_card, loan=loan)
-    elif user_card.card_type == "health_card":
-        return HealthCard(session=session, bill_class=HealthBill, user_card=user_card, loan=loan)
+    user_card.prepare(session=session)
+    return user_card
 
 
-def create_user_card(session: Session, **kwargs) -> BaseCard:
-    loan = Loan(
-        user_id=kwargs["user_id"],
-        product_id=get_product_id_from_card_type(session=session, card_type=kwargs["card_type"]),
-        lender_id=kwargs.pop("lender_id"),
-        rc_rate_of_interest_monthly=kwargs.get("rc_rate_of_interest_monthly", Decimal(3)),
-        lender_rate_of_interest_annual=kwargs.get("lender_rate_of_interest_annual", Decimal(18)),
+def create_user_product(session: Session, **kwargs) -> Loan:
+    loan = get_product_class(card_type=kwargs["card_type"]).create(session=session, **kwargs)
+    return loan
+
+
+def get_product_class(card_type: str) -> Any:
+    """
+        Only classes imported within this file will be listed here.
+        Make sure to import every Product class.
+    """
+
+    for kls in BaseLoan.__subclasses__():
+        if hasattr(kls, "__mapper_args__") and kls.__mapper_args__["polymorphic_identity"] == card_type:
+            return kls
+    else:
+        raise Exception("NoValidProductImplementation")
+
+
+def activate_card(session: Session, user_loan: BaseLoan, user_card: UserCard) -> None:
+    event = LedgerTriggerEvent(
+        name="card_activation",
+        loan_id=user_loan.loan_id,
+        amount=Decimal("0"),
+        post_date=get_current_ist_time().date(),
+        extra_details={},
     )
-    session.add(loan)
+
+    session.add(event)
     session.flush()
 
-    kwargs["loan_id"] = loan.id
+    user_loan.amortization_date = get_current_ist_time().date()
+    user_card.card_activation_date = user_loan.amortization_date
 
-    uc = UserCard(**kwargs)
-    session.add(uc)
-    session.flush()
 
-    if uc.card_type == "ruby":
-        return RubyCard(session=session, bill_class=RubyBill, user_card=uc, loan=loan)
-    elif uc.card_type == "health_card":
-        return HealthCard(session=session, bill_class=HealthBill, user_card=uc, loan=loan)
-    return uc
+def disburse_card(
+    session: Session, user_loan: BaseLoan, amount: Decimal, payment_request_id: str
+) -> None:
+    event = LedgerTriggerEvent(
+        name="card_disbursal",
+        loan_id=user_loan.loan_id,
+        amount=amount,
+        post_date=get_current_ist_time().date(),
+        extra_details={"payment_request_id": payment_request_id},
+    )
+
+    limit_assignment_event(session=session, loan_id=user_loan.loan_id, event=event, amount=amount)

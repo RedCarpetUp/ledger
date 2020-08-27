@@ -100,6 +100,10 @@ def upgrade() -> None:
         sa.Column("loan_status", sa.String(50), nullable=True),  # TODO: change back to nullable=False
         sa.Column("product_id", sa.Integer(), nullable=False),
         sa.Column("lender_id", sa.Integer(), nullable=False),
+        sa.Column("product_type", sa.String(), nullable=False),
+        sa.Column("dpd", sa.Integer, nullable=True),
+        sa.Column("ever_dpd", sa.Integer, nullable=True),
+        sa.Column("interest_free_period_in_days", sa.Integer, nullable=True),
         sa.Column("rc_rate_of_interest_monthly", sa.Numeric(), nullable=False),
         sa.Column("lender_rate_of_interest_annual", sa.Numeric(), nullable=False),
         sa.ForeignKeyConstraint(["lender_id"], ["rc_lenders.id"], name="fk_v3_user_cards_lender_id"),
@@ -227,6 +231,7 @@ def upgrade() -> None:
     op.create_table(
         "card_emis",
         sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("bill_id", sa.Integer(), nullable=True),
         sa.Column("due_date", sa.Date(), nullable=True),
         sa.Column("due_amount", sa.DECIMAL(), nullable=False),
         sa.Column("total_due_amount", sa.DECIMAL(), nullable=False),
@@ -252,6 +257,7 @@ def upgrade() -> None:
         sa.Column("loan_id", sa.Integer(), nullable=False),
         sa.Column("extra_details", sa.JSON(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
+        sa.ForeignKeyConstraint(["bill_id"], ["loan_data.id"], name="fk_card_emis_bill_id"),
         sa.ForeignKeyConstraint(["loan_id"], ["loan.id"], name="fk_card_emis_loan_id"),
     )
 
