@@ -14,7 +14,7 @@ from sqlalchemy import func
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Session
 
-from rush.card.utils import create_user_product
+from rush.card.utils import create_user_product_mapping
 from rush.ledger_utils import (
     get_remaining_bill_balance,
     is_bill_closed,
@@ -120,7 +120,7 @@ class BaseLoan(Loan):
     def create(cls, session: Session, **kwargs) -> Loan:
         user_product_id = kwargs.get("user_product_id")
         if not user_product_id:
-            user_product_id = create_user_product(
+            user_product_id = create_user_product_mapping(
                 session=session, user_id=kwargs["user_id"], product_type=kwargs["card_type"]
             ).id
 

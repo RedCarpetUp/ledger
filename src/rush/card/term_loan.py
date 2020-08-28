@@ -4,7 +4,7 @@ from dateutil.relativedelta import relativedelta
 from sqlalchemy.orm import Session
 
 from rush.card.base_card import BaseLoan
-from rush.card.utils import create_user_product
+from rush.card.utils import create_user_product_mapping
 from rush.ledger_events import loan_disbursement_event
 from rush.models import (
     LedgerTriggerEvent,
@@ -27,7 +27,7 @@ class TermLoan(BaseLoan):
     def create(cls, session: Session, **kwargs) -> Loan:
         user_product_id = kwargs.get("user_product_id")
         if not user_product_id:
-            user_product_id = create_user_product(
+            user_product_id = create_user_product_mapping(
                 session=session, user_id=kwargs["user_id"], product_type=kwargs["card_type"]
             ).id
 

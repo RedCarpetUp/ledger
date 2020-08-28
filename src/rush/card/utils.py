@@ -29,7 +29,7 @@ def get_product_id_from_card_type(session: Session, card_type: str) -> int:
     )
 
 
-def create_user_product(session: Session, user_id: int, product_type: str) -> UserProduct:
+def create_user_product_mapping(session: Session, user_id: int, product_type: str) -> UserProduct:
     user_product = UserProduct(user_id=user_id, product_type=product_type)
     session.add(user_product)
     session.flush()
@@ -64,7 +64,7 @@ def add_pre_product_fee(
     session.flush()
 
     if user_product_id is None:
-        user_product_id = create_user_product(
+        user_product_id = create_user_product_mapping(
             session=session, user_id=user_id, product_type=product_type
         ).id
 
