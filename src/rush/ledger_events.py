@@ -52,18 +52,18 @@ def m2p_transfer_event(session: Session, event: LedgerTriggerEvent, lender_id: i
     )
 
 
-def disburse_money_to_card(session: Session, user_card: BaseLoan, event: LedgerTriggerEvent) -> None:
+def disburse_money_to_card(session: Session, user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
-        debit_book_str=f"{user_card.loan_id}/card/card_balance/a",
-        credit_book_str=f"{user_card.lender_id}/lender/pool_balance/a",
+        debit_book_str=f"{user_loan.loan_id}/card/card_balance/a",
+        credit_book_str=f"{user_loan.lender_id}/lender/pool_balance/a",
         amount=event.amount,
     )
 
 
 def card_transaction_event(
-    session: Session, user_card: BaseLoan, event: LedgerTriggerEvent, mcc: Optional[str] = None
+    session: Session, user_loan: BaseLoan, event: LedgerTriggerEvent, mcc: Optional[str] = None
 ) -> None:
     amount = Decimal(event.amount)
     swipe_id = event.extra_details["swipe_id"]
@@ -72,10 +72,10 @@ def card_transaction_event(
         .filter(LoanData.id == CardTransaction.loan_id, CardTransaction.id == swipe_id)
         .scalar()
     )
-    lender_id = user_card.lender_id
+    lender_id = user_loan.lender_id
     bill_id = bill.id
 
-    user_books_prefix_str = f"{user_card.loan_id}/card/{user_card.get_limit_type(mcc=mcc)}"
+    user_books_prefix_str = f"{user_loan.loan_id}/card/{user_loan.get_limit_type(mcc=mcc)}"
 
     # Reduce user's card balance
     create_ledger_entry_from_str(
@@ -91,7 +91,7 @@ def card_transaction_event(
         session,
         event_id=event.id,
         debit_book_str=f"{lender_id}/lender/lender_capital/l",
-        credit_book_str=f"{user_card.loan_id}/loan/lender_payable/l",
+        credit_book_str=f"{user_loan.loan_id}/loan/lender_payable/l",
         amount=amount,
     )
 
@@ -100,18 +100,20 @@ def card_transaction_event(
         session,
         event_id=event.id,
         debit_book_str=f"{bill_id}/bill/unbilled/a",
-        credit_book_str=f"{user_card.loan_id}/card/card_balance/a",
+        credit_book_str=f"{user_loan.loan_id}/card/card_balance/a",
         amount=amount,
     )
 
 
 def bill_generate_event(
-    session: Session, bill: BaseBill, user_card: BaseLoan, event: LedgerTriggerEvent
+    session: Session, bill: BaseBill, user_loan: BaseLoan, event: LedgerTriggerEvent
 ) -> None:
     bill_id = bill.id
 
     # Move all unbilled book amount to billed account
-    _, unbilled_balance = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
+    _, unbilled_balance = get_account_balance_from_str(
+        session=session, book_string=f"{bill_id}/bill/unbilled/a"
+    )
 
     create_ledger_entry_from_str(
         session,
@@ -123,15 +125,15 @@ def bill_generate_event(
 
     # checking prepayment_balance
     _, prepayment_balance = get_account_balance_from_str(
-        session, book_string=f"{user_card.loan_id}/loan/pre_payment/l"
+        session=session, book_string=f"{user_loan.loan_id}/loan/pre_payment/l"
     )
     if prepayment_balance > 0:
         balance = min(unbilled_balance, prepayment_balance)
         # reducing balance from pre payment and unbilled
         create_ledger_entry_from_str(
-            session,
+            session=session,
             event_id=event.id,
-            debit_book_str=f"{user_card.loan_id}/loan/pre_payment/l",
+            debit_book_str=f"{user_loan.loan_id}/loan/pre_payment/l",
             credit_book_str=f"{bill_id}/bill/principal_receivable/a",
             amount=balance,
         )
@@ -150,36 +152,36 @@ def add_min_amount_event(
 
 
 def payment_received_event(
-    session: Session, user_card: BaseLoan, debit_book_str: str, event: LedgerTriggerEvent
+    session: Session, user_loan: BaseLoan, debit_book_str: str, event: LedgerTriggerEvent
 ) -> None:
     payment_received = Decimal(event.amount)
     if event.name == "merchant_refund":
         pass
     elif event.name == "payment_received":
-        unpaid_bills = user_card.get_unpaid_bills()
+        unpaid_bills = user_loan.get_unpaid_bills()
         actual_payment = payment_received
         payment_received = _adjust_for_min(
-            session,
-            unpaid_bills,
-            payment_received,
-            event.id,
+            session=session,
+            bills=unpaid_bills,
+            payment_received=payment_received,
+            event_id=event.id,
             debit_book_str=debit_book_str,
         )
         payment_received = _adjust_for_complete_bill(
-            session,
-            unpaid_bills,
-            payment_received,
-            event.id,
+            session=session,
+            bills=unpaid_bills,
+            payment_received=payment_received,
+            event_id=event.id,
             debit_book_str=debit_book_str,
         )
 
-        if user_card.should_reinstate_limit_on_payment:
-            user_card.reinstate_limit_on_payment(event=event, amount=actual_payment)
+        if user_loan.should_reinstate_limit_on_payment:
+            user_loan.reinstate_limit_on_payment(event=event, amount=actual_payment)
 
     if payment_received > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
             session=session,
-            loan_id=user_card.loan_id,
+            loan_id=user_loan.loan_id,
             event_id=event.id,
             amount=payment_received,
             debit_book_str=debit_book_str,
@@ -187,7 +189,7 @@ def payment_received_event(
 
     from rush.create_emi import slide_payments
 
-    slide_payments(user_card=user_card, payment_event=event)
+    slide_payments(user_loan=user_loan, payment_event=event)
 
 
 def _adjust_bill(
@@ -434,11 +436,11 @@ def limit_assignment_event(
     )
 
 
-def daily_dpd_event(session: Session, user_card: BaseLoan) -> None:
+def daily_dpd_event(session: Session, user_loan: BaseLoan) -> None:
     from rush.utils import get_current_ist_time
 
     event = LedgerTriggerEvent(
-        name="daily_dpd", post_date=get_current_ist_time(), loan_id=user_card.loan_id, amount=0
+        name="daily_dpd", post_date=get_current_ist_time(), loan_id=user_loan.loan_id, amount=0
     )
     session.add(event)
     session.flush()

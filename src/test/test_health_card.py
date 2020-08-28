@@ -63,7 +63,7 @@ def create_user(session: Session) -> None:
     session.flush()
 
 
-def create_test_user_card(session: Session) -> HealthCard:
+def create_test_user_loan(session: Session) -> HealthCard:
     uc = create_user_product(
         session=session,
         user_id=3,
@@ -80,26 +80,26 @@ def test_create_health_card(session: Session) -> None:
     create_lenders(session=session)
     card_db_updates(session=session)
     create_user(session=session)
-    uc = create_test_user_card(session=session)
+    uc = create_test_user_loan(session=session)
 
     assert uc.product_type == "health_card"
     assert uc.get_limit_type(mcc="8011") == "health_limit"
     assert uc.get_limit_type(mcc="5555") == "available_limit"
     assert uc.should_reinstate_limit_on_payment == True
 
-    user_card = get_user_product(session=session, user_id=uc.user_id, card_type="health_card")
-    assert isinstance(user_card, HealthCard) == True
+    user_loan = get_user_product(session=session, user_id=uc.user_id, card_type="health_card")
+    assert isinstance(user_loan, HealthCard) == True
 
 
 def test_medical_health_card_swipe(session: Session) -> None:
     create_lenders(session=session)
     card_db_updates(session=session)
     create_user(session=session)
-    uc = create_test_user_card(session=session)
+    uc = create_test_user_loan(session=session)
 
     swipe = create_card_swipe(
         session=session,
-        user_card=uc,
+        user_loan=uc,
         txn_time=parse_date("2020-07-11 18:30:10"),
         amount=Decimal(700),
         description="Amazon.com",
@@ -131,11 +131,11 @@ def test_mixed_health_card_swipe(session: Session) -> None:
     create_lenders(session=session)
     card_db_updates(session=session)
     create_user(session=session)
-    uc = create_test_user_card(session=session)
+    uc = create_test_user_loan(session=session)
 
     medical_swipe = create_card_swipe(
         session=session,
-        user_card=uc,
+        user_loan=uc,
         txn_time=parse_date("2020-07-11 18:30:10"),
         amount=Decimal(1500),
         description="Max Hospital",
@@ -145,7 +145,7 @@ def test_mixed_health_card_swipe(session: Session) -> None:
 
     non_medical_swipe = create_card_swipe(
         session=session,
-        user_card=uc,
+        user_loan=uc,
         txn_time=parse_date("2020-07-11 18:30:10"),
         amount=Decimal(700),
         description="Amazon.com",
@@ -176,11 +176,11 @@ def test_generate_health_card_bill_1(session: Session) -> None:
     card_db_updates(session=session)
     create_user(session=session)
 
-    uc = create_test_user_card(session=session)
+    uc = create_test_user_loan(session=session)
 
     swipe = create_card_swipe(
         session=session,
-        user_card=uc,
+        user_loan=uc,
         txn_time=parse_date("2020-07-08 19:23:11"),
         amount=Decimal(1000),
         description="Amazon.com",
@@ -231,11 +231,11 @@ def test_generate_health_card_bill_2(session: Session) -> None:
     create_lenders(session=session)
     card_db_updates(session=session)
     create_user(session=session)
-    uc = create_test_user_card(session=session)
+    uc = create_test_user_loan(session=session)
 
     swipe = create_card_swipe(
         session=session,
-        user_card=uc,
+        user_loan=uc,
         txn_time=parse_date("2020-07-08 19:23:11"),
         amount=Decimal(1000),
         description="Amazon.com",
@@ -285,11 +285,11 @@ def test_generate_health_card_bill_3(session: Session) -> None:
     create_lenders(session=session)
     card_db_updates(session=session)
     create_user(session=session)
-    uc = create_test_user_card(session=session)
+    uc = create_test_user_loan(session=session)
 
     medical_swipe = create_card_swipe(
         session=session,
-        user_card=uc,
+        user_loan=uc,
         txn_time=parse_date("2020-07-08 19:23:11"),
         amount=Decimal(1000),
         description="Apollo Hospital",
@@ -299,7 +299,7 @@ def test_generate_health_card_bill_3(session: Session) -> None:
 
     non_medical_swipe = create_card_swipe(
         session=session,
-        user_card=uc,
+        user_loan=uc,
         txn_time=parse_date("2020-07-09 19:23:11"),
         amount=Decimal(1500),
         description="Amazon.com",
@@ -353,11 +353,11 @@ def test_mixed_payment_received(session: Session) -> None:
     create_lenders(session=session)
     card_db_updates(session=session)
     create_user(session=session)
-    uc = create_test_user_card(session=session)
+    uc = create_test_user_loan(session=session)
 
     medical_swipe = create_card_swipe(
         session=session,
-        user_card=uc,
+        user_loan=uc,
         txn_time=parse_date("2020-07-08 19:23:11"),
         amount=Decimal(1000),
         description="Apollo Hospital",
@@ -367,7 +367,7 @@ def test_mixed_payment_received(session: Session) -> None:
 
     non_medical_swipe = create_card_swipe(
         session=session,
-        user_card=uc,
+        user_loan=uc,
         txn_time=parse_date("2020-07-09 19:23:11"),
         amount=Decimal(1500),
         description="Amazon.com",
@@ -429,7 +429,7 @@ def test_mixed_payment_received(session: Session) -> None:
 
     payment_received(
         session=session,
-        user_card=uc,
+        user_loan=uc,
         payment_amount=amount,
         payment_date=payment_date,
         payment_request_id="mixed_payment",
@@ -448,11 +448,11 @@ def test_medical_payment_received(session: Session) -> None:
     create_lenders(session=session)
     card_db_updates(session=session)
     create_user(session=session)
-    uc = create_test_user_card(session=session)
+    uc = create_test_user_loan(session=session)
 
     medical_swipe = create_card_swipe(
         session=session,
-        user_card=uc,
+        user_loan=uc,
         txn_time=parse_date("2020-07-08 19:23:11"),
         amount=Decimal(1000),
         description="Apollo Hospital",
@@ -508,7 +508,7 @@ def test_medical_payment_received(session: Session) -> None:
 
     payment_received(
         session=session,
-        user_card=uc,
+        user_loan=uc,
         payment_amount=Decimal(700),
         payment_date=parse_date("2020-08-03"),
         payment_request_id="medical_payment",
@@ -527,11 +527,11 @@ def test_non_medical_payment_received(session: Session) -> None:
     create_lenders(session=session)
     card_db_updates(session=session)
     create_user(session=session)
-    uc = create_test_user_card(session=session)
+    uc = create_test_user_loan(session=session)
 
     non_medical_swipe = create_card_swipe(
         session=session,
-        user_card=uc,
+        user_loan=uc,
         txn_time=parse_date("2020-07-09 19:23:11"),
         amount=Decimal(1500),
         description="Amazon.com",
@@ -589,7 +589,7 @@ def test_non_medical_payment_received(session: Session) -> None:
 
     payment_received(
         session=session,
-        user_card=uc,
+        user_loan=uc,
         payment_amount=amount,
         payment_date=payment_date,
         payment_request_id="non_medical_payment",

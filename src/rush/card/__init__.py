@@ -20,15 +20,15 @@ from rush.utils import get_current_ist_time
 
 
 def get_user_product(session: Session, user_id: int, card_type: str = "ruby") -> Loan:
-    user_card = (
+    user_product = (
         session.query(Loan)
         .join(Product, and_(Product.product_name == card_type, Product.id == Loan.product_id))
         .filter(Loan.user_id == user_id, Loan.product_type == card_type)
         .one()
     )
 
-    user_card.prepare(session=session)
-    return user_card
+    user_product.prepare(session=session)
+    return user_product
 
 
 def create_user_product(session: Session, **kwargs) -> Loan:

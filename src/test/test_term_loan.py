@@ -65,13 +65,13 @@ def test_create_term_loan(session: Session) -> None:
 
     assert loan.product_type == "term_loan"
 
-    user_card = get_user_product(session=session, user_id=loan.user_id, card_type="term_loan")
-    assert isinstance(user_card, TermLoan) == True
+    user_loan = get_user_product(session=session, user_id=loan.user_id, card_type="term_loan")
+    assert isinstance(user_loan, TermLoan) == True
 
     all_emis_query = (
         session.query(CardEmis)
         .filter(
-            CardEmis.loan_id == user_card.loan_id,
+            CardEmis.loan_id == user_loan.loan_id,
             CardEmis.row_status == "active",
             CardEmis.bill_id == None,
         )

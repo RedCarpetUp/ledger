@@ -38,11 +38,11 @@ from rush.utils import (
 )
 
 
-def _get_total_outstanding(session, user_card):
+def _get_total_outstanding(session, user_loan):
     # Temp func.
     all_bills = (
         session.query(LoanData)
-        .filter(LoanData.loan_id == user_card.loan_id, LoanData.is_generated.is_(True))
+        .filter(LoanData.loan_id == user_loan.loan_id, LoanData.is_generated.is_(True))
         .all()
     )
     total_outstanding = sum(get_remaining_bill_balance(session, bill)["total_due"] for bill in all_bills)
@@ -51,7 +51,7 @@ def _get_total_outstanding(session, user_card):
 
 def can_remove_interest(
     session: Session,
-    user_card: BaseLoan,
+    user_loan: BaseLoan,
     interest_event: LedgerTriggerEvent,
     event_date: Optional[DateTime] = None,
 ) -> bool:
@@ -62,7 +62,7 @@ def can_remove_interest(
     This function gets called at every payment. We also need to check if the interest is even there to
     be removed.
     """
-    latest_bill = user_card.get_latest_generated_bill()
+    latest_bill = user_loan.get_latest_generated_bill()
     # First check if there is even interest accrued in the latest bill.
     _, interest_accrued = get_account_balance_from_str(
         session, f"{latest_bill.id}/bill/interest_accrued/r"
@@ -70,23 +70,23 @@ def can_remove_interest(
     if interest_accrued == 0:
         return False  # Nothing to remove.
 
-    due_date = latest_bill.bill_start_date + timedelta(days=user_card.interest_free_period_in_days)
+    due_date = latest_bill.bill_start_date + timedelta(days=user_loan.interest_free_period_in_days)
     payment_came_after_due_date = event_date.date() > due_date
     if payment_came_after_due_date:
         return False
 
     this_month_interest = interest_event.amount  # The total interest amount which we last accrued.
-    total_outstanding = user_card.get_total_outstanding()  # TODO outstanding as of due_date.
+    total_outstanding = user_loan.get_total_outstanding()  # TODO outstanding as of due_date.
 
     if total_outstanding <= this_month_interest:  # the amount has been paid sans interest.
         return True
     return False
 
 
-def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_card: BaseLoan) -> None:
-    unpaid_bills = user_card.get_unpaid_bills()
+def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loan: BaseLoan) -> None:
+    unpaid_bills = user_loan.get_unpaid_bills()
     accrue_event = LedgerTriggerEvent(
-        name="accrue_interest", loan_id=user_card.loan_id, post_date=post_date, amount=0
+        name="accrue_interest", loan_id=user_loan.loan_id, post_date=post_date, amount=0
     )
     session.add(accrue_event)
     session.flush()
@@ -95,12 +95,12 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_car
         accrue_event.amount += bill.table.interest_to_charge
 
 
-def is_late_fee_valid(session: Session, user_card: BaseLoan) -> bool:
+def is_late_fee_valid(session: Session, user_loan: BaseLoan) -> bool:
     """
     Late fee gets charged if user fails to pay the minimum due before the due date.
     We check if the min was paid before due date and there's late fee charged.
     """
-    latest_bill = user_card.get_latest_generated_bill()
+    latest_bill = user_loan.get_latest_generated_bill()
     # TODO get bill from event?
 
     # First check if there is even late fee accrued in the latest bill.
@@ -108,7 +108,7 @@ def is_late_fee_valid(session: Session, user_card: BaseLoan) -> bool:
     if late_fee_accrued == 0:
         return False  # Nothing to remove.
 
-    due_date = latest_bill.bill_start_date + timedelta(days=user_card.interest_free_period_in_days)
+    due_date = latest_bill.bill_start_date + timedelta(days=user_loan.interest_free_period_in_days)
     min_balance_as_of_due_date = latest_bill.get_remaining_min(due_date)
     if (
         min_balance_as_of_due_date > 0
@@ -147,24 +147,24 @@ def create_bill_fee_entry(
 
 def accrue_late_charges(
     session: Session,
-    user_card: BaseLoan,
+    user_loan: BaseLoan,
     post_date: DateTime,
     late_fee_to_charge_without_tax: Decimal = Decimal(100),
 ) -> BaseBill:
-    latest_bill = user_card.get_latest_generated_bill()
+    latest_bill = user_loan.get_latest_generated_bill()
     can_charge_fee = latest_bill.get_remaining_min() > 0
     #  accrue_late_charges_prerequisites(session, bill)
     if can_charge_fee:  # if min isn't paid charge late fine.
         # TODO get correct date here.
         # Adjust for rounding because total due amount has to be rounded
         event = LedgerTriggerEvent(
-            name="charge_late_fine", post_date=post_date, loan_id=user_card.loan_id
+            name="charge_late_fine", post_date=post_date, loan_id=user_loan.loan_id
         )
         session.add(event)
         session.flush()
         fee = create_bill_fee_entry(
             session=session,
-            user_id=user_card.user_id,
+            user_id=user_loan.user_id,
             bill=latest_bill,
             event=event,
             fee_name="late_fee",
@@ -176,12 +176,12 @@ def accrue_late_charges(
 
         from rush.create_emi import adjust_late_fee_in_emis
 
-        adjust_late_fee_in_emis(session, user_card, latest_bill)
+        adjust_late_fee_in_emis(session=session, user_loan=user_loan, bill=latest_bill)
     return latest_bill
 
 
 def reverse_interest_charges(
-    session: Session, event_to_reverse: LedgerTriggerEvent, user_card: UserCard, payment_date: DateTime
+    session: Session, event_to_reverse: LedgerTriggerEvent, user_loan: BaseLoan, payment_date: DateTime
 ) -> None:
     """
     This event is intended only when the complete amount has been paid and we need to remove the
@@ -190,7 +190,7 @@ def reverse_interest_charges(
     is more convenient than adding it on 16th.
     """
     event = LedgerTriggerEvent(
-        name="reverse_interest_charges", loan_id=user_card.loan_id, post_date=payment_date
+        name="reverse_interest_charges", loan_id=user_loan.loan_id, post_date=payment_date
     )
     session.add(event)
     session.flush()
@@ -258,7 +258,7 @@ def reverse_interest_charges(
                 continue
             _adjust_for_prepayment(
                 session=session,
-                loan_id=user_card.loan_id,
+                loan_id=user_loan.loan_id,
                 event_id=event.id,
                 amount=entry["amount"],
                 debit_book_str=entry["acc_to_remove_from"],
@@ -271,11 +271,11 @@ def reverse_interest_charges(
 
 
 def reverse_incorrect_late_charges(
-    session: Session, user_card: BaseLoan, event_to_reverse: LedgerTriggerEvent
+    session: Session, user_loan: BaseLoan, event_to_reverse: LedgerTriggerEvent
 ) -> None:
     event = LedgerTriggerEvent(
         name="reverse_late_charges",
-        loan_id=user_card.loan_id,
+        loan_id=user_loan.loan_id,
         post_date=get_current_ist_time(),
         amount=event_to_reverse.amount,
     )
@@ -321,7 +321,7 @@ def reverse_incorrect_late_charges(
                 # TODO maybe just call the entire payment received event here?
                 _adjust_for_prepayment(
                     session=session,
-                    loan_id=user_card.loan_id,
+                    loan_id=user_loan.loan_id,
                     event_id=event.id,
                     amount=acc["amount"],
                     debit_book_str=acc["acc_to_remove_from"],
@@ -332,7 +332,7 @@ def reverse_incorrect_late_charges(
     emi = (
         session.query(CardEmis)
         .filter(
-            CardEmis.loan_id == user_card.loan_id,
+            CardEmis.loan_id == user_loan.loan_id,
             CardEmis.bill_id == bill.id,
             CardEmis.emi_number == 1,
             CardEmis.row_status == "active",
@@ -349,4 +349,4 @@ def reverse_incorrect_late_charges(
     from rush.create_emi import group_bills_to_create_loan_schedule
 
     # Recreate loan level emis
-    group_bills_to_create_loan_schedule(user_card)
+    group_bills_to_create_loan_schedule(user_loan=user_loan)
