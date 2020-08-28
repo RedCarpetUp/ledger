@@ -3,12 +3,22 @@ from decimal import Decimal
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
-from rush.card.utils import add_pre_product_fee
+from rush.card import (
+    HealthCard,
+    create_user_product,
+    get_user_product,
+)
+from rush.card.utils import (
+    add_pre_product_fee,
+    add_reload_fee,
+)
 from rush.models import (
     CardKitNumbers,
     CardNames,
     Lenders,
+    LoanFee,
     Product,
+    ProductFee,
     User,
 )
 
@@ -28,16 +38,16 @@ def create_products(session: Session) -> None:
     session.flush()
 
 
-# def card_db_updates(session: Session) -> None:
-#     create_products(session=session)
+def card_db_updates(session: Session) -> None:
+    create_products(session=session)
 
-#     cn = CardNames(name="ruby")
-#     session.add(cn)
-#     session.flush()
+    cn = CardNames(name="ruby")
+    session.add(cn)
+    session.flush()
 
-#     ckn = CardKitNumbers(kit_number="10000", card_name_id=cn.id, last_5_digits="0000", status="active")
-#     session.add(ckn)
-#     session.flush()
+    ckn = CardKitNumbers(kit_number="10000", card_name_id=cn.id, last_5_digits="0000", status="active")
+    session.add(ckn)
+    session.flush()
 
 
 def create_user(session: Session) -> None:
@@ -47,6 +57,19 @@ def create_user(session: Session) -> None:
     )
     session.add(u)
     session.flush()
+
+
+def create_test_user_card(session: Session) -> HealthCard:
+    uc = create_user_product(
+        session=session,
+        user_id=5,
+        card_activation_date=parse_date("2020-07-01").date(),
+        card_type="health_card",
+        lender_id=62311,
+        kit_number="10000",
+    )
+
+    return uc
 
 
 def test_add_pre_product_fees(session: Session) -> None:
@@ -62,11 +85,34 @@ def test_add_pre_product_fees(session: Session) -> None:
         fee_amount=Decimal(1000),
     )
 
-    ephemeral_account_id = card_activation_fee.ephemeral_account_id
+    sell_book_id = card_activation_fee.identifier_id
 
-    assert ephemeral_account_id is not None
+    assert type(card_activation_fee) == ProductFee
+    assert sell_book_id is not None
     assert card_activation_fee.fee_status == "UNPAID"
 
 
-def test_add_reload_fee() -> None:
-    pass
+def test_add_reload_fee(session: Session) -> None:
+    create_lenders(session=session)
+    card_db_updates(session=session)
+    create_user(session=session)
+    uc = create_test_user_card(session=session)
+
+    assert uc.product_type == "health_card"
+    assert uc.get_limit_type(mcc="8011") == "health_limit"
+    assert uc.get_limit_type(mcc="5555") == "available_limit"
+    assert uc.should_reinstate_limit_on_payment == True
+
+    user_card = get_user_product(session=session, user_id=uc.user_id, card_type="health_card")
+    assert isinstance(user_card, HealthCard) == True
+
+    reload_fee = add_reload_fee(
+        session=session,
+        user_loan=uc,
+        fee_amount=Decimal("100"),
+        post_date=parse_date("2020-08-01").date(),
+    )
+
+    assert type(reload_fee) == LoanFee
+    assert reload_fee.identifier_id == uc.loan_id
+    assert reload_fee.fee_status == "UNPAID"

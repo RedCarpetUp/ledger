@@ -10,8 +10,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from rush.models import (
+    BillFee,
     BookAccount,
-    Fee,
     LedgerEntry,
     LoanData,
     get_or_create,
@@ -137,7 +137,11 @@ def is_bill_closed(session: Session, bill: LoanData, to_date: Optional[DateTime]
     if interest_due != 0:
         return False
 
-    unpaid_fees = session.query(Fee).filter(Fee.bill_id == bill.id, Fee.fee_status == "UNPAID").all()
+    unpaid_fees = (
+        session.query(BillFee)
+        .filter(BillFee.identifier_id == bill.id, BillFee.fee_status == "UNPAID")
+        .all()
+    )
     if unpaid_fees:
         return False
     return True
@@ -158,7 +162,11 @@ def get_remaining_bill_balance(
         session, book_string=f"{bill.id}/bill/interest_receivable/a", to_date=to_date
     )
     d = {"principal_due": principal_due, "interest_due": interest_due}
-    fees = session.query(Fee).filter(Fee.bill_id == bill.id, Fee.fee_status == "UNPAID").all()
+    fees = (
+        session.query(BillFee)
+        .filter(BillFee.identifier_id == bill.id, BillFee.fee_status == "UNPAID")
+        .all()
+    )
     for fee in fees:
         fee_due_amount = fee.gross_amount - fee.gross_amount_paid
         d[fee.name] = fee_due_amount

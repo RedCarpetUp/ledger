@@ -23,6 +23,7 @@ from rush.ledger_utils import (
     get_remaining_bill_balance,
 )
 from rush.models import (
+    BillFee,
     BookAccount,
     CardEmis,
     EmiPaymentMapping,
@@ -382,7 +383,11 @@ def adjust_late_fee_in_emis(session: Session, user_card: BaseLoan, bill: LoanDat
         .order_by(CardEmis.emi_number.asc())
         .first()
     )
-    late_fee = session.query(Fee).filter(Fee.bill_id == bill.id, Fee.name == "late_fee").one_or_none()
+    late_fee = (
+        session.query(BillFee)
+        .filter(BillFee.identifier_id == bill.id, BillFee.name == "late_fee")
+        .one_or_none()
+    )
     if late_fee and late_fee.gross_amount > 0:
         emi.total_closing_balance_post_due_date += late_fee.gross_amount
         emi.total_due_amount += late_fee.gross_amount
@@ -404,7 +409,11 @@ def adjust_atm_fee_in_emis(session: Session, user_card: BaseLoan, bill: LoanData
         .order_by(CardEmis.emi_number.asc())
         .first()
     )
-    atm_fee = session.query(Fee).filter(Fee.bill_id == bill.id, Fee.name == "atm_fee").one_or_none()
+    atm_fee = (
+        session.query(BillFee)
+        .filter(BillFee.identifier_id == bill.id, BillFee.name == "atm_fee")
+        .one_or_none()
+    )
     if atm_fee and atm_fee.gross_amount > 0:
         emi.total_closing_balance_post_due_date += atm_fee.gross_amount
         emi.total_due_amount += atm_fee.gross_amount

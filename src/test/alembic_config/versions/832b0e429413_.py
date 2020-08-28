@@ -19,7 +19,7 @@ def upgrade() -> None:
     op.create_unique_constraint("uq_product_name", "product", ["product_name"])
 
     op.create_table(
-        "ephemeral_account",
+        "sell_book",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("performed_by", sa.Integer(), nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=False),
@@ -31,15 +31,16 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["product_type"], ["product.product_name"]),
     )
 
-    op.alter_column("fee", "loan_id", nullable=True)
-    op.add_column("fee", sa.Column("ephemeral_account_id", sa.Integer(), nullable=True))
-    op.create_foreign_key(None, "fee", "ephemeral_account", ["ephemeral_account_id"], ["id"])
-    op.create_check_constraint(
-        None, "fee", "NOT(loan_id IS NULL AND bill_id IS NULL and ephemeral_account_id IS NULL)"
-    )
+    op.drop_column("fee", "bill_id")
+    op.drop_column("fee", "loan_id")
+    op.add_column("fee", sa.Column("user_id", sa.Integer(), nullable=False))
+    op.create_foreign_key(None, "fee", "v3_users", ["user_id"], ["id"])
 
-    op.add_column("loan", sa.Column("ephemeral_account_id", sa.Integer(), nullable=True))
-    op.create_foreign_key(None, "loan", "ephemeral_account", ["ephemeral_account_id"], ["id"])
+    op.add_column("fee", sa.Column("identifier", sa.String(), nullable=False))
+    op.add_column("fee", sa.Column("identifier_id", sa.Integer(), nullable=False))
+
+    op.add_column("loan", sa.Column("sell_book_id", sa.Integer(), nullable=True))
+    op.create_foreign_key(None, "loan", "sell_book", ["sell_book_id"], ["id"])
     op.create_foreign_key(None, "loan", "product", ["product_type"], ["product_name"])
 
 

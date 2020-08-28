@@ -38,5 +38,7 @@ def write_off_event(user_card: BaseLoan, event: LedgerTriggerEvent) -> None:
 
 def reverse_all_unpaid_fees(user_card: BaseLoan) -> None:
     session = user_card.session
-    fee = session.query(Fee).filter(Fee.loan_id == user_card.loan_id, Fee.fee_status == "UNPAID").all()
-    fee.fee_status = "REVERSED"
+    # fee = session.query(Fee).filter(Fee.loan_id == user_card.loan_id, Fee.fee_status == "UNPAID").all()
+    # fee.fee_status = "REVERSED"
+
+    raise Exception("NotImplemented")

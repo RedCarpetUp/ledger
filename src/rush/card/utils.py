@@ -5,11 +5,13 @@ from pendulum import Date
 from sqlalchemy.orm import Session
 
 from rush.models import (
-    EphemeralAccount,
     Fee,
     LedgerTriggerEvent,
     Loan,
+    LoanFee,
     Product,
+    ProductFee,
+    SellBook,
 )
 from rush.utils import (
     add_gst_split_to_amount,
@@ -34,10 +36,10 @@ def add_pre_product_fee(
     fee_name: str,
     fee_amount: Decimal,
     post_date: Optional[Date] = None,
-    ephemeral_account_id: Optional[int] = None,
+    sell_book_id: Optional[int] = None,
 ) -> Fee:
     """
-    In case of no ephemeral_account_id, it will always create a new ephemeral account.
+    In case of no sell_book_id, it will always create a new ephemeral account.
     For multiple pre-product fees, this needs to be maintained by ledger user. Also, same ephemeral
     account should be passed to loan during loan creation.
     """
@@ -53,16 +55,16 @@ def add_pre_product_fee(
     session.add(event)
     session.flush()
 
-    if ephemeral_account_id is None:
-        ephemeral_account = EphemeralAccount(user_id=user_id, product_type=product_type)
+    if sell_book_id is None:
+        ephemeral_account = SellBook(user_id=user_id, product_type=product_type)
         session.add(ephemeral_account)
         session.flush()
 
-        ephemeral_account_id = ephemeral_account.id
+        sell_book_id = ephemeral_account.id
 
-    f = Fee(
+    f = ProductFee(
         event_id=event.id,
-        ephemeral_account_id=ephemeral_account_id,
+        identifier_id=sell_book_id,
         name=fee_name,
         fee_status="UNPAID",
         net_amount=fee_amount,
@@ -86,6 +88,8 @@ def add_reload_fee(
     fee_amount: Decimal,
     post_date: Optional[Date] = None,
 ) -> Fee:
+    assert user_loan.amortization_date is not None
+
     if post_date is None:
         post_date = get_current_ist_time().date()
 
@@ -96,8 +100,8 @@ def add_reload_fee(
     session.add(event)
     session.flush()
 
-    f = Fee(
-        loan_id=user_loan.id,
+    f = LoanFee(
+        identifier_id=user_loan.id,
         event_id=event.id,
         name="card_reload_fees",
         fee_status="UNPAID",

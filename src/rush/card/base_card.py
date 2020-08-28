@@ -121,7 +121,7 @@ class BaseLoan(Loan):
         loan = cls(
             session=session,
             user_id=kwargs["user_id"],
-            ephemeral_account_id=kwargs.get("ephemeral_account_id"),
+            sell_book_id=kwargs.get("sell_book_id"),
             product_id=get_product_id_from_card_type(session=session, card_type=kwargs["card_type"]),
             lender_id=kwargs.pop("lender_id"),
             rc_rate_of_interest_monthly=Decimal(3),

@@ -223,8 +223,8 @@ class User(AuditMixin):
     data_class = UserData
 
 
-class EphemeralAccount(AuditMixin):
-    __tablename__ = "ephemeral_account"
+class SellBook(AuditMixin):
+    __tablename__ = "sell_book"
 
     user_id = Column(Integer, ForeignKey(User.id), nullable=False)
     product_type = Column(String(), ForeignKey(Product.product_name), nullable=False)
@@ -233,7 +233,7 @@ class EphemeralAccount(AuditMixin):
 class Loan(AuditMixin):
     __tablename__ = "loan"
     user_id = Column(Integer, ForeignKey(User.id))
-    ephemeral_account_id = Column(Integer, ForeignKey(EphemeralAccount.id), nullable=True)
+    sell_book_id = Column(Integer, ForeignKey(SellBook.id), nullable=True)
     amortization_date = Column(TIMESTAMP, nullable=False)
     loan_status = Column(String(), nullable=False)
     product_type = Column(String(), ForeignKey(Product.product_name), nullable=False)
@@ -525,10 +525,10 @@ class LoanMoratorium(AuditMixin):
 class Fee(AuditMixin):
     __tablename__ = "fee"
 
-    bill_id = Column(Integer, ForeignKey(LoanData.id), nullable=True)
+    user_id = Column(Integer, ForeignKey(User.id))
     event_id = Column(Integer, ForeignKey(LedgerTriggerEvent.id), nullable=False)
-    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=True)
-    ephemeral_account_id = Column(Integer, ForeignKey(EphemeralAccount.id), nullable=True)
+    identifier = Column(String(), nullable=False)
+    identifier_id = Column(Integer, nullable=False)
     name = Column(String(30), nullable=False)
     net_amount = Column(Numeric, nullable=False)
     sgst_rate = Column(Numeric, nullable=False)
@@ -542,9 +542,31 @@ class Fee(AuditMixin):
     gross_amount_paid = Column(Numeric, nullable=True)
     fee_status = Column(String(10), nullable=False, default="UNPAID")
 
-    __table_args__ = (
-        CheckConstraint("NOT(loan_id IS NULL AND bill_id IS NULL and ephemeral_account_id IS NULL)"),
-    )
+    __mapper_args__ = {
+        "polymorphic_identity": "fee",
+        "polymorphic_on": identifier,
+    }
+
+
+class BillFee(Fee):
+
+    __mapper_args__ = {
+        "polymorphic_identity": "bill",
+    }
+
+
+class LoanFee(Fee):
+
+    __mapper_args__ = {
+        "polymorphic_identity": "loan",
+    }
+
+
+class ProductFee(Fee):
+
+    __mapper_args__ = {
+        "polymorphic_identity": "product",
+    }
 
 
 class EventDpd(AuditMixin):

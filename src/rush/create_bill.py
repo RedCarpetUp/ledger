@@ -4,7 +4,7 @@ from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
 from sqlalchemy.orm import Session
 
-from rush.accrue_financial_charges import create_fee_entry
+from rush.accrue_financial_charges import create_bill_fee_entry
 from rush.card.base_card import (
     BaseBill,
     BaseLoan,
@@ -105,7 +105,13 @@ def bill_generate(user_card: BaseLoan) -> BaseBill:
 
     atm_transactions_sum = bill.sum_of_atm_transactions()
     if atm_transactions_sum > 0:
-        add_atm_fee(session, bill, bill.table.bill_close_date, atm_transactions_sum, user_card)
+        add_atm_fee(
+            session=session,
+            bill=bill,
+            post_date=bill.table.bill_close_date,
+            atm_transactions_amount=atm_transactions_sum,
+            user_card=user_card,
+        )
 
     return bill
 
@@ -187,7 +193,14 @@ def add_atm_fee(
     session.add(event)
     session.flush()
 
-    fee = create_fee_entry(session, bill, event, "atm_fee", atm_fee_without_gst)
+    fee = create_bill_fee_entry(
+        session=session,
+        user_id=user_card.user_id,
+        bill=bill,
+        event=event,
+        fee_name="atm_fee",
+        net_fee_amount=atm_fee_without_gst,
+    )
     event.amount = fee.gross_amount
 
     from rush.create_emi import adjust_atm_fee_in_emis

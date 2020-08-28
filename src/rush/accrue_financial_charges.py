@@ -23,6 +23,7 @@ from rush.ledger_utils import (
     is_bill_closed,
 )
 from rush.models import (
+    BillFee,
     BookAccount,
     CardEmis,
     Fee,
@@ -116,13 +117,18 @@ def is_late_fee_valid(session: Session, user_card: BaseLoan) -> bool:
     return False
 
 
-def create_fee_entry(
-    session: Session, bill: BaseBill, event: LedgerTriggerEvent, fee_name: str, net_fee_amount: Decimal
+def create_bill_fee_entry(
+    session: Session,
+    user_id: int,
+    bill: BaseBill,
+    event: LedgerTriggerEvent,
+    fee_name: str,
+    net_fee_amount: Decimal,
 ) -> Fee:
-    f = Fee(
-        bill_id=bill.id,
+    f = BillFee(
+        user_id=user_id,
         event_id=event.id,
-        loan_id=bill.table.loan_id,
+        identifier_id=bill.id,
         name=fee_name,
         net_amount=net_fee_amount,
         sgst_rate=Decimal(0),
@@ -156,7 +162,14 @@ def accrue_late_charges(
         )
         session.add(event)
         session.flush()
-        fee = create_fee_entry(session, latest_bill, event, "late_fee", late_fee_to_charge_without_tax)
+        fee = create_bill_fee_entry(
+            session=session,
+            user_id=user_card.user_id,
+            bill=latest_bill,
+            event=event,
+            fee_name="late_fee",
+            net_fee_amount=late_fee_to_charge_without_tax,
+        )
         event.amount = fee.gross_amount
 
         session.flush()
@@ -270,8 +283,8 @@ def reverse_incorrect_late_charges(
     session.flush()
 
     fee, bill = (
-        session.query(Fee, LoanData)
-        .filter(Fee.event_id == event_to_reverse.id, LoanData.id == Fee.bill_id)
+        session.query(BillFee, LoanData)
+        .filter(BillFee.event_id == event_to_reverse.id, LoanData.id == BillFee.identifier_id)
         .one_or_none()
     )
 

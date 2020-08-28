@@ -37,6 +37,7 @@ from rush.lender_funds import (
     m2p_transfer,
 )
 from rush.models import (
+    BillFee,
     CardEmis,
     CardKitNumbers,
     CardNames,
@@ -338,7 +339,11 @@ def _accrue_late_fine_bill_1(session: Session) -> None:
     event_date = parse_date("2020-05-16 00:00:00")
     bill = accrue_late_charges(session, user_card, event_date)
 
-    fee_due = session.query(Fee).filter(Fee.bill_id == bill.id, Fee.name == "late_fee").one_or_none()
+    fee_due = (
+        session.query(BillFee)
+        .filter(BillFee.identifier_id == bill.id, BillFee.name == "late_fee")
+        .one_or_none()
+    )
     assert fee_due.net_amount == Decimal(100)
     assert fee_due.gross_amount == Decimal(118)
 
@@ -367,9 +372,9 @@ def _accrue_late_fine_bill_2(session: Session) -> None:
     bill = accrue_late_charges(session, user_card, event_date)
 
     fee_due = (
-        session.query(Fee)
-        .filter(Fee.bill_id == bill.id, Fee.name == "late_fee")
-        .order_by(Fee.id.desc())
+        session.query(BillFee)
+        .filter(BillFee.identifier_id == bill.id, BillFee.name == "late_fee")
+        .order_by(BillFee.id.desc())
         .one_or_none()
     )
     assert fee_due.net_amount == Decimal(100)
@@ -399,8 +404,10 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
     bill = unpaid_bills[0]
 
     fee_id = (
-        session.query(Fee.id)
-        .filter(Fee.bill_id == bill.id, Fee.name == "late_fee", Fee.fee_status == "UNPAID")
+        session.query(BillFee.id)
+        .filter(
+            BillFee.identifier_id == bill.id, BillFee.name == "late_fee", BillFee.fee_status == "UNPAID"
+        )
         .scalar()
     )
     # Pay 13.33 more. and 118 for late fee.
@@ -476,7 +483,11 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
     min_due = bill.get_remaining_min()
     assert min_due == Decimal(0)
 
-    fee_due = session.query(Fee).filter(Fee.bill_id == bill.id, Fee.name == "late_fee").one_or_none()
+    fee_due = (
+        session.query(BillFee)
+        .filter(BillFee.identifier_id == bill.id, BillFee.name == "late_fee")
+        .one_or_none()
+    )
     assert fee_due.fee_status == "PAID"
 
     _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine/r")
@@ -1171,7 +1182,9 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
 
     # Check for atm fee.
     atm_fee_due = (
-        session.query(Fee).filter(Fee.bill_id == bill_may.id, Fee.name == "atm_fee").one_or_none()
+        session.query(BillFee)
+        .filter(BillFee.identifier_id == bill_may.id, BillFee.name == "atm_fee")
+        .one_or_none()
     )
     assert atm_fee_due.gross_amount == 59
 

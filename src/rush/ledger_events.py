@@ -19,11 +19,14 @@ from rush.ledger_utils import (
     get_account_balance_from_str,
 )
 from rush.models import (
+    BillFee,
     CardTransaction,
     Fee,
     LedgerTriggerEvent,
     Loan,
     LoanData,
+    LoanFee,
+    ProductFee,
 )
 from rush.recon.dmi_interest_on_portfolio import interest_on_dmi_portfolio
 from rush.utils import get_gst_split_from_amount
@@ -196,13 +199,13 @@ def _adjust_bill(
 ) -> Decimal:
     def adjust_for_revenue(payment_to_adjust_from: Decimal, debit_str: str, bill_fee: Fee) -> Decimal:
         if bill_fee.name == "late_fee":
-            credit_book_str = f"{bill_fee.bill_id}/bill/late_fine/r"
+            credit_book_str = f"{bill_fee.identifier_id}/bill/late_fine/r"
         elif bill_fee.name == "atm_fee":
-            credit_book_str = f"{bill_fee.bill_id}/bill/atm_fee/r"
+            credit_book_str = f"{bill_fee.identifier_id}/bill/atm_fee/r"
         elif bill_fee.name == "card_activation_fees":
-            credit_book_str = f"{bill_fee.ephemeral_account_id}/ephemeral_account/card_activation_fees/r"
+            credit_book_str = f"{bill_fee.identifier_id}/product/card_activation_fees/r"
         elif bill_fee.name == "card_reload_fees":
-            credit_book_str = f"{bill_fee.loan_id}/loan/card_reload_fees/r"
+            credit_book_str = f"{bill_fee.identifier_id}/loan/card_reload_fees/r"
         fee_to_adjust = min(payment_to_adjust_from, bill_fee.gross_amount)
         gst_split = get_gst_split_from_amount(
             amount=fee_to_adjust,
@@ -276,9 +279,9 @@ def _adjust_bill(
 
     # settling pre loans fee first.
     pre_loan_fees = (
-        session.query(Fee)
-        .join(Loan, and_(Loan.id == bill.loan_id, Fee.ephemeral_account_id == Loan.ephemeral_account_id))
-        .filter(Fee.bill_id.is_(None), Fee.loan_id.is_(None), Fee.fee_status == "UNPAID")
+        session.query(ProductFee)
+        .join(Loan, and_(Loan.id == bill.loan_id, ProductFee.identifier_id == Loan.sell_book_id))
+        .filter(ProductFee.fee_status == "UNPAID")
         .all()
     )
     for fee in pre_loan_fees:
@@ -287,14 +290,18 @@ def _adjust_bill(
     # TODO is the order right?
     # settle reload fees
     reload_fees = (
-        session.query(Fee)
-        .filter(Fee.bill_id.is_(None), Fee.loan_id == bill.loan_id, Fee.fee_status == "UNPAID")
+        session.query(LoanFee)
+        .filter(LoanFee.identifier_id == bill.loan_id, LoanFee.fee_status == "UNPAID")
         .all()
     )
     for fee in reload_fees:
         remaining_amount = adjust_for_revenue(remaining_amount, debit_acc_str, fee)
 
-    fees = session.query(Fee).filter(Fee.bill_id == bill.id, Fee.fee_status == "UNPAID").all()
+    fees = (
+        session.query(BillFee)
+        .filter(BillFee.identifier_id == bill.id, BillFee.fee_status == "UNPAID")
+        .all()
+    )
     for fee in fees:
         remaining_amount = adjust_for_revenue(remaining_amount, debit_acc_str, fee)
 
