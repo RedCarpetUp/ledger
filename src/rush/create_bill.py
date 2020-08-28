@@ -197,7 +197,7 @@ def add_atm_fee(
 
 def close_bills(user_card: BaseLoan, payment_date: DateTime):
     session = user_card.session
-    all_bills = user_card.get_all_bills()
+    all_bills = user_card.get_unpaid_bills()
 
     for bill in all_bills:
         all_paid = False

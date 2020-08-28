@@ -1,15 +1,12 @@
 from decimal import Decimal
-from typing import Union
 
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
-from pendulum import parse as parse_date
 from sqlalchemy import or_
 from sqlalchemy.orm import (
     Session,
     aliased,
 )
-from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.sql import func
 
 from rush.anomaly_detection import get_payment_events
@@ -18,10 +15,7 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
-from rush.ledger_utils import (
-    get_account_balance_from_str,
-    get_remaining_bill_balance,
-)
+from rush.ledger_utils import get_remaining_bill_balance
 from rush.models import (
     BookAccount,
     CardEmis,
@@ -320,6 +314,12 @@ def slide_payments(user_card: BaseLoan, payment_event: LedgerTriggerEvent = None
                     emi.payment_received,
                 )
                 payment_received_and_adjusted = abs(diff)
+
+        # Got to close all bill if all payment is done
+        if all_paid:
+            from rush.create_bill import close_bills
+
+            close_bills(user_card, last_payment_date)
 
     session = user_card.session
     all_emis = (
