@@ -103,10 +103,18 @@ def transaction_refund_event(
     else:  # Treat as payment.
         unpaid_bills = user_card.get_unpaid_bills()
         refund_amount = _adjust_for_min(
-            session, unpaid_bills, refund_amount, event.id, debit_book_str=m2p_pool_account,
+            session,
+            unpaid_bills,
+            refund_amount,
+            event.id,
+            debit_book_str=m2p_pool_account,
         )
         refund_amount = _adjust_for_complete_bill(
-            session, unpaid_bills, refund_amount, event.id, debit_book_str=m2p_pool_account,
+            session,
+            unpaid_bills,
+            refund_amount,
+            event.id,
+            debit_book_str=m2p_pool_account,
         )
 
         if refund_amount > 0:  # if there's payment left to be adjusted.

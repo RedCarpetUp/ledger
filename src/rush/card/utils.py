@@ -18,7 +18,13 @@ from rush.utils import (
 
 
 def get_product_id_from_card_type(session: Session, card_type: str) -> int:
-    return session.query(Product.id).filter(Product.product_name == card_type,).scalar()
+    return (
+        session.query(Product.id)
+        .filter(
+            Product.product_name == card_type,
+        )
+        .scalar()
+    )
 
 
 def add_pre_product_fee(
@@ -31,9 +37,9 @@ def add_pre_product_fee(
     ephemeral_account_id: Optional[int] = None,
 ) -> Fee:
     """
-        In case of no ephemeral_account_id, it will always create a new ephemeral account.
-        For multiple pre-product fees, this needs to be maintained by ledger user. Also, same ephemeral
-        account should be passed to loan during loan creation.
+    In case of no ephemeral_account_id, it will always create a new ephemeral account.
+    For multiple pre-product fees, this needs to be maintained by ledger user. Also, same ephemeral
+    account should be passed to loan during loan creation.
     """
 
     if post_date is None:
@@ -75,12 +81,18 @@ def add_pre_product_fee(
 
 
 def add_reload_fee(
-    session: Session, user_loan: Loan, fee_amount: Decimal, post_date: Optional[Date] = None,
+    session: Session,
+    user_loan: Loan,
+    fee_amount: Decimal,
+    post_date: Optional[Date] = None,
 ) -> Fee:
     if post_date is None:
         post_date = get_current_ist_time().date()
 
-    event = LedgerTriggerEvent(name="reload_fee_added", post_date=get_current_ist_time().date(),)
+    event = LedgerTriggerEvent(
+        name="reload_fee_added",
+        post_date=get_current_ist_time().date(),
+    )
     session.add(event)
     session.flush()
 
