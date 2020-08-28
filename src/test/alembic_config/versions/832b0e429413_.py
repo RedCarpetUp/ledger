@@ -19,7 +19,7 @@ def upgrade() -> None:
     op.create_unique_constraint("uq_product_name", "product", ["product_name"])
 
     op.create_table(
-        "sell_book",
+        "user_product",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("performed_by", sa.Integer(), nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=False),
@@ -39,8 +39,9 @@ def upgrade() -> None:
     op.add_column("fee", sa.Column("identifier", sa.String(), nullable=False))
     op.add_column("fee", sa.Column("identifier_id", sa.Integer(), nullable=False))
 
-    op.add_column("loan", sa.Column("sell_book_id", sa.Integer(), nullable=True))
-    op.create_foreign_key(None, "loan", "sell_book", ["sell_book_id"], ["id"])
+    op.drop_column("loan", "product_id")
+    op.add_column("loan", sa.Column("user_product_id", sa.Integer(), nullable=True))
+    op.create_foreign_key(None, "loan", "user_product", ["user_product_id"], ["id"])
     op.create_foreign_key(None, "loan", "product", ["product_type"], ["product_name"])
 
 

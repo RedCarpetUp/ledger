@@ -223,8 +223,8 @@ class User(AuditMixin):
     data_class = UserData
 
 
-class SellBook(AuditMixin):
-    __tablename__ = "sell_book"
+class UserProduct(AuditMixin):
+    __tablename__ = "user_product"
 
     user_id = Column(Integer, ForeignKey(User.id), nullable=False)
     product_type = Column(String(), ForeignKey(Product.product_name), nullable=False)
@@ -233,11 +233,11 @@ class SellBook(AuditMixin):
 class Loan(AuditMixin):
     __tablename__ = "loan"
     user_id = Column(Integer, ForeignKey(User.id))
-    sell_book_id = Column(Integer, ForeignKey(SellBook.id), nullable=True)
-    amortization_date = Column(TIMESTAMP, nullable=False)
-    loan_status = Column(String(), nullable=False)
+    user_product_id = Column(Integer, ForeignKey(UserProduct.id), nullable=True)
+    amortization_date = Column(TIMESTAMP, nullable=True)
+    loan_status = Column(String(), nullable=True)
+    interest_type = Column(String(), nullable=True)
     product_type = Column(String(), ForeignKey(Product.product_name), nullable=False)
-    product_id = Column(Integer, ForeignKey(Product.id))
     lender_id = Column(Integer, ForeignKey(Lenders.id), nullable=False)
     rc_rate_of_interest_monthly = Column(Numeric, nullable=False)
     lender_rate_of_interest_annual = Column(Numeric, nullable=False)

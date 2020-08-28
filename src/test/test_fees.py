@@ -59,7 +59,7 @@ def create_user(session: Session) -> None:
     session.flush()
 
 
-def create_test_user_card(session: Session) -> HealthCard:
+def create_test_user_loan(session: Session) -> HealthCard:
     uc = create_user_product(
         session=session,
         user_id=5,
@@ -96,15 +96,15 @@ def test_add_reload_fee(session: Session) -> None:
     create_lenders(session=session)
     card_db_updates(session=session)
     create_user(session=session)
-    uc = create_test_user_card(session=session)
+    uc = create_test_user_loan(session=session)
 
     assert uc.product_type == "health_card"
     assert uc.get_limit_type(mcc="8011") == "health_limit"
     assert uc.get_limit_type(mcc="5555") == "available_limit"
     assert uc.should_reinstate_limit_on_payment == True
 
-    user_card = get_user_product(session=session, user_id=uc.user_id, card_type="health_card")
-    assert isinstance(user_card, HealthCard) == True
+    user_loan = get_user_product(session=session, user_id=uc.user_id, card_type="health_card")
+    assert isinstance(user_loan, HealthCard) == True
 
     reload_fee = add_reload_fee(
         session=session,

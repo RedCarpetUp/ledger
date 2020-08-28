@@ -1,11 +1,10 @@
 from decimal import Decimal
-from typing import Type
 
 from dateutil.relativedelta import relativedelta
 from sqlalchemy.orm import Session
 
 from rush.card.base_card import BaseLoan
-from rush.card.utils import get_product_id_from_card_type
+from rush.card.utils import create_user_product
 from rush.ledger_events import loan_disbursement_event
 from rush.models import (
     LedgerTriggerEvent,
@@ -26,10 +25,16 @@ class TermLoan(BaseLoan):
 
     @classmethod
     def create(cls, session: Session, **kwargs) -> Loan:
+        user_product_id = kwargs.get("user_product_id")
+        if not user_product_id:
+            user_product_id = create_user_product(
+                session=session, user_id=kwargs["user_id"], product_type=kwargs["card_type"]
+            ).id
+
         loan = cls(
             session=session,
             user_id=kwargs["user_id"],
-            product_id=get_product_id_from_card_type(session=session, card_type=kwargs["card_type"]),
+            user_product_id=user_product_id,
             lender_id=kwargs["lender_id"],
             rc_rate_of_interest_monthly=Decimal(3),
             lender_rate_of_interest_annual=Decimal(18),

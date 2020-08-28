@@ -11,7 +11,7 @@ from rush.models import (
     LoanFee,
     Product,
     ProductFee,
-    SellBook,
+    UserProduct,
 )
 from rush.utils import (
     add_gst_split_to_amount,
@@ -29,6 +29,14 @@ def get_product_id_from_card_type(session: Session, card_type: str) -> int:
     )
 
 
+def create_user_product(session: Session, user_id: int, product_type: str) -> UserProduct:
+    user_product = UserProduct(user_id=user_id, product_type=product_type)
+    session.add(user_product)
+    session.flush()
+
+    return user_product
+
+
 def add_pre_product_fee(
     session: Session,
     user_id: int,
@@ -36,7 +44,7 @@ def add_pre_product_fee(
     fee_name: str,
     fee_amount: Decimal,
     post_date: Optional[Date] = None,
-    sell_book_id: Optional[int] = None,
+    user_product_id: Optional[int] = None,
 ) -> Fee:
     """
     In case of no sell_book_id, it will always create a new ephemeral account.
@@ -55,16 +63,14 @@ def add_pre_product_fee(
     session.add(event)
     session.flush()
 
-    if sell_book_id is None:
-        ephemeral_account = SellBook(user_id=user_id, product_type=product_type)
-        session.add(ephemeral_account)
-        session.flush()
-
-        sell_book_id = ephemeral_account.id
+    if user_product_id is None:
+        user_product_id = create_user_product(
+            session=session, user_id=user_id, product_type=product_type
+        ).id
 
     f = ProductFee(
         event_id=event.id,
-        identifier_id=sell_book_id,
+        identifier_id=user_product_id,
         name=fee_name,
         fee_status="UNPAID",
         net_amount=fee_amount,

@@ -609,12 +609,9 @@ def test_health_card_loan(session: Session) -> None:
     card_db_updates(session=session)
     create_user(session=session)
 
-    from rush.card.utils import get_product_id_from_card_type
-
     loan = HealthCard(
         session=session,
         user_id=3,
-        product_id=get_product_id_from_card_type(session=session, card_type="health_card"),
         lender_id=62311,
         rc_rate_of_interest_monthly=Decimal(3),
         lender_rate_of_interest_annual=Decimal(18),

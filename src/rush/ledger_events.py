@@ -282,7 +282,7 @@ def _adjust_bill(
     # settling pre loans fee first.
     pre_loan_fees = (
         session.query(ProductFee)
-        .join(Loan, and_(Loan.id == bill.loan_id, ProductFee.identifier_id == Loan.sell_book_id))
+        .join(Loan, and_(Loan.id == bill.loan_id, ProductFee.identifier_id == Loan.user_product_id))
         .filter(ProductFee.fee_status == "UNPAID")
         .all()
     )
