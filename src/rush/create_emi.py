@@ -24,6 +24,7 @@ from rush.models import (
     EmiPaymentMapping,
     EventDpd,
     LedgerEntry,
+    LedgerEntryPy,
     LedgerTriggerEvent,
     LoanData,
     LoanMoratorium,
@@ -706,7 +707,9 @@ def entry_checks(
     return verdict
 
 
-def update_event_with_dpd(user_loan: BaseLoan, post_date: DateTime = None) -> None:
+def update_event_with_dpd(
+    user_loan: BaseLoan, post_date: DateTime = None, event: LedgerTriggerEvent = None
+) -> None:
     def actual_event_update(
         session: Session, is_debit: bool, ledger_trigger_event, ledger_entry, account
     ):
@@ -743,21 +746,38 @@ def update_event_with_dpd(user_loan: BaseLoan, post_date: DateTime = None) -> No
 
     debit_book_account = aliased(BookAccount)
     credit_book_account = aliased(BookAccount)
-    events_list = (
-        session.query(LedgerTriggerEvent, LedgerEntry, debit_book_account, credit_book_account)
-        .filter(
-            LedgerTriggerEvent.id == LedgerEntry.event_id,
-            LedgerEntry.debit_account == debit_book_account.id,
-            LedgerEntry.credit_account == credit_book_account.id,
-            LedgerTriggerEvent.post_date <= post_date,
-            or_(
-                debit_book_account.identifier_type == "bill",
-                credit_book_account.identifier_type == "bill",
-            ),
+    if event:
+        events_list = (
+            session.query(LedgerTriggerEvent, LedgerEntry, debit_book_account, credit_book_account)
+            .filter(
+                LedgerTriggerEvent.id == LedgerEntry.event_id,
+                LedgerEntry.debit_account == debit_book_account.id,
+                LedgerEntry.credit_account == credit_book_account.id,
+                LedgerTriggerEvent.id == event.id,
+                or_(
+                    debit_book_account.identifier_type == "bill",
+                    credit_book_account.identifier_type == "bill",
+                ),
+            )
+            .order_by(LedgerTriggerEvent.post_date.asc())
+            .all()
         )
-        .order_by(LedgerTriggerEvent.post_date.asc())
-        .all()
-    )
+    else:
+        events_list = (
+            session.query(LedgerTriggerEvent, LedgerEntry, debit_book_account, credit_book_account)
+            .filter(
+                LedgerTriggerEvent.id == LedgerEntry.event_id,
+                LedgerEntry.debit_account == debit_book_account.id,
+                LedgerEntry.credit_account == credit_book_account.id,
+                LedgerTriggerEvent.post_date <= post_date,
+                or_(
+                    debit_book_account.identifier_type == "bill",
+                    credit_book_account.identifier_type == "bill",
+                ),
+            )
+            .order_by(LedgerTriggerEvent.post_date.asc())
+            .all()
+        )
 
     event_id = event_type = event_amount = None
     bills_touched = []
