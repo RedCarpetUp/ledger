@@ -13,7 +13,7 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
-from rush.card.utils import get_product_id_from_card_type
+from rush.card.utils import create_user_product_mapping
 from rush.ledger_events import loan_disbursement_event
 from rush.models import (
     LedgerTriggerEvent,
@@ -31,14 +31,14 @@ class TermLoanBill(BaseBill):
 
     def get_relative_delta_for_emi(self, emi_number: int, amortization_date: Date) -> Dict[str, int]:
         """
-            Sample Tenure Loan:
-                +-----------+-------------+----------------------+---------------------+--------------+---------------------+--------------+
-                | loan_id   | loan_type   | product_order_date   | agreement_date      | emi_number   | due_date            | due_amount   |
-                |-----------+-------------+----------------------+---------------------+--------------+---------------------+--------------|
-                | 8826      | Tenure Loan | 2015-10-09 00:00:00  | 2015-10-09 00:00:00 | 1            | 2015-10-09 00:00:00 | 1420.0       |
-                | 8826      | Tenure Loan | 2015-10-09 00:00:00  | 2015-10-09 00:00:00 | 2            | 2015-11-09 00:00:00 | 610.0        |
-                | 8826      | Tenure Loan | 2015-10-09 00:00:00  | 2015-10-09 00:00:00 | 3            | 2015-12-09 00:00:00 | 610.0        |
-                +-----------+-------------+----------------------+---------------------+--------------+---------------------+--------------+
+        Sample Tenure Loan:
+            +-----------+-------------+----------------------+---------------------+--------------+---------------------+--------------+
+            | loan_id   | loan_type   | product_order_date   | agreement_date      | emi_number   | due_date            | due_amount   |
+            |-----------+-------------+----------------------+---------------------+--------------+---------------------+--------------|
+            | 8826      | Tenure Loan | 2015-10-09 00:00:00  | 2015-10-09 00:00:00 | 1            | 2015-10-09 00:00:00 | 1420.0       |
+            | 8826      | Tenure Loan | 2015-10-09 00:00:00  | 2015-10-09 00:00:00 | 2            | 2015-11-09 00:00:00 | 610.0        |
+            | 8826      | Tenure Loan | 2015-10-09 00:00:00  | 2015-10-09 00:00:00 | 3            | 2015-12-09 00:00:00 | 610.0        |
+            +-----------+-------------+----------------------+---------------------+--------------+---------------------+--------------+
 
         """
         if emi_number == 1:
@@ -58,10 +58,16 @@ class TermLoan(BaseLoan):
 
     @classmethod
     def create(cls, session: Session, **kwargs) -> Loan:
+        user_product_id = kwargs.get("user_product_id")
+        if not user_product_id:
+            user_product_id = create_user_product_mapping(
+                session=session, user_id=kwargs["user_id"], product_type=kwargs["card_type"]
+            ).id
+
         loan = cls(
             session=session,
             user_id=kwargs["user_id"],
-            product_id=get_product_id_from_card_type(session=session, card_type=kwargs["card_type"]),
+            user_product_id=user_product_id,
             lender_id=kwargs["lender_id"],
             rc_rate_of_interest_monthly=Decimal(3),
             lender_rate_of_interest_annual=Decimal(18),
@@ -108,15 +114,15 @@ class TermLoan(BaseLoan):
         loan_disbursement_event(session=session, loan=loan, event=event, bill_id=loan_data.id)
 
         # create emis for term loan.
-        from rush.create_emi import create_emis_for_card
+        from rush.create_emi import create_emis_for_bill
 
         bill = cls.bill_class(session=session, loan_data=loan_data)
 
-        create_emis_for_card(
+        create_emis_for_bill(
             session=session,
-            user_card=loan,
+            user_loan=loan,
             bill=bill,
-            interest=bill.get_interest_to_charge(rate_of_interest=loan.rc_rate_of_interest_monthly),
+            # interest=bill.get_interest_to_charge(rate_of_interest=loan.rc_rate_of_interest_monthly),
         )
 
         return loan

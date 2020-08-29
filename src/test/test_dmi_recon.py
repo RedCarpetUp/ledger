@@ -66,7 +66,7 @@ def _create_user_raghav_and_do_swipes(session: Session) -> BaseLoan:
     session.flush()
 
     # Create user's card
-    user_card_raghav = create_user_product(
+    user_loan_raghav = create_user_product(
         session=session,
         user_id=user_raghav.id,
         card_activation_date=parse_date("2020-01-01").date(),
@@ -78,21 +78,21 @@ def _create_user_raghav_and_do_swipes(session: Session) -> BaseLoan:
     # Create card swipes.
     swipe_1_raghav = create_card_swipe(
         session=session,
-        user_card=user_card_raghav,
+        user_loan=user_loan_raghav,
         txn_time=parse_date("2020-01-01 14:23:11"),
         amount=Decimal(700),
         description="Amazon.com",
     )
     swipe_2_raghav = create_card_swipe(
         session=session,
-        user_card=user_card_raghav,
+        user_loan=user_loan_raghav,
         txn_time=parse_date("2020-01-02 11:22:11"),
         amount=Decimal(200),
         description="Flipkart.com",
     )
     swipe_3_raghav = create_card_swipe(
         session=session,
-        user_card=user_card_raghav,
+        user_loan=user_loan_raghav,
         txn_time=parse_date("2020-01-15 11:22:11"),
         amount=Decimal(200),
         description="Flipkart.com",
@@ -108,10 +108,10 @@ def _create_user_raghav_and_do_swipes(session: Session) -> BaseLoan:
     assert unbilled_bal_raghav_bill_1 == 1100
 
     _, lender_payable_raghav = get_account_balance_from_str(
-        session, f"{user_card_raghav.loan_id}/loan/lender_payable/l"
+        session, f"{user_loan_raghav.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable_raghav == 1100
-    return user_card_raghav
+    return user_loan_raghav
 
 
 def _create_user_ananth_and_do_swipes(session: Session) -> BaseLoan:
@@ -128,7 +128,7 @@ def _create_user_ananth_and_do_swipes(session: Session) -> BaseLoan:
     session.flush()
 
     # Create user's card
-    user_card_ananth = create_user_product(
+    user_loan_ananth = create_user_product(
         session=session,
         user_id=user_ananth.id,
         card_activation_date=parse_date("2020-01-01").date(),
@@ -140,21 +140,21 @@ def _create_user_ananth_and_do_swipes(session: Session) -> BaseLoan:
     # Create card swipes.
     swipe_1_ananth = create_card_swipe(
         session=session,
-        user_card=user_card_ananth,
+        user_loan=user_loan_ananth,
         txn_time=parse_date("2020-01-15 14:23:11"),
         amount=Decimal(1000),
         description="Amazon.com",
     )
     swipe_2_ananth = create_card_swipe(
         session=session,
-        user_card=user_card_ananth,
+        user_loan=user_loan_ananth,
         txn_time=parse_date("2020-01-12 11:22:11"),
         amount=Decimal(5000),
         description="Flipkart.com",
     )
     swipe_3_ananth = create_card_swipe(
         session=session,
-        user_card=user_card_ananth,
+        user_loan=user_loan_ananth,
         txn_time=parse_date("2020-01-25 11:22:11"),
         amount=Decimal("500.75"),
         description="Flipkart.com",
@@ -170,17 +170,17 @@ def _create_user_ananth_and_do_swipes(session: Session) -> BaseLoan:
     assert unbilled_bal_ananth_bill_1 == Decimal("6500.75")
 
     _, lender_payable_ananth = get_account_balance_from_str(
-        session, f"{user_card_ananth.loan_id}/loan/lender_payable/l"
+        session, f"{user_loan_ananth.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable_ananth == Decimal("6500.75")
-    return user_card_ananth
+    return user_loan_ananth
 
 
 def test_dmi_recon_process_1(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
-    user_card_raghav = _create_user_raghav_and_do_swipes(session)
-    user_card_ananth = _create_user_ananth_and_do_swipes(session)
+    user_loan_raghav = _create_user_raghav_and_do_swipes(session)
+    user_loan_ananth = _create_user_ananth_and_do_swipes(session)
 
     # Incur interest for last month's period.
     lender_interest_incur(
@@ -188,18 +188,18 @@ def test_dmi_recon_process_1(session: Session) -> None:
     )
 
     _, lender_payable_raghav = get_account_balance_from_str(
-        session, f"{user_card_raghav.loan_id}/loan/lender_payable/l"
+        session, f"{user_loan_raghav.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable_raghav == Decimal("1114.90")
 
     _, lender_payable_ananth = get_account_balance_from_str(
-        session, f"{user_card_ananth.loan_id}/loan/lender_payable/l"
+        session, f"{user_loan_ananth.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable_ananth == Decimal("6557.24")
 
     # We generate the two bills.
-    bill_raghav = bill_generate(user_card=user_card_raghav)
-    bill_ananth = bill_generate(user_card=user_card_ananth)
+    bill_raghav = bill_generate(user_loan=user_loan_raghav)
+    bill_ananth = bill_generate(user_loan=user_loan_ananth)
 
     _, billed_amount_raghav = get_account_balance_from_str(
         session, book_string=f"{bill_raghav.id}/bill/principal_receivable/a"
@@ -219,14 +219,14 @@ def test_dmi_recon_process_1(session: Session) -> None:
     # Some payment comes
     payment_received(
         session=session,
-        user_card=user_card_raghav,
+        user_loan=user_loan_raghav,
         payment_amount=200,
         payment_date=parse_date("2020-02-10 15:23:20"),
         payment_request_id="r23gs23",
     )
     payment_received(
         session=session,
-        user_card=user_card_ananth,
+        user_loan=user_loan_ananth,
         payment_amount=500,
         payment_date=parse_date("2020-02-13 15:33:20"),
         payment_request_id="r23gs23",
@@ -243,10 +243,10 @@ def test_dmi_recon_process_1(session: Session) -> None:
     assert billed_amount_ananth == Decimal("6000.75")
 
     accrue_interest_on_all_bills(
-        session, bill_raghav.table.bill_due_date + relativedelta(days=1), user_card_raghav
+        session, bill_raghav.table.bill_due_date + relativedelta(days=1), user_loan_raghav
     )
     accrue_interest_on_all_bills(
-        session, bill_ananth.table.bill_due_date + relativedelta(days=1), user_card_ananth
+        session, bill_ananth.table.bill_due_date + relativedelta(days=1), user_loan_ananth
     )
 
     # Check for interest accrued
@@ -262,14 +262,14 @@ def test_dmi_recon_process_1(session: Session) -> None:
     # Payment came after interest has been accrued.
     payment_received(
         session=session,
-        user_card=user_card_raghav,
+        user_loan=user_loan_raghav,
         payment_amount=100,
         payment_date=parse_date("2020-02-26 15:23:20"),
         payment_request_id="r23gs23",
     )
     payment_received(
         session=session,
-        user_card=user_card_ananth,
+        user_loan=user_loan_ananth,
         payment_amount=50,
         payment_date=parse_date("2020-02-25 15:33:20"),
         payment_request_id="r23gs23",
@@ -292,6 +292,6 @@ def test_dmi_recon_process_1(session: Session) -> None:
     lender_interest_incur(session, from_date=from_date, to_date=to_date)
 
     _, lender_payable_raghav = get_account_balance_from_str(
-        session, f"{user_card_raghav.loan_id}/loan/lender_payable/l"
+        session, f"{user_loan_raghav.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable_raghav == Decimal("829.82")

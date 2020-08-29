@@ -48,7 +48,10 @@ def upgrade() -> None:
         sa.Column("card_type", sa.String(length=5), nullable=False),
         sa.Column("last_5_digits", sa.String(length=5), nullable=False),
         sa.Column("status", sa.String(length=15), nullable=False),
-        sa.ForeignKeyConstraint(["card_type"], ["v3_card_types.name"],),
+        sa.ForeignKeyConstraint(
+            ["card_type"],
+            ["v3_card_types.name"],
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("kit_number"),
     )
@@ -124,9 +127,18 @@ def upgrade() -> None:
         sa.Column("loan_id", sa.Integer(), nullable=True),
         sa.Column("details", sa.JSON(), server_default="{}", nullable=True),
         sa.Column("row_status", sa.String(length=20), nullable=False),
-        sa.ForeignKeyConstraint(["loan_id"], ["loan.id"],),
-        sa.ForeignKeyConstraint(["kit_number"], ["v3_card_kit_numbers.kit_number"],),
-        sa.ForeignKeyConstraint(["user_id"], ["v3_users.id"],),
+        sa.ForeignKeyConstraint(
+            ["loan_id"],
+            ["loan.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["kit_number"],
+            ["v3_card_kit_numbers.kit_number"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["user_id"],
+            ["v3_users.id"],
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -231,6 +243,7 @@ def upgrade() -> None:
     op.create_table(
         "card_emis",
         sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("bill_id", sa.Integer(), nullable=True),
         sa.Column("due_date", sa.Date(), nullable=True),
         sa.Column("due_amount", sa.DECIMAL(), nullable=False),
         sa.Column("total_due_amount", sa.DECIMAL(), nullable=False),
@@ -256,6 +269,7 @@ def upgrade() -> None:
         sa.Column("loan_id", sa.Integer(), nullable=False),
         sa.Column("extra_details", sa.JSON(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
+        sa.ForeignKeyConstraint(["bill_id"], ["loan_data.id"], name="fk_card_emis_bill_id"),
         sa.ForeignKeyConstraint(["loan_id"], ["loan.id"], name="fk_card_emis_loan_id"),
     )
 

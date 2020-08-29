@@ -33,7 +33,10 @@ def create_products(session: Session) -> None:
 
 
 def create_user(session: Session) -> None:
-    u = User(id=4, performed_by=123,)
+    u = User(
+        id=4,
+        performed_by=123,
+    )
     session.add(u)
     session.flush()
 
@@ -104,17 +107,17 @@ def test_create_term_loan(session: Session) -> None:
     assert loan.product_type == "term_loan_2"
     assert loan.amortization_date == parse_date("2020-08-01").date()
 
-    user_card = get_user_product(session=session, user_id=loan.user_id, card_type="term_loan_2")
-    assert isinstance(user_card, TermLoan2) == True
+    user_loan = get_user_product(session=session, user_id=loan.user_id, card_type="term_loan_2")
+    assert isinstance(user_loan, TermLoan2) == True
 
-    loan_data = session.query(LoanData).filter(LoanData.loan_id == user_card.loan_id).one()
+    loan_data = session.query(LoanData).filter(LoanData.loan_id == user_loan.loan_id).one()
 
     assert loan_data.bill_start_date == parse_date("2020-08-01").date()
     assert loan_data.bill_close_date == parse_date("2021-07-16").date()
 
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == user_loan.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
@@ -140,17 +143,17 @@ def test_create_term_loan_2(session: Session) -> None:
     assert loan.product_type == "term_loan_2"
     assert loan.amortization_date == parse_date("2018-12-22").date()
 
-    user_card = get_user_product(session=session, user_id=loan.user_id, card_type="term_loan_2")
-    assert isinstance(user_card, TermLoan2) == True
+    user_loan = get_user_product(session=session, user_id=loan.user_id, card_type="term_loan_2")
+    assert isinstance(user_loan, TermLoan2) == True
 
-    loan_data = session.query(LoanData).filter(LoanData.loan_id == user_card.loan_id).one()
+    loan_data = session.query(LoanData).filter(LoanData.loan_id == user_loan.loan_id).one()
 
     assert loan_data.bill_start_date == parse_date("2018-12-22").date()
     assert loan_data.bill_close_date == parse_date("2019-11-30").date()
 
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
+        .filter(CardEmis.loan_id == user_loan.loan_id, CardEmis.row_status == "active")
         .order_by(CardEmis.emi_number.asc())
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]

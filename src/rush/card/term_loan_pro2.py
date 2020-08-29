@@ -13,7 +13,7 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
-from rush.card.utils import get_product_id_from_card_type
+from rush.card.utils import create_user_product_mapping
 from rush.ledger_events import loan_disbursement_event
 from rush.models import (
     LedgerTriggerEvent,
@@ -31,14 +31,14 @@ class TermLoanPro2Bill(BaseBill):
 
     def get_relative_delta_for_emi(self, emi_number: int, amortization_date: Date) -> Dict[str, int]:
         """
-            Sample for Tenure Loan Pro2:
-            +-----------+------------------+----------------------+---------------------+--------------+---------------------+
-            | loan_id   | loan_type        | product_order_date   | agreement_date      | emi_number   | due_date            |
-            |-----------+------------------+----------------------+---------------------+--------------+---------------------|
-            | 1051798   | Tenure Loan Pro2 | 2018-12-31 00:00:00  | 2018-12-29 00:00:00 | 1            | 2019-02-01 00:00:00 |
-            | 1051798   | Tenure Loan Pro2 | 2018-12-31 00:00:00  | 2018-12-29 00:00:00 | 2            | 2019-03-01 00:00:00 |
-            | 1051798   | Tenure Loan Pro2 | 2018-12-31 00:00:00  | 2018-12-29 00:00:00 | 3            | 2019-04-01 00:00:00 |
-            +-----------+------------------+----------------------+---------------------+--------------+---------------------+
+        Sample for Tenure Loan Pro2:
+        +-----------+------------------+----------------------+---------------------+--------------+---------------------+
+        | loan_id   | loan_type        | product_order_date   | agreement_date      | emi_number   | due_date            |
+        |-----------+------------------+----------------------+---------------------+--------------+---------------------|
+        | 1051798   | Tenure Loan Pro2 | 2018-12-31 00:00:00  | 2018-12-29 00:00:00 | 1            | 2019-02-01 00:00:00 |
+        | 1051798   | Tenure Loan Pro2 | 2018-12-31 00:00:00  | 2018-12-29 00:00:00 | 2            | 2019-03-01 00:00:00 |
+        | 1051798   | Tenure Loan Pro2 | 2018-12-31 00:00:00  | 2018-12-29 00:00:00 | 3            | 2019-04-01 00:00:00 |
+        +-----------+------------------+----------------------+---------------------+--------------+---------------------+
         """
         if emi_number == 1:
             return {"months": 0, "days": 0}
@@ -62,10 +62,16 @@ class TermLoanPro2(BaseLoan):
 
     @classmethod
     def create(cls, session: Session, **kwargs) -> Loan:
+        user_product_id = kwargs.get("user_product_id")
+        if not user_product_id:
+            user_product_id = create_user_product_mapping(
+                session=session, user_id=kwargs["user_id"], product_type=kwargs["card_type"]
+            ).id
+
         loan = cls(
             session=session,
             user_id=kwargs["user_id"],
-            product_id=get_product_id_from_card_type(session=session, card_type=kwargs["card_type"]),
+            user_product_id=user_product_id,
             lender_id=kwargs["lender_id"],
             rc_rate_of_interest_monthly=Decimal(3),
             lender_rate_of_interest_annual=Decimal(18),
@@ -112,15 +118,15 @@ class TermLoanPro2(BaseLoan):
         loan_disbursement_event(session=session, loan=loan, event=event, bill_id=loan_data.id)
 
         # create emis for term loan.
-        from rush.create_emi import create_emis_for_card
+        from rush.create_emi import create_emis_for_bill
 
         bill = cls.bill_class(session=session, loan_data=loan_data)
 
-        create_emis_for_card(
+        create_emis_for_bill(
             session=session,
-            user_card=loan,
+            user_loan=loan,
             bill=bill,
-            interest=bill.get_interest_to_charge(rate_of_interest=loan.rc_rate_of_interest_monthly),
+            # interest=bill.get_interest_to_charge(rate_of_interest=loan.rc_rate_of_interest_monthly),
         )
 
         return loan
