@@ -17,6 +17,7 @@ from rush.ledger_utils import (
     get_remaining_bill_balance,
 )
 from rush.models import (
+    CardEmis,
     CardTransaction,
     LedgerTriggerEvent,
     LoanData,
@@ -126,29 +127,49 @@ def payment_received_event(
 
 
 def find_amount_to_slide_in_bills(user_card: BaseLoan, total_amount_to_slide: Decimal) -> list:
-    unpaid_bills = user_card.get_unpaid_bills()
-    bills_dict = [
-        {
-            "bill": bill,
-            "total_outstanding": get_remaining_bill_balance(user_card.session, bill)["total_due"],
-            "monthly_instalment": bill.get_min_for_schedule(),
-            "amount_to_adjust": 0,
-        }
-        for bill in unpaid_bills
-    ]
-    total_loan_outstanding = sum(bill["total_outstanding"] for bill in bills_dict)
-    # Either nothing is left to slide or loan is completely settled and there is excess payment.
-    while total_amount_to_slide > 0 and total_loan_outstanding > 0:
-        for bill_data in bills_dict:
-            amount_to_adjust = min(
-                bill_data["monthly_instalment"], total_amount_to_slide, bill_data["total_outstanding"]
+    card_emis = (
+        user_card.session.query(CardEmis)
+        .filter(
+            CardEmis.loan_id == user_card.loan_id,
+            CardEmis.row_status == "active",
+            CardEmis.payment_status == "UnPaid",
+            CardEmis.bill_id == None,
+        )
+        .order_by(CardEmis.emi_number)
+        .all()
+    )
+    total_amount_to_slide = min(total_amount_to_slide, user_card.get_total_outstanding())
+    bill_id_and_amount_to_adjust = {}
+    for emi in card_emis:
+        payment_received_on_emi = emi.get_payment_received_on_emi()
+        bills_split = {k: Decimal(v) for k, v in emi.extra_details.items()}
+
+        # I need to reduce the payment that we have received on this emi from the bill splits.
+        if payment_received_on_emi:
+            for bill_id, bill_split_value in bills_split.items():
+                amount_to_reduce_per_bill = min(bill_split_value, payment_received_on_emi)
+                bills_split[bill_id] -= amount_to_reduce_per_bill
+
+        for bill_id, bill_split_value in bills_split.items():
+            if bill_split_value == 0:
+                continue
+            # TODO check bill outstanding and the amount to adjust shouldn't be more than that.
+            amount_to_adjust = min(bill_split_value, total_amount_to_slide)
+            bill_id_and_amount_to_adjust[bill_id] = (
+                bill_id_and_amount_to_adjust.get(bill_id, 0) + amount_to_adjust
             )
-            bill_data["amount_to_adjust"] += amount_to_adjust
-            bill_data["total_outstanding"] -= amount_to_adjust
             total_amount_to_slide -= amount_to_adjust
-            total_loan_outstanding -= amount_to_adjust
-    filtered_bills_dict = filter(lambda x: x["amount_to_adjust"] > 0, bills_dict)
-    return filtered_bills_dict
+        if total_amount_to_slide == 0:
+            break
+    bill_and_amount_to_adjust_list = []
+    for bill_id, amount_to_adjust in bill_id_and_amount_to_adjust.items():
+        bill = user_card.session.query(LoanData).filter_by(id=bill_id).one()
+        bill_and_amount_to_adjust_dict = {
+            "bill": user_card.convert_to_bill_class(bill),
+            "amount_to_adjust": amount_to_adjust,
+        }
+        bill_and_amount_to_adjust_list.append(bill_and_amount_to_adjust_dict)
+    return bill_and_amount_to_adjust_list
 
 
 def transaction_refund_event(
