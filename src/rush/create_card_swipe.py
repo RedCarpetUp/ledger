@@ -23,19 +23,19 @@ from rush.models import (
 
 def create_card_swipe(
     session: Session,
-    user_card: BaseLoan,
+    user_loan: BaseLoan,
     txn_time: DateTime,
     amount: Decimal,
     description: str,
     source: Optional[str] = "ECOM",
     mcc: Optional[str] = None,
 ) -> Dict[str, Any]:
-    if not hasattr(user_card, "amortization_date") or not user_card.amortization_date:
+    if not hasattr(user_loan, "amortization_date") or not user_loan.amortization_date:
         return {"result": "error", "message": "Card has not been activated"}
 
-    if txn_time.date() < user_card.amortization_date:
+    if txn_time.date() < user_loan.amortization_date:
         return {"result": "error", "message": "Transaction cannot happen before activation"}
-    card_bill = get_or_create_bill_for_card_swipe(user_card, txn_time)
+    card_bill = get_or_create_bill_for_card_swipe(user_loan=user_loan, txn_time=txn_time)
     if card_bill["result"] == "error":
         return card_bill
     card_bill = card_bill["bill"]
@@ -51,9 +51,9 @@ def create_card_swipe(
     session.flush()
 
     lt = LedgerTriggerEvent(
-        performed_by=user_card.user_id,
+        performed_by=user_loan.user_id,
         name="card_transaction",
-        loan_id=user_card.loan_id,
+        loan_id=user_loan.loan_id,
         post_date=txn_time,
         amount=amount,
         extra_details={"swipe_id": swipe.id},
@@ -61,8 +61,8 @@ def create_card_swipe(
     session.add(lt)
     session.flush()  # need id. TODO Gotta use table relationships
 
-    if isinstance(user_card, RubyCard):  # Need to load card balance at every swipe.
-        disburse_money_to_card(session, user_card, lt)
+    if isinstance(user_loan, RubyCard):  # Need to load card balance at every swipe.
+        disburse_money_to_card(session=session, user_loan=user_loan, event=lt)
 
-    card_transaction_event(session=session, user_card=user_card, event=lt, mcc=mcc)
+    card_transaction_event(session=session, user_loan=user_loan, event=lt, mcc=mcc)
     return {"result": "success", "data": swipe}
