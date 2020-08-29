@@ -18,10 +18,10 @@ from rush.models import (
 )
 
 
-def user_view(session, user_card: BaseLoan) -> dict:
+def user_view(session, user_loan: BaseLoan) -> dict:
     index = 0
     total_due, min_amount, current_bill_principal_amount, current_bill_principal_interest = 0, 0, 0, 0
-    unpaid_bills = user_card.get_unpaid_bills()
+    unpaid_bills = user_loan.get_unpaid_bills()
 
     for bill in unpaid_bills:
         bill_balance = get_remaining_bill_balance(session, bill)
@@ -43,17 +43,17 @@ def user_view(session, user_card: BaseLoan) -> dict:
     }
 
 
-def bill_view(session: Session, user_card: BaseLoan) -> list:
+def bill_view(session: Session, user_loan: BaseLoan) -> list:
 
     bill_details = []
     all_bills = (
         session.query(LoanData)
-        .filter(LoanData.user_id == user_card.user_id)
+        .filter(LoanData.user_id == user_loan.user_id)
         .order_by(LoanData.bill_start_date.desc())
         .all()
     )
     for bill in all_bills:
-        bill_balance = get_remaining_bill_balance(session, bill)
+        bill_balance = get_remaining_bill_balance(session=session, bill=bill)
         bill_details.append(
             {
                 "bill_id": bill.id,

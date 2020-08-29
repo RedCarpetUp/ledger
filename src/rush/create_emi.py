@@ -1,15 +1,13 @@
 from decimal import Decimal
-from typing import Union
+from typing import Optional
 
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
-from pendulum import parse as parse_date
 from sqlalchemy import or_
 from sqlalchemy.orm import (
     Session,
     aliased,
 )
-from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.sql import func
 
 from rush.anomaly_detection import get_payment_events
@@ -18,21 +16,17 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
-from rush.ledger_utils import (
-    get_account_balance_from_str,
-    get_remaining_bill_balance,
-)
+from rush.ledger_utils import get_remaining_bill_balance
 from rush.models import (
+    BillFee,
     BookAccount,
     CardEmis,
     EmiPaymentMapping,
     EventDpd,
-    Fee,
     LedgerEntry,
     LedgerTriggerEvent,
     LoanData,
     LoanMoratorium,
-    UserCard,
 )
 from rush.utils import (
     div,
@@ -42,14 +36,14 @@ from rush.utils import (
 
 def create_emis_for_bill(
     session: Session,
-    user_card: BaseLoan,
+    user_loan: BaseLoan,
     bill: BaseBill,
     last_emi: CardEmis = None,
     bill_accumalation_till_date: Decimal = None,
 ) -> None:
     # In case of term loan, bill_class is set to None.
     # Therefore need to pass LoanData as bill instead of BaseBill class.
-    bill_data = bill if user_card.bill_class is None else bill.table
+    bill_data = bill if user_loan.bill_class is None else bill.table
 
     bill_tenure = bill_data.bill_tenure
     if not last_emi:
@@ -85,7 +79,7 @@ def create_emis_for_bill(
         total_closing_balance_post_due_date += interest
         extra_details = {str(bill_data.id): str(due_amount)}
         new_emi = CardEmis(
-            loan_id=user_card.loan_id,
+            loan_id=user_loan.loan_id,
             bill_id=bill_data.id,
             emi_number=i,
             total_closing_balance=total_closing_balance,
@@ -102,10 +96,10 @@ def create_emis_for_bill(
     session.flush()
 
     # Recreate loan level emis
-    group_bills_to_create_loan_schedule(user_card)
+    group_bills_to_create_loan_schedule(user_loan=user_loan)
 
 
-def slide_payments(user_card: BaseLoan, payment_event: LedgerTriggerEvent = None) -> None:
+def slide_payments(user_loan: BaseLoan, payment_event: Optional[LedgerTriggerEvent] = None) -> None:
     def slide_payments_repeated_logic(
         all_emis,
         payment_received_and_adjusted,
@@ -182,15 +176,15 @@ def slide_payments(user_card: BaseLoan, payment_event: LedgerTriggerEvent = None
                     emi.dpd = 0
                     # Create payment mapping
                     create_emi_payment_mapping(
-                        session,
-                        user_card,
-                        emi.emi_number,
-                        last_payment_date,
-                        payment_request_id,
-                        emi.interest_received,
-                        emi.late_fee_received,
-                        emi.atm_fee_received,
-                        emi.payment_received,
+                        session=session,
+                        user_loan=user_loan,
+                        emi_number=emi.emi_number,
+                        payment_date=last_payment_date,
+                        payment_request_id=payment_request_id,
+                        interest_received=emi.interest_received,
+                        late_fee_received=emi.late_fee_received,
+                        atm_fee_received=emi.atm_fee_received,
+                        principal_received=emi.payment_received,
                     )
                     continue
                 diff = emi.total_due_amount - payment_received_and_adjusted
@@ -208,15 +202,15 @@ def slide_payments(user_card: BaseLoan, payment_event: LedgerTriggerEvent = None
                         emi.total_closing_balance_post_due_date -= payment_received_and_adjusted
                         # Create payment mapping
                         create_emi_payment_mapping(
-                            session,
-                            user_card,
-                            emi.emi_number,
-                            last_payment_date,
-                            payment_request_id,
-                            emi.interest_received,
-                            emi.late_fee_received,
-                            emi.atm_fee_received,
-                            emi.payment_received,
+                            session=session,
+                            user_loan=user_loan,
+                            emi_number=emi.emi_number,
+                            payment_date=last_payment_date,
+                            payment_request_id=payment_request_id,
+                            interest_received=emi.interest_received,
+                            late_fee_received=emi.late_fee_received,
+                            atm_fee_received=emi.atm_fee_received,
+                            principal_received=emi.payment_received,
                         )
                         break
                     else:
@@ -233,15 +227,15 @@ def slide_payments(user_card: BaseLoan, payment_event: LedgerTriggerEvent = None
                             emi.total_closing_balance_post_due_date -= payment_received_and_adjusted
                             # Create payment mapping
                             create_emi_payment_mapping(
-                                session,
-                                user_card,
-                                emi.emi_number,
-                                last_payment_date,
-                                payment_request_id,
-                                emi.interest_received,
-                                emi.late_fee_received,
-                                emi.atm_fee_received,
-                                emi.payment_received,
+                                session=session,
+                                user_loan=user_loan,
+                                emi_number=emi.emi_number,
+                                payment_date=last_payment_date,
+                                payment_request_id=payment_request_id,
+                                interest_received=emi.interest_received,
+                                late_fee_received=emi.late_fee_received,
+                                atm_fee_received=emi.atm_fee_received,
+                                principal_received=emi.payment_received,
                             )
                             break
                         else:
@@ -264,15 +258,15 @@ def slide_payments(user_card: BaseLoan, payment_event: LedgerTriggerEvent = None
                                 emi.total_closing_balance_post_due_date -= payment_received_and_adjusted
                                 # Create payment mapping
                                 create_emi_payment_mapping(
-                                    session,
-                                    user_card,
-                                    emi.emi_number,
-                                    last_payment_date,
-                                    payment_request_id,
-                                    emi.interest_received,
-                                    emi.late_fee_received,
-                                    emi.atm_fee_received,
-                                    emi.payment_received,
+                                    session=session,
+                                    user_loan=user_loan,
+                                    emi_number=emi.emi_number,
+                                    payment_date=last_payment_date,
+                                    payment_request_id=payment_request_id,
+                                    interest_received=emi.interest_received,
+                                    late_fee_received=emi.late_fee_received,
+                                    atm_fee_received=emi.atm_fee_received,
+                                    principal_received=emi.payment_received,
                                 )
                                 break
                             else:
@@ -290,15 +284,15 @@ def slide_payments(user_card: BaseLoan, payment_event: LedgerTriggerEvent = None
                                     )
                                     # Create payment mapping
                                     create_emi_payment_mapping(
-                                        session,
-                                        user_card,
-                                        emi.emi_number,
-                                        last_payment_date,
-                                        payment_request_id,
-                                        emi.interest_received,
-                                        emi.late_fee_received,
-                                        emi.atm_fee_received,
-                                        emi.payment_received,
+                                        session=session,
+                                        user_loan=user_loan,
+                                        emi_number=emi.emi_number,
+                                        payment_date=last_payment_date,
+                                        payment_request_id=payment_request_id,
+                                        interest_received=emi.interest_received,
+                                        late_fee_received=emi.late_fee_received,
+                                        atm_fee_received=emi.atm_fee_received,
+                                        principal_received=emi.payment_received,
                                     )
                                     break
                 emi.late_fee_received = emi.late_fee
@@ -309,23 +303,23 @@ def slide_payments(user_card: BaseLoan, payment_event: LedgerTriggerEvent = None
                 last_paid_emi_number = emi.emi_number
                 # Create payment mapping
                 create_emi_payment_mapping(
-                    session,
-                    user_card,
-                    emi.emi_number,
-                    last_payment_date,
-                    payment_request_id,
-                    emi.interest_received,
-                    emi.late_fee_received,
-                    emi.atm_fee_received,
-                    emi.payment_received,
+                    session=session,
+                    user_loan=user_loan,
+                    emi_number=emi.emi_number,
+                    payment_date=last_payment_date,
+                    payment_request_id=payment_request_id,
+                    interest_received=emi.interest_received,
+                    late_fee_received=emi.late_fee_received,
+                    atm_fee_received=emi.atm_fee_received,
+                    principal_received=emi.payment_received,
                 )
                 payment_received_and_adjusted = abs(diff)
 
-    session = user_card.session
+    session = user_loan.session
     all_emis = (
         session.query(CardEmis)
         .filter(
-            CardEmis.loan_id == user_card.loan_id,
+            CardEmis.loan_id == user_loan.loan_id,
             CardEmis.row_status == "active",
             CardEmis.bill_id == None,
         )
@@ -339,7 +333,7 @@ def slide_payments(user_card: BaseLoan, payment_event: LedgerTriggerEvent = None
     last_paid_emi_number = 0
     last_payment_date = None
     all_paid = False
-    events = get_payment_events(session, user_card)
+    events = get_payment_events(session=session, user_loan=user_loan)
     if not payment_event:
         for event in events:
             payment_received_and_adjusted = Decimal(0)
@@ -347,11 +341,11 @@ def slide_payments(user_card: BaseLoan, payment_event: LedgerTriggerEvent = None
             payment_request_id = event.extra_details.get("payment_request_id")
             last_payment_date = event.post_date
             slide_payments_repeated_logic(
-                all_emis,
-                payment_received_and_adjusted,
-                payment_request_id,
-                last_payment_date,
-                last_paid_emi_number,
+                all_emis=all_emis,
+                payment_received_and_adjusted=payment_received_and_adjusted,
+                payment_request_id=payment_request_id,
+                last_payment_date=last_payment_date,
+                last_paid_emi_number=last_paid_emi_number,
                 all_paid=all_paid,
             )
     else:
@@ -360,21 +354,21 @@ def slide_payments(user_card: BaseLoan, payment_event: LedgerTriggerEvent = None
         payment_request_id = payment_event.extra_details.get("payment_request_id")
         last_payment_date = payment_event.post_date
         slide_payments_repeated_logic(
-            all_emis,
-            payment_received_and_adjusted,
-            payment_request_id,
-            last_payment_date,
-            last_paid_emi_number,
+            all_emis=all_emis,
+            payment_received_and_adjusted=payment_received_and_adjusted,
+            payment_request_id=payment_request_id,
+            last_payment_date=last_payment_date,
+            last_paid_emi_number=last_paid_emi_number,
             all_paid=all_paid,
         )
     session.flush()
 
 
-def adjust_late_fee_in_emis(session: Session, user_card: BaseLoan, bill: LoanData) -> None:
+def adjust_late_fee_in_emis(session: Session, user_loan: BaseLoan, bill: LoanData) -> None:
     emi = (
         session.query(CardEmis)
         .filter(
-            CardEmis.loan_id == user_card.loan_id,
+            CardEmis.loan_id == user_loan.loan_id,
             CardEmis.bill_id == bill.id,
             CardEmis.emi_number == 1,
             CardEmis.row_status == "active",
@@ -382,21 +376,25 @@ def adjust_late_fee_in_emis(session: Session, user_card: BaseLoan, bill: LoanDat
         .order_by(CardEmis.emi_number.asc())
         .first()
     )
-    late_fee = session.query(Fee).filter(Fee.bill_id == bill.id, Fee.name == "late_fee").one_or_none()
+    late_fee = (
+        session.query(BillFee)
+        .filter(BillFee.identifier_id == bill.id, BillFee.name == "late_fee")
+        .one_or_none()
+    )
     if late_fee and late_fee.gross_amount > 0:
         emi.total_closing_balance_post_due_date += late_fee.gross_amount
         emi.total_due_amount += late_fee.gross_amount
         emi.late_fee += late_fee.gross_amount
 
     # Recreate loan level emis
-    group_bills_to_create_loan_schedule(user_card)
+    group_bills_to_create_loan_schedule(user_loan=user_loan)
 
 
-def adjust_atm_fee_in_emis(session: Session, user_card: BaseLoan, bill: LoanData) -> None:
+def adjust_atm_fee_in_emis(session: Session, user_loan: BaseLoan, bill: LoanData) -> None:
     emi = (
         session.query(CardEmis)
         .filter(
-            CardEmis.loan_id == user_card.loan_id,
+            CardEmis.loan_id == user_loan.loan_id,
             CardEmis.bill_id == bill.id,
             CardEmis.emi_number == 1,
             CardEmis.row_status == "active",
@@ -404,7 +402,11 @@ def adjust_atm_fee_in_emis(session: Session, user_card: BaseLoan, bill: LoanData
         .order_by(CardEmis.emi_number.asc())
         .first()
     )
-    atm_fee = session.query(Fee).filter(Fee.bill_id == bill.id, Fee.name == "atm_fee").one_or_none()
+    atm_fee = (
+        session.query(BillFee)
+        .filter(BillFee.identifier_id == bill.id, BillFee.name == "atm_fee")
+        .one_or_none()
+    )
     if atm_fee and atm_fee.gross_amount > 0:
         emi.total_closing_balance_post_due_date += atm_fee.gross_amount
         emi.total_due_amount += atm_fee.gross_amount
@@ -412,12 +414,12 @@ def adjust_atm_fee_in_emis(session: Session, user_card: BaseLoan, bill: LoanData
         session.flush()
 
     # Recreate loan level emis
-    group_bills_to_create_loan_schedule(user_card)
+    group_bills_to_create_loan_schedule(user_loan=user_loan)
 
 
 def create_emi_payment_mapping(
     session: Session,
-    user_card: UserCard,
+    user_loan: BaseLoan,
     emi_number: int,
     payment_date: DateTime,
     payment_request_id: str,
@@ -427,7 +429,7 @@ def create_emi_payment_mapping(
     principal_received: Decimal,
 ) -> None:
     new_payment_mapping = EmiPaymentMapping(
-        loan_id=user_card.loan_id,
+        loan_id=user_loan.loan_id,
         emi_number=emi_number,
         payment_date=payment_date,
         payment_request_id=payment_request_id,
@@ -442,7 +444,7 @@ def create_emi_payment_mapping(
 
 
 def add_moratorium_to_loan_emi(
-    session: Session, user_card, loan_emis, start_date, months_to_be_inserted: int
+    session: Session, user_loan, loan_emis, start_date, months_to_be_inserted: int
 ):
     if not loan_emis:
         return {"result": "error", "message": "loan emis required"}
@@ -466,7 +468,7 @@ def add_moratorium_to_loan_emi(
                     # late fine and interest will be handled through events
                     if i != months_to_be_inserted:
                         new_emi = CardEmis(
-                            loan_id=user_card.loan_id,
+                            loan_id=user_loan.loan_id,
                             bill_id=emi.bill_id,
                             emi_number=(emi.emi_number + i),
                             total_closing_balance=emi.total_closing_balance,
@@ -496,7 +498,7 @@ def add_moratorium_to_loan_emi(
             # Need to just update emi related fields because
             # late fine and interest will be handled through events
             new_emi = CardEmis(
-                loan_id=user_card.loan_id,
+                loan_id=user_loan.loan_id,
                 bill_id=last_emi.bill_id,
                 emi_number=(emi_number_to_begin_insertion_from + i + 1),
                 total_closing_balance=last_emi.total_closing_balance,
@@ -525,12 +527,12 @@ def add_moratorium_to_loan_emi(
     return {"result": "success"}
 
 
-def check_moratorium_eligibility(user_card: BaseLoan):
-    session = user_card.session
+def check_moratorium_eligibility(user_loan: BaseLoan):
+    session = user_loan.session
 
     # Check if user has opted for moratorium and adjust that in schedule
     moratorium = (
-        session.query(LoanMoratorium).filter(LoanMoratorium.loan_id == user_card.loan_id).first()
+        session.query(LoanMoratorium).filter(LoanMoratorium.loan_id == user_loan.loan_id).first()
     )
     if moratorium:
         start_date = moratorium.start_date.date()
@@ -541,13 +543,13 @@ def check_moratorium_eligibility(user_card: BaseLoan):
             - moratorium.start_date.month
         )
 
-        all_bills = user_card.get_all_bills()
+        all_bills = user_loan.get_all_bills()
 
         for bill in all_bills:
             bill_emis = (
                 session.query(CardEmis)
                 .filter(
-                    CardEmis.loan_id == user_card.loan_id,
+                    CardEmis.loan_id == user_loan.loan_id,
                     CardEmis.row_status == "active",
                     CardEmis.bill_id == bill.id,
                 )
@@ -566,23 +568,29 @@ def check_moratorium_eligibility(user_card: BaseLoan):
                     return {"result": "error", "message": "Not eligible for moratorium"}
 
                 resp = add_moratorium_to_loan_emi(
-                    session, user_card, bill_emis, start_date, months_to_be_inserted
+                    session=session,
+                    user_loan=user_loan,
+                    loan_emis=bill_emis,
+                    start_date=start_date,
+                    months_to_be_inserted=months_to_be_inserted,
                 )
                 if resp["result"] == "error":
                     return resp
 
         # Recreate loan level emis
-        group_bills_to_create_loan_schedule(user_card)
+        group_bills_to_create_loan_schedule(user_loan=user_loan)
 
 
-def group_bills_to_create_loan_schedule(user_card: BaseLoan):
-    session = user_card.session
+def group_bills_to_create_loan_schedule(user_loan: BaseLoan):
+    session = user_loan.session
 
     # Get all loan level emis of the user
     all_emis = (
         session.query(CardEmis)
         .filter(
-            CardEmis.loan_id == user_card.id, CardEmis.row_status == "active", CardEmis.bill_id == None,
+            CardEmis.loan_id == user_loan.id,
+            CardEmis.row_status == "active",
+            CardEmis.bill_id == None,
         )
         .order_by(CardEmis.emi_number.asc())
         .all()
@@ -592,7 +600,7 @@ def group_bills_to_create_loan_schedule(user_card: BaseLoan):
 
     all_payment_mappings = (
         session.query(EmiPaymentMapping)
-        .filter(EmiPaymentMapping.loan_id == user_card.loan_id, EmiPaymentMapping.row_status == "active")
+        .filter(EmiPaymentMapping.loan_id == user_loan.loan_id, EmiPaymentMapping.row_status == "active")
         .all()
     )
     for mapping in all_payment_mappings:
@@ -615,7 +623,7 @@ def group_bills_to_create_loan_schedule(user_card: BaseLoan):
             func.json_agg(CardEmis.extra_details).label("total_extra_details"),
         )
         .filter(
-            CardEmis.loan_id == user_card.loan_id,
+            CardEmis.loan_id == user_loan.loan_id,
             CardEmis.row_status == "active",
             CardEmis.bill_id != None,
         )
@@ -627,7 +635,7 @@ def group_bills_to_create_loan_schedule(user_card: BaseLoan):
     emi_number = 1
     for cumulative_emi in grouped_values:
         new_emi = CardEmis(
-            loan_id=user_card.loan_id,
+            loan_id=user_loan.loan_id,
             bill_id=None,
             emi_number=emi_number,
             total_closing_balance=cumulative_emi.sum_total_closing_balance,
@@ -646,7 +654,7 @@ def group_bills_to_create_loan_schedule(user_card: BaseLoan):
         emi_number += 1
 
     # Slide all payments
-    slide_payments(user_card=user_card)
+    slide_payments(user_loan=user_loan)
     session.flush()
 
 
@@ -692,7 +700,7 @@ def entry_checks(
     return verdict
 
 
-def update_event_with_dpd(user_card: BaseLoan, post_date: DateTime = None) -> None:
+def update_event_with_dpd(user_loan: BaseLoan, post_date: DateTime = None) -> None:
     def actual_event_update(
         session: Session, is_debit: bool, ledger_trigger_event, ledger_entry, account
     ):
@@ -705,13 +713,16 @@ def update_event_with_dpd(user_card: BaseLoan, post_date: DateTime = None) -> No
         bills_touched.append(account.identifier)
         bill = (
             session.query(LoanData)
-            .filter(LoanData.loan_id == user_card.loan_id, LoanData.id == account.identifier,)
+            .filter(
+                LoanData.loan_id == user_loan.loan_id,
+                LoanData.id == account.identifier,
+            )
             .first()
         )
         dpd = (event_post_date - bill.bill_due_date).days
         new_event = EventDpd(
             bill_id=account.identifier,
-            loan_id=user_card.loan_id,
+            loan_id=user_loan.loan_id,
             event_id=ledger_trigger_event.id,
             credit=credit_amount,
             debit=debit_amount,
@@ -722,7 +733,7 @@ def update_event_with_dpd(user_card: BaseLoan, post_date: DateTime = None) -> No
         )
         session.add(new_event)
 
-    session = user_card.session
+    session = user_loan.session
 
     debit_book_account = aliased(BookAccount)
     credit_book_account = aliased(BookAccount)
@@ -814,8 +825,8 @@ def update_event_with_dpd(user_card: BaseLoan, post_date: DateTime = None) -> No
     #         emi.dpd = (post_date.date() - emi.due_date).days
 
     max_dpd = session.query(func.max(EventDpd.dpd).label("max_dpd")).one()
-    user_card.dpd = max_dpd.max_dpd
-    if not user_card.ever_dpd or max_dpd.max_dpd > user_card.ever_dpd:
-        user_card.ever_dpd = max_dpd.max_dpd
+    user_loan.dpd = max_dpd.max_dpd
+    if not user_loan.ever_dpd or max_dpd.max_dpd > user_loan.ever_dpd:
+        user_loan.ever_dpd = max_dpd.max_dpd
 
     session.flush()

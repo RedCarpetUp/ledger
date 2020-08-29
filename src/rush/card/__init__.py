@@ -1,5 +1,8 @@
 from decimal import Decimal
-from typing import Any
+from typing import (
+    Any,
+    Optional,
+)
 
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
@@ -13,22 +16,32 @@ from rush.ledger_events import limit_assignment_event
 from rush.models import (
     LedgerTriggerEvent,
     Loan,
-    Product,
     UserCard,
 )
 from rush.utils import get_current_ist_time
 
 
-def get_user_product(session: Session, user_id: int, card_type: str = "ruby") -> Loan:
-    user_card = (
-        session.query(Loan)
-        .join(Product, and_(Product.product_name == card_type, Product.id == Loan.product_id))
-        .filter(Loan.user_id == user_id, Loan.product_type == card_type)
-        .one()
+def get_user_product(
+    session: Session,
+    user_id: int,
+    card_type: str = "ruby",
+    loan_id: Optional[int] = None,
+    user_product_id: Optional[int] = None,
+) -> Loan:
+    user_product_query = session.query(Loan).filter(
+        Loan.user_id == user_id, Loan.product_type == card_type
     )
 
-    user_card.prepare(session=session)
-    return user_card
+    if loan_id is not None:
+        user_product_query = user_product_query.filter(Loan.id == loan_id)
+
+    if user_product_id is not None:
+        user_product_query = user_product_query.filter(Loan.id == user_product_id)
+
+    user_product = user_product_query.one()
+
+    user_product.prepare(session=session)
+    return user_product
 
 
 def create_user_product(session: Session, **kwargs) -> Loan:
@@ -38,8 +51,8 @@ def create_user_product(session: Session, **kwargs) -> Loan:
 
 def get_product_class(card_type: str) -> Any:
     """
-        Only classes imported within this file will be listed here.
-        Make sure to import every Product class.
+    Only classes imported within this file will be listed here.
+    Make sure to import every Product class.
     """
 
     for kls in BaseLoan.__subclasses__():
