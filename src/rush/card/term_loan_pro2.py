@@ -121,6 +121,9 @@ class TermLoanPro2(BaseLoan):
         from rush.create_emi import create_emis_for_bill
 
         bill = cls.bill_class(session=session, loan_data=loan_data)
+        loan_data.interest_to_charge = bill.get_interest_to_charge(
+            rate_of_interest=loan.rc_rate_of_interest_monthly
+        )
 
         create_emis_for_bill(
             session=session,

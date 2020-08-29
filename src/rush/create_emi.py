@@ -38,9 +38,10 @@ def create_emis_for_bill(
     session: Session,
     user_loan: BaseLoan,
     bill: BaseBill,
-    last_emi: CardEmis = None,
-    bill_accumalation_till_date: Decimal = None,
+    last_emi: Optional[CardEmis] = None,
+    bill_accumalation_till_date: Optional[Decimal] = None,
 ) -> None:
+    assert bill.table.id is not None
     bill_data = bill.table
     if not last_emi:
         due_date = bill_data.bill_start_date

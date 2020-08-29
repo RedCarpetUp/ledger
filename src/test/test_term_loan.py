@@ -117,7 +117,11 @@ def test_create_term_loan(session: Session) -> None:
 
     all_emis_query = (
         session.query(CardEmis)
-        .filter(CardEmis.loan_id == user_loan.loan_id, CardEmis.row_status == "active")
+        .filter(
+            CardEmis.loan_id == user_loan.loan_id,
+            CardEmis.row_status == "active",
+            CardEmis.bill_id == None,
+        )
         .order_by(CardEmis.emi_number.asc())
     )
     emis_dict = [u.as_dict() for u in all_emis_query.all()]
