@@ -15,7 +15,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     op.create_index(
         None,
         "card_emis",
@@ -25,5 +25,5 @@ def upgrade():
     )
 
 
-def downgrade():
+def downgrade() -> None:
     pass
