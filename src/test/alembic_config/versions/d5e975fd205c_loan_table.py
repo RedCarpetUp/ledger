@@ -48,10 +48,7 @@ def upgrade() -> None:
         sa.Column("card_type", sa.String(length=5), nullable=False),
         sa.Column("last_5_digits", sa.String(length=5), nullable=False),
         sa.Column("status", sa.String(length=15), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["card_type"],
-            ["v3_card_types.name"],
-        ),
+        sa.ForeignKeyConstraint(["card_type"], ["v3_card_types.name"],),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("kit_number"),
     )
@@ -127,18 +124,9 @@ def upgrade() -> None:
         sa.Column("loan_id", sa.Integer(), nullable=True),
         sa.Column("details", sa.JSON(), server_default="{}", nullable=True),
         sa.Column("row_status", sa.String(length=20), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["loan_id"],
-            ["loan.id"],
-        ),
-        sa.ForeignKeyConstraint(
-            ["kit_number"],
-            ["v3_card_kit_numbers.kit_number"],
-        ),
-        sa.ForeignKeyConstraint(
-            ["user_id"],
-            ["v3_users.id"],
-        ),
+        sa.ForeignKeyConstraint(["loan_id"], ["loan.id"],),
+        sa.ForeignKeyConstraint(["kit_number"], ["v3_card_kit_numbers.kit_number"],),
+        sa.ForeignKeyConstraint(["user_id"], ["v3_users.id"],),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(

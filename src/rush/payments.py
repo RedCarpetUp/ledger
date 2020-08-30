@@ -88,14 +88,14 @@ def refund_payment(
 
 
 def payment_received_event(
-    session: Session, user_card: BaseLoan, debit_book_str: str, event: LedgerTriggerEvent,
+    session: Session, user_loan: BaseLoan, debit_book_str: str, event: LedgerTriggerEvent,
 ) -> None:
     payment_received = Decimal(event.amount)
     if event.name == "merchant_refund":
         pass
     elif event.name == "payment_received":
         actual_payment = payment_received
-        bills_data = find_amount_to_slide_in_bills(user_card, payment_received)
+        bills_data = find_amount_to_slide_in_bills(user_loan, payment_received)
         for bill_data in bills_data:
             adjust_for_min(bill_data["bill"], bill_data["amount_to_adjust"], event.id)
             remaining_amount = _adjust_bill(
@@ -109,35 +109,35 @@ def payment_received_event(
                 remaining_amount == 0
             )  # The amount to adjust is computed for this bill. It should all settle.
             payment_received -= bill_data["amount_to_adjust"]
-        if user_card.should_reinstate_limit_on_payment:
-            user_card.reinstate_limit_on_payment(event=event, amount=actual_payment)
+        if user_loan.should_reinstate_limit_on_payment:
+            user_loan.reinstate_limit_on_payment(event=event, amount=actual_payment)
 
     if payment_received > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
             session=session,
-            loan_id=user_card.loan_id,
+            loan_id=user_loan.loan_id,
             event_id=event.id,
             amount=payment_received,
             debit_book_str=debit_book_str,
         )
 
     is_in_write_off = (
-        get_account_balance_from_str(session, f"{user_card.loan_id}/loan/write_off_expenses/e")[1] > 0
+        get_account_balance_from_str(session, f"{user_loan.loan_id}/loan/write_off_expenses/e")[1] > 0
     )
     if is_in_write_off:
-        recovery_event(user_card, event)
+        recovery_event(user_loan, event)
         # TODO set loan status to recovered.
     from rush.create_emi import slide_payments
 
-    slide_payments(user_card=user_card, payment_event=event)
+    slide_payments(user_loan=user_loan, payment_event=event)
 
 
-def find_amount_to_slide_in_bills(user_card: BaseLoan, total_amount_to_slide: Decimal) -> list:
-    unpaid_bills = user_card.get_unpaid_bills()
+def find_amount_to_slide_in_bills(user_loan: BaseLoan, total_amount_to_slide: Decimal) -> list:
+    unpaid_bills = user_loan.get_unpaid_bills()
     bills_dict = [
         {
             "bill": bill,
-            "total_outstanding": get_remaining_bill_balance(user_card.session, bill)["total_due"],
+            "total_outstanding": get_remaining_bill_balance(user_loan.session, bill)["total_due"],
             "monthly_instalment": bill.get_min_for_schedule(),
             "amount_to_adjust": 0,
         }
