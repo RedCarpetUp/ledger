@@ -6,10 +6,10 @@ from rush.ledger_events import add_min_amount_event
 from rush.models import LedgerTriggerEvent
 
 
-def add_min_to_all_bills(session: Session, post_date: DateTime, user_card: BaseLoan) -> None:
-    unpaid_bills = user_card.get_unpaid_bills()
+def add_min_to_all_bills(session: Session, post_date: DateTime, user_loan: BaseLoan) -> None:
+    unpaid_bills = user_loan.get_unpaid_bills()
     min_event = LedgerTriggerEvent(
-        name="min_amount_added", loan_id=user_card.loan_id, post_date=post_date, amount=0
+        name="min_amount_added", loan_id=user_loan.loan_id, post_date=post_date, amount=0
     )
     session.add(min_event)
     session.flush()

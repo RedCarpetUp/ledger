@@ -3,8 +3,6 @@ from decimal import Decimal
 from typing import (
     Any,
     Dict,
-    Optional,
-    Tuple,
 )
 
 from pendulum import Date as PythonDate
@@ -15,6 +13,7 @@ from sqlalchemy import (
     JSON,
     TIMESTAMP,
     Boolean,
+    CheckConstraint,
     Column,
     Date,
     ForeignKey,
@@ -132,7 +131,7 @@ class LenderPy(AuditMixinPy):
 
 class Product(AuditMixin):
     __tablename__ = "product"
-    product_name = Column(String(), nullable=False)
+    product_name = Column(String(), nullable=False, unique=True)
 
 
 @py_dataclass
@@ -224,13 +223,21 @@ class User(AuditMixin):
     data_class = UserData
 
 
+class UserProduct(AuditMixin):
+    __tablename__ = "user_product"
+
+    user_id = Column(Integer, ForeignKey(User.id), nullable=False)
+    product_type = Column(String(), ForeignKey(Product.product_name), nullable=False)
+
+
 class Loan(AuditMixin):
     __tablename__ = "loan"
     user_id = Column(Integer, ForeignKey(User.id))
-    amortization_date = Column(TIMESTAMP, nullable=False)
-    loan_status = Column(String(), nullable=False)
-    product_type = Column(String(), nullable=False)
-    product_id = Column(Integer, ForeignKey(Product.id))
+    user_product_id = Column(Integer, ForeignKey(UserProduct.id), nullable=True)
+    amortization_date = Column(TIMESTAMP, nullable=True)
+    loan_status = Column(String(), nullable=True)
+    interest_type = Column(String(), nullable=True)
+    product_type = Column(String(), ForeignKey(Product.product_name), nullable=False)
     lender_id = Column(Integer, ForeignKey(Lenders.id), nullable=False)
     rc_rate_of_interest_monthly = Column(Numeric, nullable=False)
     lender_rate_of_interest_annual = Column(Numeric, nullable=False)
@@ -526,9 +533,10 @@ class LoanMoratorium(AuditMixin):
 class Fee(AuditMixin):
     __tablename__ = "fee"
 
-    bill_id = Column(Integer, ForeignKey(LoanData.id), nullable=True)
+    user_id = Column(Integer, ForeignKey(User.id))
     event_id = Column(Integer, ForeignKey(LedgerTriggerEvent.id), nullable=False)
-    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
+    identifier = Column(String(), nullable=False)
+    identifier_id = Column(Integer, nullable=False)
     name = Column(String(30), nullable=False)
     net_amount = Column(Numeric, nullable=False)
     sgst_rate = Column(Numeric, nullable=False)
@@ -541,6 +549,32 @@ class Fee(AuditMixin):
     igst_paid = Column(Numeric, nullable=True)
     gross_amount_paid = Column(Numeric, nullable=True)
     fee_status = Column(String(10), nullable=False, default="UNPAID")
+
+    __mapper_args__ = {
+        "polymorphic_identity": "fee",
+        "polymorphic_on": identifier,
+    }
+
+
+class BillFee(Fee):
+
+    __mapper_args__ = {
+        "polymorphic_identity": "bill",
+    }
+
+
+class LoanFee(Fee):
+
+    __mapper_args__ = {
+        "polymorphic_identity": "loan",
+    }
+
+
+class ProductFee(Fee):
+
+    __mapper_args__ = {
+        "polymorphic_identity": "product",
+    }
 
 
 class EventDpd(AuditMixin):
