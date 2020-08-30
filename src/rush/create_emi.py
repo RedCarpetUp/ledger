@@ -24,6 +24,7 @@ from rush.models import (
     EmiPaymentMapping,
     EventDpd,
     LedgerEntry,
+    LedgerEntryPy,
     LedgerTriggerEvent,
     LoanData,
     LoanMoratorium,
@@ -313,6 +314,12 @@ def slide_payments(user_loan: BaseLoan, payment_event: Optional[LedgerTriggerEve
                 )
                 payment_received_and_adjusted = abs(diff)
 
+        # Got to close all bill if all payment is done
+        if all_paid:
+            from rush.create_bill import close_bills
+
+            close_bills(user_loan, last_payment_date)
+
     session = user_loan.session
     all_emis = (
         session.query(CardEmis)
@@ -442,7 +449,7 @@ def create_emi_payment_mapping(
 
 
 def add_moratorium_to_loan_emi(
-    session: Session, user_loan, loan_emis, start_date, months_to_be_inserted: int
+    session: Session, user_loan, loan_emis, start_date, months_to_be_inserted: int, bill_id: int
 ):
     if not loan_emis:
         return {"result": "error", "message": "loan emis required"}
@@ -457,70 +464,88 @@ def add_moratorium_to_loan_emi(
         is_insertion_happening_in_the_end = True
         emi_number_to_begin_insertion_from = loan_emis[len(loan_emis) - 1].emi_number
     if not is_insertion_happening_in_the_end:
+        # Get values from shift emi
+        shift_emi = loan_emis[emi_number_to_begin_insertion_from - 1]
+        shift_emi_due_date = shift_emi.due_date
+        shift_emi_closing_balance = shift_emi.total_closing_balance
+        shift_emi_closing_balance_post_due_date = shift_emi.total_closing_balance_post_due_date
+
         for emi in loan_emis:
-            # temp_emi = emi.copy()
-            if emi.emi_number == emi_number_to_begin_insertion_from:
-                for i in range(months_to_be_inserted + 1):
-                    # insert_emi = temp_emi.copy()
-                    # Need to just update emi related fields because
-                    # late fine and interest will be handled through events
-                    if i != months_to_be_inserted:
-                        new_emi = CardEmis(
-                            loan_id=user_loan.loan_id,
-                            bill_id=emi.bill_id,
-                            emi_number=(emi.emi_number + i),
-                            total_closing_balance=emi.total_closing_balance,
-                            total_closing_balance_post_due_date=emi.total_closing_balance_post_due_date,
-                            due_amount=Decimal(0),
-                            late_fee=Decimal(0),
-                            interest=Decimal(0),
-                            interest_current_month=Decimal(0),
-                            interest_next_month=Decimal(0),
-                            total_due_amount=Decimal(0),
-                            due_date=(emi.due_date + relativedelta(months=+i)),
-                            extra_details={"moratorium": True},
-                            payment_status="Paid",
-                        )
-                        session.add(new_emi)
-                        continue
-                    emi.emi_number += i
-                    emi.due_date += relativedelta(months=+i)
-            elif emi.emi_number > emi_number_to_begin_insertion_from:
+            if emi.emi_number >= emi_number_to_begin_insertion_from:
                 emi.emi_number += months_to_be_inserted
                 emi.due_date += relativedelta(months=+months_to_be_inserted)
-            if emi.emi_number != emi_number_to_begin_insertion_from:
+            elif emi.emi_number != emi_number_to_begin_insertion_from:
                 continue
-    else:
-        last_emi = loan_emis[-1]
+
         for i in range(months_to_be_inserted):
             # Need to just update emi related fields because
             # late fine and interest will be handled through events
             new_emi = CardEmis(
                 loan_id=user_loan.loan_id,
-                bill_id=last_emi.bill_id,
-                emi_number=(emi_number_to_begin_insertion_from + i + 1),
-                total_closing_balance=last_emi.total_closing_balance,
-                total_closing_balance_post_due_date=last_emi.total_closing_balance_post_due_date,
-                due_amount=last_emi.due_amount,
-                late_fee=last_emi.late_fee,
-                interest=last_emi.interest,
-                interest_current_month=last_emi.interest_current_month,
-                interest_next_month=last_emi.interest_next_month,
-                total_due_amount=last_emi.total_due_amount,
-                due_date=last_emi.due_date + relativedelta(months=+(i + 1)),
+                bill_id=bill_id,
+                emi_number=(emi_number_to_begin_insertion_from + i),
+                total_closing_balance=shift_emi_closing_balance,
+                total_closing_balance_post_due_date=shift_emi_closing_balance_post_due_date,
+                due_amount=Decimal(0),
+                late_fee=Decimal(0),
+                interest=Decimal(0),
+                interest_current_month=Decimal(0),
+                interest_next_month=Decimal(0),
+                total_due_amount=Decimal(0),
+                due_date=(shift_emi_due_date + relativedelta(months=+i)),
                 extra_details={"moratorium": True},
                 payment_status="Paid",
+                row_status="inactive",
             )
             session.add(new_emi)
+    else:
+        # TODO, Do we even need this case?
+        last_emi = loan_emis[-1]
+        # for i in range(months_to_be_inserted):
+        #     # Need to just update emi related fields because
+        #     # late fine and interest will be handled through events
+        #     new_emi = CardEmis(
+        #         loan_id=user_loan.loan_id,
+        #         bill_id=last_emi.bill_id,
+        #         emi_number=(emi_number_to_begin_insertion_from + i + 1),
+        #         total_closing_balance=last_emi.total_closing_balance,
+        #         total_closing_balance_post_due_date=last_emi.total_closing_balance_post_due_date,
+        #         due_amount=last_emi.due_amount,
+        #         late_fee=last_emi.late_fee,
+        #         interest=last_emi.interest,
+        #         interest_current_month=last_emi.interest_current_month,
+        #         interest_next_month=last_emi.interest_next_month,
+        #         total_due_amount=last_emi.total_due_amount,
+        #         due_date=last_emi.due_date + relativedelta(months=+(i + 1)),
+        #         extra_details={"moratorium": True},
+        #         payment_status="Paid",
+        #     )
+        #     session.add(new_emi)
+
+    # Get bill schedule again
+    bill_emis = (
+        session.query(CardEmis)
+        .filter(
+            CardEmis.loan_id == user_loan.loan_id,
+            CardEmis.row_status == "inactive",
+            CardEmis.bill_id == bill_id,
+        )
+        .order_by(CardEmis.emi_number.asc())
+        .all()
+    )
     # Total due amount adjustment
     total_due_amount_addition_interest = 0
-    for i in range(
-        emi_number_to_begin_insertion_from, emi_number_to_begin_insertion_from + months_to_be_inserted
-    ):
-        total_due_amount_addition_interest += loan_emis[i - 1].interest
-    loan_emis[
-        emi_number_to_begin_insertion_from - 1
+    shifted_emi_now_number = emi_number_to_begin_insertion_from + months_to_be_inserted
+    for i in range(shifted_emi_now_number, shifted_emi_now_number + months_to_be_inserted):
+        total_due_amount_addition_interest += bill_emis[i - 1].interest
+    bill_emis[
+        emi_number_to_begin_insertion_from + months_to_be_inserted - 1
     ].total_due_amount += total_due_amount_addition_interest
+
+    # Reactivate all emis
+    for emi in bill_emis:
+        emi.row_status = "active"
+
     session.flush()
     return {"result": "success"}
 
@@ -558,6 +583,11 @@ def check_moratorium_eligibility(user_loan: BaseLoan):
                 emi for emi in bill_emis if emi.due_date >= start_date and emi.due_date < end_date
             ]
             if has_any_emis_to_apply_moratorium:
+                # Mark all rows_inactive
+                for emi in bill_emis:
+                    emi.row_status = "inactive"
+
+                # Process for moratorium
                 try:
                     moratorium_start_emi = next(emi for emi in bill_emis if emi.due_date >= start_date)
                 except:
@@ -571,6 +601,7 @@ def check_moratorium_eligibility(user_loan: BaseLoan):
                     loan_emis=bill_emis,
                     start_date=start_date,
                     months_to_be_inserted=months_to_be_inserted,
+                    bill_id=bill.id,
                 )
                 if resp["result"] == "error":
                     return resp
@@ -586,7 +617,9 @@ def group_bills_to_create_loan_schedule(user_loan: BaseLoan):
     all_emis = (
         session.query(CardEmis)
         .filter(
-            CardEmis.loan_id == user_loan.id, CardEmis.row_status == "active", CardEmis.bill_id == None,
+            CardEmis.loan_id == user_loan.id,
+            CardEmis.row_status == "active",
+            CardEmis.bill_id == None,
         )
         .order_by(CardEmis.emi_number.asc())
         .all()
@@ -698,7 +731,9 @@ def entry_checks(
     return verdict
 
 
-def update_event_with_dpd(user_loan: BaseLoan, post_date: DateTime = None) -> None:
+def update_event_with_dpd(
+    user_loan: BaseLoan, post_date: DateTime = None, event: LedgerTriggerEvent = None
+) -> None:
     def actual_event_update(
         session: Session, is_debit: bool, ledger_trigger_event, ledger_entry, account
     ):
@@ -711,7 +746,10 @@ def update_event_with_dpd(user_loan: BaseLoan, post_date: DateTime = None) -> No
         bills_touched.append(account.identifier)
         bill = (
             session.query(LoanData)
-            .filter(LoanData.loan_id == user_loan.loan_id, LoanData.id == account.identifier,)
+            .filter(
+                LoanData.loan_id == user_loan.loan_id,
+                LoanData.id == account.identifier,
+            )
             .first()
         )
         dpd = (event_post_date - bill.bill_due_date).days
@@ -732,21 +770,38 @@ def update_event_with_dpd(user_loan: BaseLoan, post_date: DateTime = None) -> No
 
     debit_book_account = aliased(BookAccount)
     credit_book_account = aliased(BookAccount)
-    events_list = (
-        session.query(LedgerTriggerEvent, LedgerEntry, debit_book_account, credit_book_account)
-        .filter(
-            LedgerTriggerEvent.id == LedgerEntry.event_id,
-            LedgerEntry.debit_account == debit_book_account.id,
-            LedgerEntry.credit_account == credit_book_account.id,
-            LedgerTriggerEvent.post_date <= post_date,
-            or_(
-                debit_book_account.identifier_type == "bill",
-                credit_book_account.identifier_type == "bill",
-            ),
+    if event:
+        events_list = (
+            session.query(LedgerTriggerEvent, LedgerEntry, debit_book_account, credit_book_account)
+            .filter(
+                LedgerTriggerEvent.id == LedgerEntry.event_id,
+                LedgerEntry.debit_account == debit_book_account.id,
+                LedgerEntry.credit_account == credit_book_account.id,
+                LedgerTriggerEvent.id == event.id,
+                or_(
+                    debit_book_account.identifier_type == "bill",
+                    credit_book_account.identifier_type == "bill",
+                ),
+            )
+            .order_by(LedgerTriggerEvent.post_date.asc())
+            .all()
         )
-        .order_by(LedgerTriggerEvent.post_date.asc())
-        .all()
-    )
+    else:
+        events_list = (
+            session.query(LedgerTriggerEvent, LedgerEntry, debit_book_account, credit_book_account)
+            .filter(
+                LedgerTriggerEvent.id == LedgerEntry.event_id,
+                LedgerEntry.debit_account == debit_book_account.id,
+                LedgerEntry.credit_account == credit_book_account.id,
+                LedgerTriggerEvent.post_date <= post_date,
+                or_(
+                    debit_book_account.identifier_type == "bill",
+                    credit_book_account.identifier_type == "bill",
+                ),
+            )
+            .order_by(LedgerTriggerEvent.post_date.asc())
+            .all()
+        )
 
     event_id = event_type = event_amount = None
     bills_touched = []
