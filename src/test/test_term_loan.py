@@ -46,7 +46,7 @@ def create_user(session: Session) -> None:
     session.flush()
 
 
-def create_test_term_loan(session: Session, **kwargs) -> TermLoan:
+def create_test_term_loan(session: Session, **kwargs) -> TermLoan:  # type: ignore
     user_product_id = kwargs.get("user_product_id")
     date_str = kwargs["date_str"]
     loan = create_user_product(
