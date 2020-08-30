@@ -45,7 +45,12 @@ def create_emis_for_bill(
     bill_data = bill.table
     if not last_emi:
         due_date = bill_data.bill_start_date
-        principal_due = Decimal(bill_data.principal)
+        if "term_loan" in user_loan.product_type:
+            principal_due = bill_data.principal - (
+                bill_data.principal * user_loan.downpayment_perc * Decimal("0.01")
+            )
+        else:
+            principal_due = Decimal(bill_data.principal)
         due_amount = bill_data.principal_instalment
         start_emi_number = difference_counter = 1
     else:
@@ -72,6 +77,10 @@ def create_emis_for_bill(
             )
 
         total_due_amount = due_amount
+
+        # if term-loan and first emi, downpayment is also added in total_due_amount.
+        if i == 1 and "term_loan" in user_loan.product_type:
+            total_due_amount += bill_data.principal * user_loan.downpayment_perc * Decimal("0.01")
         total_closing_balance = (
             principal_due - mul(due_amount, (i - difference_counter))
             if principal_due - mul(due_amount, (i - difference_counter)) > 0

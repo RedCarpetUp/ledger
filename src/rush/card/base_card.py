@@ -99,6 +99,7 @@ class BaseLoan(Loan):
     should_reinstate_limit_on_payment: bool = False
     bill_class: Type[B] = BaseBill
     session: Session = None
+    downpayment_perc: Optional[Decimal] = None
 
     __mapper_args__ = {"polymorphic_identity": "base_loan"}
 
@@ -120,6 +121,12 @@ class BaseLoan(Loan):
 
     def prepare(self, session: Session) -> None:
         self.session = session
+
+    @classmethod
+    def calculate_downpayment_amount(cls, product_price: Decimal, tenure: int) -> Decimal:
+        assert cls.downpayment_perc is not None
+
+        return product_price * cls.downpayment_perc * Decimal("0.01")
 
     @classmethod
     def create(cls, session: Session, **kwargs) -> Loan:

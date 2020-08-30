@@ -20,7 +20,10 @@ from rush.models import (
     Loan,
     LoanData,
 )
-from rush.utils import div
+from rush.utils import (
+    div,
+    round_up_decimal_to_nearest,
+)
 
 
 class TermLoan2Bill(BaseBill):
@@ -63,8 +66,26 @@ class TermLoan2Bill(BaseBill):
 class TermLoan2(BaseLoan):
     bill_class: Type[B] = TermLoan2Bill
     session: Session = None
+    downpayment_perc: Decimal = Decimal("20")
 
     __mapper_args__ = {"polymorphic_identity": "term_loan_2"}
+
+    @classmethod
+    def calculate_downpayment_amount(cls, product_price: Decimal, tenure: int) -> Decimal:
+        downpayment_amount = super().calculate_downpayment_amount(
+            product_price=product_price, tenure=tenure
+        )
+
+        amount = product_price - downpayment_amount
+        instalment = div(amount, tenure)
+
+        interest = product_price * Decimal(3) * Decimal("0.01")
+        instalment += interest
+
+        rounded_instalment = round_up_decimal_to_nearest(
+            instalment, to_nearest=cls.bill_class.round_emi_to_nearest
+        )
+        return downpayment_amount + rounded_instalment
 
     @staticmethod
     def calculate_amortization_date(product_order_date: Date) -> Date:
@@ -108,6 +129,13 @@ class TermLoan2(BaseLoan):
             days=kwargs["interest_free_period_in_days"]
         )
 
+        downpayment_amount = super().calculate_downpayment_amount(
+            product_price=kwargs["amount"], tenure=kwargs["tenure"]
+        )
+
+        amount = kwargs["amount"] - downpayment_amount
+        principal_instalment = div(amount, kwargs["tenure"])
+
         loan_data = LoanData(
             user_id=kwargs["user_id"],
             loan_id=kwargs["loan_id"],
@@ -117,7 +145,7 @@ class TermLoan2(BaseLoan):
             is_generated=True,
             bill_tenure=kwargs["tenure"],
             principal=kwargs["amount"],
-            principal_instalment=div(kwargs["amount"], kwargs["tenure"]),
+            principal_instalment=principal_instalment,
         )
         session.add(loan_data)
         session.flush()

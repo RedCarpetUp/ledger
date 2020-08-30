@@ -98,6 +98,11 @@ def test_product_amortization_6() -> None:
     assert amortization_date == parse_date("2020-08-26").date()
 
 
+def test_calculate_downpayment_amount() -> None:
+    downpayment_amount = TermLoan.calculate_downpayment_amount(product_price=Decimal(10000), tenure=12)
+    assert downpayment_amount == Decimal("2970")
+
+
 def test_create_term_loan(session: Session) -> None:
     create_lenders(session=session)
     create_products(session=session)
@@ -129,12 +134,13 @@ def test_create_term_loan(session: Session) -> None:
     assert len(emis_dict) == 12
     assert emis_dict[0]["due_date"] == parse_date("2020-08-01").date()
     assert emis_dict[0]["emi_number"] == 1
-    assert emis_dict[0]["interest"] == Decimal("306.67")
+    assert emis_dict[0]["interest"] == Decimal("303.33")
     assert emis_dict[0]["total_due_amount"] % 10 == 0
+    assert emis_dict[0]["total_due_amount"] == Decimal("2970")
 
     assert emis_dict[-1]["due_date"] == parse_date("2021-07-01").date()
     assert emis_dict[-1]["emi_number"] == 12
-    assert emis_dict[-1]["interest"] == Decimal("306.67")
+    assert emis_dict[-1]["interest"] == Decimal("303.33")
     assert emis_dict[-1]["total_due_amount"] % 10 == 0
 
 
@@ -169,15 +175,15 @@ def test_create_term_loan_2(session: Session) -> None:
     assert len(emis_dict) == 12
     assert emis_dict[0]["due_date"] == parse_date("2015-10-09").date()
     assert emis_dict[0]["emi_number"] == 1
-    assert emis_dict[0]["interest"] == Decimal("306.67")
+    assert emis_dict[0]["interest"] == Decimal("303.33")
     assert emis_dict[0]["total_due_amount"] % 10 == 0
 
     assert emis_dict[1]["due_date"] == parse_date("2015-11-09").date()
     assert emis_dict[1]["emi_number"] == 2
-    assert emis_dict[1]["interest"] == Decimal("306.67")
+    assert emis_dict[1]["interest"] == Decimal("303.33")
     assert emis_dict[1]["total_due_amount"] % 10 == 0
 
     assert emis_dict[-1]["due_date"] == parse_date("2016-09-09").date()
     assert emis_dict[-1]["emi_number"] == 12
-    assert emis_dict[-1]["interest"] == Decimal("306.67")
+    assert emis_dict[-1]["interest"] == Decimal("303.33")
     assert emis_dict[-1]["total_due_amount"] % 10 == 0

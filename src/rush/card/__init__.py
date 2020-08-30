@@ -4,7 +4,6 @@ from typing import (
     Optional,
 )
 
-from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 # for now, these imports are required by get_product_class method to fetch all class within card module.
@@ -93,3 +92,9 @@ def disburse_card(
     )
 
     limit_assignment_event(session=session, loan_id=user_loan.loan_id, event=event, amount=amount)
+
+
+def get_downpayment_amount(product_type: str, product_price: Decimal, tenure: int) -> Decimal:
+    return get_product_class(card_type=product_type).calculate_downpayment_amount(
+        product_price=product_price, tenure=tenure
+    )

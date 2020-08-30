@@ -98,6 +98,13 @@ def test_product_amortization_6() -> None:
     assert amortization_date == parse_date("2020-10-01").date()
 
 
+def test_calculate_downpayment_amount() -> None:
+    downpayment_amount = TermLoanPro2.calculate_downpayment_amount(
+        product_price=Decimal(10000), tenure=12
+    )
+    assert downpayment_amount == Decimal("2000")
+
+
 def test_create_term_loan(session: Session) -> None:
     create_lenders(session=session)
     create_products(session=session)
