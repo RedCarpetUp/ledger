@@ -370,51 +370,6 @@ class CardKitNumbers(AuditMixin):
     user_cards = relationship("UserCard")
 
 
-class UserCard(AuditMixin):
-    __tablename__ = "v3_user_cards"
-    user_id = Column(Integer, ForeignKey(User.id), index=True, nullable=False)
-    kit_number = Column(
-        String(12), ForeignKey(CardKitNumbers.kit_number), nullable=False, default="00000"
-    )
-    credit_limit = Column(Numeric, nullable=False, default=1000)  # limit in rupees
-    cash_withdrawal_limit = Column(Numeric, nullable=False, default=1000)
-    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=True)  # to detect payments
-    details = Column(JSON, nullable=True, server_default="{}")
-    activation_type = Column(String(12), nullable=False, default="P")
-    row_status = Column(String(20), nullable=False, default="active")
-    kyc_status = Column(String(20), server_default="PENDING", nullable=True)
-
-    single_txn_spend_limit = Column(Integer, nullable=True)
-    no_of_txn_per_day = Column(Integer, nullable=True)
-    international_usage = Column(Boolean, nullable=False, default=False)
-    daily_spend_limit = Column(Integer, nullable=True)
-
-    card_type = Column(String, nullable=True)
-    card_activation_date = Column(Date, nullable=True)
-    statement_period_in_days = Column(Integer, default=30, nullable=True)  # 30 days
-    interest_free_period_in_days = Column(Integer, default=45, nullable=True)
-
-    dpd = Column(Integer, nullable=True)
-    ever_dpd = Column(Integer, nullable=True)
-
-    __table_args__ = (
-        Index(
-            "idx_uniq_kit_number_row_status",
-            kit_number,
-            row_status,
-            unique=True,
-            postgresql_where=row_status == "active",
-        ),
-        Index(
-            "idx_user_cards_uniq_user_id_loan_id_row_status",
-            user_id,
-            loan_id,
-            unique=True,
-            postgresql_where=row_status == "active",
-        ),
-    )
-
-
 class LedgerTriggerEvent(AuditMixin):
     __tablename__ = "ledger_trigger_event"
     name = Column(String(50))
@@ -589,3 +544,59 @@ class EventDpd(AuditMixin):
     balance = Column(Numeric, nullable=True, default=Decimal(0))
     dpd = Column(Integer, nullable=False)
     row_status = Column(String(length=10), nullable=False, default="active")
+
+
+class UserInstrument(AuditMixin):
+    __tablename__ = "user_instrument"
+
+    user_id = Column(Integer, ForeignKey(User.id), nullable=False)
+    type = Column(String(), nullable=False)
+    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
+    details = Column(JSON, default=lambda: {})
+    kyc_status = Column(String(length=20), default="PENDING", nullable=True)
+    no_of_txn_per_day = Column(Integer, nullable=True)
+    single_txn_spend_limit = Column(Integer, nullable=True)
+    daily_spend_limit = Column(Integer, nullable=True)
+    international_usage = Column(Boolean, default=False, nullable=False)
+    credit_limit = Column(Numeric, nullable=True)
+
+    __mapper_args__ = {
+        "polymorphic_identity": "user_instrument",
+        "polymorphic_on": type,
+    }
+
+
+class UserCard(UserInstrument):
+
+    __mapper_args__ = {
+        "polymorphic_identity": "card",
+    }
+
+    kit_number = Column(String(length=12), ForeignKey(CardKitNumbers.kit_number), nullable=True)
+    cash_withdrawal_limit = Column(Numeric, nullable=True)
+    activation_type = Column(String(length=12), nullable=True)
+    card_name = Column(String, nullable=True)
+    card_activation_date = Column(Date, nullable=True)
+
+    def __init__(self, **kwargs):
+        assert kwargs.get("kit_number") is not None
+        assert kwargs.get("activation_type") is not None
+        assert kwargs.get("card_name") is not None
+
+        super().__init__(**kwargs)
+
+
+class UserUPI(UserInstrument):
+
+    __mapper_args__ = {
+        "polymorphic_identity": "upi",
+    }
+
+    upi_id = Column(String, nullable=True)
+    upi_merchant = Column(String, nullable=True)
+
+    def __init__(self, **kwargs):
+        assert kwargs.get("upi_id") is not None
+        assert kwargs.get("upi_merchant") is not None
+
+        super().__init__(**kwargs)

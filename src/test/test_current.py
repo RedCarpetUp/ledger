@@ -291,7 +291,10 @@ def test_min_multiplier(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
     # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    a = User(id=99, performed_by=123,)
+    a = User(
+        id=99,
+        performed_by=123,
+    )
     session.add(a)
     session.flush()
 
@@ -349,7 +352,10 @@ def test_min_tenure(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
     # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    a = User(id=99, performed_by=123,)
+    a = User(
+        id=99,
+        performed_by=123,
+    )
     session.add(a)
     session.flush()
 
