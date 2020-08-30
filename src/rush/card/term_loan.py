@@ -79,11 +79,7 @@ class TermLoan(BaseLoan):
 
     @classmethod
     def create(cls, session: Session, **kwargs) -> Loan:
-        user_product_id = kwargs.get("user_product_id")
-        if not user_product_id:
-            user_product_id = create_user_product_mapping(
-                session=session, user_id=kwargs["user_id"], product_type=kwargs["card_type"]
-            ).id
+        user_product_id = kwargs["user_product_id"]
 
         loan = cls(
             session=session,
