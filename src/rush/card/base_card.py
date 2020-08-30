@@ -58,9 +58,18 @@ class BaseBill:
     def get_min_for_schedule(
         self, date_to_check_against: DateTime = get_current_ist_time().date()
     ) -> Decimal:
+        user_loan = self.session.query(Loan).filter_by(id=self.table.loan_id).one_or_none()
         # Don't add in min if user is in moratorium.
         if LoanMoratorium.is_in_moratorium(self.session, self.loan_id, date_to_check_against):
             min_scheduled = self.table.interest_to_charge  # only charge interest if in moratorium.
+        elif user_loan.min_tenure:
+            new_instalment = div(self.table.principal, user_loan.min_tenure)
+            min_scheduled = new_instalment + self.table.interest_to_charge
+        elif user_loan.min_multiplier:
+            min_without_scheduled_multiplier = (
+                self.table.principal_instalment + self.table.interest_to_charge
+            )
+            min_scheduled = min_without_scheduled_multiplier * user_loan.min_multiplier
         else:
             min_scheduled = self.table.principal_instalment + self.table.interest_to_charge
         max_remaining_amount = get_remaining_bill_balance(self.session, self.table)["total_due"]
@@ -136,6 +145,8 @@ class BaseLoan(Loan):
             rc_rate_of_interest_monthly=Decimal(3),
             lender_rate_of_interest_annual=Decimal(18),  # this is hardcoded for one lender.
             amortization_date=kwargs.get("card_activation_date"),  # TODO: change this later.
+            min_tenure=kwargs.pop("min_tenure", None),
+            min_multiplier=kwargs.pop("min_multiplier", None),
         )
         session.add(loan)
         session.flush()

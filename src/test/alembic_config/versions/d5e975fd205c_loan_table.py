@@ -109,6 +109,8 @@ def upgrade() -> None:
         sa.Column("interest_free_period_in_days", sa.Integer, nullable=True),
         sa.Column("rc_rate_of_interest_monthly", sa.Numeric(), nullable=False),
         sa.Column("lender_rate_of_interest_annual", sa.Numeric(), nullable=False),
+        sa.Column("min_tenure", sa.Integer(), nullable=True),
+        sa.Column("min_multiplier", sa.Numeric(), nullable=True),
         sa.ForeignKeyConstraint(["lender_id"], ["rc_lenders.id"], name="fk_v3_user_cards_lender_id"),
         sa.ForeignKeyConstraint(["product_id"], ["product.id"], name="fk_loan_product_id"),
         sa.PrimaryKeyConstraint("id"),
