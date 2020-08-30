@@ -116,7 +116,17 @@ class TermLoanPro2(BaseLoan):
         session.add(event)
         session.flush()
 
-        loan_disbursement_event(session=session, loan=loan, event=event, bill_id=loan_data.id)
+        actual_downpayment_amount = cls.calculate_downpayment_amount(
+            product_price=kwargs["amount"], tenure=kwargs["tenure"]
+        )
+
+        loan_disbursement_event(
+            session=session,
+            loan=loan,
+            event=event,
+            bill_id=loan_data.id,
+            downpayment_amount=actual_downpayment_amount,
+        )
 
         # create emis for term loan.
         from rush.create_emi import create_emis_for_bill
