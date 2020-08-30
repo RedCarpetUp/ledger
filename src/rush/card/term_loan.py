@@ -99,9 +99,7 @@ class TermLoan(BaseLoan):
 
         bill_start_date = loan.amortization_date
         # not sure about bill close date.
-        bill_close_date = bill_start_date.add(months=kwargs["tenure"] - 1).add(
-            days=kwargs["interest_free_period_in_days"]
-        )
+        bill_close_date = bill_start_date.add(months=kwargs["tenure"] - 1)
 
         downpayment_amount = super().calculate_downpayment_amount(
             product_price=kwargs["amount"], tenure=kwargs["tenure"]

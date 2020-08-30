@@ -183,7 +183,7 @@ def test_create_term_loan(session: Session) -> None:
     loan_data = session.query(LoanData).filter(LoanData.loan_id == user_loan.loan_id).one()
 
     assert loan_data.bill_start_date == parse_date("2020-09-01").date()
-    assert loan_data.bill_close_date == parse_date("2021-08-16").date()
+    assert loan_data.bill_close_date == parse_date("2021-08-01").date()
 
     _, principal_receivable = get_account_balance_from_str(
         session=session, book_string=f"{loan_data.id}/bill/principal_receivable/a"
@@ -292,7 +292,7 @@ def test_create_term_loan_2(session: Session) -> None:
     loan_data = session.query(LoanData).filter(LoanData.loan_id == user_loan.loan_id).one()
 
     assert loan_data.bill_start_date == parse_date("2019-02-01").date()
-    assert loan_data.bill_close_date == parse_date("2020-01-16").date()
+    assert loan_data.bill_close_date == parse_date("2020-01-01").date()
 
     _, principal_receivable = get_account_balance_from_str(
         session=session, book_string=f"{loan_data.id}/bill/principal_receivable/a"
