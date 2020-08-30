@@ -39,6 +39,18 @@ def write_off_event(user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
     )
 
 
+def recovery_event(user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
+    # Recovery event is reversal of write off event. Add money that we need to receive from lender.
+    # Reduce the expenses because the money was recovered.
+    create_ledger_entry_from_str(
+        user_loan.session,
+        event_id=event.id,
+        debit_book_str=f"{user_loan.lender_id}/lender/lender_receivable/a",
+        credit_book_str=f"{user_loan.loan_id}/loan/write_off_expenses/e",
+        amount=event.amount,
+    )
+
+
 def reverse_all_unpaid_fees(user_loan: BaseLoan) -> None:
     session = user_loan.session
     fee = (

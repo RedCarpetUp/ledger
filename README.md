@@ -17,7 +17,7 @@
 
 # Setup
 
-- make sure you are using python > 3.8+
+- make sure you are using python > 3.7+
 - setup virtualenv using `virtualenv env` and activate it
 - run `pip install -e "."` to install dependencies. keep setup.py updated
   - rerun `pip install -e "."` if you make changes to models/source code. not needed for testcase changes

@@ -3,7 +3,6 @@ from sqlalchemy.orm import Session
 
 from rush.card.base_card import BaseLoan
 from rush.ledger_events import add_min_amount_event
-from rush.ledger_utils import get_remaining_bill_balance
 from rush.models import LedgerTriggerEvent
 
 
@@ -15,14 +14,8 @@ def add_min_to_all_bills(session: Session, post_date: DateTime, user_loan: BaseL
     session.add(min_event)
     session.flush()
     for bill in unpaid_bills:
-        max_remaining_amount = get_remaining_bill_balance(session, bill)["total_due"]
-        amount_already_present_in_min = bill.get_remaining_min()
-        if amount_already_present_in_min == max_remaining_amount:
+        min_amount = bill.get_min_for_schedule()
+        if min_amount == 0:
             continue
-
-        amount_that_can_be_added_in_min = max_remaining_amount - amount_already_present_in_min
-        scheduled_min_amount = bill.get_min_for_schedule()
-        min_amount_to_add = min(scheduled_min_amount, amount_that_can_be_added_in_min)
-
-        add_min_amount_event(session, bill, min_event, min_amount_to_add)
-        min_event.amount += min_amount_to_add
+        add_min_amount_event(session, bill, min_event, min_amount)
+        min_event.amount += min_amount

@@ -7,21 +7,23 @@ from sqlalchemy.orm import Session
 
 from rush.anomaly_detection import run_anomaly
 from rush.card import BaseLoan
+from rush.card.base_card import BaseBill
 from rush.ledger_events import (
-    _adjust_for_complete_bill,
-    _adjust_for_min,
+    _adjust_bill,
+    _adjust_for_downpayment,
     _adjust_for_prepayment,
-    payment_received_event,
 )
 from rush.ledger_utils import (
     create_ledger_entry_from_str,
     get_account_balance_from_str,
+    get_remaining_bill_balance,
 )
 from rush.models import (
     CardTransaction,
     LedgerTriggerEvent,
     LoanData,
 )
+from rush.writeoff_and_recovery import recovery_event
 
 
 def payment_received(
@@ -102,6 +104,84 @@ def refund_payment(
     run_anomaly(session=session, user_loan=user_loan, event_date=payment_date)
 
 
+def payment_received_event(
+    session: Session,
+    user_loan: BaseLoan,
+    debit_book_str: str,
+    event: LedgerTriggerEvent,
+) -> None:
+    payment_received = Decimal(event.amount)
+    if event.name == "merchant_refund":
+        pass
+    elif event.name == "payment_received":
+        if event.extra_details.get("payment_type") == "downpayment":
+            _adjust_for_downpayment(session=session, event=event, amount=payment_received)
+            return
+
+        actual_payment = payment_received
+        bills_data = find_amount_to_slide_in_bills(user_loan, payment_received)
+        for bill_data in bills_data:
+            adjust_for_min(bill_data["bill"], bill_data["amount_to_adjust"], event.id)
+            remaining_amount = _adjust_bill(
+                session,
+                bill_data["bill"],
+                bill_data["amount_to_adjust"],
+                event.id,
+                debit_acc_str=debit_book_str,
+            )
+            assert (
+                remaining_amount == 0
+            )  # The amount to adjust is computed for this bill. It should all settle.
+            payment_received -= bill_data["amount_to_adjust"]
+        if user_loan.should_reinstate_limit_on_payment:
+            user_loan.reinstate_limit_on_payment(event=event, amount=actual_payment)
+
+    if payment_received > 0:  # if there's payment left to be adjusted.
+        _adjust_for_prepayment(
+            session=session,
+            loan_id=user_loan.loan_id,
+            event_id=event.id,
+            amount=payment_received,
+            debit_book_str=debit_book_str,
+        )
+
+    is_in_write_off = (
+        get_account_balance_from_str(session, f"{user_loan.loan_id}/loan/write_off_expenses/e")[1] > 0
+    )
+    if is_in_write_off:
+        recovery_event(user_loan, event)
+        # TODO set loan status to recovered.
+    from rush.create_emi import slide_payments
+
+    slide_payments(user_loan=user_loan, payment_event=event)
+
+
+def find_amount_to_slide_in_bills(user_loan: BaseLoan, total_amount_to_slide: Decimal) -> list:
+    unpaid_bills = user_loan.get_unpaid_bills()
+    bills_dict = [
+        {
+            "bill": bill,
+            "total_outstanding": get_remaining_bill_balance(user_loan.session, bill)["total_due"],
+            "monthly_instalment": bill.get_min_for_schedule(),
+            "amount_to_adjust": 0,
+        }
+        for bill in unpaid_bills
+    ]
+    total_loan_outstanding = sum(bill["total_outstanding"] for bill in bills_dict)
+    # Either nothing is left to slide or loan is completely settled and there is excess payment.
+    while total_amount_to_slide > 0 and total_loan_outstanding > 0:
+        for bill_data in bills_dict:
+            amount_to_adjust = min(
+                bill_data["monthly_instalment"], total_amount_to_slide, bill_data["total_outstanding"]
+            )
+            bill_data["amount_to_adjust"] += amount_to_adjust
+            bill_data["total_outstanding"] -= amount_to_adjust
+            total_amount_to_slide -= amount_to_adjust
+            total_loan_outstanding -= amount_to_adjust
+    filtered_bills_dict = filter(lambda x: x["amount_to_adjust"] > 0, bills_dict)
+    return filtered_bills_dict
+
+
 def transaction_refund_event(
     session: Session, user_loan: BaseLoan, event: LedgerTriggerEvent, bill: LoanData
 ) -> None:
@@ -117,22 +197,16 @@ def transaction_refund_event(
             amount=refund_amount,
         )
     else:  # Treat as payment.
-        unpaid_bills = user_loan.get_unpaid_bills()
-        refund_amount = _adjust_for_min(
-            session=session,
-            bills=unpaid_bills,
-            payment_received=refund_amount,
-            event_id=event.id,
-            debit_book_str=m2p_pool_account,
-        )
-        refund_amount = _adjust_for_complete_bill(
-            session=session,
-            bills=unpaid_bills,
-            payment_received=refund_amount,
-            event_id=event.id,
-            debit_book_str=m2p_pool_account,
-        )
-
+        bills_data = find_amount_to_slide_in_bills(user_loan, refund_amount)
+        for bill_data in bills_data:
+            adjust_for_min(bill_data["bill"], bill_data["amount_to_adjust"], event.id)
+            refund_amount = _adjust_bill(
+                session,
+                bill_data["bill"],
+                bill_data["amount_to_adjust"],
+                event.id,
+                debit_acc_str=m2p_pool_account,
+            )
         if refund_amount > 0:  # if there's payment left to be adjusted.
             _adjust_for_prepayment(
                 session=session,
@@ -210,4 +284,19 @@ def payment_settlement_event(
         debit_book_str=f"{user_loan.loan_id}/loan/lender_payable/l",
         credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
         amount=event.amount,
+    )
+
+
+def adjust_for_min(bill: BaseBill, payment_to_adjust_from: Decimal, event_id: int):
+    min_due = bill.get_remaining_min()
+    min_to_adjust_in_this_bill = min(min_due, payment_to_adjust_from)
+    if min_to_adjust_in_this_bill == 0:
+        return
+    # Reduce min amount
+    create_ledger_entry_from_str(
+        bill.session,
+        event_id=event_id,
+        debit_book_str=f"{bill.id}/bill/min/l",
+        credit_book_str=f"{bill.id}/bill/min/a",
+        amount=min_to_adjust_in_this_bill,
     )

@@ -253,7 +253,8 @@ class Loan(AuditMixin):
     rc_rate_of_interest_monthly = Column(Numeric, nullable=False)
     lender_rate_of_interest_annual = Column(Numeric, nullable=False)
     interest_free_period_in_days = Column(Integer, default=45, nullable=True)
-
+    min_tenure = Column(Integer, nullable=True)
+    min_multiplier = Column(Numeric, nullable=True)
     dpd = Column(Integer, nullable=True)
     ever_dpd = Column(Integer, nullable=True)
 
@@ -499,6 +500,14 @@ class CardEmis(AuditMixin):
     payment_received = Column(Numeric, nullable=False, default=Decimal(0))
     payment_status = Column(String(length=10), nullable=False, default="UnPaid")
     extra_details = Column(JSON, default=lambda: {})
+
+    def get_payment_received_on_emi(self):
+        return (
+            self.atm_fee_received
+            + self.late_fee_received
+            + self.interest_received
+            + self.payment_received
+        )
 
 
 class EmiPaymentMapping(AuditMixin):

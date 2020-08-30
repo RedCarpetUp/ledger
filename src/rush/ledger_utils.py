@@ -168,7 +168,7 @@ def get_remaining_bill_balance(
         .all()
     )
     for fee in fees:
-        fee_due_amount = fee.gross_amount - fee.gross_amount_paid
+        fee_due_amount = fee.gross_amount - (fee.gross_amount_paid or 0)
         d[fee.name] = fee_due_amount
     d["total_due"] = sum(v for _, v in d.items())  # sum of all values becomes total due.
 

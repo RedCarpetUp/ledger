@@ -1,8 +1,5 @@
 from decimal import Decimal
-from typing import (
-    List,
-    Optional,
-)
+from typing import Optional
 
 from sqlalchemy import (
     Date,
@@ -151,54 +148,6 @@ def add_min_amount_event(
     )
 
 
-def payment_received_event(
-    session: Session, user_loan: BaseLoan, debit_book_str: str, event: LedgerTriggerEvent
-) -> None:
-    payment_received = Decimal(event.amount)
-    if event.name == "merchant_refund":
-        pass
-    elif event.name == "payment_received":
-        if event.extra_details.get("payment_type") == "downpayment":
-            _adjust_for_downpayment(session=session, event=event, amount=payment_received)
-
-            return
-
-        else:
-            unpaid_bills = user_loan.get_unpaid_bills()
-            actual_payment = payment_received
-
-            payment_received = _adjust_for_min(
-                session=session,
-                bills=unpaid_bills,
-                payment_received=payment_received,
-                event_id=event.id,
-                debit_book_str=debit_book_str,
-            )
-            payment_received = _adjust_for_complete_bill(
-                session=session,
-                bills=unpaid_bills,
-                payment_received=payment_received,
-                event_id=event.id,
-                debit_book_str=debit_book_str,
-            )
-
-            if user_loan.should_reinstate_limit_on_payment:
-                user_loan.reinstate_limit_on_payment(event=event, amount=actual_payment)
-
-    if payment_received > 0:  # if there's payment left to be adjusted.
-        _adjust_for_prepayment(
-            session=session,
-            loan_id=user_loan.loan_id,
-            event_id=event.id,
-            amount=payment_received,
-            debit_book_str=debit_book_str,
-        )
-
-    from rush.create_emi import slide_payments
-
-    slide_payments(user_loan=user_loan, payment_event=event)
-
-
 def _adjust_bill(
     session: Session,
     bill: LoanData,
@@ -325,57 +274,6 @@ def _adjust_bill(
         from_acc=f"{bill.id}/bill/principal_receivable/a",
     )
     return remaining_amount
-
-
-def _adjust_for_min(
-    session: Session,
-    bills: List[BaseBill],
-    payment_received: Decimal,
-    event_id: int,
-    debit_book_str: str,
-) -> Decimal:
-    for bill in bills:
-        min_due = bill.get_remaining_min()
-        amount_to_adjust_in_this_bill = min(min_due, payment_received)
-        if amount_to_adjust_in_this_bill == 0:
-            continue
-        # Remove amount from the original variable.
-        payment_received -= amount_to_adjust_in_this_bill
-        # Reduce min amount
-        create_ledger_entry_from_str(
-            session,
-            event_id=event_id,
-            debit_book_str=f"{bill.id}/bill/min/l",
-            credit_book_str=f"{bill.id}/bill/min/a",
-            amount=amount_to_adjust_in_this_bill,
-        )
-        remaining_amount = _adjust_bill(
-            session,
-            bill,
-            amount_to_adjust_in_this_bill,
-            event_id,
-            debit_acc_str=debit_book_str,
-        )
-        assert remaining_amount == 0  # Can't be more than 0
-    return payment_received  # The remaining amount goes back to the main func.
-
-
-def _adjust_for_complete_bill(
-    session: Session,
-    bills: List[BaseBill],
-    payment_received: Decimal,
-    event_id: int,
-    debit_book_str: str,
-) -> Decimal:
-    for bill in bills:
-        payment_received = _adjust_bill(
-            session,
-            bill,
-            payment_received,
-            event_id,
-            debit_acc_str=debit_book_str,
-        )
-    return payment_received  # The remaining amount goes back to the main func.
 
 
 def _adjust_for_prepayment(
