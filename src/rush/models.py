@@ -10,7 +10,6 @@ from pendulum import DateTime
 from pydantic.dataclasses import dataclass as py_dataclass
 from sqlalchemy import (
     DECIMAL,
-    JSON,
     TIMESTAMP,
     Boolean,
     CheckConstraint,
@@ -22,7 +21,9 @@ from sqlalchemy import (
     String,
     Text,
 )
+from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.indexable import index_property
 from sqlalchemy.orm import (
     Session,
     relationship,
@@ -32,6 +33,16 @@ from sqlalchemy.schema import Index
 from rush.utils import get_current_ist_time
 
 Base = declarative_base()  # type: Any
+
+
+class pg_json_property(index_property):
+    def __init__(self, attr_name, index, cast_type, default=None):
+        super(pg_json_property, self).__init__(attr_name, index, default=default)
+        self.cast_type = cast_type
+
+    def expr(self, model):
+        expr = super(pg_json_property, self).expr(model)
+        return expr.astext.cast(self.cast_type)
 
 
 class AuditMixin(Base):
@@ -421,6 +432,8 @@ class LedgerTriggerEvent(AuditMixin):
     post_date = Column(TIMESTAMP)
     amount = Column(Numeric)
     extra_details = Column(JSON, default="{}")
+
+    user_product_id = pg_json_property("extra_details", "user_product_id", Integer, default=None)
 
 
 class LedgerEntry(AuditMixin):

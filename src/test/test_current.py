@@ -104,7 +104,6 @@ def test_user2(session: Session) -> None:
     session.add(u)
     session.commit()
     a = session.query(User).first()
-    print(a.id)
     u = UserPy(
         id=a.id,
         performed_by=123,

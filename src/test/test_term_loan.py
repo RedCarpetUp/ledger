@@ -5,16 +5,21 @@ from sqlalchemy.orm import Session
 
 from rush.card import (
     create_user_product,
+    get_product_class,
     get_user_product,
 )
 from rush.card.term_loan import TermLoan
+from rush.card.utils import create_user_product_mapping
+from rush.ledger_utils import get_account_balance_from_str
 from rush.models import (
     CardEmis,
+    LedgerTriggerEvent,
     Lenders,
     LoanData,
     Product,
     User,
 )
+from rush.payments import payment_received
 
 
 def create_lenders(session: Session) -> None:
@@ -41,7 +46,9 @@ def create_user(session: Session) -> None:
     session.flush()
 
 
-def create_test_term_loan(session: Session, date_str: str) -> TermLoan:
+def create_test_term_loan(session: Session, **kwargs) -> TermLoan:
+    user_product_id = kwargs.get("user_product_id")
+    date_str = kwargs["date_str"]
     loan = create_user_product(
         session=session,
         user_id=4,
@@ -51,6 +58,7 @@ def create_test_term_loan(session: Session, date_str: str) -> TermLoan:
         tenure=12,
         amount=Decimal(10000),
         product_order_date=parse_date(date_str).date(),
+        user_product_id=user_product_id,
     )
 
     return loan
@@ -107,18 +115,85 @@ def test_create_term_loan(session: Session) -> None:
     create_lenders(session=session)
     create_products(session=session)
     create_user(session=session)
-    loan = create_test_term_loan(session=session, date_str="2020-08-01")
+
+    user_product = create_user_product_mapping(session=session, user_id=4, product_type="term_loan")
+
+    loan_creation_data = {"date_str": "2020-08-01", "user_product_id": user_product.id}
+
+    _downpayment_amount = get_product_class(card_type="term_loan").calculate_downpayment_amount(
+        product_price=Decimal("10000"), tenure=12
+    )
+
+    # downpayment
+    payment_received(
+        session=session,
+        user_loan=None,
+        payment_amount=_downpayment_amount,
+        payment_date=parse_date("2020-08-01").date(),
+        payment_request_id="dummy_downpayment",
+        payment_type="downpayment",
+        user_product_id=user_product.id,
+        lender_id=62311,
+    )
+
+    downpayment_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.loan_id.is_(None),
+            LedgerTriggerEvent.user_product_id == user_product.id,
+        )
+        .one()
+    )
+
+    assert downpayment_event.post_date.date() == parse_date("2020-08-01").date()
+    assert downpayment_event.amount == Decimal("2970")
+
+    _, downpayment_balance = get_account_balance_from_str(
+        session=session, book_string=f"{user_product.id}/product/downpayment/l"
+    )
+    assert downpayment_balance == Decimal("2970")
+
+    _, product_lender_payable = get_account_balance_from_str(
+        session=session, book_string=f"{user_product.id}/product/lender_payable/l"
+    )
+    assert product_lender_payable == Decimal("-2970")
+
+    # create loan
+    loan = create_test_term_loan(session=session, **loan_creation_data)
+
+    _, rc_cash_balance = get_account_balance_from_str(
+        session=session, book_string=f"12345/redcarpet/rc_cash/a"
+    )
+    assert rc_cash_balance == Decimal("-10000")
 
     assert loan.product_type == "term_loan"
     assert loan.amortization_date == parse_date("2020-08-01").date()
 
-    user_loan = get_user_product(session=session, user_id=loan.user_id, card_type="term_loan")
+    user_loan = get_user_product(
+        session=session, user_id=loan.user_id, card_type="term_loan", loan_id=loan.id
+    )
     assert isinstance(user_loan, TermLoan) == True
 
     loan_data = session.query(LoanData).filter(LoanData.loan_id == user_loan.loan_id).one()
 
     assert loan_data.bill_start_date == parse_date("2020-08-01").date()
     assert loan_data.bill_close_date == parse_date("2021-07-16").date()
+
+    _, principal_receivable = get_account_balance_from_str(
+        session=session, book_string=f"{loan_data.id}/bill/principal_receivable/a"
+    )
+    assert principal_receivable == Decimal("7030")
+
+    _, loan_lender_payable = get_account_balance_from_str(
+        session=session, book_string=f"{loan.loan_id}/loan/lender_payable/l"
+    )
+    assert loan_lender_payable == Decimal("7030")
+
+    _, product_lender_payable = get_account_balance_from_str(
+        session=session, book_string=f"{user_product.id}/product/lender_payable/l"
+    )
+    assert product_lender_payable == Decimal("0")
 
     all_emis_query = (
         session.query(CardEmis)
@@ -148,18 +223,87 @@ def test_create_term_loan_2(session: Session) -> None:
     create_lenders(session=session)
     create_products(session=session)
     create_user(session=session)
-    loan = create_test_term_loan(session=session, date_str="2015-10-09")
+
+    user_product = create_user_product_mapping(session=session, user_id=4, product_type="term_loan")
+
+    loan_creation_data = {"date_str": "2015-10-09", "user_product_id": user_product.id}
+
+    _downpayment_amount = get_product_class(card_type="term_loan").calculate_downpayment_amount(
+        product_price=Decimal("10000"), tenure=12
+    )
+
+    assert _downpayment_amount == Decimal("2970")
+
+    # downpayment
+    payment_received(
+        session=session,
+        user_loan=None,
+        payment_amount=_downpayment_amount,
+        payment_date=parse_date(loan_creation_data["date_str"]).date(),
+        payment_request_id="dummy_downpayment",
+        payment_type="downpayment",
+        user_product_id=user_product.id,
+        lender_id=62311,
+    )
+
+    downpayment_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.loan_id.is_(None),
+            LedgerTriggerEvent.user_product_id == user_product.id,
+        )
+        .one()
+    )
+
+    assert downpayment_event.post_date.date() == parse_date("2015-10-09").date()
+    assert downpayment_event.amount == Decimal("2970")
+
+    _, downpayment_balance = get_account_balance_from_str(
+        session=session, book_string=f"{user_product.id}/product/downpayment/l"
+    )
+    assert downpayment_balance == Decimal("2970")
+
+    _, product_lender_payable = get_account_balance_from_str(
+        session=session, book_string=f"{user_product.id}/product/lender_payable/l"
+    )
+    assert product_lender_payable == Decimal("-2970")
+
+    # create loan
+    loan = create_test_term_loan(session=session, **loan_creation_data)
+
+    _, rc_cash_balance = get_account_balance_from_str(
+        session=session, book_string=f"12345/redcarpet/rc_cash/a"
+    )
+    assert rc_cash_balance == Decimal("-10000")
 
     assert loan.product_type == "term_loan"
     assert loan.amortization_date == parse_date("2015-10-09").date()
 
-    user_loan = get_user_product(session=session, user_id=loan.user_id, card_type="term_loan")
+    user_loan = get_user_product(
+        session=session, user_id=loan.user_id, card_type="term_loan", loan_id=loan.id
+    )
     assert isinstance(user_loan, TermLoan) == True
 
     loan_data = session.query(LoanData).filter(LoanData.loan_id == user_loan.loan_id).one()
 
     assert loan_data.bill_start_date == parse_date("2015-10-09").date()
     assert loan_data.bill_close_date == parse_date("2016-09-24").date()
+
+    _, principal_receivable = get_account_balance_from_str(
+        session=session, book_string=f"{loan_data.id}/bill/principal_receivable/a"
+    )
+    assert principal_receivable == Decimal("7030")
+
+    _, loan_lender_payable = get_account_balance_from_str(
+        session=session, book_string=f"{loan.loan_id}/loan/lender_payable/l"
+    )
+    assert loan_lender_payable == Decimal("7030")
+
+    _, product_lender_payable = get_account_balance_from_str(
+        session=session, book_string=f"{user_product.id}/product/lender_payable/l"
+    )
+    assert product_lender_payable == Decimal("0")
 
     all_emis_query = (
         session.query(CardEmis)

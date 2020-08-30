@@ -93,7 +93,7 @@ def breakdown_account_variables_from_str(book_string: str) -> dict:
         "redcarpet",
         "card",
         "loan",
-        "ephemeral_account",
+        "product",
     )
     return {
         "identifier": identifier,
