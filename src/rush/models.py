@@ -487,6 +487,14 @@ class CardEmis(AuditMixin):
     payment_status = Column(String(length=10), nullable=False, default="UnPaid")
     extra_details = Column(JSON, default=lambda: {})
 
+    def get_payment_received_on_emi(self):
+        return (
+            self.atm_fee_received
+            + self.late_fee_received
+            + self.interest_received
+            + self.payment_received
+        )
+
 
 class EmiPaymentMapping(AuditMixin):
     __tablename__ = "emi_payment_mapping"

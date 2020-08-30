@@ -78,7 +78,6 @@ def create_emis_for_bill(
         total_interest = current_interest + next_interest
         total_due_amount += interest
         total_closing_balance_post_due_date += interest
-        extra_details = {str(bill_data.id): str(due_amount)}
         new_emi = CardEmis(
             loan_id=user_loan.loan_id,
             bill_id=bill_data.id,
@@ -91,7 +90,6 @@ def create_emis_for_bill(
             interest_next_month=next_interest,
             total_due_amount=total_due_amount,
             due_date=due_date,
-            extra_details=extra_details,
         )
         session.add(new_emi)
     session.flush()
@@ -595,9 +593,7 @@ def group_bills_to_create_loan_schedule(user_loan: BaseLoan):
     all_emis = (
         session.query(CardEmis)
         .filter(
-            CardEmis.loan_id == user_loan.id,
-            CardEmis.row_status == "active",
-            CardEmis.bill_id == None,
+            CardEmis.loan_id == user_loan.id, CardEmis.row_status == "active", CardEmis.bill_id == None,
         )
         .order_by(CardEmis.emi_number.asc())
         .all()
@@ -627,7 +623,9 @@ def group_bills_to_create_loan_schedule(user_loan: BaseLoan):
             func.sum(CardEmis.total_closing_balance_post_due_date).label(
                 "sum_total_closing_balance_post_due_date"
             ),
-            func.json_agg(CardEmis.extra_details).label("total_extra_details"),
+            func.jsonb_object_agg(CardEmis.bill_id, CardEmis.total_due_amount).label(
+                "total_extra_details"
+            ),
         )
         .filter(
             CardEmis.loan_id == user_loan.loan_id,
@@ -722,10 +720,7 @@ def update_event_with_dpd(
         bills_touched.append(account.identifier)
         bill = (
             session.query(LoanData)
-            .filter(
-                LoanData.loan_id == user_loan.loan_id,
-                LoanData.id == account.identifier,
-            )
+            .filter(LoanData.loan_id == user_loan.loan_id, LoanData.id == account.identifier,)
             .first()
         )
         dpd = (event_post_date - bill.bill_due_date).days

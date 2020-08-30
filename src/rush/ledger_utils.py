@@ -19,17 +19,10 @@ from rush.models import (
 
 
 def create_ledger_entry(
-    session: Session,
-    event_id: int,
-    debit_book_id: int,
-    credit_book_id: int,
-    amount: Decimal,
+    session: Session, event_id: int, debit_book_id: int, credit_book_id: int, amount: Decimal,
 ) -> LedgerEntry:
     entry = LedgerEntry(
-        event_id=event_id,
-        debit_account=debit_book_id,
-        credit_account=credit_book_id,
-        amount=amount,
+        event_id=event_id, debit_account=debit_book_id, credit_account=credit_book_id, amount=amount,
     )
     session.add(entry)
     session.flush()
@@ -37,11 +30,7 @@ def create_ledger_entry(
 
 
 def create_ledger_entry_from_str(
-    session: Session,
-    event_id: int,
-    debit_book_str: str,
-    credit_book_str: str,
-    amount: Decimal,
+    session: Session, event_id: int, debit_book_str: str, credit_book_str: str, amount: Decimal,
 ) -> LedgerEntry:
     debit_account = get_book_account_by_string(session, book_string=debit_book_str)
     credit_account = get_book_account_by_string(session, book_string=credit_book_str)
@@ -168,7 +157,7 @@ def get_remaining_bill_balance(
         .all()
     )
     for fee in fees:
-        fee_due_amount = fee.gross_amount - fee.gross_amount_paid
+        fee_due_amount = fee.gross_amount - (fee.gross_amount_paid or 0)
         d[fee.name] = fee_due_amount
     d["total_due"] = sum(v for _, v in d.items())  # sum of all values becomes total due.
 
