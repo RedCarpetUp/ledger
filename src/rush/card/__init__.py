@@ -74,7 +74,8 @@ def activate_card(session: Session, user_loan: BaseLoan, user_card: UserCard) ->
     session.add(event)
     session.flush()
 
-    user_loan.amortization_date = get_current_ist_time().date()
+    if not user_loan.amortization_date:
+        user_loan.amortization_date = get_current_ist_time().date()
     user_card.card_activation_date = user_loan.amortization_date
 
 
