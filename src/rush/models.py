@@ -242,7 +242,8 @@ class Loan(AuditMixin):
     rc_rate_of_interest_monthly = Column(Numeric, nullable=False)
     lender_rate_of_interest_annual = Column(Numeric, nullable=False)
     interest_free_period_in_days = Column(Integer, default=45, nullable=True)
-
+    min_tenure = Column(Integer, nullable=True)
+    min_multiplier = Column(Numeric, nullable=True)
     dpd = Column(Integer, nullable=True)
     ever_dpd = Column(Integer, nullable=True)
 

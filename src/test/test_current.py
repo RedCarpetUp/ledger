@@ -264,6 +264,122 @@ def test_generate_bill_1(session: Session) -> None:
     assert interest_event is not None
 
 
+def test_min_multiplier(session: Session) -> None:
+    test_lenders(session)
+    card_db_updates(session)
+    # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    a = User(id=99, performed_by=123,)
+    session.add(a)
+    session.flush()
+
+    # assign card
+    user_loan = create_user_product(
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02").date(),
+        card_type="ruby",
+        lender_id=62311,
+        min_multiplier=Decimal(2),
+    )
+
+    swipe = create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-04-08 19:23:11"),
+        amount=Decimal(12000),
+        description="BigB.com",
+    )
+    bill_id = swipe["data"].loan_id
+
+    _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
+    assert unbilled_amount == 12000
+
+    bill = bill_generate(user_loan=user_loan)
+    # Interest event to be fired separately now
+
+    # check latest bill method
+    latest_bill = user_loan.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
+    accrue_interest_on_all_bills(
+        session=session, post_date=bill.table.bill_due_date + relativedelta(days=1), user_loan=user_loan
+    )
+
+    assert bill.bill_start_date == parse_date("2020-04-02").date()
+    assert bill.table.is_generated is True
+
+    _, min_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/min/a")
+    assert min_amount == 2720
+
+    _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
+    # Should be 0 because it has moved to billed account.
+    assert unbilled_amount == 0
+
+    _, billed_amount = get_account_balance_from_str(
+        session, book_string=f"{bill_id}/bill/principal_receivable/a"
+    )
+    assert billed_amount == 12000
+
+
+def test_min_tenure(session: Session) -> None:
+    test_lenders(session)
+    card_db_updates(session)
+    # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    a = User(id=99, performed_by=123,)
+    session.add(a)
+    session.flush()
+
+    # assign card
+    user_loan = create_user_product(
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02").date(),
+        card_type="ruby",
+        lender_id=62311,
+        min_tenure=24,
+    )
+
+    swipe = create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-04-08 19:23:11"),
+        amount=Decimal(12000),
+        description="BigB.com",
+    )
+    bill_id = swipe["data"].loan_id
+
+    _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
+    assert unbilled_amount == 12000
+
+    bill = bill_generate(user_loan=user_loan)
+    # Interest event to be fired separately now
+
+    # check latest bill method
+    latest_bill = user_loan.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
+    accrue_interest_on_all_bills(
+        session=session, post_date=bill.table.bill_due_date + relativedelta(days=1), user_loan=user_loan
+    )
+
+    assert bill.bill_start_date == parse_date("2020-04-02").date()
+    assert bill.table.is_generated is True
+
+    _, min_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/min/a")
+    assert min_amount == 860
+
+    _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
+    # Should be 0 because it has moved to billed account.
+    assert unbilled_amount == 0
+
+    _, billed_amount = get_account_balance_from_str(
+        session, book_string=f"{bill_id}/bill/principal_receivable/a"
+    )
+    assert billed_amount == 12000
+
+
 def _partial_payment_bill_1(session: Session) -> None:
     user_loan = get_user_product(session, 99)
     payment_date = parse_date("2020-05-03")
