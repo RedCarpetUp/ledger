@@ -28,6 +28,7 @@ from sqlalchemy.orm import (
     relationship,
 )
 from sqlalchemy.schema import Index
+from sqlalchemy.util.langhelpers import hybridproperty
 
 from rush.utils import get_current_ist_time
 
@@ -367,7 +368,6 @@ class CardKitNumbers(AuditMixin):
     last_5_digits = Column(String(5), nullable=False)
     status = Column(String(15), nullable=False)
     extra_details = Column(JSON, nullable=False, default={})
-    user_cards = relationship("UserCard")
 
 
 class LedgerTriggerEvent(AuditMixin):
@@ -559,6 +559,10 @@ class UserInstrument(AuditMixin):
     daily_spend_limit = Column(Integer, nullable=True)
     international_usage = Column(Boolean, default=False, nullable=False)
     credit_limit = Column(Numeric, nullable=True)
+    name = Column(String(), nullable=False)
+    activation_date = Column(Date, nullable=True)
+    instrument_id = Column(String(), nullable=False)
+    status = Column(String(), nullable=False)
 
     __mapper_args__ = {
         "polymorphic_identity": "user_instrument",
@@ -572,18 +576,32 @@ class UserCard(UserInstrument):
         "polymorphic_identity": "card",
     }
 
-    kit_number = Column(String(length=12), ForeignKey(CardKitNumbers.kit_number), nullable=True)
-    cash_withdrawal_limit = Column(Numeric, nullable=True)
     activation_type = Column(String(length=12), nullable=True)
-    card_name = Column(String, nullable=True)
-    card_activation_date = Column(Date, nullable=True)
 
     def __init__(self, **kwargs):
         assert kwargs.get("kit_number") is not None
         assert kwargs.get("activation_type") is not None
         assert kwargs.get("card_name") is not None
 
+        kwargs["instrument_id"] = kwargs.pop("kit_number")
+        kwargs["name"] = kwargs.pop("card_name")
+
+        kwargs["status"] = kwargs.get("status", "INACTIVE")
+        kwargs["activation_date"] = kwargs.get("card_activation_date")
+
         super().__init__(**kwargs)
+
+    @hybridproperty
+    def card_activation_date(self):
+        return self.activation_date
+
+    @hybridproperty
+    def kit_number(self):
+        return self.instrument_id
+
+    @hybridproperty
+    def card_name(self):
+        return self.name
 
 
 class UserUPI(UserInstrument):
@@ -592,11 +610,21 @@ class UserUPI(UserInstrument):
         "polymorphic_identity": "upi",
     }
 
-    upi_id = Column(String, nullable=True)
-    upi_merchant = Column(String, nullable=True)
-
     def __init__(self, **kwargs):
         assert kwargs.get("upi_id") is not None
         assert kwargs.get("upi_merchant") is not None
 
+        kwargs["name"] = kwargs.pop("upi_merchant")
+        kwargs["instrument_id"] = kwargs.pop("upi_id")
+
+        kwargs["status"] = kwargs.get("status", "INACTIVE")
+
         super().__init__(**kwargs)
+
+    @hybridproperty
+    def upi_id(self):
+        return self.instrument_id
+
+    @hybridproperty
+    def upi_merchant(self):
+        return self.name

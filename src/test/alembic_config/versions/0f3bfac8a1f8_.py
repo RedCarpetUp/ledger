@@ -27,16 +27,14 @@ def upgrade() -> None:
         sa.Column("loan_id", sa.Integer(), nullable=False),
         sa.Column("details", sa.JSON(), server_default="{}", nullable=True),
         sa.Column("kyc_status", sa.String(length=20), server_default="PENDING", nullable=True),
+        sa.Column("name", sa.String(), nullable=False),
+        sa.Column("activation_date", sa.Date(), nullable=True),
+        sa.Column("instrument_id", sa.String(), nullable=False),
+        sa.Column("status", sa.String(), nullable=False, server_default="INACTIVE"),
         ### card-level columns
-        sa.Column("kit_number", sa.String(length=12), nullable=True),
         sa.Column("credit_limit", sa.Numeric(), nullable=True),
-        sa.Column("cash_withdrawal_limit", sa.Numeric(), nullable=True),
         sa.Column("activation_type", sa.String(length=12), nullable=True),
-        sa.Column("card_name", sa.String(), nullable=True),
-        sa.Column("card_activation_date", sa.Date(), nullable=True),
         ### upi-level columns
-        sa.Column("upi_id", sa.String(), nullable=True),
-        sa.Column("upi_merchant", sa.String(), nullable=True),
         ### instrument settlings level columns
         sa.Column("no_of_txn_per_day", sa.Integer(), nullable=True),
         sa.Column("single_txn_spend_limit", sa.Integer(), nullable=True),
@@ -45,10 +43,6 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["loan_id"],
             ["loan.id"],
-        ),
-        sa.ForeignKeyConstraint(
-            ["kit_number"],
-            ["v3_card_kit_numbers.kit_number"],
         ),
         sa.ForeignKeyConstraint(
             ["user_id"],
