@@ -1,5 +1,9 @@
 from decimal import Decimal
-from typing import Optional
+from typing import (
+    Any,
+    Dict,
+    Optional,
+)
 
 from pendulum import Date
 from sqlalchemy.orm import Session
@@ -11,7 +15,10 @@ from rush.models import (
     LoanFee,
     Product,
     ProductFee,
+    UserCard,
+    UserInstrument,
     UserProduct,
+    UserUPI,
 )
 from rush.utils import (
     add_gst_split_to_amount,
@@ -124,3 +131,59 @@ def add_reload_fee(
     session.add(f)
 
     return f
+
+
+def add_card_to_loan(session: Session, loan: Loan, card_info: Dict[str, Any]) -> UserCard:
+    event = LedgerTriggerEvent(
+        name="add_card",
+        loan_id=loan.loan_id,
+        amount=Decimal("0"),
+        post_date=get_current_ist_time().date(),
+        extra_details={},
+    )
+
+    session.add(event)
+    session.flush()
+
+    card_info["user_id"] = loan.user_id
+    card_info["loan_id"] = loan.loan_id
+
+    user_card = UserCard(**card_info)
+    session.add(user_card)
+    session.flush()
+
+    return user_card
+
+
+def add_upi_to_loan(session: Session, loan: Loan, upi_info: Dict[str, Any]) -> UserUPI:
+    event = LedgerTriggerEvent(
+        name="add_upi",
+        loan_id=loan.loan_id,
+        amount=Decimal("0"),
+        post_date=get_current_ist_time().date(),
+        extra_details={},
+    )
+
+    session.add(event)
+    session.flush()
+
+    upi_info["user_id"] = loan.user_id
+    upi_info["loan_id"] = loan.loan_id
+
+    user_upi = UserUPI(**upi_info)
+    session.add(user_upi)
+    session.flush()
+
+    return user_upi
+
+
+def add_instrument_to_loan(
+    session: Session, instrument_type: str, loan: Loan, instrument_info: Dict[str, Any]
+) -> UserInstrument:
+    assert instrument_type in ("upi", "card")
+
+    if instrument_type == "upi":
+        return add_upi_to_loan(session=session, loan=loan, upi_info=instrument_info)
+
+    elif instrument_type == "card":
+        return add_card_to_loan(session=session, loan=loan, card_info=instrument_info)

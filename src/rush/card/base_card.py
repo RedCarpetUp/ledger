@@ -132,9 +132,10 @@ class BaseLoan(Loan):
     @classmethod
     def create(cls, session: Session, **kwargs) -> Loan:
         user_product_id = kwargs.get("user_product_id")
+        card_type = kwargs.pop("card_type")
         if not user_product_id:
             user_product_id = create_user_product_mapping(
-                session=session, user_id=kwargs["user_id"], product_type=kwargs["card_type"]
+                session=session, user_id=kwargs["user_id"], product_type=card_type
             ).id
 
         loan = cls(
@@ -148,10 +149,19 @@ class BaseLoan(Loan):
             min_tenure=kwargs.pop("min_tenure", None),
             min_multiplier=kwargs.pop("min_multiplier", None),
         )
+
+        # Don't want to overwrite default value in case of None.
+        if kwargs.get("interest_free_period_in_days"):
+            loan.interest_free_period_in_days = kwargs.pop("interest_free_period_in_days")
+
         session.add(loan)
         session.flush()
 
         kwargs["loan_id"] = loan.id
+
+        kwargs["card_name"] = kwargs.get("card_name", "ruby")  # TODO: change this later.
+        kwargs["activation_type"] = kwargs.get("activation_type", "V")  # TODO: change this later.
+        kwargs["kit_number"] = kwargs.get("kit_number", "00000")  # TODO: change this later.
 
         user_card = UserCard(**kwargs)
         session.add(user_card)
