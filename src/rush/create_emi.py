@@ -24,7 +24,6 @@ from rush.models import (
     EmiPaymentMapping,
     EventDpd,
     LedgerEntry,
-    LedgerEntryPy,
     LedgerTriggerEvent,
     LoanData,
     LoanMoratorium,
@@ -39,29 +38,51 @@ def create_emis_for_bill(
     session: Session,
     user_loan: BaseLoan,
     bill: BaseBill,
-    last_emi: CardEmis = None,
-    bill_accumalation_till_date: Decimal = None,
+    last_emi: Optional[CardEmis] = None,
+    bill_accumalation_till_date: Optional[Decimal] = None,
 ) -> None:
-    # In case of term loan, bill_class is set to None.
-    # Therefore need to pass LoanData as bill instead of BaseBill class.
-    bill_data = bill if user_loan.bill_class is None else bill.table
-
-    bill_tenure = bill_data.bill_tenure
+    assert bill.table.id is not None
+    bill_data = bill.table
     if not last_emi:
         due_date = bill_data.bill_start_date
-        principal_due = Decimal(bill_data.principal)
+        if "term_loan" in user_loan.product_type:
+            principal_due = bill_data.principal - bill.get_downpayment_amount(
+                product_price=bill_data.principal, downpayment_perc=user_loan.downpayment_percent
+            )
+        else:
+            principal_due = Decimal(bill_data.principal)
         due_amount = bill_data.principal_instalment
         start_emi_number = difference_counter = 1
     else:
         due_date = last_emi.due_date
         principal_due = Decimal(bill_data.principal - bill_accumalation_till_date)
-        due_amount = div(principal_due, bill_tenure - last_emi.emi_number)
+        due_amount = div(principal_due, bill_data.bill_tenure - last_emi.emi_number)
         start_emi_number = last_emi.emi_number + 1
         difference_counter = last_emi.emi_number
     total_interest = current_interest = next_interest = Decimal(0)
-    for i in range(start_emi_number, bill_tenure + 1):
-        due_date += relativedelta(months=1, day=15)
+    for i in range(start_emi_number, bill_data.bill_tenure + 1):
+        deltas_for_due_date = bill.get_relative_delta_for_emi(
+            emi_number=i, amortization_date=user_loan.amortization_date
+        )
+
+        # in relativedelta, `days` arg is for interval
+        # whereas `day` arg is for replace functionality.
+        if deltas_for_due_date["days"] < 0:
+            due_date += relativedelta(
+                months=deltas_for_due_date["months"], days=deltas_for_due_date["days"]
+            )
+        else:
+            due_date += relativedelta(
+                months=deltas_for_due_date["months"], day=deltas_for_due_date["days"]
+            )
+
         total_due_amount = due_amount
+
+        # if term-loan and first emi, downpayment is also added in total_due_amount.
+        if i == 1 and "term_loan" in user_loan.product_type:
+            total_due_amount += bill.get_downpayment_amount(
+                product_price=bill_data.principal, downpayment_perc=user_loan.downpayment_percent
+            )
         total_closing_balance = (
             principal_due - mul(due_amount, (i - difference_counter))
             if principal_due - mul(due_amount, (i - difference_counter)) > 0

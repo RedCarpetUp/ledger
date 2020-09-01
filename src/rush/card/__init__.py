@@ -1,10 +1,10 @@
 from decimal import Decimal
 from typing import (
     Any,
+    Generator,
     Optional,
 )
 
-from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 # for now, these imports are required by get_product_class method to fetch all class within card module.
@@ -12,6 +12,9 @@ from rush.card.base_card import BaseLoan
 from rush.card.health_card import HealthCard
 from rush.card.ruby_card import RubyCard
 from rush.card.term_loan import TermLoan
+from rush.card.term_loan2 import TermLoan2
+from rush.card.term_loan_pro import TermLoanPro
+from rush.card.term_loan_pro2 import TermLoanPro2
 from rush.ledger_events import limit_assignment_event
 from rush.models import (
     LedgerTriggerEvent,
@@ -45,7 +48,8 @@ def get_user_product(
 
 
 def create_user_product(session: Session, **kwargs) -> Loan:
-    loan = get_product_class(card_type=kwargs["card_type"]).create(session=session, **kwargs)
+    loan_cls = get_product_class(card_type=kwargs["card_type"])
+    loan = loan_cls.create(session=session, **kwargs)
     return loan
 
 
@@ -55,11 +59,23 @@ def get_product_class(card_type: str) -> Any:
     Make sure to import every Product class.
     """
 
-    for kls in BaseLoan.__subclasses__():
-        if hasattr(kls, "__mapper_args__") and kls.__mapper_args__["polymorphic_identity"] == card_type:
-            return kls
-    else:
-        raise Exception("NoValidProductImplementation")
+    def _subclasses(card_type: str) -> Generator[Any, Any, Any]:
+        for kls in BaseLoan.__subclasses__():
+            if (
+                hasattr(kls, "__mapper_args__")
+                and kls.__mapper_args__["polymorphic_identity"] == card_type
+            ):
+                yield kls
+            for sub_kls in kls.__subclasses__():
+                if (
+                    hasattr(sub_kls, "__mapper_args__")
+                    and sub_kls.__mapper_args__["polymorphic_identity"] == card_type
+                ):
+                    yield sub_kls
+        else:
+            raise Exception("NoValidProductImplementation")
+
+    return next(_subclasses(card_type=card_type))
 
 
 def activate_card(session: Session, user_loan: BaseLoan, user_card: UserCard) -> None:
