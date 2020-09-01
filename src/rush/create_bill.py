@@ -95,10 +95,10 @@ def bill_generate(user_loan: BaseLoan) -> BaseBill:
 
     # Don't add in min if user is in moratorium.
     if not LoanMoratorium.is_in_moratorium(
-        session=session, loan_id=user_loan.loan_id, date_to_check_against=bill.bill_close_date
+        session=session, loan_id=user_loan.loan_id, date_to_check_against=bill.table.bill_close_date
     ):
         # After the bill has generated. Call the min generation event on all unpaid bills.
-        add_min_to_all_bills(session=session, post_date=bill.bill_close_date, user_loan=user_loan)
+        add_min_to_all_bills(session=session, post_date=bill.table.bill_close_date, user_loan=user_loan)
 
     from rush.create_emi import create_emis_for_bill
 
