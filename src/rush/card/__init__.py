@@ -66,12 +66,14 @@ def get_product_class(card_type: str) -> Any:
                 and kls.__mapper_args__["polymorphic_identity"] == card_type
             ):
                 yield kls
+                break
             for sub_kls in kls.__subclasses__():
                 if (
                     hasattr(sub_kls, "__mapper_args__")
                     and sub_kls.__mapper_args__["polymorphic_identity"] == card_type
                 ):
                     yield sub_kls
+                    break
         else:
             raise Exception("NoValidProductImplementation")
 
