@@ -61,12 +61,12 @@ def get_or_create_bill_for_card_swipe(user_loan: BaseLoan, txn_time: DateTime) -
     return {"result": "success", "bill": new_bill}
 
 
-def bill_generate(user_loan: BaseLoan) -> BaseBill:
+def bill_generate(user_loan: BaseLoan, creation_time: DateTime = get_current_ist_time()) -> BaseBill:
     session = user_loan.session
     bill = user_loan.get_latest_bill_to_generate()  # Get the first bill which is not generated.
     if not bill:
         bill = get_or_create_bill_for_card_swipe(
-            user_loan=user_loan, txn_time=get_current_ist_time()
+            user_loan=user_loan, txn_time=creation_time
         )  # TODO not sure about this
         if bill["result"] == "error":
             return bill
