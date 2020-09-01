@@ -46,9 +46,15 @@ class BaseBill:
         self.table = loan_data
         self.__dict__.update(loan_data.__dict__)
 
-    def get_interest_to_charge(self, rate_of_interest: Decimal):
+    def get_interest_to_charge(
+        self, rate_of_interest: Decimal, product_price: Optional[Decimal] = None
+    ) -> Decimal:
         # TODO get tenure from table.
-        interest_on_principal = mul(self.table.principal, div(rate_of_interest, 100))
+        principal = self.table.principal
+        if product_price:
+            principal = product_price
+
+        interest_on_principal = mul(principal, div(rate_of_interest, 100))
         not_rounded_emi = self.table.principal_instalment + interest_on_principal
         rounded_emi = round_up_decimal_to_nearest(not_rounded_emi, to_nearest=self.round_emi_to_nearest)
 

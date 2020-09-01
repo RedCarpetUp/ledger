@@ -37,7 +37,6 @@ class TermLoanPro2Bill(TermLoanBill):
 class TermLoanPro2(TermLoan):
     bill_class: Type[B] = TermLoanPro2Bill
     session: Session = None
-    downpayment_perc: Decimal = Decimal("20")
 
     __mapper_args__ = {"polymorphic_identity": "term_loan_pro_2"}
 

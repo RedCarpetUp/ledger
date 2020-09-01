@@ -258,6 +258,7 @@ class Loan(AuditMixin):
     min_multiplier = Column(Numeric, nullable=True)
     dpd = Column(Integer, nullable=True)
     ever_dpd = Column(Integer, nullable=True)
+    downpayment_percent = Column(Numeric, nullable=True)
 
     __mapper_args__ = {
         "polymorphic_identity": "loan",

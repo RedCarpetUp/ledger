@@ -60,6 +60,7 @@ def create_test_term_loan(session: Session, **kwargs) -> TermLoanPro:  # type: i
         amount=Decimal(10000),
         product_order_date=parse_date(date_str).date(),
         user_product_id=user_product_id,
+        downpayment_percent=Decimal("20"),
     )
 
     return loan

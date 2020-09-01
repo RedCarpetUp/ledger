@@ -1,6 +1,7 @@
 from decimal import Decimal
 from typing import (
     Any,
+    Generator,
     Optional,
 )
 
@@ -47,7 +48,8 @@ def get_user_product(
 
 
 def create_user_product(session: Session, **kwargs) -> Loan:
-    loan = get_product_class(card_type=kwargs["card_type"]).create(session=session, **kwargs)
+    loan_cls = get_product_class(card_type=kwargs["card_type"])
+    loan = loan_cls.create(session=session, **kwargs)
     return loan
 
 
@@ -57,21 +59,23 @@ def get_product_class(card_type: str) -> Any:
     Make sure to import every Product class.
     """
 
-    parent_class = BaseLoan
-    if "term_loan" in card_type:
-        parent_class = TermLoan
+    def _subclasses(card_type: str) -> Generator[Any, Any, Any]:
+        for kls in BaseLoan.__subclasses__():
+            if (
+                hasattr(kls, "__mapper_args__")
+                and kls.__mapper_args__["polymorphic_identity"] == card_type
+            ):
+                yield kls
+            for sub_kls in kls.__subclasses__():
+                if (
+                    hasattr(sub_kls, "__mapper_args__")
+                    and sub_kls.__mapper_args__["polymorphic_identity"] == card_type
+                ):
+                    yield sub_kls
+        else:
+            raise Exception("NoValidProductImplementation")
 
-    if (
-        hasattr(parent_class, "__mapper_args__")
-        and parent_class.__mapper_args__["polymorphic_identity"] == card_type
-    ):
-        return parent_class
-
-    for kls in parent_class.__subclasses__():
-        if hasattr(kls, "__mapper_args__") and kls.__mapper_args__["polymorphic_identity"] == card_type:
-            return kls
-    else:
-        raise Exception("NoValidProductImplementation")
+    return next(_subclasses(card_type=card_type))
 
 
 def activate_card(session: Session, user_loan: BaseLoan, user_card: UserCard) -> None:
