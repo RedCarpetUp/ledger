@@ -1,6 +1,7 @@
 from decimal import Decimal
 from typing import (
     Dict,
+    Tuple,
     Type,
 )
 
@@ -10,10 +11,8 @@ from sqlalchemy.orm import Session
 
 from rush.card.base_card import (
     B,
-    BaseBill,
     BaseLoan,
 )
-from rush.card.utils import create_user_product_mapping
 from rush.ledger_events import loan_disbursement_event
 from rush.models import (
     LedgerTriggerEvent,
@@ -22,15 +21,90 @@ from rush.models import (
 )
 from rush.utils import (
     div,
+    mul,
     round_up_decimal_to_nearest,
 )
 
 
-class TermLoanBill(BaseBill):
+class TermLoanBill:
+    session: Session = None
+    table: LoanData = None
     round_emi_to_nearest: Decimal = Decimal("10")
+    add_emi_one_to_downpayment: bool = True
 
-    def sum_of_atm_transactions(self) -> Decimal:
-        return Decimal(0)
+    def __init__(self, session: Session, loan_data: LoanData):
+        self.session = session
+        self.table = loan_data
+        self.__dict__.update(loan_data.__dict__)
+
+    @classmethod
+    def get_downpayment_amount(cls, product_price: Decimal, downpayment_perc: Decimal) -> Decimal:
+        downpayment_amount = product_price * downpayment_perc * Decimal("0.01")
+        downpayment_amount = round_up_decimal_to_nearest(
+            downpayment_amount, to_nearest=cls.round_emi_to_nearest
+        )
+
+        return downpayment_amount
+
+    @classmethod
+    def calculate_downpayment_amount_payable(
+        cls,
+        product_price: Decimal,
+        downpayment_perc: Decimal,
+        tenure: int,
+        interest_rate: Decimal = Decimal("3"),
+    ) -> Decimal:
+        downpayment_amount = cls.get_downpayment_amount(
+            product_price=product_price, downpayment_perc=downpayment_perc
+        )
+
+        if cls.add_emi_one_to_downpayment:
+            chargeable_principal = product_price - downpayment_amount
+            chargeable_principal *= 1 + (Decimal(0.01) * interest_rate * tenure)
+            monthly_emi = chargeable_principal / Decimal(tenure)
+            monthly_emi = round_up_decimal_to_nearest(monthly_emi, to_nearest=cls.round_emi_to_nearest)
+
+            downpayment_amount += monthly_emi
+
+        return downpayment_amount
+
+    @classmethod
+    def calculate_principal_instalment(
+        cls, product_price: Decimal, downpayment_perc: Decimal, tenure: int
+    ) -> Decimal:
+        amount = cls.net_product_price(product_price=product_price, downpayment_perc=downpayment_perc)
+        principal_instalment = div(amount, tenure)
+
+        return principal_instalment
+
+    @classmethod
+    def net_product_price(cls, product_price: Decimal, downpayment_perc: Decimal) -> Decimal:
+        downpayment_amount = cls.get_downpayment_amount(
+            product_price=product_price,
+            downpayment_perc=downpayment_perc,
+        )
+
+        amount = product_price - downpayment_amount
+        return amount
+
+    @staticmethod
+    def calculate_bill_start_and_close_date(amortization_date: Date, tenure: int) -> Tuple[Date]:
+        bill_start_date = amortization_date
+        # not sure about bill close date.
+        bill_close_date = bill_start_date.add(months=tenure - 1)
+
+        return bill_start_date, bill_close_date
+
+    def get_interest_to_charge(self, rate_of_interest: Decimal, product_price: Decimal) -> Decimal:
+        # TODO get tenure from table.
+        interest_on_principal = mul(product_price, div(rate_of_interest, 100))
+        not_rounded_emi = self.table.principal_instalment + interest_on_principal
+        rounded_emi = round_up_decimal_to_nearest(not_rounded_emi, to_nearest=self.round_emi_to_nearest)
+
+        rounding_difference = rounded_emi - not_rounded_emi
+
+        new_interest = interest_on_principal + rounding_difference
+        return new_interest
 
     def get_relative_delta_for_emi(self, emi_number: int, amortization_date: Date) -> Dict[str, int]:
         """
@@ -56,23 +130,6 @@ class TermLoan(BaseLoan):
 
     __mapper_args__ = {"polymorphic_identity": "term_loan"}
 
-    @classmethod
-    def calculate_downpayment_amount(cls, product_price: Decimal, tenure: int) -> Decimal:
-        downpayment_amount = super().calculate_downpayment_amount(
-            product_price=product_price, tenure=tenure
-        )
-
-        amount = product_price - downpayment_amount
-        instalment = div(amount, tenure)
-
-        interest = product_price * Decimal(3) * Decimal("0.01")
-        instalment += interest
-
-        rounded_instalment = round_up_decimal_to_nearest(
-            instalment, to_nearest=cls.bill_class.round_emi_to_nearest
-        )
-        return downpayment_amount + rounded_instalment
-
     @staticmethod
     def calculate_amortization_date(product_order_date: Date) -> Date:
         return product_order_date
@@ -89,24 +146,24 @@ class TermLoan(BaseLoan):
             rc_rate_of_interest_monthly=Decimal(3),
             lender_rate_of_interest_annual=Decimal(18),
             amortization_date=kwargs.get(
-                "loan_creation_date", cls.calculate_amortization_date(kwargs["product_order_date"])
-            ),  # TODO: change this later.
+                "loan_creation_date",
+                cls.calculate_amortization_date(product_order_date=kwargs["product_order_date"]),
+            ),
         )
         session.add(loan)
         session.flush()
 
         kwargs["loan_id"] = loan.id
 
-        bill_start_date = loan.amortization_date
-        # not sure about bill close date.
-        bill_close_date = bill_start_date.add(months=kwargs["tenure"] - 1)
-
-        downpayment_amount = super().calculate_downpayment_amount(
-            product_price=kwargs["amount"], tenure=kwargs["tenure"]
+        bill_start_date, bill_close_date = cls.bill_class.calculate_bill_start_and_close_date(
+            amortization_date=loan.amortization_date, tenure=kwargs["tenure"]
         )
 
-        amount = kwargs["amount"] - downpayment_amount
-        principal_instalment = div(amount, kwargs["tenure"])
+        principal_instalment = cls.bill_class.calculate_principal_instalment(
+            product_price=kwargs["amount"],
+            tenure=kwargs["tenure"],
+            downpayment_perc=cls.downpayment_perc,
+        )
 
         loan_data = LoanData(
             user_id=kwargs["user_id"],
@@ -133,8 +190,11 @@ class TermLoan(BaseLoan):
         session.add(event)
         session.flush()
 
-        actual_downpayment_amount = cls.calculate_downpayment_amount(
-            product_price=kwargs["amount"], tenure=kwargs["tenure"]
+        actual_downpayment_amount = cls.bill_class.calculate_downpayment_amount_payable(
+            product_price=kwargs["amount"],
+            tenure=kwargs["tenure"],
+            downpayment_perc=cls.downpayment_perc,
+            interest_rate=Decimal(3),
         )
 
         loan_disbursement_event(
@@ -150,7 +210,10 @@ class TermLoan(BaseLoan):
 
         bill = cls.bill_class(session=session, loan_data=loan_data)
         loan_data.interest_to_charge = bill.get_interest_to_charge(
-            rate_of_interest=loan.rc_rate_of_interest_monthly
+            rate_of_interest=loan.rc_rate_of_interest_monthly,
+            product_price=bill.net_product_price(
+                product_price=kwargs["amount"], downpayment_perc=cls.downpayment_perc
+            ),
         )
 
         create_emis_for_bill(

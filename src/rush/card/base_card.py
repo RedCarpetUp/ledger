@@ -136,12 +136,6 @@ class BaseLoan(Loan):
         self.session = session
 
     @classmethod
-    def calculate_downpayment_amount(cls, product_price: Decimal, tenure: int) -> Decimal:
-        assert cls.downpayment_perc is not None
-
-        return product_price * cls.downpayment_perc * Decimal("0.01")
-
-    @classmethod
     def create(cls, session: Session, **kwargs) -> Loan:
         user_product_id = kwargs.get("user_product_id")
         card_type = kwargs.pop("card_type")

@@ -108,8 +108,8 @@ def test_product_amortization_6() -> None:
 
 
 def test_calculate_downpayment_amount() -> None:
-    downpayment_amount = TermLoanPro2.calculate_downpayment_amount(
-        product_price=Decimal(10000), tenure=12
+    downpayment_amount = TermLoanPro2.bill_class.calculate_downpayment_amount_payable(
+        product_price=Decimal(10000), tenure=12, downpayment_perc=Decimal("20")
     )
     assert downpayment_amount == Decimal("2000")
 
@@ -125,8 +125,8 @@ def test_create_term_loan(session: Session) -> None:
 
     loan_creation_data = {"date_str": "2020-08-01", "user_product_id": user_product.id}
 
-    _downpayment_amount = get_product_class(card_type="term_loan_pro_2").calculate_downpayment_amount(
-        product_price=Decimal("10000"), tenure=12
+    _downpayment_amount = TermLoanPro2.bill_class.calculate_downpayment_amount_payable(
+        product_price=Decimal("10000"), tenure=12, downpayment_perc=Decimal("20")
     )
 
     # downpayment
@@ -214,12 +214,12 @@ def test_create_term_loan(session: Session) -> None:
     assert len(emis_dict) == 12
     assert emis_dict[0]["due_date"] == parse_date("2020-09-01").date()
     assert emis_dict[0]["emi_number"] == 1
-    assert emis_dict[0]["interest"] == Decimal("306.67")
+    assert emis_dict[0]["interest"] == Decimal("243.33")
     assert emis_dict[0]["total_due_amount"] % 10 == 0
 
     assert emis_dict[-1]["due_date"] == parse_date("2021-08-01").date()
     assert emis_dict[-1]["emi_number"] == 12
-    assert emis_dict[-1]["interest"] == Decimal("306.67")
+    assert emis_dict[-1]["interest"] == Decimal("243.33")
     assert emis_dict[-1]["total_due_amount"] % 10 == 0
 
 
@@ -234,8 +234,8 @@ def test_create_term_loan_2(session: Session) -> None:
 
     loan_creation_data = {"date_str": "2018-12-31", "user_product_id": user_product.id}
 
-    _downpayment_amount = get_product_class(card_type="term_loan_pro_2").calculate_downpayment_amount(
-        product_price=Decimal("10000"), tenure=12
+    _downpayment_amount = TermLoanPro2.bill_class.calculate_downpayment_amount_payable(
+        product_price=Decimal("10000"), tenure=12, downpayment_perc=Decimal("20")
     )
 
     # downpayment
@@ -323,15 +323,15 @@ def test_create_term_loan_2(session: Session) -> None:
     assert len(emis_dict) == 12
     assert emis_dict[0]["due_date"] == parse_date("2019-02-01").date()
     assert emis_dict[0]["emi_number"] == 1
-    assert emis_dict[0]["interest"] == Decimal("306.67")
+    assert emis_dict[0]["interest"] == Decimal("243.33")
     assert emis_dict[0]["total_due_amount"] % 10 == 0
 
     assert emis_dict[1]["due_date"] == parse_date("2019-03-01").date()
     assert emis_dict[1]["emi_number"] == 2
-    assert emis_dict[1]["interest"] == Decimal("306.67")
+    assert emis_dict[1]["interest"] == Decimal("243.33")
     assert emis_dict[1]["total_due_amount"] % 10 == 0
 
     assert emis_dict[-1]["due_date"] == parse_date("2020-01-01").date()
     assert emis_dict[-1]["emi_number"] == 12
-    assert emis_dict[-1]["interest"] == Decimal("306.67")
+    assert emis_dict[-1]["interest"] == Decimal("243.33")
     assert emis_dict[-1]["total_due_amount"] % 10 == 0

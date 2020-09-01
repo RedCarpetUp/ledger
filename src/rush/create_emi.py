@@ -24,7 +24,6 @@ from rush.models import (
     EmiPaymentMapping,
     EventDpd,
     LedgerEntry,
-    LedgerEntryPy,
     LedgerTriggerEvent,
     LoanData,
     LoanMoratorium,

@@ -107,8 +107,10 @@ def test_product_amortization_6() -> None:
 
 
 def test_calculate_downpayment_amount() -> None:
-    downpayment_amount = TermLoan2.calculate_downpayment_amount(product_price=Decimal(10000), tenure=12)
-    assert downpayment_amount == Decimal("2970")
+    downpayment_amount = TermLoan2.bill_class.calculate_downpayment_amount_payable(
+        product_price=Decimal(10000), tenure=12, downpayment_perc=Decimal("20")
+    )
+    assert downpayment_amount == Decimal("2910")
 
 
 def test_create_term_loan(session: Session) -> None:
@@ -120,8 +122,8 @@ def test_create_term_loan(session: Session) -> None:
 
     loan_creation_data = {"date_str": "2020-08-01", "user_product_id": user_product.id}
 
-    _downpayment_amount = get_product_class(card_type="term_loan").calculate_downpayment_amount(
-        product_price=Decimal("10000"), tenure=12
+    _downpayment_amount = TermLoan2.bill_class.calculate_downpayment_amount_payable(
+        product_price=Decimal("10000"), tenure=12, downpayment_perc=Decimal("20")
     )
 
     # downpayment
@@ -147,17 +149,17 @@ def test_create_term_loan(session: Session) -> None:
     )
 
     assert downpayment_event.post_date.date() == parse_date("2020-08-01").date()
-    assert downpayment_event.amount == Decimal("2970")
+    assert downpayment_event.amount == Decimal("2910")
 
     _, downpayment_balance = get_account_balance_from_str(
         session=session, book_string=f"{user_product.id}/product/downpayment/l"
     )
-    assert downpayment_balance == Decimal("2970")
+    assert downpayment_balance == Decimal("2910")
 
     _, product_lender_payable = get_account_balance_from_str(
         session=session, book_string=f"{user_product.id}/product/lender_payable/l"
     )
-    assert product_lender_payable == Decimal("-2970")
+    assert product_lender_payable == Decimal("-2910")
 
     loan = create_test_term_loan(session=session, **loan_creation_data)
 
@@ -180,12 +182,12 @@ def test_create_term_loan(session: Session) -> None:
     _, principal_receivable = get_account_balance_from_str(
         session=session, book_string=f"{loan_data.id}/bill/principal_receivable/a"
     )
-    assert principal_receivable == Decimal("7030")
+    assert principal_receivable == Decimal("7090")
 
     _, loan_lender_payable = get_account_balance_from_str(
         session=session, book_string=f"{loan.loan_id}/loan/lender_payable/l"
     )
-    assert loan_lender_payable == Decimal("7030")
+    assert loan_lender_payable == Decimal("7090")
 
     _, product_lender_payable = get_account_balance_from_str(
         session=session, book_string=f"{user_product.id}/product/lender_payable/l"
@@ -206,15 +208,15 @@ def test_create_term_loan(session: Session) -> None:
     assert len(emis_dict) == 12
     assert emis_dict[0]["due_date"] == parse_date("2020-08-01").date()
     assert emis_dict[0]["emi_number"] == 1
-    assert emis_dict[0]["interest"] == Decimal("303.33")
+    assert emis_dict[0]["interest"] == Decimal("243.33")
     assert emis_dict[0]["total_due_amount"] % 10 == 0
-    assert emis_dict[0]["total_due_amount"] == Decimal("2970")
+    assert emis_dict[0]["total_due_amount"] == Decimal("2910")
 
-    assert emis_dict[1]["total_due_amount"] == Decimal("970")
+    assert emis_dict[1]["total_due_amount"] == Decimal("910")
 
     assert emis_dict[-1]["due_date"] == parse_date("2021-07-01").date()
     assert emis_dict[-1]["emi_number"] == 12
-    assert emis_dict[-1]["interest"] == Decimal("303.33")
+    assert emis_dict[-1]["interest"] == Decimal("243.33")
     assert emis_dict[-1]["total_due_amount"] % 10 == 0
 
 
@@ -227,8 +229,8 @@ def test_create_term_loan_2(session: Session) -> None:
 
     loan_creation_data = {"date_str": "2018-12-22", "user_product_id": user_product.id}
 
-    _downpayment_amount = get_product_class(card_type="term_loan").calculate_downpayment_amount(
-        product_price=Decimal("10000"), tenure=12
+    _downpayment_amount = TermLoan2.bill_class.calculate_downpayment_amount_payable(
+        product_price=Decimal("10000"), tenure=12, downpayment_perc=Decimal("20")
     )
 
     # downpayment
@@ -254,17 +256,17 @@ def test_create_term_loan_2(session: Session) -> None:
     )
 
     assert downpayment_event.post_date.date() == parse_date("2018-12-22").date()
-    assert downpayment_event.amount == Decimal("2970")
+    assert downpayment_event.amount == Decimal("2910")
 
     _, downpayment_balance = get_account_balance_from_str(
         session=session, book_string=f"{user_product.id}/product/downpayment/l"
     )
-    assert downpayment_balance == Decimal("2970")
+    assert downpayment_balance == Decimal("2910")
 
     _, product_lender_payable = get_account_balance_from_str(
         session=session, book_string=f"{user_product.id}/product/lender_payable/l"
     )
-    assert product_lender_payable == Decimal("-2970")
+    assert product_lender_payable == Decimal("-2910")
 
     loan = create_test_term_loan(session=session, **loan_creation_data)
 
@@ -287,12 +289,12 @@ def test_create_term_loan_2(session: Session) -> None:
     _, principal_receivable = get_account_balance_from_str(
         session=session, book_string=f"{loan_data.id}/bill/principal_receivable/a"
     )
-    assert principal_receivable == Decimal("7030")
+    assert principal_receivable == Decimal("7090")
 
     _, loan_lender_payable = get_account_balance_from_str(
         session=session, book_string=f"{loan.loan_id}/loan/lender_payable/l"
     )
-    assert loan_lender_payable == Decimal("7030")
+    assert loan_lender_payable == Decimal("7090")
 
     _, product_lender_payable = get_account_balance_from_str(
         session=session, book_string=f"{user_product.id}/product/lender_payable/l"
@@ -313,15 +315,15 @@ def test_create_term_loan_2(session: Session) -> None:
     assert len(emis_dict) == 12
     assert emis_dict[0]["due_date"] == parse_date("2018-12-22").date()
     assert emis_dict[0]["emi_number"] == 1
-    assert emis_dict[0]["interest"] == Decimal("303.33")
+    assert emis_dict[0]["interest"] == Decimal("243.33")
     assert emis_dict[0]["total_due_amount"] % 10 == 0
 
     assert emis_dict[1]["due_date"] == parse_date("2019-01-15").date()
     assert emis_dict[1]["emi_number"] == 2
-    assert emis_dict[1]["interest"] == Decimal("303.33")
+    assert emis_dict[1]["interest"] == Decimal("243.33")
     assert emis_dict[1]["total_due_amount"] % 10 == 0
 
     assert emis_dict[-1]["due_date"] == parse_date("2019-11-15").date()
     assert emis_dict[-1]["emi_number"] == 12
-    assert emis_dict[-1]["interest"] == Decimal("303.33")
+    assert emis_dict[-1]["interest"] == Decimal("243.33")
     assert emis_dict[-1]["total_due_amount"] % 10 == 0

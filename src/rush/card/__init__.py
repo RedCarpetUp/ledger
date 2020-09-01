@@ -57,7 +57,17 @@ def get_product_class(card_type: str) -> Any:
     Make sure to import every Product class.
     """
 
-    for kls in BaseLoan.__subclasses__():
+    parent_class = BaseLoan
+    if "term_loan" in card_type:
+        parent_class = TermLoan
+
+    if (
+        hasattr(parent_class, "__mapper_args__")
+        and parent_class.__mapper_args__["polymorphic_identity"] == card_type
+    ):
+        return parent_class
+
+    for kls in parent_class.__subclasses__():
         if hasattr(kls, "__mapper_args__") and kls.__mapper_args__["polymorphic_identity"] == card_type:
             return kls
     else:
@@ -96,9 +106,3 @@ def disburse_card(
     )
 
     limit_assignment_event(session=session, loan_id=user_loan.loan_id, event=event, amount=amount)
-
-
-def get_downpayment_amount(product_type: str, product_price: Decimal, tenure: int) -> Decimal:
-    return get_product_class(card_type=product_type).calculate_downpayment_amount(
-        product_price=product_price, tenure=tenure
-    )
