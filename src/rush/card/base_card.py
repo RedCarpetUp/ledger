@@ -1,5 +1,6 @@
 from decimal import Decimal
 from typing import (
+    Dict,
     List,
     Optional,
     Type,
@@ -31,24 +32,31 @@ from rush.utils import (
     div,
     get_current_ist_time,
     mul,
-    round_up_decimal,
+    round_up_decimal_to_nearest,
 )
 
 
 class BaseBill:
     session: Session = None
     table: LoanData = None
+    round_emi_to_nearest: Decimal = Decimal("1")
 
     def __init__(self, session: Session, loan_data: LoanData):
         self.session = session
         self.table = loan_data
         self.__dict__.update(loan_data.__dict__)
 
-    def get_interest_to_charge(self, rate_of_interest: Decimal):
+    def get_interest_to_charge(
+        self, rate_of_interest: Decimal, product_price: Optional[Decimal] = None
+    ) -> Decimal:
         # TODO get tenure from table.
-        interest_on_principal = mul(self.table.principal, div(rate_of_interest, 100))
+        principal = self.table.principal
+        if product_price:
+            principal = product_price
+
+        interest_on_principal = mul(principal, div(rate_of_interest, 100))
         not_rounded_emi = self.table.principal_instalment + interest_on_principal
-        rounded_emi = round_up_decimal(not_rounded_emi)
+        rounded_emi = round_up_decimal_to_nearest(not_rounded_emi, to_nearest=self.round_emi_to_nearest)
 
         rounding_difference = rounded_emi - not_rounded_emi
 
@@ -99,6 +107,9 @@ class BaseBill:
         )
         return atm_transactions_sum or 0
 
+    def get_relative_delta_for_emi(self, emi_number: int, amortization_date: Date) -> Dict[str, int]:
+        return {"months": 1, "days": 15}
+
 
 B = TypeVar("B", bound=BaseBill)
 
@@ -107,6 +118,7 @@ class BaseLoan(Loan):
     should_reinstate_limit_on_payment: bool = False
     bill_class: Type[B] = BaseBill
     session: Session = None
+    downpayment_perc: Optional[Decimal] = None
 
     __mapper_args__ = {"polymorphic_identity": "base_loan"}
 
