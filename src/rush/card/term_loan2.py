@@ -24,9 +24,9 @@ class TermLoan2Bill(TermLoanBill):
         bill_start_date = amortization_date
         # not sure about bill close date.
 
-        if bill_start_date.day < 15:
+        if 1 <= bill_start_date.day <= 5:
             normalized_amortization_date = bill_start_date.replace(day=1)
-        elif bill_start_date.day >= 15 and bill_start_date.day < 25:
+        elif 6 <= bill_start_date.day <= 25:
             normalized_amortization_date = bill_start_date.replace(day=15)
         else:
             normalized_amortization_date = bill_start_date.add(months=1).replace(day=1)
@@ -51,10 +51,10 @@ class TermLoan2Bill(TermLoanBill):
         if emi_number == 1:
             return {"months": 0, "days": 0}
         elif emi_number == 2:
-            if amortization_date.day < 15:
+            if 1 <= amortization_date.day <= 5:
                 months = 1
                 days = 1 - amortization_date.day
-            elif amortization_date.day >= 15 and amortization_date.day < 25:
+            elif 6 <= amortization_date.day <= 25:
                 months = 1
                 days = 15 - amortization_date.day
             else:

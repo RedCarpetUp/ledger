@@ -43,9 +43,9 @@ class TermLoanPro2(TermLoan):
 
     @staticmethod
     def calculate_amortization_date(product_order_date: Date) -> Date:
-        if product_order_date.day < 15:
+        if 1 <= product_order_date.day <= 5:
             return product_order_date.add(months=1).replace(day=1)
-        elif product_order_date.day >= 15 and product_order_date.day < 25:
+        elif 6 <= product_order_date.day <= 25:
             return product_order_date.add(months=1).replace(day=15)
         else:
             return product_order_date.add(months=2).replace(day=1)

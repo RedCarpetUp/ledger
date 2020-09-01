@@ -83,7 +83,7 @@ def test_product_amortization_3() -> None:
     amortization_date = TermLoanPro2.calculate_amortization_date(
         product_order_date=parse_date("2020-08-12").date()
     )
-    assert amortization_date == parse_date("2020-09-01").date()
+    assert amortization_date == parse_date("2020-09-15").date()
 
 
 def test_product_amortization_4() -> None:
