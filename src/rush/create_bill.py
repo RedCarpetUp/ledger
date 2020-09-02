@@ -61,12 +61,12 @@ def get_or_create_bill_for_card_swipe(user_loan: BaseLoan, txn_time: DateTime) -
     return {"result": "success", "bill": new_bill}
 
 
-def bill_generate(user_loan: BaseLoan) -> BaseBill:
+def bill_generate(user_loan: BaseLoan, creation_time: DateTime = get_current_ist_time()) -> BaseBill:
     session = user_loan.session
     bill = user_loan.get_latest_bill_to_generate()  # Get the first bill which is not generated.
     if not bill:
         bill = get_or_create_bill_for_card_swipe(
-            user_loan=user_loan, txn_time=get_current_ist_time()
+            user_loan=user_loan, txn_time=creation_time
         )  # TODO not sure about this
         if bill["result"] == "error":
             return bill
@@ -93,13 +93,12 @@ def bill_generate(user_loan: BaseLoan) -> BaseBill:
         rate_of_interest=user_loan.rc_rate_of_interest_monthly
     )
 
-    bill_closing_date = bill.bill_start_date + relativedelta(months=+1)
     # Don't add in min if user is in moratorium.
     if not LoanMoratorium.is_in_moratorium(
-        session=session, loan_id=user_loan.loan_id, date_to_check_against=bill_closing_date
+        session=session, loan_id=user_loan.loan_id, date_to_check_against=bill.table.bill_close_date
     ):
         # After the bill has generated. Call the min generation event on all unpaid bills.
-        add_min_to_all_bills(session=session, post_date=bill_closing_date, user_loan=user_loan)
+        add_min_to_all_bills(session=session, post_date=bill.table.bill_close_date, user_loan=user_loan)
 
     from rush.create_emi import create_emis_for_bill
 
@@ -213,4 +212,52 @@ def add_atm_fee(
 
     from rush.create_emi import adjust_atm_fee_in_emis
 
-    adjust_atm_fee_in_emis(session=session, user_loan=user_loan, bill=bill)
+    adjust_atm_fee_in_emis(session, user_loan, bill)
+
+
+def close_bills(user_loan: BaseLoan, payment_date: DateTime):
+    session = user_loan.session
+    all_bills = user_loan.get_unpaid_bills()
+
+    for bill in all_bills:
+        all_paid = False
+        bill_emis = (
+            session.query(CardEmis)
+            .filter(
+                CardEmis.loan_id == user_loan.loan_id,
+                CardEmis.row_status == "active",
+                CardEmis.bill_id == bill.id,
+            )
+            .order_by(CardEmis.emi_number.asc())
+            .all()
+        )
+        last_emi_number = bill_emis[-1].emi_number
+        for emi in bill_emis:
+            if all_paid:
+                emi.payment_received = (
+                    emi.atm_fee_received
+                ) = (
+                    emi.late_fee_received
+                ) = (
+                    emi.interest_received
+                ) = (
+                    emi.due_amount
+                ) = (
+                    emi.total_due_amount
+                ) = (
+                    emi.total_closing_balance
+                ) = (
+                    emi.total_closing_balance_post_due_date
+                ) = emi.interest_current_month = emi.interest_next_month = emi.interest = Decimal(0)
+                continue
+            actual_closing_balance = emi.total_closing_balance_post_due_date
+            if payment_date.date() <= emi.due_date:
+                actual_closing_balance = emi.total_closing_balance
+            if (
+                emi.due_date >= payment_date.date() > (emi.due_date + relativedelta(months=-1))
+            ) or emi.emi_number == last_emi_number:
+                all_paid = True
+                emi.total_closing_balance = (
+                    emi.total_closing_balance_post_due_date
+                ) = emi.interest = emi.interest_current_month = emi.interest_next_month = 0
+                emi.due_amount = emi.total_due_amount = actual_closing_balance

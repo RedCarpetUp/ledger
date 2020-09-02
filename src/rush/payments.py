@@ -1,4 +1,5 @@
 from decimal import Decimal
+from typing import Optional
 
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
@@ -10,6 +11,7 @@ from rush.card.base_card import BaseBill
 from rush.create_emi import group_bills_to_create_loan_schedule
 from rush.ledger_events import (
     _adjust_bill,
+    _adjust_for_downpayment,
     _adjust_for_prepayment,
 )
 from rush.ledger_utils import (
@@ -31,17 +33,27 @@ from rush.writeoff_and_recovery import recovery_event
 
 def payment_received(
     session: Session,
-    user_loan: BaseLoan,
+    user_loan: Optional[BaseLoan],
     payment_amount: Decimal,
     payment_date: DateTime,
     payment_request_id: str,
+    payment_type: Optional[str] = None,
+    user_product_id: Optional[int] = None,
+    lender_id: Optional[int] = None,
 ) -> None:
+    assert user_loan is not None or lender_id is not None
+
     lt = LedgerTriggerEvent(
         name="payment_received",
-        loan_id=user_loan.loan_id,
+        loan_id=user_loan.loan_id if user_loan else None,
         amount=payment_amount,
         post_date=payment_date,
-        extra_details={"payment_request_id": payment_request_id},
+        extra_details={
+            "payment_request_id": payment_request_id,
+            "payment_type": payment_type,
+            "user_product_id": user_product_id,
+            "lender_id": user_loan.lender_id if user_loan else lender_id,
+        },
     )
     session.add(lt)
     session.flush()
@@ -49,9 +61,14 @@ def payment_received(
     payment_received_event(
         session=session,
         user_loan=user_loan,
-        debit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
+        debit_book_str=f"{user_loan.lender_id if user_loan else lender_id}/lender/pg_account/a",
         event=lt,
     )
+
+    # TODO: check if this code is needed for downpayment, since there is no user loan at that point of time.
+    if payment_type == "downpayment":
+        return
+
     run_anomaly(session=session, user_loan=user_loan, event_date=payment_date)
     gateway_charges = Decimal("0.5")
     settle_payment_in_bank(
@@ -87,12 +104,19 @@ def refund_payment(
 
 
 def payment_received_event(
-    session: Session, user_loan: BaseLoan, debit_book_str: str, event: LedgerTriggerEvent,
+    session: Session,
+    user_loan: BaseLoan,
+    debit_book_str: str,
+    event: LedgerTriggerEvent,
 ) -> None:
     payment_received = Decimal(event.amount)
     if event.name == "merchant_refund":
         pass
     elif event.name == "payment_received":
+        if event.extra_details.get("payment_type") == "downpayment":
+            _adjust_for_downpayment(session=session, event=event, amount=payment_received)
+            return
+
         actual_payment = payment_received
         bills_data = find_amount_to_slide_in_bills(user_loan, payment_received)
         for bill_data in bills_data:

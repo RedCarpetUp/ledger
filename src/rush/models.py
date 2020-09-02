@@ -10,7 +10,6 @@ from pendulum import DateTime
 from pydantic.dataclasses import dataclass as py_dataclass
 from sqlalchemy import (
     DECIMAL,
-    JSON,
     TIMESTAMP,
     Boolean,
     CheckConstraint,
@@ -22,16 +21,29 @@ from sqlalchemy import (
     String,
     Text,
 )
+from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.indexable import index_property
 from sqlalchemy.orm import (
     Session,
     relationship,
 )
 from sqlalchemy.schema import Index
+from sqlalchemy.util.langhelpers import hybridproperty
 
 from rush.utils import get_current_ist_time
 
 Base = declarative_base()  # type: Any
+
+
+class pg_json_property(index_property):
+    def __init__(self, attr_name, index, cast_type, default=None):
+        super(pg_json_property, self).__init__(attr_name, index, default=default)
+        self.cast_type = cast_type
+
+    def expr(self, model):
+        expr = super(pg_json_property, self).expr(model)
+        return expr.astext.cast(self.cast_type)
 
 
 class AuditMixin(Base):
@@ -246,6 +258,7 @@ class Loan(AuditMixin):
     min_multiplier = Column(Numeric, nullable=True)
     dpd = Column(Integer, nullable=True)
     ever_dpd = Column(Integer, nullable=True)
+    downpayment_percent = Column(Numeric, nullable=True)
 
     __mapper_args__ = {
         "polymorphic_identity": "loan",
@@ -367,52 +380,6 @@ class CardKitNumbers(AuditMixin):
     last_5_digits = Column(String(5), nullable=False)
     status = Column(String(15), nullable=False)
     extra_details = Column(JSON, nullable=False, default={})
-    user_cards = relationship("UserCard")
-
-
-class UserCard(AuditMixin):
-    __tablename__ = "v3_user_cards"
-    user_id = Column(Integer, ForeignKey(User.id), index=True, nullable=False)
-    kit_number = Column(
-        String(12), ForeignKey(CardKitNumbers.kit_number), nullable=False, default="00000"
-    )
-    credit_limit = Column(Numeric, nullable=False, default=1000)  # limit in rupees
-    cash_withdrawal_limit = Column(Numeric, nullable=False, default=1000)
-    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=True)  # to detect payments
-    details = Column(JSON, nullable=True, server_default="{}")
-    activation_type = Column(String(12), nullable=False, default="P")
-    row_status = Column(String(20), nullable=False, default="active")
-    kyc_status = Column(String(20), server_default="PENDING", nullable=True)
-
-    single_txn_spend_limit = Column(Integer, nullable=True)
-    no_of_txn_per_day = Column(Integer, nullable=True)
-    international_usage = Column(Boolean, nullable=False, default=False)
-    daily_spend_limit = Column(Integer, nullable=True)
-
-    card_type = Column(String, nullable=True)
-    card_activation_date = Column(Date, nullable=True)
-    statement_period_in_days = Column(Integer, default=30, nullable=True)  # 30 days
-    interest_free_period_in_days = Column(Integer, default=45, nullable=True)
-
-    dpd = Column(Integer, nullable=True)
-    ever_dpd = Column(Integer, nullable=True)
-
-    __table_args__ = (
-        Index(
-            "idx_uniq_kit_number_row_status",
-            kit_number,
-            row_status,
-            unique=True,
-            postgresql_where=row_status == "active",
-        ),
-        Index(
-            "idx_user_cards_uniq_user_id_loan_id_row_status",
-            user_id,
-            loan_id,
-            unique=True,
-            postgresql_where=row_status == "active",
-        ),
-    )
 
 
 class LedgerTriggerEvent(AuditMixin):
@@ -422,6 +389,8 @@ class LedgerTriggerEvent(AuditMixin):
     post_date = Column(TIMESTAMP)
     amount = Column(Numeric)
     extra_details = Column(JSON, default="{}")
+
+    user_product_id = pg_json_property("extra_details", "user_product_id", Integer, default=None)
 
 
 class LedgerEntry(AuditMixin):
@@ -589,3 +558,87 @@ class EventDpd(AuditMixin):
     balance = Column(Numeric, nullable=True, default=Decimal(0))
     dpd = Column(Integer, nullable=False)
     row_status = Column(String(length=10), nullable=False, default="active")
+
+
+class UserInstrument(AuditMixin):
+    __tablename__ = "user_instrument"
+
+    user_id = Column(Integer, ForeignKey(User.id), nullable=False)
+    type = Column(String(), nullable=False)
+    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
+    details = Column(JSON, default=lambda: {})
+    kyc_status = Column(String(length=20), default="PENDING", nullable=True)
+    no_of_txn_per_day = Column(Integer, nullable=True)
+    single_txn_spend_limit = Column(Integer, nullable=True)
+    daily_spend_limit = Column(Integer, nullable=True)
+    international_usage = Column(Boolean, default=False, nullable=False)
+    credit_limit = Column(Numeric, nullable=True)
+    name = Column(String(), nullable=False)
+    activation_date = Column(Date, nullable=True)
+    instrument_id = Column(String(), nullable=False)
+    status = Column(String(), nullable=False)
+
+    __mapper_args__ = {
+        "polymorphic_identity": "user_instrument",
+        "polymorphic_on": type,
+    }
+
+
+class UserCard(UserInstrument):
+
+    __mapper_args__ = {
+        "polymorphic_identity": "card",
+    }
+
+    activation_type = Column(String(length=12), nullable=True)
+
+    def __init__(self, **kwargs):
+        assert kwargs.get("kit_number") is not None
+        assert kwargs.get("activation_type") is not None
+        assert kwargs.get("card_name") is not None
+
+        kwargs["instrument_id"] = kwargs.pop("kit_number")
+        kwargs["name"] = kwargs.pop("card_name")
+
+        kwargs["status"] = kwargs.get("status", "INACTIVE")
+        kwargs["activation_date"] = kwargs.get("card_activation_date")
+
+        super().__init__(**kwargs)
+
+    @hybridproperty
+    def card_activation_date(self):
+        return self.activation_date
+
+    @hybridproperty
+    def kit_number(self):
+        return self.instrument_id
+
+    @hybridproperty
+    def card_name(self):
+        return self.name
+
+
+class UserUPI(UserInstrument):
+
+    __mapper_args__ = {
+        "polymorphic_identity": "upi",
+    }
+
+    def __init__(self, **kwargs):
+        assert kwargs.get("upi_id") is not None
+        assert kwargs.get("upi_merchant") is not None
+
+        kwargs["name"] = kwargs.pop("upi_merchant")
+        kwargs["instrument_id"] = kwargs.pop("upi_id")
+
+        kwargs["status"] = kwargs.get("status", "INACTIVE")
+
+        super().__init__(**kwargs)
+
+    @hybridproperty
+    def upi_id(self):
+        return self.instrument_id
+
+    @hybridproperty
+    def upi_merchant(self):
+        return self.name

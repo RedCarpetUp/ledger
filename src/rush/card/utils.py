@@ -1,5 +1,9 @@
 from decimal import Decimal
-from typing import Optional
+from typing import (
+    Any,
+    Dict,
+    Optional,
+)
 
 from pendulum import Date
 from sqlalchemy.orm import Session
@@ -11,7 +15,10 @@ from rush.models import (
     LoanFee,
     Product,
     ProductFee,
+    UserCard,
+    UserInstrument,
     UserProduct,
+    UserUPI,
 )
 from rush.utils import (
     add_gst_split_to_amount,
@@ -20,7 +27,13 @@ from rush.utils import (
 
 
 def get_product_id_from_card_type(session: Session, card_type: str) -> int:
-    return session.query(Product.id).filter(Product.product_name == card_type,).scalar()
+    return (
+        session.query(Product.id)
+        .filter(
+            Product.product_name == card_type,
+        )
+        .scalar()
+    )
 
 
 def create_user_product_mapping(session: Session, user_id: int, product_type: str) -> UserProduct:
@@ -83,14 +96,20 @@ def add_pre_product_fee(
 
 
 def add_reload_fee(
-    session: Session, user_loan: Loan, fee_amount: Decimal, post_date: Optional[Date] = None,
+    session: Session,
+    user_loan: Loan,
+    fee_amount: Decimal,
+    post_date: Optional[Date] = None,
 ) -> Fee:
     assert user_loan.amortization_date is not None
 
     if post_date is None:
         post_date = get_current_ist_time().date()
 
-    event = LedgerTriggerEvent(name="reload_fee_added", post_date=get_current_ist_time().date(),)
+    event = LedgerTriggerEvent(
+        name="reload_fee_added",
+        post_date=get_current_ist_time().date(),
+    )
     session.add(event)
     session.flush()
 
@@ -112,3 +131,81 @@ def add_reload_fee(
     session.add(f)
 
     return f
+
+
+def add_card_to_loan(session: Session, loan: Loan, card_info: Dict[str, Any]) -> UserCard:
+    event = LedgerTriggerEvent(
+        name="add_card",
+        loan_id=loan.loan_id,
+        amount=Decimal("0"),
+        post_date=get_current_ist_time().date(),
+        extra_details={},
+    )
+
+    session.add(event)
+    session.flush()
+
+    card_info["user_id"] = loan.user_id
+    card_info["loan_id"] = loan.loan_id
+
+    user_card = UserCard(**card_info)
+    session.add(user_card)
+    session.flush()
+
+    return user_card
+
+
+def add_upi_to_loan(session: Session, loan: Loan, upi_info: Dict[str, Any]) -> UserUPI:
+    event = LedgerTriggerEvent(
+        name="add_upi",
+        loan_id=loan.loan_id,
+        amount=Decimal("0"),
+        post_date=get_current_ist_time().date(),
+        extra_details={},
+    )
+
+    session.add(event)
+    session.flush()
+
+    upi_info["user_id"] = loan.user_id
+    upi_info["loan_id"] = loan.loan_id
+
+    user_upi = UserUPI(**upi_info)
+    session.add(user_upi)
+    session.flush()
+
+    return user_upi
+
+
+def add_instrument_to_loan(
+    session: Session, instrument_type: str, loan: Loan, instrument_info: Dict[str, Any]
+) -> UserInstrument:
+    assert instrument_type in ("upi", "card")
+
+    if instrument_type == "upi":
+        return add_upi_to_loan(session=session, loan=loan, upi_info=instrument_info)
+
+    elif instrument_type == "card":
+        return add_card_to_loan(session=session, loan=loan, card_info=instrument_info)
+
+
+def get_downpayment_amount(
+    product_type: str,
+    product_price: Decimal,
+    tenure: int,
+    downpayment_perc: Decimal,
+    interest_rate: Optional[Decimal] = None,
+) -> Decimal:
+    from rush.card import get_product_class
+
+    request_data = {
+        "product_price": product_price,
+        "tenure": tenure,
+        "downpayment_perc": downpayment_perc,
+    }
+    if interest_rate:
+        request_data["interest_rate"] = interest_rate
+
+    return get_product_class(card_type=product_type).bill_class.calculate_downpayment_amount_payable(
+        **request_data
+    )

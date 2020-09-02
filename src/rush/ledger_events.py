@@ -1,8 +1,5 @@
 from decimal import Decimal
-from typing import (
-    List,
-    Optional,
-)
+from typing import Optional
 
 from sqlalchemy import (
     Date,
@@ -354,13 +351,17 @@ def daily_dpd_event(session: Session, user_loan: BaseLoan) -> None:
 
 
 def loan_disbursement_event(
-    session: Session, loan: Loan, event: LedgerTriggerEvent, bill_id: int
+    session: Session,
+    loan: Loan,
+    event: LedgerTriggerEvent,
+    bill_id: int,
+    downpayment_amount: Optional[Decimal] = None,
 ) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
         debit_book_str=f"{bill_id}/bill/principal_receivable/a",
-        credit_book_str=f"12345/redcarpet/rc_cash/a",  # TODO: confirm if this right.
+        credit_book_str="12345/redcarpet/rc_cash/a",  # TODO: confirm if this right.
         amount=event.amount,
     )
 
@@ -370,4 +371,54 @@ def loan_disbursement_event(
         debit_book_str=f"{loan.lender_id}/lender/lender_capital/l",
         credit_book_str=f"{loan.loan_id}/loan/lender_payable/l",
         amount=event.amount,
+    )
+
+    # settling downpayment balance as well.
+    if downpayment_amount:
+        downpayment_event = (
+            session.query(LedgerTriggerEvent)
+            .filter(
+                LedgerTriggerEvent.name == "payment_received",
+                LedgerTriggerEvent.loan_id.is_(None),
+                LedgerTriggerEvent.user_product_id == loan.user_product_id,
+            )
+            .one()
+        )
+
+        assert downpayment_event.amount == downpayment_amount
+
+        create_ledger_entry_from_str(
+            session=session,
+            event_id=event.id,
+            debit_book_str=f"{loan.user_product_id}/product/downpayment/l",
+            credit_book_str=f"{bill_id}/bill/principal_receivable/a",
+            amount=downpayment_amount,
+        )
+
+        create_ledger_entry_from_str(
+            session=session,
+            event_id=event.id,
+            debit_book_str=f"{loan.loan_id}/loan/lender_payable/l",
+            credit_book_str=f"{loan.user_product_id}/product/lender_payable/l",
+            amount=downpayment_amount,
+        )
+
+
+def _adjust_for_downpayment(session: Session, event: LedgerTriggerEvent, amount: Decimal) -> None:
+    lender_id = event.extra_details["lender_id"]
+    user_product_id = event.extra_details["user_product_id"]
+    create_ledger_entry_from_str(
+        session=session,
+        event_id=event.id,
+        debit_book_str=f"{lender_id}/lender/pg_account/a",
+        credit_book_str=f"{user_product_id}/product/downpayment/l",
+        amount=amount,
+    )
+
+    create_ledger_entry_from_str(
+        session=session,
+        event_id=event.id,
+        debit_book_str=f"{user_product_id}/product/lender_payable/l",  # TODO: confirm this.
+        credit_book_str=f"{lender_id}/lender/pg_account/a",
+        amount=amount,
     )
