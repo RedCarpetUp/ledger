@@ -23,6 +23,10 @@ from rush.models import (
     LedgerTriggerEvent,
     LoanData,
 )
+from rush.utils import (
+    div,
+    mul,
+)
 from rush.writeoff_and_recovery import recovery_event
 
 
@@ -167,12 +171,17 @@ def find_amount_to_slide_in_bills(user_loan: BaseLoan, total_amount_to_slide: De
         }
         for bill in unpaid_bills
     ]
+    total_amount_before_sliding = total_amount_to_slide
     total_loan_outstanding = sum(bill["total_outstanding"] for bill in bills_dict)
+    total_min = sum(bill["monthly_instalment"] for bill in bills_dict)
     # Either nothing is left to slide or loan is completely settled and there is excess payment.
     while total_amount_to_slide > 0 and total_loan_outstanding > 0:
         for bill_data in bills_dict:
+            amount_to_slide_based_on_ratio = mul(
+                div(bill_data["monthly_instalment"], total_min), total_amount_before_sliding
+            )
             amount_to_adjust = min(
-                bill_data["monthly_instalment"], total_amount_to_slide, bill_data["total_outstanding"]
+                amount_to_slide_based_on_ratio, total_amount_to_slide, bill_data["total_outstanding"]
             )
             bill_data["amount_to_adjust"] += amount_to_adjust
             bill_data["total_outstanding"] -= amount_to_adjust
