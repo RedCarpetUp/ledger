@@ -21,7 +21,7 @@ from rush.models import (
 def user_view(session, user_loan: BaseLoan) -> dict:
     index = 0
     total_due, min_amount, current_bill_principal_amount, current_bill_principal_interest = 0, 0, 0, 0
-    unpaid_bills = user_loan.get_unpaid_bills()
+    unpaid_bills = user_loan.get_unpaid_generated_bills()
 
     for bill in unpaid_bills:
         bill_balance = get_remaining_bill_balance(session, bill)

@@ -139,18 +139,16 @@ def is_bill_closed(session: Session, bill: LoanData, to_date: Optional[DateTime]
 def get_remaining_bill_balance(
     session: Session, bill: LoanData, to_date: Optional[DateTime] = None
 ) -> Dict[str, Decimal]:
-    if bill.is_generated and to_date and to_date.date() < bill.bill_close_date:
-        _, principal_due = get_account_balance_from_str(
-            session, book_string=f"{bill.id}/bill/unbilled/a", to_date=to_date
-        )
-    else:
-        _, principal_due = get_account_balance_from_str(
-            session, book_string=f"{bill.id}/bill/principal_receivable/a", to_date=to_date
-        )
+    _, unbilled_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/unbilled/a", to_date=to_date
+    )
+    _, principal_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/principal_receivable/a", to_date=to_date
+    )
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/interest_receivable/a", to_date=to_date
     )
-    d = {"principal_due": principal_due, "interest_due": interest_due}
+    d = {"unbilled_due": unbilled_due, "principal_due": principal_due, "interest_due": interest_due}
     fees = (
         session.query(BillFee)
         .filter(BillFee.identifier_id == bill.id, BillFee.fee_status == "UNPAID")

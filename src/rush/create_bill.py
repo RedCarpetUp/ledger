@@ -166,7 +166,7 @@ def extend_tenure(
 
     list_of_bills = []
     if not bill:
-        unpaid_bills = user_loan.get_unpaid_bills()
+        unpaid_bills = user_loan.get_unpaid_generated_bills()
         for unpaid_bill in unpaid_bills:
             extension(bill=unpaid_bill)
     else:

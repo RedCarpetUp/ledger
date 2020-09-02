@@ -58,6 +58,8 @@ class BaseBill:
     def get_min_for_schedule(
         self, date_to_check_against: DateTime = get_current_ist_time().date()
     ) -> Decimal:
+        if not self.table.is_generated:
+            return Decimal(0)
         user_loan = self.session.query(Loan).filter_by(id=self.table.loan_id).one_or_none()
         # Don't add in min if user is in moratorium.
         if LoanMoratorium.is_in_moratorium(self.session, self.loan_id, date_to_check_against):
@@ -203,25 +205,26 @@ class BaseLoan(Loan):
         self.session.flush()
         return self.convert_to_bill_class(new_bill)
 
-    def get_unpaid_bills(self) -> List[BaseBill]:
-        all_bills = (
-            self.session.query(LoanData)
-            .filter(LoanData.loan_id == self.loan_id, LoanData.is_generated.is_(True))
-            .order_by(LoanData.bill_start_date)
-            .all()
-        )
-        all_bills = [self.convert_to_bill_class(bill) for bill in all_bills]
-        unpaid_bills = [bill for bill in all_bills if not bill.is_bill_closed()]
-        return unpaid_bills
+    def get_unpaid_generated_bills(self) -> List[BaseBill]:
+        return self.get_all_bills(are_generated=True, only_unpaid_bills=True)
 
-    def get_all_bills(self) -> List[BaseBill]:
-        all_bills = (
+    def get_unpaid_bills(self) -> List[BaseBill]:
+        return self.get_all_bills(are_generated=False, only_unpaid_bills=True)
+
+    def get_all_bills(
+        self, are_generated: bool = True, only_unpaid_bills: bool = False
+    ) -> List[BaseBill]:
+        all_bills_query = (
             self.session.query(LoanData)
-            .filter(LoanData.loan_id == self.loan_id, LoanData.is_generated.is_(True))
+            .filter(LoanData.loan_id == self.loan_id)
             .order_by(LoanData.bill_start_date)
-            .all()
         )
-        all_bills = [self.convert_to_bill_class(bill) for bill in all_bills]
+        if are_generated:
+            all_bills_query = all_bills_query.filter(LoanData.is_generated.is_(True))
+        query_result = all_bills_query.all()
+        all_bills = [self.convert_to_bill_class(bill) for bill in query_result]
+        if only_unpaid_bills:
+            all_bills = [bill for bill in all_bills if not bill.is_bill_closed()]
         return all_bills
 
     def get_all_bills_post_date(self, post_date: DateTime) -> List[BaseBill]:
@@ -287,7 +290,7 @@ class BaseLoan(Loan):
         # if user is in moratorium then return 0
         if LoanMoratorium.is_in_moratorium(self.session, self.loan_id, date_to_check_against):
             return Decimal(0)
-        unpaid_bills = self.get_unpaid_bills()
+        unpaid_bills = self.get_unpaid_generated_bills()
         min_of_all_bills = sum(bill.get_min_for_schedule() for bill in unpaid_bills)
         return min_of_all_bills
 
@@ -295,7 +298,7 @@ class BaseLoan(Loan):
         # if user is in moratorium then return 0
         if LoanMoratorium.is_in_moratorium(self.session, self.id, get_current_ist_time().date()):
             return 0
-        unpaid_bills = self.get_unpaid_bills()
+        unpaid_bills = self.get_unpaid_generated_bills()
         remaining_min_of_all_bills = sum(bill.get_remaining_min() for bill in unpaid_bills)
         return remaining_min_of_all_bills
 
