@@ -43,9 +43,11 @@ def create_emis_for_bill(
 ) -> None:
     assert bill.table.id is not None
     bill_data = bill.table
+
+    is_term_loan = "term_loan" in user_loan.product_type
     if not last_emi:
         due_date = bill_data.bill_start_date
-        if "term_loan" in user_loan.product_type:
+        if is_term_loan:
             principal_due = bill_data.principal - bill.get_downpayment_amount(
                 product_price=bill_data.principal, downpayment_perc=user_loan.downpayment_percent
             )
@@ -79,7 +81,7 @@ def create_emis_for_bill(
         total_due_amount = due_amount
 
         # if term-loan and first emi, downpayment is also added in total_due_amount.
-        if i == 1 and "term_loan" in user_loan.product_type:
+        if i == 1 and is_term_loan:
             total_due_amount += bill.get_downpayment_amount(
                 product_price=bill_data.principal, downpayment_perc=user_loan.downpayment_percent
             )
@@ -105,7 +107,7 @@ def create_emis_for_bill(
             emi_number=i,
             total_closing_balance=total_closing_balance,
             total_closing_balance_post_due_date=total_closing_balance_post_due_date,
-            due_amount=due_amount,
+            due_amount=total_due_amount - interest if i == 1 and is_term_loan else due_amount,
             interest=total_interest,
             interest_current_month=current_interest,
             interest_next_month=next_interest,
