@@ -39,7 +39,7 @@ def get_user_product(
         user_product_query = user_product_query.filter(Loan.id == loan_id)
 
     if user_product_id is not None:
-        user_product_query = user_product_query.filter(Loan.id == user_product_id)
+        user_product_query = user_product_query.filter(Loan.user_product_id == user_product_id)
 
     user_product = user_product_query.one()
 
