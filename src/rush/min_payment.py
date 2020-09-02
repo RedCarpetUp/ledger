@@ -14,7 +14,7 @@ def add_min_to_all_bills(session: Session, post_date: DateTime, user_loan: BaseL
     session.add(min_event)
     session.flush()
     for bill in unpaid_bills:
-        min_amount = bill.get_min_for_schedule()
+        min_amount = bill.get_min_amount_to_add()
         if min_amount == 0:
             continue
         add_min_amount_event(session, bill, min_event, min_amount)

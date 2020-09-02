@@ -104,10 +104,7 @@ def refund_payment(
 
 
 def payment_received_event(
-    session: Session,
-    user_loan: BaseLoan,
-    debit_book_str: str,
-    event: LedgerTriggerEvent,
+    session: Session, user_loan: BaseLoan, debit_book_str: str, event: LedgerTriggerEvent,
 ) -> None:
     payment_received = Decimal(event.amount)
     if event.name == "merchant_refund":
@@ -161,7 +158,7 @@ def find_amount_to_slide_in_bills(user_loan: BaseLoan, total_amount_to_slide: De
         {
             "bill": bill,
             "total_outstanding": get_remaining_bill_balance(user_loan.session, bill)["total_due"],
-            "monthly_instalment": bill.get_min_for_schedule(),
+            "monthly_instalment": bill.get_scheduled_min_amount(),
             "amount_to_adjust": 0,
         }
         for bill in unpaid_bills
@@ -173,7 +170,7 @@ def find_amount_to_slide_in_bills(user_loan: BaseLoan, total_amount_to_slide: De
     while total_amount_to_slide > 0 and total_loan_outstanding > 0:
         for bill_data in bills_dict:
             # If bill isn't generated there's no minimum amount scheduled. So can slide entire amount.
-            if not bill_data["bill"].table.is_generated and len(bills_dict) == 1:
+            if not bill_data["bill"].table.is_generated:
                 amount_to_slide_based_on_ratio = total_amount_to_slide
             else:
                 amount_to_slide_based_on_ratio = mul(

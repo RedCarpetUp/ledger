@@ -27,13 +27,7 @@ from rush.utils import (
 
 
 def get_product_id_from_card_type(session: Session, card_type: str) -> int:
-    return (
-        session.query(Product.id)
-        .filter(
-            Product.product_name == card_type,
-        )
-        .scalar()
-    )
+    return session.query(Product.id).filter(Product.product_name == card_type,).scalar()
 
 
 def create_user_product_mapping(session: Session, user_id: int, product_type: str) -> UserProduct:
@@ -96,20 +90,14 @@ def add_pre_product_fee(
 
 
 def add_reload_fee(
-    session: Session,
-    user_loan: Loan,
-    fee_amount: Decimal,
-    post_date: Optional[Date] = None,
+    session: Session, user_loan: Loan, fee_amount: Decimal, post_date: Optional[Date] = None,
 ) -> Fee:
     assert user_loan.amortization_date is not None
 
     if post_date is None:
         post_date = get_current_ist_time().date()
 
-    event = LedgerTriggerEvent(
-        name="reload_fee_added",
-        post_date=get_current_ist_time().date(),
-    )
+    event = LedgerTriggerEvent(name="reload_fee_added", post_date=get_current_ist_time().date(),)
     session.add(event)
     session.flush()
 
