@@ -51,7 +51,10 @@ def card_db_updates(session: Session) -> None:
 
 
 def create_user(session: Session) -> None:
-    u = User(id=5, performed_by=123,)
+    u = User(
+        id=5,
+        performed_by=123,
+    )
     session.add(u)
     session.flush()
 
