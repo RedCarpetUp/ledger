@@ -165,7 +165,7 @@ def extend_tenure(
 
     list_of_bills = []
     if not bill:
-        unpaid_bills = user_loan.get_unpaid_bills()
+        unpaid_bills = user_loan.get_unpaid_generated_bills()
         for unpaid_bill in unpaid_bills:
             extension(bill=unpaid_bill)
     else:
@@ -217,7 +217,7 @@ def add_atm_fee(
 
 def close_bills(user_loan: BaseLoan, payment_date: DateTime):
     session = user_loan.session
-    all_bills = user_loan.get_unpaid_bills()
+    all_bills = user_loan.get_unpaid_generated_bills()
 
     for bill in all_bills:
         all_paid = False
