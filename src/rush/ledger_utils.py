@@ -19,17 +19,10 @@ from rush.models import (
 
 
 def create_ledger_entry(
-    session: Session,
-    event_id: int,
-    debit_book_id: int,
-    credit_book_id: int,
-    amount: Decimal,
+    session: Session, event_id: int, debit_book_id: int, credit_book_id: int, amount: Decimal,
 ) -> LedgerEntry:
     entry = LedgerEntry(
-        event_id=event_id,
-        debit_account=debit_book_id,
-        credit_account=credit_book_id,
-        amount=amount,
+        event_id=event_id, debit_account=debit_book_id, credit_account=credit_book_id, amount=amount,
     )
     session.add(entry)
     session.flush()
@@ -37,11 +30,7 @@ def create_ledger_entry(
 
 
 def create_ledger_entry_from_str(
-    session: Session,
-    event_id: int,
-    debit_book_str: str,
-    credit_book_str: str,
-    amount: Decimal,
+    session: Session, event_id: int, debit_book_str: str, credit_book_str: str, amount: Decimal,
 ) -> LedgerEntry:
     debit_account = get_book_account_by_string(session, book_string=debit_book_str)
     credit_account = get_book_account_by_string(session, book_string=credit_book_str)
@@ -86,15 +75,7 @@ def get_account_balance_from_str(
 def breakdown_account_variables_from_str(book_string: str) -> dict:
     identifier, identifier_type, name, account_type = book_string.split("/")
     assert account_type in ("a", "l", "r", "e", "ca")
-    assert identifier_type in (
-        "user",
-        "lender",
-        "bill",
-        "redcarpet",
-        "card",
-        "loan",
-        "product",
-    )
+    assert identifier_type in ("user", "lender", "bill", "redcarpet", "card", "loan", "product",)
     return {
         "identifier": identifier,
         "identifier_type": identifier_type,
@@ -150,18 +131,16 @@ def is_bill_closed(session: Session, bill: LoanData, to_date: Optional[DateTime]
 def get_remaining_bill_balance(
     session: Session, bill: LoanData, to_date: Optional[DateTime] = None
 ) -> Dict[str, Decimal]:
-    if bill.is_generated and to_date and to_date.date() < bill.bill_close_date:
-        _, principal_due = get_account_balance_from_str(
-            session, book_string=f"{bill.id}/bill/unbilled/a", to_date=to_date
-        )
-    else:
-        _, principal_due = get_account_balance_from_str(
-            session, book_string=f"{bill.id}/bill/principal_receivable/a", to_date=to_date
-        )
+    _, unbilled_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/unbilled/a", to_date=to_date
+    )
+    _, principal_due = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/principal_receivable/a", to_date=to_date
+    )
     _, interest_due = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/interest_receivable/a", to_date=to_date
     )
-    d = {"principal_due": principal_due, "interest_due": interest_due}
+    d = {"unbilled_due": unbilled_due, "principal_due": principal_due, "interest_due": interest_due}
     fees = (
         session.query(BillFee)
         .filter(BillFee.identifier_id == bill.id, BillFee.fee_status == "UNPAID")

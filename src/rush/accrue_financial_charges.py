@@ -84,7 +84,7 @@ def can_remove_interest(
 
 
 def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loan: BaseLoan) -> None:
-    unpaid_bills = user_loan.get_unpaid_bills()
+    unpaid_bills = user_loan.get_unpaid_generated_bills()
     accrue_event = LedgerTriggerEvent(
         name="accrue_interest", loan_id=user_loan.loan_id, post_date=post_date, amount=0
     )

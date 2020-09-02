@@ -63,14 +63,11 @@ class BaseBill:
         new_interest = interest_on_principal + rounding_difference
         return new_interest
 
-    def get_min_for_schedule(
-        self, date_to_check_against: DateTime = get_current_ist_time().date()
-    ) -> Decimal:
+    def get_scheduled_min_amount(self) -> Decimal:
+        if not self.table.is_generated:
+            return Decimal(0)
         user_loan = self.session.query(Loan).filter_by(id=self.table.loan_id).one_or_none()
-        # Don't add in min if user is in moratorium.
-        if LoanMoratorium.is_in_moratorium(self.session, self.loan_id, date_to_check_against):
-            min_scheduled = self.table.interest_to_charge  # only charge interest if in moratorium.
-        elif user_loan.min_tenure:
+        if user_loan.min_tenure:
             new_instalment = div(self.table.principal, user_loan.min_tenure)
             min_scheduled = new_instalment + self.table.interest_to_charge
         elif user_loan.min_multiplier:
@@ -80,12 +77,22 @@ class BaseBill:
             min_scheduled = min_without_scheduled_multiplier * user_loan.min_multiplier
         else:
             min_scheduled = self.table.principal_instalment + self.table.interest_to_charge
+        return min_scheduled
+
+    def get_min_amount_to_add(
+        self, date_to_check_against: DateTime = get_current_ist_time().date()
+    ) -> Decimal:
+        # only charge interest if in moratorium.
+        if LoanMoratorium.is_in_moratorium(self.session, self.loan_id, date_to_check_against):
+            scheduled_minimum_amount = self.table.interest_to_charge
+        else:
+            scheduled_minimum_amount = self.get_scheduled_min_amount()
         max_remaining_amount = get_remaining_bill_balance(self.session, self.table)["total_due"]
         amount_already_present_in_min = self.get_remaining_min()
         if amount_already_present_in_min == max_remaining_amount:
             return Decimal(0)
         amount_that_can_be_added_in_min = max_remaining_amount - amount_already_present_in_min
-        return min(min_scheduled, amount_that_can_be_added_in_min)
+        return min(scheduled_minimum_amount, amount_that_can_be_added_in_min)
 
     def get_remaining_min(self, to_date: Optional[DateTime] = None) -> Decimal:
         from rush.ledger_utils import get_account_balance_from_str
@@ -225,25 +232,26 @@ class BaseLoan(Loan):
         self.session.flush()
         return self.convert_to_bill_class(new_bill)
 
-    def get_unpaid_bills(self) -> List[BaseBill]:
-        all_bills = (
-            self.session.query(LoanData)
-            .filter(LoanData.loan_id == self.loan_id, LoanData.is_generated.is_(True))
-            .order_by(LoanData.bill_start_date)
-            .all()
-        )
-        all_bills = [self.convert_to_bill_class(bill) for bill in all_bills]
-        unpaid_bills = [bill for bill in all_bills if not bill.is_bill_closed()]
-        return unpaid_bills
+    def get_unpaid_generated_bills(self) -> List[BaseBill]:
+        return self.get_all_bills(are_generated=True, only_unpaid_bills=True)
 
-    def get_all_bills(self) -> List[BaseBill]:
-        all_bills = (
+    def get_unpaid_bills(self) -> List[BaseBill]:
+        return self.get_all_bills(are_generated=False, only_unpaid_bills=True)
+
+    def get_all_bills(
+        self, are_generated: bool = True, only_unpaid_bills: bool = False
+    ) -> List[BaseBill]:
+        all_bills_query = (
             self.session.query(LoanData)
-            .filter(LoanData.loan_id == self.loan_id, LoanData.is_generated.is_(True))
+            .filter(LoanData.loan_id == self.loan_id)
             .order_by(LoanData.bill_start_date)
-            .all()
         )
-        all_bills = [self.convert_to_bill_class(bill) for bill in all_bills]
+        if are_generated:
+            all_bills_query = all_bills_query.filter(LoanData.is_generated.is_(True))
+        query_result = all_bills_query.all()
+        all_bills = [self.convert_to_bill_class(bill) for bill in query_result]
+        if only_unpaid_bills:
+            all_bills = [bill for bill in all_bills if not bill.is_bill_closed()]
         return all_bills
 
     def get_all_bills_post_date(self, post_date: DateTime) -> List[BaseBill]:
@@ -303,21 +311,13 @@ class BaseLoan(Loan):
         )
         return loan_data
 
-    def get_min_for_schedule(
+    def get_remaining_min(
         self, date_to_check_against: DateTime = get_current_ist_time().date()
     ) -> Decimal:
         # if user is in moratorium then return 0
-        if LoanMoratorium.is_in_moratorium(self.session, self.loan_id, date_to_check_against):
+        if LoanMoratorium.is_in_moratorium(self.session, self.id, date_to_check_against):
             return Decimal(0)
-        unpaid_bills = self.get_unpaid_bills()
-        min_of_all_bills = sum(bill.get_min_for_schedule() for bill in unpaid_bills)
-        return min_of_all_bills
-
-    def get_remaining_min(self) -> Decimal:
-        # if user is in moratorium then return 0
-        if LoanMoratorium.is_in_moratorium(self.session, self.id, get_current_ist_time().date()):
-            return 0
-        unpaid_bills = self.get_unpaid_bills()
+        unpaid_bills = self.get_unpaid_generated_bills()
         remaining_min_of_all_bills = sum(bill.get_remaining_min() for bill in unpaid_bills)
         return remaining_min_of_all_bills
 

@@ -97,40 +97,20 @@ def card_db_updates(session: Session) -> None:
 
 def test_user2(session: Session) -> None:
     # u = User(performed_by=123, id=1, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    u = User(
-        id=1,
-        performed_by=123,
-    )
+    u = User(id=1, performed_by=123,)
     session.add(u)
     session.commit()
     a = session.query(User).first()
-    u = UserPy(
-        id=a.id,
-        performed_by=123,
-        email="sss",
-        name="dfd",
-        fullname="dfdf",
-        nickname="dfdd",
-    )
+    u = UserPy(id=a.id, performed_by=123, email="sss", name="dfd", fullname="dfdf", nickname="dfdd",)
 
 
 def test_user(session: Session) -> None:
     # u = User(id=2, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    u = User(
-        id=2,
-        performed_by=123,
-    )
+    u = User(id=2, performed_by=123,)
     session.add(u)
     session.commit()
     a = session.query(User).first()
-    u = UserPy(
-        id=a.id,
-        performed_by=123,
-        email="sss",
-        name="dfd",
-        fullname="dfdf",
-        nickname="dfdd",
-    )
+    u = UserPy(id=a.id, performed_by=123, email="sss", name="dfd", fullname="dfdf", nickname="dfdd",)
 
 
 def test_lenders(session: Session) -> None:
@@ -206,10 +186,7 @@ def test_generate_bill_1(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
     # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    a = User(
-        id=99,
-        performed_by=123,
-    )
+    a = User(id=99, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -272,10 +249,10 @@ def test_generate_bill_1(session: Session) -> None:
     )
     assert interest_due == Decimal("30.67")
 
-    update_event_with_dpd(user_loan=user_loan, post_date=parse_date("2020-05-21 00:05:00"))
-
-    dpd_events = session.query(EventDpd).filter_by(loan_id=uc.loan_id).all()
-    assert dpd_events[0].balance == Decimal(1000)
+    # update_event_with_dpd(user_loan=user_loan, post_date=parse_date("2020-05-21 00:05:00"))
+    #
+    # dpd_events = session.query(EventDpd).filter_by(loan_id=uc.loan_id).all()
+    # assert dpd_events[0].balance == Decimal(1000)
 
     interest_event = (
         session.query(LedgerTriggerEvent)
@@ -290,10 +267,7 @@ def test_min_multiplier(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
     # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    a = User(
-        id=99,
-        performed_by=123,
-    )
+    a = User(id=99, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -351,10 +325,7 @@ def test_min_tenure(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
     # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    a = User(
-        id=99,
-        performed_by=123,
-    )
+    a = User(id=99, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -763,10 +734,7 @@ def test_generate_bill_3(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
     # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    a = User(
-        id=99,
-        performed_by=123,
-    )
+    a = User(id=99, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -817,10 +785,7 @@ def test_emi_creation(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
     # a = User(id=108, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    a = User(
-        id=108,
-        performed_by=123,
-    )
+    a = User(id=108, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -872,10 +837,7 @@ def test_subsequent_emi_creation(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
     # a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    a = User(
-        id=160,
-        performed_by=123,
-    )
+    a = User(id=160, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -954,10 +916,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
     # a = User(id=1991, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    a = User(
-        id=1991,
-        performed_by=123,
-    )
+    a = User(id=1991, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -1100,10 +1059,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     #     nickname="UPENDRA",
     #     email="upsigh921067@gmail.com",
     # )
-    a = User(
-        id=1764433,
-        performed_by=123,
-    )
+    a = User(id=1764433, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -1177,7 +1133,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     # Merchant Refund
     refund_date = parse_date("2020-05-23 21:20:07")
     amount = Decimal(2)
-    refund_payment(session, uc, amount, refund_date, "A3d223g2", refunded_swipe["data"])
+    refund_payment(session, uc, amount, refund_date, "A3d223g2")
 
     create_card_swipe(
         session=session,
@@ -1430,7 +1386,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         amount=Decimal("281.52"),
         description="JUNE",
     )
-    refunded_swipe = create_card_swipe(
+    create_card_swipe(
         session=session,
         user_loan=uc,
         txn_time=parse_date("2020-06-13 12:17:49"),
@@ -1446,27 +1402,27 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     # Merchant Refund
     refund_date = parse_date("2020-06-16 01:48:05")
     amount = Decimal(160)
-    refund_payment(session, uc, amount, refund_date, "A3d223g3", one_sixty_rupee["data"])
+    refund_payment(session, uc, amount, refund_date, "A3d223g3")
     # Merchant Refund
     refund_date = parse_date("2020-06-17 00:21:23")
     amount = Decimal(160)
-    refund_payment(session, uc, amount, refund_date, "A3d223g4", refunded_swipe["data"])
+    refund_payment(session, uc, amount, refund_date, "A3d223g4")
     # Merchant Refund
     refund_date = parse_date("2020-06-18 06:54:58")
     amount = Decimal(1)
-    refund_payment(session, uc, amount, refund_date, "A3d223g5", one_rupee_1["data"])
+    refund_payment(session, uc, amount, refund_date, "A3d223g5")
     # Merchant Refund
     refund_date = parse_date("2020-06-18 06:54:59")
     amount = Decimal(1)
-    refund_payment(session, uc, amount, refund_date, "A3d223g6", one_rupee_2["data"])
+    refund_payment(session, uc, amount, refund_date, "A3d223g6")
     # Merchant Refund
     refund_date = parse_date("2020-06-18 06:54:59")
     amount = Decimal(1)
-    refund_payment(session, uc, amount, refund_date, "A3d223g7", one_rupee_3["data"])
+    refund_payment(session, uc, amount, refund_date, "A3d223g7")
     # Merchant Refund
     refund_date = parse_date("2020-06-18 06:55:00")
     amount = Decimal(1)
-    refund_payment(session, uc, amount, refund_date, "A3d223g8", one_rupee_4["data"])
+    refund_payment(session, uc, amount, refund_date, "A3d223g8")
 
     # Check if amount is adjusted correctly in schedule
     all_emis_query = (
@@ -1562,8 +1518,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     _, bill_june_principal_due = get_account_balance_from_str(
         session, book_string=f"{bill_june.id}/bill/principal_receivable/a"
     )
-    assert bill_may_principal_due == Decimal("12881.86")
-    assert bill_june_principal_due == Decimal("7722.99")
+    assert bill_may_principal_due == Decimal("12717.86")
+    assert bill_june_principal_due == Decimal("7891.33")
 
 
 def test_interest_reversal_interest_already_settled(session: Session) -> None:
@@ -1792,9 +1748,8 @@ def _pay_minimum_amount_bill_2(session: Session) -> None:
 def test_refund_1(session: Session) -> None:
     test_generate_bill_1(session)
     user_loan = get_user_product(session, 99)
-    refunded_swipe = session.query(CardTransaction).filter_by(description="BigB.com").one()
 
-    refund_payment(session, user_loan, 100, parse_date("2020-05-05 15:24:34"), "asd23g2", refunded_swipe)
+    refund_payment(session, user_loan, 100, parse_date("2020-05-05 15:24:34"), "asd23g2")
 
     _, merchant_refund_off_balance = get_account_balance_from_str(
         session, book_string=f"{user_loan.loan_id}/loan/refund_off_balance/l"
@@ -1809,7 +1764,7 @@ def test_refund_1(session: Session) -> None:
         amount=Decimal(1500),
         description="BigBB.com",
     )
-    refund_payment(session, user_loan, 1500, parse_date("2020-05-15 15:24:34"), "af423g2", swipe["data"])
+    refund_payment(session, user_loan, 1500, parse_date("2020-05-15 15:24:34"), "af423g2")
 
     _, merchant_refund_off_balance = get_account_balance_from_str(
         session, book_string=f"{user_loan.loan_id}/loan/refund_off_balance/l"
@@ -1821,10 +1776,7 @@ def test_lender_incur(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
     # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas")
-    a = User(
-        id=99,
-        performed_by=123,
-    )
+    a = User(id=99, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -1905,10 +1857,7 @@ def test_lender_incur_two(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
     # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas")
-    a = User(
-        id=99,
-        performed_by=123,
-    )
+    a = User(id=99, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -2181,10 +2130,7 @@ def test_moratorium(session: Session) -> None:
     #     nickname="Ananth",
     #     email="ananth@redcarpetup.com",
     # )
-    a = User(
-        id=38612,
-        performed_by=123,
-    )
+    a = User(id=38612, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -2251,10 +2197,7 @@ def test_moratorium_schedule(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
     # a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    a = User(
-        id=160,
-        performed_by=123,
-    )
+    a = User(id=160, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -2369,10 +2312,7 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
     #     nickname="Ananth",
     #     email="ananth@redcarpetup.com",
     # )
-    a = User(
-        id=38613,
-        performed_by=123,
-    )
+    a = User(id=38613, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -2412,7 +2352,7 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
         is False
     )
 
-    assert user_loan.get_min_for_schedule(parse_date("2020-02-01")) == 284
+    assert user_loan.get_remaining_min(parse_date("2020-02-01")) == 284
 
     # Give moratorium
     m = LoanMoratorium.new(
@@ -2436,7 +2376,7 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
         )
         is False
     )
-    assert user_loan.get_min_for_schedule(parse_date("2020-02-01")) == 0  # 0 after moratorium
+    assert user_loan.get_remaining_min(parse_date("2020-02-01")) == 0  # 0 after moratorium
 
 
 def test_moratorium_live_user_1836540(session: Session) -> None:
@@ -2450,10 +2390,7 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
     #     nickname="Mohammad Shahbaz Mohammad Shafi Qureshi",
     #     email="shahbazq797@gmail.com",
     # )
-    a = User(
-        id=1836540,
-        performed_by=123,
-    )
+    a = User(id=1836540, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -2553,10 +2490,7 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
 
-    a = User(
-        id=1836540,
-        performed_by=123,
-    )
+    a = User(id=1836540, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -2699,20 +2633,12 @@ def test_transaction_before_activation(session: Session) -> None:
     #     nickname="Mohammad Shahbaz Mohammad Shafi Qureshi",
     #     email="shahbazq797@gmail.com",
     # )
-    a = User(
-        id=1836540,
-        performed_by=123,
-    )
+    a = User(id=1836540, performed_by=123,)
     session.add(a)
     session.flush()
 
     # assign card
-    user_loan = create_user_product(
-        session=session,
-        card_type="ruby",
-        user_id=a.id,
-        lender_id=62311,
-    )
+    user_loan = create_user_product(session=session, card_type="ruby", user_id=a.id, lender_id=62311,)
 
     # Swipe before activation
     swipe = create_card_swipe(
