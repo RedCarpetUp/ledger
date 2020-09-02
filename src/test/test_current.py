@@ -1547,15 +1547,16 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     assert first_emi["interest_received"] == Decimal("387.83")
 
     event_date = parse_date("2020-08-21 00:05:00")
-    # update_event_with_dpd(user_loan, event_date)
-    #
-    # dpd_events = session.query(EventDpd).filter_by(loan_id=uc.loan_id).all()
-    #
-    # last_entry_first_bill = dpd_events[54]
-    # last_entry_second_bill = dpd_events[52]
-    #
-    # assert last_entry_first_bill.balance == Decimal("12881.86")
-    # assert last_entry_second_bill.balance == Decimal("7722.99")
+    update_event_with_dpd(user_loan, event_date)
+
+    dpd_events = session.query(EventDpd).filter_by(loan_id=uc.loan_id).all()
+
+    last_entry_first_bill = dpd_events[54]
+    last_entry_second_bill = dpd_events[52]
+
+    assert last_entry_first_bill.balance == Decimal("12882.48")
+    assert last_entry_second_bill.balance == Decimal("8156.19")
+
     _, bill_may_principal_due = get_account_balance_from_str(
         session, book_string=f"{bill_may.id}/bill/principal_receivable/a"
     )
