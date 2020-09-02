@@ -1554,8 +1554,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     last_entry_first_bill = dpd_events[54]
     last_entry_second_bill = dpd_events[52]
 
-    assert last_entry_first_bill.balance == Decimal("12882.48")
-    assert last_entry_second_bill.balance == Decimal("8156.19")
+    assert last_entry_first_bill.balance == Decimal("12718.48")
+    assert last_entry_second_bill.balance == Decimal("8324.53")
 
     _, bill_may_principal_due = get_account_balance_from_str(
         session, book_string=f"{bill_may.id}/bill/principal_receivable/a"
