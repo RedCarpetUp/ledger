@@ -100,6 +100,8 @@ def card_transaction_event(
         credit_book_str=f"{user_loan.loan_id}/card/card_balance/a",
         amount=amount,
     )
+    # Add to max amount to pay account.
+    add_max_amount_event(session, bill, event, amount)
 
 
 def bill_generate_event(
@@ -144,6 +146,18 @@ def add_min_amount_event(
         event_id=event.id,
         debit_book_str=f"{bill.id}/bill/min/a",
         credit_book_str=f"{bill.id}/bill/min/l",
+        amount=amount,
+    )
+
+
+def add_max_amount_event(
+    session: Session, bill: BaseBill, event: LedgerTriggerEvent, amount: Decimal
+) -> None:
+    create_ledger_entry_from_str(
+        session=session,
+        event_id=event.id,
+        debit_book_str=f"{bill.id}/bill/max/a",
+        credit_book_str=f"{bill.id}/bill/max/l",
         amount=amount,
     )
 

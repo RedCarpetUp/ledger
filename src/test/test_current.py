@@ -2352,7 +2352,7 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
         is False
     )
 
-    assert user_loan.get_remaining_min(parse_date("2020-02-01")) == 284
+    assert user_loan.get_remaining_min(parse_date("2020-02-01").date()) == 284
 
     # Give moratorium
     m = LoanMoratorium.new(
@@ -2376,7 +2376,7 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
         )
         is False
     )
-    assert user_loan.get_remaining_min(parse_date("2020-02-01")) == 0  # 0 after moratorium
+    assert user_loan.get_remaining_min(parse_date("2020-02-01").date()) == 0  # 0 after moratorium
 
 
 def test_moratorium_live_user_1836540(session: Session) -> None:

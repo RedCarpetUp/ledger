@@ -17,7 +17,6 @@ from rush.ledger_events import (
 from rush.ledger_utils import (
     create_ledger_entry_from_str,
     get_account_balance_from_str,
-    get_remaining_bill_balance,
 )
 from rush.models import (
     CardTransaction,
@@ -117,7 +116,7 @@ def payment_received_event(
         actual_payment = payment_received
         bills_data = find_amount_to_slide_in_bills(user_loan, payment_received)
         for bill_data in bills_data:
-            adjust_for_min(bill_data["bill"], bill_data["amount_to_adjust"], event.id)
+            adjust_for_min_max_accounts(bill_data["bill"], bill_data["amount_to_adjust"], event.id)
             remaining_amount = _adjust_bill(
                 session,
                 bill_data["bill"],
@@ -157,7 +156,7 @@ def find_amount_to_slide_in_bills(user_loan: BaseLoan, total_amount_to_slide: De
     bills_dict = [
         {
             "bill": bill,
-            "total_outstanding": get_remaining_bill_balance(user_loan.session, bill)["total_due"],
+            "total_outstanding": bill.get_remaining_max(),
             "monthly_instalment": bill.get_scheduled_min_amount(),
             "amount_to_adjust": 0,
         }
@@ -193,7 +192,7 @@ def transaction_refund_event(session: Session, user_loan: BaseLoan, event: Ledge
     bills_data = find_amount_to_slide_in_bills(user_loan, refund_amount)
 
     for bill_data in bills_data:
-        adjust_for_min(bill_data["bill"], bill_data["amount_to_adjust"], event.id)
+        adjust_for_min_max_accounts(bill_data["bill"], bill_data["amount_to_adjust"], event.id)
         refund_amount = _adjust_bill(
             session,
             bill_data["bill"],
@@ -278,16 +277,27 @@ def payment_settlement_event(
     )
 
 
-def adjust_for_min(bill: BaseBill, payment_to_adjust_from: Decimal, event_id: int):
+def adjust_for_min_max_accounts(bill: BaseBill, payment_to_adjust_from: Decimal, event_id: int):
     min_due = bill.get_remaining_min()
     min_to_adjust_in_this_bill = min(min_due, payment_to_adjust_from)
-    if min_to_adjust_in_this_bill == 0:
-        return
-    # Reduce min amount
-    create_ledger_entry_from_str(
-        bill.session,
-        event_id=event_id,
-        debit_book_str=f"{bill.id}/bill/min/l",
-        credit_book_str=f"{bill.id}/bill/min/a",
-        amount=min_to_adjust_in_this_bill,
-    )
+    if min_to_adjust_in_this_bill != 0:
+        # Reduce min amount
+        create_ledger_entry_from_str(
+            bill.session,
+            event_id=event_id,
+            debit_book_str=f"{bill.id}/bill/min/l",
+            credit_book_str=f"{bill.id}/bill/min/a",
+            amount=min_to_adjust_in_this_bill,
+        )
+
+    max_due = bill.get_remaining_max()
+    max_to_adjust_in_this_bill = min(max_due, payment_to_adjust_from)
+    if max_to_adjust_in_this_bill != 0:
+        # Reduce min amount
+        create_ledger_entry_from_str(
+            bill.session,
+            event_id=event_id,
+            debit_book_str=f"{bill.id}/bill/max/l",
+            credit_book_str=f"{bill.id}/bill/max/a",
+            amount=max_to_adjust_in_this_bill,
+        )
