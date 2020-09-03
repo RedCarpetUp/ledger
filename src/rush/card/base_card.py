@@ -118,7 +118,7 @@ class BaseLoan(Loan):
     should_reinstate_limit_on_payment: bool = False
     bill_class: Type[B] = BaseBill
     session: Session = None
-    downpayment_perc: Optional[Decimal] = None
+    can_generate_bill: bool = True
 
     __mapper_args__ = {"polymorphic_identity": "base_loan"}
 

@@ -1,4 +1,5 @@
 from decimal import Decimal
+from typing import Optional
 
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
@@ -61,7 +62,9 @@ def get_or_create_bill_for_card_swipe(user_loan: BaseLoan, txn_time: DateTime) -
     return {"result": "success", "bill": new_bill}
 
 
-def bill_generate(user_loan: BaseLoan) -> BaseBill:
+def bill_generate(user_loan: BaseLoan) -> Optional[BaseBill]:
+    if not user_loan.can_generate_bill:
+        return
     session = user_loan.session
     bill = user_loan.get_latest_bill_to_generate()  # Get the first bill which is not generated.
     if not bill:

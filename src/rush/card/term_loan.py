@@ -119,6 +119,7 @@ class TermLoanBill(BaseBill):
 class TermLoan(BaseLoan):
     bill_class: Type[B] = TermLoanBill
     session: Session = None
+    can_generate_bill: bool = False
 
     __mapper_args__ = {"polymorphic_identity": "term_loan"}
 

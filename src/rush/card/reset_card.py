@@ -33,6 +33,7 @@ class ResetBill(TermLoanBill):
 
 class ResetCard(BaseLoan):
     bill_class: Type[B] = ResetBill
+    can_generate_bill: bool = False
 
     __mapper_args__ = {"polymorphic_identity": "term_loan_reset"}
 
