@@ -278,19 +278,13 @@ def _adjust_bill(
         remaining_amount = adjust_for_revenue(remaining_amount, debit_acc_str, fee)
 
     remaining_amount = adjust_for_receivable(
-        remaining_amount,
-        to_acc=debit_acc_str,
-        from_acc=f"{bill.id}/bill/unbilled/a",
+        remaining_amount, to_acc=debit_acc_str, from_acc=f"{bill.id}/bill/unbilled/a",
     )
     remaining_amount = adjust_for_receivable(
-        remaining_amount,
-        to_acc=debit_acc_str,
-        from_acc=f"{bill.id}/bill/interest_receivable/a",
+        remaining_amount, to_acc=debit_acc_str, from_acc=f"{bill.id}/bill/interest_receivable/a",
     )
     remaining_amount = adjust_for_receivable(
-        remaining_amount,
-        to_acc=debit_acc_str,
-        from_acc=f"{bill.id}/bill/principal_receivable/a",
+        remaining_amount, to_acc=debit_acc_str, from_acc=f"{bill.id}/bill/principal_receivable/a",
     )
     return remaining_amount
 

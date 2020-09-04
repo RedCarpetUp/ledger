@@ -103,10 +103,7 @@ def refund_payment(
 
 
 def payment_received_event(
-    session: Session,
-    user_loan: BaseLoan,
-    debit_book_str: str,
-    event: LedgerTriggerEvent,
+    session: Session, user_loan: BaseLoan, debit_book_str: str, event: LedgerTriggerEvent,
 ) -> None:
     payment_received = Decimal(event.amount)
     if event.name == "merchant_refund":

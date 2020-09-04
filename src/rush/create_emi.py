@@ -636,9 +636,7 @@ def group_bills_to_create_loan_schedule(user_loan: BaseLoan):
     all_emis = (
         session.query(CardEmis)
         .filter(
-            CardEmis.loan_id == user_loan.id,
-            CardEmis.row_status == "active",
-            CardEmis.bill_id == None,
+            CardEmis.loan_id == user_loan.id, CardEmis.row_status == "active", CardEmis.bill_id == None,
         )
         .order_by(CardEmis.emi_number.asc())
         .all()
