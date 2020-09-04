@@ -765,10 +765,12 @@ def update_event_with_dpd(
             debit_amount = Decimal(0)
             credit_amount = ledger_entry.amount
         bills_touched.append(account.identifier)
-        bill = (
-            session.query(LoanData)
-            .filter(LoanData.loan_id == user_loan.loan_id, LoanData.id == account.identifier,)
-            .first()
+        bill = user_loan.convert_to_bill_class(
+            (
+                session.query(LoanData)
+                .filter(LoanData.loan_id == user_loan.loan_id, LoanData.id == account.identifier,)
+                .first()
+            )
         )
         event_post_date = ledger_trigger_event.post_date.date()
         # In case of moratorium reset all post dates to start of moratorium
