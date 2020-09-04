@@ -435,6 +435,7 @@ def adjust_atm_fee_in_emis(session: Session, user_loan: BaseLoan, bill: LoanData
     )
     if atm_fee and atm_fee.gross_amount > 0:
         emi.total_closing_balance_post_due_date += atm_fee.gross_amount
+        emi.total_closing_balance += atm_fee.gross_amount
         emi.total_due_amount += atm_fee.gross_amount
         emi.atm_fee += atm_fee.gross_amount
         session.flush()
