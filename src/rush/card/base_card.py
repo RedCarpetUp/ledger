@@ -243,8 +243,14 @@ class BaseLoan(Loan):
     def get_unpaid_bills(self) -> List[BaseBill]:
         return self.get_all_bills(are_generated=False, only_unpaid_bills=True)
 
+    def get_closed_bills(self) -> List[BaseBill]:
+        return self.get_all_bills(are_generated=True, only_closed_bills=True)
+
     def get_all_bills(
-        self, are_generated: bool = True, only_unpaid_bills: bool = False
+        self,
+        are_generated: bool = True,
+        only_unpaid_bills: bool = False,
+        only_closed_bills: bool = False,
     ) -> List[BaseBill]:
         all_bills_query = (
             self.session.query(LoanData)
@@ -257,6 +263,8 @@ class BaseLoan(Loan):
         all_bills = [self.convert_to_bill_class(bill) for bill in query_result]
         if only_unpaid_bills:
             all_bills = [bill for bill in all_bills if not bill.is_bill_closed()]
+        elif only_closed_bills:
+            all_bills = [bill for bill in all_bills if bill.is_bill_closed()]
         return all_bills
 
     def get_all_bills_post_date(self, post_date: DateTime) -> List[BaseBill]:

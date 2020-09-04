@@ -636,7 +636,9 @@ def group_bills_to_create_loan_schedule(user_loan: BaseLoan):
     all_emis = (
         session.query(CardEmis)
         .filter(
-            CardEmis.loan_id == user_loan.id, CardEmis.row_status == "active", CardEmis.bill_id == None,
+            CardEmis.loan_id == user_loan.id,
+            CardEmis.row_status == "active",
+            CardEmis.bill_id == None,
         )
         .order_by(CardEmis.emi_number.asc())
         .all()
@@ -718,6 +720,7 @@ def entry_checks(
 ) -> bool:
     verdict = False
 
+    # These are various cases to get the exact events affecting specific bills
     if ledger_trigger_event.name == event_type and ledger_trigger_event.id == event_id:
         verdict = True
     else:
@@ -726,6 +729,7 @@ def entry_checks(
     if event_amount and ledger_entry.amount + event_amount == ledger_trigger_event.amount:
         return False
 
+    # If the specific bill has already been logged, we skip
     if (credit_account.identifier_type == "bill" and credit_account.identifier in bills_touched) and (
         debit_account.identifier_type == "bill" and debit_account.identifier not in bills_touched
     ):
@@ -761,13 +765,20 @@ def update_event_with_dpd(
             debit_amount = Decimal(0)
             credit_amount = ledger_entry.amount
         bills_touched.append(account.identifier)
-        bill = user_loan.convert_to_bill_class(
-            (
-                session.query(LoanData)
-                .filter(LoanData.loan_id == user_loan.loan_id, LoanData.id == account.identifier,)
-                .first()
-            )
+        bill = (
+            session.query(LoanData)
+            .filter(LoanData.loan_id == user_loan.loan_id, LoanData.id == account.identifier,)
+            .first()
         )
+        event_post_date = ledger_trigger_event.post_date.date()
+        # In case of moratorium reset all post dates to start of moratorium
+        if LoanMoratorium.is_in_moratorium(
+            session, loan_id=user_loan.loan_id, date_to_check_against=event_post_date
+        ):
+            moratorium = (
+                session.query(LoanMoratorium).filter(LoanMoratorium.loan_id == user_loan.loan_id).first()
+            )
+            event_post_date = moratorium.start_date
         dpd = (event_post_date - bill.bill_due_date).days
         new_event = EventDpd(
             bill_id=account.identifier,
@@ -832,7 +843,6 @@ def update_event_with_dpd(
         ):
             continue
         bills_touched = []
-        event_post_date = ledger_trigger_event.post_date.date()
         if ledger_trigger_event.name in [
             "accrue_interest",
             "accrue_late_fine",

@@ -81,7 +81,8 @@ class TermLoanBill(BaseBill):
     @classmethod
     def net_product_price(cls, product_price: Decimal, downpayment_perc: Decimal) -> Decimal:
         downpayment_amount = cls.get_downpayment_amount(
-            product_price=product_price, downpayment_perc=downpayment_perc,
+            product_price=product_price,
+            downpayment_perc=downpayment_perc,
         )
 
         amount = product_price - downpayment_amount
@@ -225,7 +226,9 @@ class TermLoan(BaseLoan):
         )
 
         create_emis_for_bill(
-            session=session, user_loan=loan, bill=bill,
+            session=session,
+            user_loan=loan,
+            bill=bill,
         )
 
         return loan
