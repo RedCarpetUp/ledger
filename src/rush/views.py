@@ -5,10 +5,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Session
 
 from rush.card.base_card import BaseLoan
-from rush.ledger_utils import (
-    get_remaining_bill_balance,
-    is_bill_closed,
-)
+from rush.ledger_utils import is_bill_closed
 from rush.models import (
     BookAccount,
     CardTransaction,
@@ -24,7 +21,7 @@ def user_view(session, user_loan: BaseLoan) -> dict:
     unpaid_bills = user_loan.get_unpaid_generated_bills()
 
     for bill in unpaid_bills:
-        bill_balance = get_remaining_bill_balance(session, bill)
+        bill_balance = bill.get_remaining_max()
         total_due = total_due + bill_balance["total_due"]
         min_amount = min_amount + bill_balance["interest_due"] + bill_balance["late_fine"]
         if index == 0:
@@ -53,7 +50,7 @@ def bill_view(session: Session, user_loan: BaseLoan) -> list:
         .all()
     )
     for bill in all_bills:
-        bill_balance = get_remaining_bill_balance(session=session, bill=bill)
+        bill_balance = bill.get_remaining_max()
         bill_details.append(
             {
                 "bill_id": bill.id,

@@ -14,12 +14,12 @@ from rush.ledger_events import (
     _adjust_bill,
     _adjust_for_prepayment,
     accrue_interest_event,
+    add_max_amount_event,
     add_min_amount_event,
 )
 from rush.ledger_utils import (
     create_ledger_entry_from_str,
     get_account_balance_from_str,
-    get_remaining_bill_balance,
     is_bill_closed,
 )
 from rush.models import (
@@ -36,17 +36,6 @@ from rush.utils import (
     add_gst_split_to_amount,
     get_current_ist_time,
 )
-
-
-def _get_total_outstanding(session, user_loan):
-    # Temp func.
-    all_bills = (
-        session.query(LoanData)
-        .filter(LoanData.loan_id == user_loan.loan_id, LoanData.is_generated.is_(True))
-        .all()
-    )
-    total_outstanding = sum(get_remaining_bill_balance(session, bill)["total_due"] for bill in all_bills)
-    return total_outstanding
 
 
 def can_remove_interest(
@@ -93,6 +82,7 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loa
     for bill in unpaid_bills:
         accrue_interest_event(session, bill, accrue_event, bill.table.interest_to_charge)
         accrue_event.amount += bill.table.interest_to_charge
+        add_max_amount_event(session, bill, accrue_event, bill.table.interest_to_charge)
 
 
 def is_late_fee_valid(session: Session, user_loan: BaseLoan) -> bool:
@@ -140,8 +130,9 @@ def create_bill_fee_entry(
     )
     f.gross_amount = d["gross_amount"]
     session.add(f)
-    # Add into min amount of the bill too.
+    # Add into min/max amount of the bill too.
     add_min_amount_event(session, bill, event, f.gross_amount)
+    add_max_amount_event(session, bill, event, f.gross_amount)
     return f
 
 
@@ -236,7 +227,7 @@ def reverse_interest_charges(
 
         if not is_bill_closed(
             session, bill
-        ):  # The bill which is open and we slide the above entries in here.
+        ):  # The bill which are open and we slide the above entries in here.
             bills_to_slide.append(bill)
 
     for bill in bills_to_slide:
