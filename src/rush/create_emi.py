@@ -188,7 +188,9 @@ def slide_payments(user_loan: BaseLoan, payment_event: Optional[LedgerTriggerEve
                         emi.total_closing_balance = (
                             emi.total_closing_balance_post_due_date
                         ) = emi.interest = emi.interest_current_month = emi.interest_next_month = 0
-                    emi.due_amount = emi.total_due_amount = actual_closing_balance
+                    only_principal = actual_closing_balance - (emi.interest + emi.atm_fee + emi.late_fee)
+                    emi.total_due_amount = actual_closing_balance
+                    emi.due_amount = only_principal
                     last_paid_emi_number = emi.emi_number
                     emi.payment_status = "Paid"
                     emi.dpd = 0
@@ -433,6 +435,7 @@ def adjust_atm_fee_in_emis(session: Session, user_loan: BaseLoan, bill: LoanData
     )
     if atm_fee and atm_fee.gross_amount > 0:
         emi.total_closing_balance_post_due_date += atm_fee.gross_amount
+        emi.total_closing_balance += atm_fee.gross_amount
         emi.total_due_amount += atm_fee.gross_amount
         emi.atm_fee += atm_fee.gross_amount
         session.flush()
