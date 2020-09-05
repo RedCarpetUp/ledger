@@ -16,7 +16,10 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Session
 
 from rush.card.utils import create_user_product_mapping
-from rush.ledger_utils import is_bill_closed
+from rush.ledger_utils import (
+    get_account_balance_from_str,
+    is_bill_closed,
+)
 from rush.models import (
     CardTransaction,
     LedgerTriggerEvent,
@@ -92,20 +95,30 @@ class BaseBill:
         return min(scheduled_minimum_amount, amount_that_can_be_added_in_min)
 
     def get_remaining_min(self, to_date: Optional[DateTime] = None) -> Decimal:
-        from rush.ledger_utils import get_account_balance_from_str
-
         _, min_due = get_account_balance_from_str(
             self.session, book_string=f"{self.id}/bill/min/a", to_date=to_date
         )
         return min_due
 
-    def get_remaining_max(self, to_date: Optional[DateTime] = None) -> Decimal:
-        from rush.ledger_utils import get_account_balance_from_str
-
-        _, max_due = get_account_balance_from_str(
-            self.session, book_string=f"{self.id}/bill/max/a", to_date=to_date
+    def get_remaining_max(self, as_of_date: Optional[DateTime] = None) -> Decimal:
+        _, max_amount = get_account_balance_from_str(
+            self.session, book_string=f"{self.id}/bill/max/a", to_date=as_of_date
         )
-        return max_due
+        return max_amount
+
+    def get_outstanding_amount(self, as_of_date: Optional[DateTime] = None) -> Decimal:
+        # If not generated or as_of_date is less than bill close date, get the unbilled amount.
+        if not self.table.is_generated or as_of_date and as_of_date.date() < self.table.bill_close_date:
+            outstanding_balance = self.get_unbilled_amount(as_of_date)
+        else:
+            outstanding_balance = self.get_remaining_max(as_of_date)
+        return outstanding_balance
+
+    def get_unbilled_amount(self, to_date: Optional[DateTime] = None):
+        _, unbilled = get_account_balance_from_str(
+            self.session, book_string=f"{self.id}/bill/unbilled/a", to_date=to_date
+        )
+        return unbilled
 
     def is_bill_closed(self, to_date: Optional[DateTime] = None) -> bool:
         return is_bill_closed(self.session, self.table, to_date)
@@ -248,7 +261,7 @@ class BaseLoan(Loan):
 
     def get_all_bills(
         self,
-        are_generated: bool = True,
+        are_generated: bool = False,
         only_unpaid_bills: bool = False,
         only_closed_bills: bool = False,
     ) -> List[BaseBill]:
@@ -324,9 +337,7 @@ class BaseLoan(Loan):
         )
         return loan_data
 
-    def get_remaining_min(
-        self, date_to_check_against: DateTime = get_current_ist_time().date()
-    ) -> Decimal:
+    def get_remaining_min(self, date_to_check_against: DateTime = None) -> Decimal:
         # if user is in moratorium then return 0
         if LoanMoratorium.is_in_moratorium(self.session, self.id, date_to_check_against):
             return Decimal(0)
@@ -336,9 +347,12 @@ class BaseLoan(Loan):
         )
         return remaining_min_of_all_bills
 
-    def get_total_outstanding(
-        self, date_to_check_against: DateTime = get_current_ist_time().date()
-    ) -> Decimal:
+    def get_remaining_max(self, date_to_check_against: DateTime = None) -> Decimal:
+        unpaid_bills = self.get_unpaid_generated_bills()
+        total_max_amount = sum(bill.get_remaining_max(date_to_check_against) for bill in unpaid_bills)
+        return total_max_amount
+
+    def get_total_outstanding(self, date_to_check_against: DateTime = None) -> Decimal:
         all_bills = self.get_all_bills()
-        total_outstanding = sum(bill.get_remaining_max(date_to_check_against) for bill in all_bills)
+        total_outstanding = sum(bill.get_outstanding_amount(date_to_check_against) for bill in all_bills)
         return total_outstanding

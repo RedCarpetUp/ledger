@@ -799,7 +799,7 @@ def update_event_with_dpd(
             event_id=ledger_trigger_event.id,
             credit=credit_amount,
             debit=debit_amount,
-            balance=bill.get_remaining_max(ledger_trigger_event.post_date),
+            balance=bill.get_outstanding_amount(ledger_trigger_event.post_date),
             dpd=dpd,
         )
         session.add(new_event)
