@@ -11,12 +11,10 @@ from sqlalchemy.orm import (
 from sqlalchemy.sql import func
 
 from rush.anomaly_detection import get_payment_events
-from rush.card import BaseLoan
 from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
-from rush.ledger_utils import get_remaining_bill_balance
 from rush.models import (
     BillFee,
     BookAccount,
@@ -770,13 +768,15 @@ def update_event_with_dpd(
             debit_amount = Decimal(0)
             credit_amount = ledger_entry.amount
         bills_touched.append(account.identifier)
-        bill = (
-            session.query(LoanData)
-            .filter(
-                LoanData.loan_id == user_loan.loan_id,
-                LoanData.id == account.identifier,
+        bill = user_loan.convert_to_bill_class(
+            (
+                session.query(LoanData)
+                .filter(
+                    LoanData.loan_id == user_loan.loan_id,
+                    LoanData.id == account.identifier,
+                )
+                .first()
             )
-            .first()
         )
         event_post_date = ledger_trigger_event.post_date.date()
         # In case of moratorium reset all post dates to start of moratorium
@@ -794,9 +794,7 @@ def update_event_with_dpd(
             event_id=ledger_trigger_event.id,
             credit=credit_amount,
             debit=debit_amount,
-            balance=get_remaining_bill_balance(session, bill, ledger_trigger_event.post_date)[
-                "total_due"
-            ],
+            balance=bill.get_remaining_max(ledger_trigger_event.post_date),
             dpd=dpd,
         )
         session.add(new_event)
