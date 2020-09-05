@@ -72,8 +72,10 @@ def bill_generate(user_loan: BaseLoan, creation_time: DateTime = get_current_ist
             return bill
         bill = bill["bill"]
     lt = LedgerTriggerEvent(
-        name="bill_generate", loan_id=user_loan.loan_id, post_date=bill.bill_close_date,
-        extra_details={"bill_id": bill.id}
+        name="bill_generate",
+        loan_id=user_loan.loan_id,
+        post_date=bill.bill_close_date,
+        extra_details={"bill_id": bill.id},
     )
     session.add(lt)
     session.flush()
