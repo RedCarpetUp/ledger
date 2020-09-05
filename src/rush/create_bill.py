@@ -9,7 +9,11 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
-from rush.ledger_events import bill_generate_event
+from rush.create_emi import create_emis_for_bill
+from rush.ledger_events import (
+    add_max_amount_event,
+    bill_generate_event,
+)
 from rush.ledger_utils import get_account_balance_from_str
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
@@ -97,14 +101,11 @@ def bill_generate(user_loan: BaseLoan, creation_time: DateTime = get_current_ist
         rate_of_interest=user_loan.rc_rate_of_interest_monthly
     )
 
-    # Don't add in min if user is in moratorium.
-    if not LoanMoratorium.is_in_moratorium(
-        session=session, loan_id=user_loan.loan_id, date_to_check_against=bill.table.bill_close_date
-    ):
-        # After the bill has generated. Call the min generation event on all unpaid bills.
-        add_min_to_all_bills(session=session, post_date=bill.table.bill_close_date, user_loan=user_loan)
+    # Add to max amount to pay account.
+    add_max_amount_event(session, bill, lt, billed_amount)
 
-    from rush.create_emi import create_emis_for_bill
+    # After the bill has generated. Call the min generation event on all unpaid bills.
+    add_min_to_all_bills(session=session, post_date=bill.table.bill_close_date, user_loan=user_loan)
 
     create_emis_for_bill(session=session, user_loan=user_loan, bill=bill)
 
