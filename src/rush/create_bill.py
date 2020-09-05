@@ -72,7 +72,10 @@ def bill_generate(user_loan: BaseLoan, creation_time: DateTime = get_current_ist
             return bill
         bill = bill["bill"]
     lt = LedgerTriggerEvent(
-        name="bill_generate", loan_id=user_loan.loan_id, post_date=bill.bill_close_date
+        name="bill_generate",
+        loan_id=user_loan.loan_id,
+        post_date=bill.bill_close_date,
+        extra_details={"bill_id": bill.id},
     )
     session.add(lt)
     session.flush()
@@ -84,6 +87,7 @@ def bill_generate(user_loan: BaseLoan, creation_time: DateTime = get_current_ist
     _, billed_amount = get_account_balance_from_str(
         session=session, book_string=f"{bill.id}/bill/principal_receivable/a"
     )
+    lt.amount = billed_amount  # Set the amount for event
     principal_instalment = div(billed_amount, bill.table.bill_tenure)
 
     # Update the bill row here.
