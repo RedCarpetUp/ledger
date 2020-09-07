@@ -100,8 +100,6 @@ def card_transaction_event(
         credit_book_str=f"{user_loan.loan_id}/card/card_balance/a",
         amount=amount,
     )
-    # Add to max amount to pay account.
-    add_max_amount_event(session, bill, event, amount)
 
 
 def bill_generate_event(
@@ -110,9 +108,7 @@ def bill_generate_event(
     bill_id = bill.id
 
     # Move all unbilled book amount to billed account
-    _, unbilled_balance = get_account_balance_from_str(
-        session=session, book_string=f"{bill_id}/bill/unbilled/a"
-    )
+    unbilled_balance = bill.get_unbilled_amount()
 
     create_ledger_entry_from_str(
         session,
