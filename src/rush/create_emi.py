@@ -181,10 +181,12 @@ def slide_payments(user_loan: BaseLoan, payment_event: Optional[LedgerTriggerEve
                     # Edge case of last emi
                     if emi.emi_number == last_emi_number and last_payment_date.date() > emi.due_date:
                         emi.interest_received = emi.interest
-                        emi.payment_received = actual_closing_balance - emi.late_fee - emi.interest - emi.atm_fee
+                        emi.payment_received = (
+                            actual_closing_balance - emi.late_fee - emi.interest - emi.atm_fee
+                        )
                         emi.total_closing_balance = emi.total_closing_balance_post_due_date = 0
                     else:
-                        emi.payment_received = actual_closing_balance - emi.late_fee - emi.atm_fee
+                        emi.payment_received = actual_closing_balance - emi.atm_fee
                         emi.total_closing_balance = (
                             emi.total_closing_balance_post_due_date
                         ) = emi.interest = emi.interest_current_month = emi.interest_next_month = 0
