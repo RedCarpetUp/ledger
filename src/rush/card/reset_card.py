@@ -14,6 +14,7 @@ from rush.card.base_card import (
 )
 from rush.card.term_loan import TermLoanBill
 from rush.ledger_events import loan_disbursement_event
+from rush.ledger_utils import create_ledger_entry_from_str
 from rush.models import (
     LedgerTriggerEvent,
     Loan,
@@ -99,6 +100,14 @@ class ResetCard(BaseLoan):
 
         session.add(event)
         session.flush()
+
+        create_ledger_entry_from_str(
+            session=session,
+            event_id=event.id,
+            debit_book_str=f"{loan.id}/card/locked_limit/a",
+            credit_book_str=f"{loan.id}/card/locked_limit/l",
+            amount=kwargs["amount"],
+        )
 
         loan_disbursement_event(
             session=session,

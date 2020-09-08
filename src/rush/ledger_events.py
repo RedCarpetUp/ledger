@@ -108,9 +108,7 @@ def bill_generate_event(
     bill_id = bill.id
 
     # Move all unbilled book amount to billed account
-    _, unbilled_balance = get_account_balance_from_str(
-        session=session, book_string=f"{bill_id}/bill/unbilled/a"
-    )
+    unbilled_balance = bill.get_unbilled_amount()
 
     create_ledger_entry_from_str(
         session,
@@ -144,6 +142,18 @@ def add_min_amount_event(
         event_id=event.id,
         debit_book_str=f"{bill.id}/bill/min/a",
         credit_book_str=f"{bill.id}/bill/min/l",
+        amount=amount,
+    )
+
+
+def add_max_amount_event(
+    session: Session, bill: BaseBill, event: LedgerTriggerEvent, amount: Decimal
+) -> None:
+    create_ledger_entry_from_str(
+        session=session,
+        event_id=event.id,
+        debit_book_str=f"{bill.id}/bill/max/a",
+        credit_book_str=f"{bill.id}/bill/max/l",
         amount=amount,
     )
 
@@ -265,6 +275,11 @@ def _adjust_bill(
     for fee in fees:
         remaining_amount = adjust_for_revenue(remaining_amount, debit_acc_str, fee)
 
+    remaining_amount = adjust_for_receivable(
+        remaining_amount,
+        to_acc=debit_acc_str,
+        from_acc=f"{bill.id}/bill/unbilled/a",
+    )
     remaining_amount = adjust_for_receivable(
         remaining_amount,
         to_acc=debit_acc_str,

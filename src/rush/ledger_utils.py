@@ -117,59 +117,10 @@ def get_book_account_by_string(session: Session, book_string: str) -> BookAccoun
 
 
 def is_bill_closed(session: Session, bill: LoanData, to_date: Optional[DateTime] = None) -> bool:
-    # Check if unbilled is zero. If not, return false.
-    _, unbilled_balance = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/unbilled/a", to_date=to_date
+    # Check if max balance is zero. If not, return false.
+    _, max_balance = get_account_balance_from_str(
+        session, book_string=f"{bill.id}/bill/max/a", to_date=to_date
     )
-    if unbilled_balance != 0:
-        return False
-    # Check if principal is paid. If not, return false.
-    _, principal_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/principal_receivable/a", to_date=to_date
-    )
-    if principal_due != 0:
-        return False
-
-    # Check if interest is paid. If not, return false.
-    _, interest_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/interest_receivable/a", to_date=to_date
-    )
-    if interest_due != 0:
-        return False
-
-    unpaid_fees = (
-        session.query(BillFee)
-        .filter(BillFee.identifier_id == bill.id, BillFee.fee_status == "UNPAID")
-        .all()
-    )
-    if unpaid_fees:
+    if max_balance != 0:
         return False
     return True
-
-
-def get_remaining_bill_balance(
-    session: Session, bill: LoanData, to_date: Optional[DateTime] = None
-) -> Dict[str, Decimal]:
-    if bill.is_generated and to_date and to_date.date() < bill.bill_close_date:
-        _, principal_due = get_account_balance_from_str(
-            session, book_string=f"{bill.id}/bill/unbilled/a", to_date=to_date
-        )
-    else:
-        _, principal_due = get_account_balance_from_str(
-            session, book_string=f"{bill.id}/bill/principal_receivable/a", to_date=to_date
-        )
-    _, interest_due = get_account_balance_from_str(
-        session, book_string=f"{bill.id}/bill/interest_receivable/a", to_date=to_date
-    )
-    d = {"principal_due": principal_due, "interest_due": interest_due}
-    fees = (
-        session.query(BillFee)
-        .filter(BillFee.identifier_id == bill.id, BillFee.fee_status == "UNPAID")
-        .all()
-    )
-    for fee in fees:
-        fee_due_amount = fee.gross_amount - (fee.gross_amount_paid or 0)
-        d[fee.name] = fee_due_amount
-    d["total_due"] = sum(v for _, v in d.items())  # sum of all values becomes total due.
-
-    return d

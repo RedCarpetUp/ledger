@@ -126,8 +126,52 @@ def upgrade() -> None:
     """
     )
 
+    # To optimize, add a filter to get only unpaid bills.
+    op.execute(
+        """
+        create view loan_min_view as 
+        select 
+          loan_id, 
+          sum(bill_min_balance) as min_balance 
+        from 
+          (
+            select 
+              loan_id, 
+              get_account_balance(id, 'bill', 'min', 'a') as bill_min_balance 
+            from 
+              loan_data 
+            where 
+              is_generated = true
+          ) bills 
+        group by 
+          loan_id;
+        """
+    )
+
+    # To optimize, add a filter to get only unpaid bills.
+    op.execute(
+        """
+        create view loan_max_view as 
+        select 
+          loan_id, 
+          sum(bill_max_balance) as max_balance 
+        from 
+          (
+            select 
+              loan_id, 
+              get_account_balance(id, 'bill', 'max', 'a') as bill_max_balance 
+            from 
+              loan_data 
+          ) bills 
+        group by 
+          loan_id;
+        """
+    )
+
 
 def downgrade() -> None:
+    op.execute("DROP VIEW loan_max_view")
+    op.execute("DROP VIEW loan_min_view")
     op.execute("DROP FUNCTION get_account_balance_by_book_id")
     op.execute("DROP FUNCTION get_account_balance_between_periods_by_book_id")
     op.execute("DROP FUNCTION get_account_balance")

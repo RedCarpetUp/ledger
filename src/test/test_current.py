@@ -1177,7 +1177,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     # Merchant Refund
     refund_date = parse_date("2020-05-23 21:20:07")
     amount = Decimal(2)
-    refund_payment(session, uc, amount, refund_date, "A3d223g2", refunded_swipe["data"])
+    refund_payment(session, uc, amount, refund_date, "A3d223g2")
 
     create_card_swipe(
         session=session,
@@ -1294,12 +1294,10 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     )
 
     # Generate bill
-    generate_date = parse_date("2020-06-01").date()
-    user_loan = get_user_product(session, a.id)
-    bill_may = bill_generate(user_loan)
+    bill_may = bill_generate(uc)
 
     # check latest bill method
-    latest_bill = user_loan.get_latest_bill()
+    latest_bill = uc.get_latest_bill()
     assert latest_bill is not None
     assert isinstance(latest_bill, BaseBill) == True
 
@@ -1430,7 +1428,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         amount=Decimal("281.52"),
         description="JUNE",
     )
-    refunded_swipe = create_card_swipe(
+    create_card_swipe(
         session=session,
         user_loan=uc,
         txn_time=parse_date("2020-06-13 12:17:49"),
@@ -1439,34 +1437,32 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     )
 
     # Interest event to be fired separately now
-    accrue_interest_on_all_bills(
-        session, bill_may.table.bill_due_date + relativedelta(days=1), user_loan
-    )
+    accrue_interest_on_all_bills(session, bill_may.table.bill_due_date + relativedelta(days=1), uc)
 
     # Merchant Refund
     refund_date = parse_date("2020-06-16 01:48:05")
     amount = Decimal(160)
-    refund_payment(session, uc, amount, refund_date, "A3d223g3", one_sixty_rupee["data"])
+    refund_payment(session, uc, amount, refund_date, "A3d223g3")
     # Merchant Refund
     refund_date = parse_date("2020-06-17 00:21:23")
     amount = Decimal(160)
-    refund_payment(session, uc, amount, refund_date, "A3d223g4", refunded_swipe["data"])
+    refund_payment(session, uc, amount, refund_date, "A3d223g4")
     # Merchant Refund
     refund_date = parse_date("2020-06-18 06:54:58")
     amount = Decimal(1)
-    refund_payment(session, uc, amount, refund_date, "A3d223g5", one_rupee_1["data"])
+    refund_payment(session, uc, amount, refund_date, "A3d223g5")
     # Merchant Refund
     refund_date = parse_date("2020-06-18 06:54:59")
     amount = Decimal(1)
-    refund_payment(session, uc, amount, refund_date, "A3d223g6", one_rupee_2["data"])
+    refund_payment(session, uc, amount, refund_date, "A3d223g6")
     # Merchant Refund
     refund_date = parse_date("2020-06-18 06:54:59")
     amount = Decimal(1)
-    refund_payment(session, uc, amount, refund_date, "A3d223g7", one_rupee_3["data"])
+    refund_payment(session, uc, amount, refund_date, "A3d223g7")
     # Merchant Refund
     refund_date = parse_date("2020-06-18 06:55:00")
     amount = Decimal(1)
-    refund_payment(session, uc, amount, refund_date, "A3d223g8", one_rupee_4["data"])
+    refund_payment(session, uc, amount, refund_date, "A3d223g8")
 
     # Check if amount is adjusted correctly in schedule
     all_emis_query = (
@@ -1486,27 +1482,28 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert lender_amount == Decimal("0")
 
-    bill_june = bill_generate(user_loan)
+    assert uc.get_remaining_max() == Decimal("13036.83")
+    assert uc.get_total_outstanding() == Decimal("21118.86")
+
+    bill_june = bill_generate(uc)
 
     # check latest bill method
-    latest_bill = user_loan.get_latest_bill()
+    latest_bill = uc.get_latest_bill()
     assert latest_bill is not None
     assert isinstance(latest_bill, BaseBill) == True
 
     # check latest bill method
-    latest_bill = user_loan.get_latest_bill()
+    latest_bill = uc.get_latest_bill()
     assert latest_bill is not None
     assert isinstance(latest_bill, BaseBill) == True
 
     # Interest event to be fired separately now
-    accrue_interest_on_all_bills(
-        session, bill_june.table.bill_due_date + relativedelta(days=1), user_loan
-    )
+    accrue_interest_on_all_bills(session, bill_june.table.bill_due_date + relativedelta(days=1), uc)
 
-    bill_july = bill_generate(user_loan)
+    bill_july = bill_generate(uc)
 
     # check latest bill method
-    latest_bill = user_loan.get_latest_bill()
+    latest_bill = uc.get_latest_bill()
     assert latest_bill is not None
     assert isinstance(latest_bill, BaseBill) == True
 
@@ -1547,15 +1544,24 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     assert first_emi["interest_received"] == Decimal("387.83")
 
     event_date = parse_date("2020-08-21 00:05:00")
-    update_event_with_dpd(user_loan, event_date)
+    update_event_with_dpd(uc, event_date)
 
-    dpd_events = session.query(EventDpd).filter_by(loan_id=uc.loan_id).all()
+    # dpd_events = session.query(EventDpd).filter_by(loan_id=uc.loan_id).all()
+    #
+    # last_entry_first_bill = dpd_events[54]
+    # last_entry_second_bill = dpd_events[52]
+    #
+    # assert last_entry_first_bill.balance == Decimal("12718.48")
+    # assert last_entry_second_bill.balance == Decimal("8324.53")
 
-    last_entry_first_bill = dpd_events[54]
-    last_entry_second_bill = dpd_events[52]
-
-    assert last_entry_first_bill.balance == Decimal("12448.66")
-    assert last_entry_second_bill.balance == Decimal("8156.19")
+    _, bill_may_principal_due = get_account_balance_from_str(
+        session, book_string=f"{bill_may.id}/bill/principal_receivable/a"
+    )
+    _, bill_june_principal_due = get_account_balance_from_str(
+        session, book_string=f"{bill_june.id}/bill/principal_receivable/a"
+    )
+    assert bill_may_principal_due == Decimal("12717.86")
+    assert bill_june_principal_due == Decimal("7891.33")
 
 
 def test_interest_reversal_interest_already_settled(session: Session) -> None:
@@ -1784,9 +1790,8 @@ def _pay_minimum_amount_bill_2(session: Session) -> None:
 def test_refund_1(session: Session) -> None:
     test_generate_bill_1(session)
     user_loan = get_user_product(session, 99)
-    refunded_swipe = session.query(CardTransaction).filter_by(description="BigB.com").one()
 
-    refund_payment(session, user_loan, 100, parse_date("2020-05-05 15:24:34"), "asd23g2", refunded_swipe)
+    refund_payment(session, user_loan, 100, parse_date("2020-05-05 15:24:34"), "asd23g2")
 
     _, merchant_refund_off_balance = get_account_balance_from_str(
         session, book_string=f"{user_loan.loan_id}/loan/refund_off_balance/l"
@@ -1801,7 +1806,7 @@ def test_refund_1(session: Session) -> None:
         amount=Decimal(1500),
         description="BigBB.com",
     )
-    refund_payment(session, user_loan, 1500, parse_date("2020-05-15 15:24:34"), "af423g2", swipe["data"])
+    refund_payment(session, user_loan, 1500, parse_date("2020-05-15 15:24:34"), "af423g2")
 
     _, merchant_refund_off_balance = get_account_balance_from_str(
         session, book_string=f"{user_loan.loan_id}/loan/refund_off_balance/l"
@@ -2404,7 +2409,7 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
         is False
     )
 
-    assert user_loan.get_min_for_schedule(parse_date("2020-02-01")) == 284
+    assert user_loan.get_remaining_min(parse_date("2020-02-01").date()) == 284
 
     # Give moratorium
     m = LoanMoratorium.new(
@@ -2428,7 +2433,7 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
         )
         is False
     )
-    assert user_loan.get_min_for_schedule(parse_date("2020-02-01")) == 0  # 0 after moratorium
+    assert user_loan.get_remaining_min(parse_date("2020-02-01").date()) == 0  # 0 after moratorium
 
 
 def test_moratorium_live_user_1836540(session: Session) -> None:

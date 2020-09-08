@@ -11,12 +11,10 @@ from sqlalchemy.orm import (
 from sqlalchemy.sql import func
 
 from rush.anomaly_detection import get_payment_events
-from rush.card import BaseLoan
 from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
-from rush.ledger_utils import get_remaining_bill_balance
 from rush.models import (
     BillFee,
     BookAccount,
@@ -185,14 +183,23 @@ def slide_payments(user_loan: BaseLoan, payment_event: Optional[LedgerTriggerEve
                     # Edge case of last emi
                     if emi.emi_number == last_emi_number and last_payment_date.date() > emi.due_date:
                         emi.interest_received = emi.interest
-                        emi.payment_received = actual_closing_balance - emi.late_fee - emi.interest
+                        emi.payment_received = (
+                            actual_closing_balance - emi.late_fee - emi.interest - emi.atm_fee
+                        )
                         emi.total_closing_balance = emi.total_closing_balance_post_due_date = 0
                     else:
-                        emi.payment_received = actual_closing_balance - emi.late_fee
+                        emi.payment_received = actual_closing_balance - emi.late_fee - emi.atm_fee
                         emi.total_closing_balance = (
                             emi.total_closing_balance_post_due_date
                         ) = emi.interest = emi.interest_current_month = emi.interest_next_month = 0
-                    emi.due_amount = emi.total_due_amount = actual_closing_balance
+                    if last_payment_date.date() > emi.due_date:
+                        only_principal = actual_closing_balance - (
+                            emi.interest + emi.atm_fee + emi.late_fee
+                        )
+                    else:
+                        only_principal = actual_closing_balance - emi.atm_fee
+                    emi.total_due_amount = actual_closing_balance
+                    emi.due_amount = only_principal
                     last_paid_emi_number = emi.emi_number
                     emi.payment_status = "Paid"
                     emi.dpd = 0
@@ -437,6 +444,7 @@ def adjust_atm_fee_in_emis(session: Session, user_loan: BaseLoan, bill: LoanData
     )
     if atm_fee and atm_fee.gross_amount > 0:
         emi.total_closing_balance_post_due_date += atm_fee.gross_amount
+        emi.total_closing_balance += atm_fee.gross_amount
         emi.total_due_amount += atm_fee.gross_amount
         emi.atm_fee += atm_fee.gross_amount
         session.flush()
@@ -724,6 +732,7 @@ def entry_checks(
 ) -> bool:
     verdict = False
 
+    # These are various cases to get the exact events affecting specific bills
     if ledger_trigger_event.name == event_type and ledger_trigger_event.id == event_id:
         verdict = True
     else:
@@ -732,6 +741,7 @@ def entry_checks(
     if event_amount and ledger_entry.amount + event_amount == ledger_trigger_event.amount:
         return False
 
+    # If the specific bill has already been logged, we skip
     if (credit_account.identifier_type == "bill" and credit_account.identifier in bills_touched) and (
         debit_account.identifier_type == "bill" and debit_account.identifier not in bills_touched
     ):
@@ -767,14 +777,25 @@ def update_event_with_dpd(
             debit_amount = Decimal(0)
             credit_amount = ledger_entry.amount
         bills_touched.append(account.identifier)
-        bill = (
-            session.query(LoanData)
-            .filter(
-                LoanData.loan_id == user_loan.loan_id,
-                LoanData.id == account.identifier,
+        bill = user_loan.convert_to_bill_class(
+            (
+                session.query(LoanData)
+                .filter(
+                    LoanData.loan_id == user_loan.loan_id,
+                    LoanData.id == account.identifier,
+                )
+                .first()
             )
-            .first()
         )
+        event_post_date = ledger_trigger_event.post_date.date()
+        # In case of moratorium reset all post dates to start of moratorium
+        if LoanMoratorium.is_in_moratorium(
+            session, loan_id=user_loan.loan_id, date_to_check_against=event_post_date
+        ):
+            moratorium = (
+                session.query(LoanMoratorium).filter(LoanMoratorium.loan_id == user_loan.loan_id).first()
+            )
+            event_post_date = moratorium.start_date
         dpd = (event_post_date - bill.bill_due_date).days
         new_event = EventDpd(
             bill_id=account.identifier,
@@ -782,9 +803,7 @@ def update_event_with_dpd(
             event_id=ledger_trigger_event.id,
             credit=credit_amount,
             debit=debit_amount,
-            balance=get_remaining_bill_balance(session, bill, ledger_trigger_event.post_date)[
-                "total_due"
-            ],
+            balance=bill.get_outstanding_amount(ledger_trigger_event.post_date),
             dpd=dpd,
         )
         session.add(new_event)
@@ -841,7 +860,6 @@ def update_event_with_dpd(
         ):
             continue
         bills_touched = []
-        event_post_date = ledger_trigger_event.post_date.date()
         if ledger_trigger_event.name in [
             "accrue_interest",
             "accrue_late_fine",

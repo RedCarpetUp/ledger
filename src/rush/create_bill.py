@@ -1,5 +1,4 @@
 from decimal import Decimal
-from typing import Optional
 
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
@@ -10,13 +9,16 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
-from rush.ledger_events import bill_generate_event
+from rush.create_emi import create_emis_for_bill
+from rush.ledger_events import (
+    add_max_amount_event,
+    bill_generate_event,
+)
 from rush.ledger_utils import get_account_balance_from_str
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
     CardEmis,
     LedgerTriggerEvent,
-    LoanMoratorium,
 )
 from rush.utils import (
     div,
@@ -62,20 +64,24 @@ def get_or_create_bill_for_card_swipe(user_loan: BaseLoan, txn_time: DateTime) -
     return {"result": "success", "bill": new_bill}
 
 
-def bill_generate(user_loan: BaseLoan) -> Optional[BaseBill]:
+def bill_generate(user_loan: BaseLoan, creation_time: DateTime = get_current_ist_time()) -> BaseBill:
     if not user_loan.can_generate_bill:
         return
+
     session = user_loan.session
     bill = user_loan.get_latest_bill_to_generate()  # Get the first bill which is not generated.
     if not bill:
         bill = get_or_create_bill_for_card_swipe(
-            user_loan=user_loan, txn_time=get_current_ist_time()
+            user_loan=user_loan, txn_time=creation_time
         )  # TODO not sure about this
         if bill["result"] == "error":
             return bill
         bill = bill["bill"]
     lt = LedgerTriggerEvent(
-        name="bill_generate", loan_id=user_loan.loan_id, post_date=bill.bill_close_date
+        name="bill_generate",
+        loan_id=user_loan.loan_id,
+        post_date=bill.bill_close_date,
+        extra_details={"bill_id": bill.id},
     )
     session.add(lt)
     session.flush()
@@ -87,6 +93,7 @@ def bill_generate(user_loan: BaseLoan) -> Optional[BaseBill]:
     _, billed_amount = get_account_balance_from_str(
         session=session, book_string=f"{bill.id}/bill/principal_receivable/a"
     )
+    lt.amount = billed_amount  # Set the amount for event
     principal_instalment = div(billed_amount, bill.table.bill_tenure)
 
     # Update the bill row here.
@@ -96,15 +103,11 @@ def bill_generate(user_loan: BaseLoan) -> Optional[BaseBill]:
         rate_of_interest=user_loan.rc_rate_of_interest_monthly
     )
 
-    bill_closing_date = bill.bill_start_date + relativedelta(months=+1)
-    # Don't add in min if user is in moratorium.
-    if not LoanMoratorium.is_in_moratorium(
-        session=session, loan_id=user_loan.loan_id, date_to_check_against=bill_closing_date
-    ):
-        # After the bill has generated. Call the min generation event on all unpaid bills.
-        add_min_to_all_bills(session=session, post_date=bill_closing_date, user_loan=user_loan)
+    # Add to max amount to pay account.
+    add_max_amount_event(session, bill, lt, billed_amount)
 
-    from rush.create_emi import create_emis_for_bill
+    # After the bill has generated. Call the min generation event on all unpaid bills.
+    add_min_to_all_bills(session=session, post_date=bill.table.bill_close_date, user_loan=user_loan)
 
     create_emis_for_bill(session=session, user_loan=user_loan, bill=bill)
 
@@ -169,7 +172,7 @@ def extend_tenure(
 
     list_of_bills = []
     if not bill:
-        unpaid_bills = user_loan.get_unpaid_bills()
+        unpaid_bills = user_loan.get_unpaid_generated_bills()
         for unpaid_bill in unpaid_bills:
             extension(bill=unpaid_bill)
     else:
@@ -221,7 +224,7 @@ def add_atm_fee(
 
 def close_bills(user_loan: BaseLoan, payment_date: DateTime):
     session = user_loan.session
-    all_bills = user_loan.get_unpaid_bills()
+    all_bills = user_loan.get_closed_bills()
 
     for bill in all_bills:
         all_paid = False
@@ -264,4 +267,9 @@ def close_bills(user_loan: BaseLoan, payment_date: DateTime):
                 emi.total_closing_balance = (
                     emi.total_closing_balance_post_due_date
                 ) = emi.interest = emi.interest_current_month = emi.interest_next_month = 0
-                emi.due_amount = emi.total_due_amount = actual_closing_balance
+                if payment_date.date() > emi.due_date:
+                    only_principal = actual_closing_balance - (emi.interest + emi.atm_fee + emi.late_fee)
+                else:
+                    only_principal = actual_closing_balance - emi.atm_fee
+                emi.total_due_amount = actual_closing_balance
+                emi.due_amount = only_principal

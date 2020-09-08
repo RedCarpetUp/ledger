@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from rush.anomaly_detection import run_anomaly
 from rush.card import BaseLoan
 from rush.card.base_card import BaseBill
+from rush.create_emi import group_bills_to_create_loan_schedule
 from rush.ledger_events import (
     _adjust_bill,
     _adjust_for_downpayment,
@@ -16,12 +17,15 @@ from rush.ledger_events import (
 from rush.ledger_utils import (
     create_ledger_entry_from_str,
     get_account_balance_from_str,
-    get_remaining_bill_balance,
 )
 from rush.models import (
     CardTransaction,
     LedgerTriggerEvent,
     LoanData,
+)
+from rush.utils import (
+    div,
+    mul,
 )
 from rush.writeoff_and_recovery import recovery_event
 
@@ -82,7 +86,6 @@ def refund_payment(
     payment_amount: Decimal,
     payment_date: DateTime,
     payment_request_id: str,
-    original_swipe: CardTransaction,
 ) -> None:
     lt = LedgerTriggerEvent(
         name="transaction_refund",
@@ -94,13 +97,8 @@ def refund_payment(
     session.add(lt)
     session.flush()
 
-    bill_of_original_transaction = (
-        session.query(LoanData).filter_by(id=original_swipe.loan_id, is_generated=False).one_or_none()
-    )
     # Checking if bill is generated or not. if not then reduce from unbilled else treat as payment.
-    transaction_refund_event(
-        session=session, user_loan=user_loan, event=lt, bill=bill_of_original_transaction
-    )
+    transaction_refund_event(session=session, user_loan=user_loan, event=lt)
     run_anomaly(session=session, user_loan=user_loan, event_date=payment_date)
 
 
@@ -121,7 +119,7 @@ def payment_received_event(
         actual_payment = payment_received
         bills_data = find_amount_to_slide_in_bills(user_loan, payment_received)
         for bill_data in bills_data:
-            adjust_for_min(bill_data["bill"], bill_data["amount_to_adjust"], event.id)
+            adjust_for_min_max_accounts(bill_data["bill"], bill_data["amount_to_adjust"], event.id)
             remaining_amount = _adjust_bill(
                 session,
                 bill_data["bill"],
@@ -161,18 +159,27 @@ def find_amount_to_slide_in_bills(user_loan: BaseLoan, total_amount_to_slide: De
     bills_dict = [
         {
             "bill": bill,
-            "total_outstanding": get_remaining_bill_balance(user_loan.session, bill)["total_due"],
-            "monthly_instalment": bill.get_min_for_schedule(),
+            "total_outstanding": bill.get_outstanding_amount(),
+            "monthly_instalment": bill.get_scheduled_min_amount(),
             "amount_to_adjust": 0,
         }
         for bill in unpaid_bills
     ]
+    total_amount_before_sliding = total_amount_to_slide
     total_loan_outstanding = sum(bill["total_outstanding"] for bill in bills_dict)
+    total_min = sum(bill["monthly_instalment"] for bill in bills_dict)
     # Either nothing is left to slide or loan is completely settled and there is excess payment.
     while total_amount_to_slide > 0 and total_loan_outstanding > 0:
         for bill_data in bills_dict:
+            # If bill isn't generated there's no minimum amount scheduled. So can slide entire amount.
+            if not bill_data["bill"].table.is_generated:
+                amount_to_slide_based_on_ratio = total_amount_to_slide
+            else:
+                amount_to_slide_based_on_ratio = mul(
+                    div(bill_data["monthly_instalment"], total_min), total_amount_before_sliding
+                )
             amount_to_adjust = min(
-                bill_data["monthly_instalment"], total_amount_to_slide, bill_data["total_outstanding"]
+                amount_to_slide_based_on_ratio, total_amount_to_slide, bill_data["total_outstanding"]
             )
             bill_data["amount_to_adjust"] += amount_to_adjust
             bill_data["total_outstanding"] -= amount_to_adjust
@@ -182,39 +189,28 @@ def find_amount_to_slide_in_bills(user_loan: BaseLoan, total_amount_to_slide: De
     return filtered_bills_dict
 
 
-def transaction_refund_event(
-    session: Session, user_loan: BaseLoan, event: LedgerTriggerEvent, bill: LoanData
-) -> None:
+def transaction_refund_event(session: Session, user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
     refund_amount = Decimal(event.amount)
     m2p_pool_account = f"{user_loan.lender_id}/lender/pool_balance/a"
-    if bill:  # refund happened before bill was generated so reduce it from unbilled.
-        # TODO check if refund amount is <= unbilled.
-        create_ledger_entry_from_str(
-            session=session,
-            event_id=event.id,
-            debit_book_str=m2p_pool_account,
-            credit_book_str=f"{bill.id}/bill/unbilled/a",
-            amount=refund_amount,
+    bills_data = find_amount_to_slide_in_bills(user_loan, refund_amount)
+
+    for bill_data in bills_data:
+        adjust_for_min_max_accounts(bill_data["bill"], bill_data["amount_to_adjust"], event.id)
+        refund_amount = _adjust_bill(
+            session,
+            bill_data["bill"],
+            bill_data["amount_to_adjust"],
+            event.id,
+            debit_acc_str=m2p_pool_account,
         )
-    else:  # Treat as payment.
-        bills_data = find_amount_to_slide_in_bills(user_loan, refund_amount)
-        for bill_data in bills_data:
-            adjust_for_min(bill_data["bill"], bill_data["amount_to_adjust"], event.id)
-            refund_amount = _adjust_bill(
-                session,
-                bill_data["bill"],
-                bill_data["amount_to_adjust"],
-                event.id,
-                debit_acc_str=m2p_pool_account,
-            )
-        if refund_amount > 0:  # if there's payment left to be adjusted.
-            _adjust_for_prepayment(
-                session=session,
-                loan_id=user_loan.loan_id,
-                event_id=event.id,
-                amount=refund_amount,
-                debit_book_str=m2p_pool_account,
-            )
+    if refund_amount > 0:  # if there's payment left to be adjusted.
+        _adjust_for_prepayment(
+            session=session,
+            loan_id=user_loan.loan_id,
+            event_id=event.id,
+            amount=refund_amount,
+            debit_book_str=m2p_pool_account,
+        )
 
     create_ledger_entry_from_str(
         session=session,
@@ -224,9 +220,6 @@ def transaction_refund_event(
         amount=Decimal(event.amount),
     )
 
-    from rush.create_emi import group_bills_to_create_loan_schedule
-
-    # Recreate loan level emis
     group_bills_to_create_loan_schedule(user_loan=user_loan)
 
 
@@ -287,16 +280,27 @@ def payment_settlement_event(
     )
 
 
-def adjust_for_min(bill: BaseBill, payment_to_adjust_from: Decimal, event_id: int):
+def adjust_for_min_max_accounts(bill: BaseBill, payment_to_adjust_from: Decimal, event_id: int):
     min_due = bill.get_remaining_min()
     min_to_adjust_in_this_bill = min(min_due, payment_to_adjust_from)
-    if min_to_adjust_in_this_bill == 0:
-        return
-    # Reduce min amount
-    create_ledger_entry_from_str(
-        bill.session,
-        event_id=event_id,
-        debit_book_str=f"{bill.id}/bill/min/l",
-        credit_book_str=f"{bill.id}/bill/min/a",
-        amount=min_to_adjust_in_this_bill,
-    )
+    if min_to_adjust_in_this_bill != 0:
+        # Reduce min amount
+        create_ledger_entry_from_str(
+            bill.session,
+            event_id=event_id,
+            debit_book_str=f"{bill.id}/bill/min/l",
+            credit_book_str=f"{bill.id}/bill/min/a",
+            amount=min_to_adjust_in_this_bill,
+        )
+
+    max_due = bill.get_remaining_max()
+    max_to_adjust_in_this_bill = min(max_due, payment_to_adjust_from)
+    if max_to_adjust_in_this_bill != 0:
+        # Reduce min amount
+        create_ledger_entry_from_str(
+            bill.session,
+            event_id=event_id,
+            debit_book_str=f"{bill.id}/bill/max/l",
+            credit_book_str=f"{bill.id}/bill/max/a",
+            amount=max_to_adjust_in_this_bill,
+        )
