@@ -44,6 +44,23 @@ def create_user_product_mapping(session: Session, user_id: int, product_type: st
     return user_product
 
 
+def get_user_product_mapping(
+    session: Session, user_id: int, product_type: str, _rows="one_or_none"
+) -> Optional[UserProduct]:
+    assert _rows in ("one", "one_or_none")
+
+    query = session.query(UserProduct).filter(
+        UserProduct.user_id == user_id, UserProduct.product_type == product_type
+    )
+
+    if _rows == "one":
+        user_product = query.one()
+    elif _rows == "one_or_none":
+        user_product = query.one_or_none()
+
+    return user_product
+
+
 def add_pre_product_fee(
     session: Session,
     user_id: int,
