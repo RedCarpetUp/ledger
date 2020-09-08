@@ -68,6 +68,10 @@ def get_user_product_mapping(
     return user_product
 
 
+def get_product_type_from_user_product_id(session: Session, user_product_id: int) -> Optional[str]:
+    return session.query(UserProduct.product_type).filter(UserProduct.id == user_product_id).scalar()
+
+
 def add_pre_product_fee(
     session: Session,
     user_id: int,
