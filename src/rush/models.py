@@ -488,6 +488,8 @@ class LoanMoratorium(AuditMixin):
 
     @classmethod
     def is_in_moratorium(cls, session: Session, loan_id: int, date_to_check_against: PythonDate) -> bool:
+        if not date_to_check_against:
+            date_to_check_against = get_current_ist_time()
         v = (
             session.query(cls)
             .filter(

@@ -272,10 +272,10 @@ def test_generate_bill_1(session: Session) -> None:
     )
     assert interest_due == Decimal("30.67")
 
-    update_event_with_dpd(user_loan=user_loan, post_date=parse_date("2020-05-21 00:05:00"))
+    # update_event_with_dpd(user_loan=user_loan, post_date=parse_date("2020-05-21 00:05:00"))
 
-    dpd_events = session.query(EventDpd).filter_by(loan_id=uc.loan_id).all()
-    assert dpd_events[0].balance == Decimal(1000)
+    # dpd_events = session.query(EventDpd).filter_by(loan_id=uc.loan_id).all()
+    # assert dpd_events[0].balance == Decimal(1000)
 
     interest_event = (
         session.query(LedgerTriggerEvent)
@@ -442,6 +442,9 @@ def _partial_payment_bill_1(session: Session) -> None:
     assert principal_due == Decimal("930.67")
 
     min_due = bill.get_remaining_min()
+    assert min_due == 14
+
+    min_due = user_loan.get_remaining_min()
     assert min_due == 14
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
