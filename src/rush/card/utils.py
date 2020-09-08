@@ -45,13 +45,20 @@ def create_user_product_mapping(session: Session, user_id: int, product_type: st
 
 
 def get_user_product_mapping(
-    session: Session, user_id: int, product_type: str, _rows="one_or_none"
+    session: Session,
+    user_id: int,
+    product_type: str,
+    user_product_id: Optional[int] = None,
+    _rows="one_or_none",
 ) -> Optional[UserProduct]:
     assert _rows in ("one", "one_or_none")
 
     query = session.query(UserProduct).filter(
         UserProduct.user_id == user_id, UserProduct.product_type == product_type
     )
+
+    if user_product_id:
+        query = query.filter(UserProduct.id == user_product_id)
 
     if _rows == "one":
         user_product = query.one()
