@@ -143,8 +143,7 @@ def accrue_late_charges(
     late_fee_to_charge_without_tax: Decimal = Decimal(100),
 ) -> BaseBill:
     latest_bill = user_loan.get_latest_generated_bill()
-    can_charge_fee = latest_bill.get_remaining_min() > 0
-    #  accrue_late_charges_prerequisites(session, bill)
+    can_charge_fee = user_loan.get_remaining_min() > 0
     if can_charge_fee:  # if min isn't paid charge late fine.
         # TODO get correct date here.
         # Adjust for rounding because total due amount has to be rounded
