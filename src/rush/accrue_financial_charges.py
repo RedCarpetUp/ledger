@@ -33,8 +33,8 @@ from rush.models import (
     UserCard,
 )
 from rush.utils import (
-    add_gst_split_to_amount,
     get_current_ist_time,
+    get_gst_split_from_amount,
 )
 
 
@@ -113,21 +113,21 @@ def create_bill_fee_entry(
     bill: BaseBill,
     event: LedgerTriggerEvent,
     fee_name: str,
-    net_fee_amount: Decimal,
+    gross_fee_amount: Decimal,
 ) -> Fee:
     f = BillFee(
         user_id=user_id,
         event_id=event.id,
         identifier_id=bill.id,
         name=fee_name,
-        net_amount=net_fee_amount,
         sgst_rate=Decimal(0),
         cgst_rate=Decimal(0),
         igst_rate=Decimal(18),
     )
-    d = add_gst_split_to_amount(
-        net_fee_amount, sgst_rate=f.sgst_rate, cgst_rate=f.cgst_rate, igst_rate=f.igst_rate
+    d = get_gst_split_from_amount(
+        gross_fee_amount, sgst_rate=f.sgst_rate, cgst_rate=f.cgst_rate, igst_rate=f.igst_rate
     )
+    f.net_amount = d["net_amount"]
     f.gross_amount = d["gross_amount"]
     session.add(f)
     # Add into min/max amount of the bill too.
@@ -140,7 +140,7 @@ def accrue_late_charges(
     session: Session,
     user_loan: BaseLoan,
     post_date: DateTime,
-    late_fee_to_charge_without_tax: Decimal = Decimal(100),
+    late_fee_to_charge_incl_tax: Decimal = Decimal(100),
 ) -> BaseBill:
     latest_bill = user_loan.get_latest_generated_bill()
     can_charge_fee = user_loan.get_remaining_min() > 0
@@ -158,7 +158,7 @@ def accrue_late_charges(
             bill=latest_bill,
             event=event,
             fee_name="late_fee",
-            net_fee_amount=late_fee_to_charge_without_tax,
+            gross_fee_amount=late_fee_to_charge_incl_tax,
         )
         event.amount = fee.gross_amount
 

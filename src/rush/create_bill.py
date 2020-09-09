@@ -211,7 +211,7 @@ def add_atm_fee(
         bill=bill,
         event=event,
         fee_name="atm_fee",
-        net_fee_amount=atm_fee_without_gst,
+        gross_fee_amount=atm_fee_without_gst,
     )
     event.amount = fee.gross_amount
 
