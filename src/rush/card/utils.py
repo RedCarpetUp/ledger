@@ -47,18 +47,32 @@ def create_user_product_mapping(session: Session, user_id: int, product_type: st
 def get_user_product_mapping(
     session: Session,
     user_id: int,
-    product_type: str,
+    product_type: Optional[str],
     user_product_id: Optional[int] = None,
-    _rows="one_or_none",
+    _rows: str = "one_or_none",
+    incomplete: bool = True,
+    loan_id: Optional[int] = None,
 ) -> Optional[UserProduct]:
     assert _rows in ("one", "one_or_none")
+    assert (product_type or user_product_id) is not None
 
-    query = session.query(UserProduct).filter(
-        UserProduct.user_id == user_id, UserProduct.product_type == product_type
+    query = (
+        session.query(UserProduct)
+        .outerjoin(Loan, Loan.user_product_id == UserProduct.id)
+        .filter(UserProduct.user_id == user_id)
     )
+
+    if incomplete:
+        query = query.filter(Loan.id.is_(None))
+    else:
+        assert loan_id is not None
+        query = query.filter(Loan.id == loan_id)
 
     if user_product_id:
         query = query.filter(UserProduct.id == user_product_id)
+
+    if product_type:
+        query = query.filter(UserProduct.product_type == product_type)
 
     if _rows == "one":
         user_product = query.one()
