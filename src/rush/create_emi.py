@@ -398,54 +398,53 @@ def slide_payments(user_loan: BaseLoan, payment_event: Optional[LedgerTriggerEve
 
 
 def adjust_late_fee_in_emis(session: Session, user_loan: BaseLoan, bill: LoanData) -> None:
-    emi = (
+    emis = (
         session.query(CardEmis)
         .filter(
             CardEmis.loan_id == user_loan.loan_id,
             CardEmis.bill_id == bill.id,
-            CardEmis.emi_number == 1,
             CardEmis.row_status == "active",
         )
         .order_by(CardEmis.emi_number.asc())
-        .first()
+        .all()
     )
     late_fee = (
         session.query(BillFee)
         .filter(BillFee.identifier_id == bill.id, BillFee.name == "late_fee")
         .one_or_none()
     )
-    if late_fee and late_fee.gross_amount > 0:
+    for emi in emis:
+        if late_fee and late_fee.gross_amount > 0 and emi.emi_number == 1:
+            emi.total_due_amount += late_fee.gross_amount
+            emi.late_fee += late_fee.gross_amount
         emi.total_closing_balance_post_due_date += late_fee.gross_amount
-        emi.total_due_amount += late_fee.gross_amount
-        emi.late_fee += late_fee.gross_amount
 
     # Recreate loan level emis
     group_bills_to_create_loan_schedule(user_loan=user_loan)
 
 
 def adjust_atm_fee_in_emis(session: Session, user_loan: BaseLoan, bill: LoanData) -> None:
-    emi = (
+    emis = (
         session.query(CardEmis)
         .filter(
             CardEmis.loan_id == user_loan.loan_id,
             CardEmis.bill_id == bill.id,
-            CardEmis.emi_number == 1,
             CardEmis.row_status == "active",
         )
         .order_by(CardEmis.emi_number.asc())
-        .first()
+        .all()
     )
     atm_fee = (
         session.query(BillFee)
         .filter(BillFee.identifier_id == bill.id, BillFee.name == "atm_fee")
         .one_or_none()
     )
-    if atm_fee and atm_fee.gross_amount > 0:
+    for emi in emis:
+        if atm_fee and atm_fee.gross_amount > 0 and emi.emi_number == 1:
+            emi.total_due_amount += atm_fee.gross_amount
+            emi.atm_fee += atm_fee.gross_amount
         emi.total_closing_balance_post_due_date += atm_fee.gross_amount
         emi.total_closing_balance += atm_fee.gross_amount
-        emi.total_due_amount += atm_fee.gross_amount
-        emi.atm_fee += atm_fee.gross_amount
-        session.flush()
 
     # Recreate loan level emis
     group_bills_to_create_loan_schedule(user_loan=user_loan)
