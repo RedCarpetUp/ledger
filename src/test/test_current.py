@@ -1554,7 +1554,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     last_entry_first_bill = dpd_events[-1]
     last_entry_second_bill = dpd_events[-2]
 
-    assert last_entry_first_bill.balance == Decimal("12717.86")
+    assert last_entry_first_bill.balance == Decimal("12708.86")
     assert last_entry_second_bill.balance == Decimal("7891.33")
 
     _, bill_may_principal_due = get_account_balance_from_str(
