@@ -417,6 +417,8 @@ def adjust_late_fee_in_emis(session: Session, user_loan: BaseLoan, bill: LoanDat
         if late_fee and late_fee.gross_amount > 0 and emi.emi_number == 1:
             emi.total_due_amount += late_fee.gross_amount
             emi.late_fee += late_fee.gross_amount
+        if emi.emi_number != 1:
+            emi.total_closing_balance += late_fee.gross_amount
         emi.total_closing_balance_post_due_date += late_fee.gross_amount
 
     # Recreate loan level emis
