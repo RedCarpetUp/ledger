@@ -271,3 +271,7 @@ def close_bills(user_loan: BaseLoan, payment_date: DateTime):
                     only_principal = actual_closing_balance - emi.atm_fee
                 emi.total_due_amount = actual_closing_balance
                 emi.due_amount = only_principal
+
+    from rush.create_emi import group_bills_to_create_loan_schedule
+
+    group_bills_to_create_loan_schedule(user_loan=user_loan, called_from_closing=True)
