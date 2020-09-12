@@ -203,6 +203,7 @@ def test_card_swipe(session: Session) -> None:
 
 
 def test_closing_bill(session: Session) -> None:
+    # Replicating nishant's case upto June
     test_lenders(session)
     card_db_updates(session)
 
@@ -308,6 +309,7 @@ def test_closing_bill(session: Session) -> None:
 
     event_date = parse_date("2019-06-15 12:00:00")
     bill = accrue_late_charges(session, user_loan, event_date, Decimal(120))
+
 
 def test_generate_bill_1(session: Session) -> None:
     test_lenders(session)
