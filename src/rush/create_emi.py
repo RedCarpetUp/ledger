@@ -173,7 +173,6 @@ def slide_payments(
                     from rush.create_bill import close_bills
 
                     close_bills(user_loan, last_payment_date)
-
                     break
                 diff = emi.total_due_amount - payment_received_and_adjusted
                 if diff >= 0:
