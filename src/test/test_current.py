@@ -202,6 +202,113 @@ def test_card_swipe(session: Session) -> None:
     assert lender_payable == 900
 
 
+def test_closing_bill(session: Session) -> None:
+    test_lenders(session)
+    card_db_updates(session)
+
+    a = User(
+        id=230,
+        performed_by=123,
+    )
+    session.add(a)
+    session.flush()
+
+    # assign card
+    user_loan = create_user_product(
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2019-01-02").date(),
+        card_type="ruby",
+        lender_id=62311,
+    )
+
+    bill_date = parse_date("2019-02-01 00:00:00")
+    bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
+
+    swipe = create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2019-02-02 19:23:11"),
+        amount=Decimal(3000),
+        description="BigB.com",
+    )
+
+    accrue_interest_on_all_bills(
+        session=session, post_date=bill.table.bill_due_date, user_loan=user_loan
+    )
+
+    bill_date = parse_date("2019-03-01 00:00:00")
+    bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
+
+    accrue_interest_on_all_bills(
+        session=session, post_date=bill.table.bill_due_date, user_loan=user_loan
+    )
+
+    event_date = parse_date("2019-03-15 12:00:00")
+    bill = accrue_late_charges(session, user_loan, event_date, Decimal(100))
+
+    payment_date = parse_date("2019-03-27")
+
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_amount=Decimal(463),
+        payment_date=payment_date,
+        payment_request_id="a123",
+    )
+
+    bill_date = parse_date("2019-04-01 00:00:00")
+    bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
+
+    accrue_interest_on_all_bills(
+        session=session, post_date=bill.table.bill_due_date, user_loan=user_loan
+    )
+
+    payment_date = parse_date("2019-04-15")
+
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_amount=Decimal(363),
+        payment_date=payment_date,
+        payment_request_id="a123",
+    )
+
+    bill_date = parse_date("2019-05-01 00:00:00")
+    bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
+
+    accrue_interest_on_all_bills(
+        session=session, post_date=bill.table.bill_due_date, user_loan=user_loan
+    )
+
+    payment_date = parse_date("2019-05-16")
+
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_amount=Decimal(2545),
+        payment_date=payment_date,
+        payment_request_id="a123",
+    )
+
+    swipe = create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2019-05-20 19:23:11"),
+        amount=Decimal(3000),
+        description="BigB.com",
+    )
+
+    bill_date = parse_date("2019-06-01 00:00:00")
+    bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
+
+    accrue_interest_on_all_bills(
+        session=session, post_date=bill.table.bill_due_date, user_loan=user_loan
+    )
+
+    event_date = parse_date("2019-06-15 12:00:00")
+    bill = accrue_late_charges(session, user_loan, event_date, Decimal(120))
+
 def test_generate_bill_1(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
