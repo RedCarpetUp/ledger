@@ -137,7 +137,7 @@ def slide_payments(user_loan: BaseLoan, payment_event: Optional[LedgerTriggerEve
             )
             if (
                 emi.emi_number <= last_paid_emi_number
-                or emi.total_due_amount <= Decimal(0)
+                or emi.extra_details.get("moratorium")
                 or emi.payment_status == "Paid"
             ):
                 continue
