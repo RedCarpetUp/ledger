@@ -13,6 +13,7 @@ from rush.card.base_card import (
     BaseLoan,
 )
 from rush.card.term_loan import TermLoanBill
+# from rush.card.utils import add_instrument_to_loan
 from rush.ledger_events import loan_disbursement_event
 from rush.ledger_utils import create_ledger_entry_from_str
 from rush.models import (
@@ -132,5 +133,17 @@ class ResetCard(BaseLoan):
             user_loan=loan,
             bill=bill,
         )
+
+        # add_instrument_to_loan(
+        #     session=session,
+        #     instrument_type="card",
+        #     loan=loan,
+        #     instrument_info={
+        #         "kit_number": kwargs["kit_number"],
+        #         "activation_type": kwargs["activation_type"],
+        #         "activation_date": kwargs["activation_date"],
+        #         "card_name": kwargs["card_name"]
+        #     }
+        # )
 
         return loan

@@ -221,7 +221,7 @@ class UserData(AuditMixin):
 
 class User(AuditMixin):
     __tablename__ = "v3_users"
-    phone_number = Column(String(20), nullable=False, default="0000000000")
+
     histories = relationship("UserData", foreign_keys=[UserData.user_id])
     roles = relationship("UserRoles")
     identities = relationship("UserIdentities", back_populates="user")
