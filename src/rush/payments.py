@@ -18,11 +18,7 @@ from rush.ledger_utils import (
     create_ledger_entry_from_str,
     get_account_balance_from_str,
 )
-from rush.models import (
-    CardTransaction,
-    LedgerTriggerEvent,
-    LoanData,
-)
+from rush.models import LedgerTriggerEvent
 from rush.utils import (
     div,
     mul,
@@ -150,8 +146,13 @@ def payment_received_event(
         recovery_event(user_loan, event)
         # TODO set loan status to recovered.
 
+    # We will either slide or close bills
+    slide_or_close_bills(user_loan, event)
+
+
+def slide_or_close_bills(user_loan, event):
     # This means that the payment closed the loan
-    if user_loan.get_total_outstanding() <= 0:
+    if user_loan.get_total_outstanding() == 0:
         from rush.create_bill import close_bills
 
         close_bills(user_loan=user_loan, payment_date=event.post_date)
