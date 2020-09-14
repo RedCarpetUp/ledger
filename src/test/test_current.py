@@ -255,7 +255,7 @@ def test_closing_bill(session: Session) -> None:
         user_loan=user_loan,
         payment_amount=Decimal(463),
         payment_date=payment_date,
-        payment_request_id="a123",
+        payment_request_id="a1234",
     )
 
     bill_date = parse_date("2019-04-01 00:00:00")
@@ -272,7 +272,7 @@ def test_closing_bill(session: Session) -> None:
         user_loan=user_loan,
         payment_amount=Decimal(363),
         payment_date=payment_date,
-        payment_request_id="a123",
+        payment_request_id="a1235",
     )
 
     bill_date = parse_date("2019-05-01 00:00:00")
@@ -289,7 +289,7 @@ def test_closing_bill(session: Session) -> None:
         user_loan=user_loan,
         payment_amount=Decimal(2545),
         payment_date=payment_date,
-        payment_request_id="a123",
+        payment_request_id="a1236",
     )
 
     swipe = create_card_swipe(
@@ -531,7 +531,7 @@ def _partial_payment_bill_1(session: Session) -> None:
         user_loan=user_loan,
         payment_amount=amount,
         payment_date=payment_date,
-        payment_request_id="a123",
+        payment_request_id="a1237",
     )
 
     bill = unpaid_bills[0]
@@ -651,7 +651,7 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
         user_loan=user_loan,
         payment_amount=Decimal("132"),
         payment_date=parse_date("2020-05-20"),
-        payment_request_id="a123",
+        payment_request_id="a1238",
     )
     # assert is_min_paid(session, bill) is True
     min_due = bill.get_remaining_min()
@@ -711,7 +711,7 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
         payment_amount=Decimal("132"),
         # Payment came before the due date.
         payment_date=parse_date("2020-06-14"),
-        payment_request_id="a123",
+        payment_request_id="a1239",
     )
     bill = unpaid_bills[0]
     # assert is_min_paid(session, bill) is True
@@ -772,7 +772,7 @@ def test_is_bill_paid_bill_1(session: Session) -> None:
         user_loan=user_loan,
         payment_amount=remaining_principal,
         payment_date=parse_date("2020-05-05"),
-        payment_request_id="a123",
+        payment_request_id="a12310",
     )
     is_it_paid_now = is_bill_closed(session, bill)
     assert is_it_paid_now is True
@@ -1136,7 +1136,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
         user_loan=uc,
         payment_amount=amount,
         payment_date=payment_date,
-        payment_request_id="a123",
+        payment_request_id="a12311",
     )
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
@@ -1627,7 +1627,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         user_loan=uc,
         payment_amount=amount,
         payment_date=payment_date,
-        payment_request_id="a123",
+        payment_request_id="a12312",
     )
     # Do Partial Payment
     payment_date = parse_date("2020-08-02 14:11:06")
@@ -1637,7 +1637,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         user_loan=uc,
         payment_amount=amount,
         payment_date=payment_date,
-        payment_request_id="a123",
+        payment_request_id="a12313",
     )
 
     # Check if amount is adjusted correctly in schedule
@@ -1698,7 +1698,7 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
         user_loan=user_loan,
         payment_amount=amount,
         payment_date=payment_date,
-        payment_request_id="a123",
+        payment_request_id="a12314",
     )
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
@@ -1774,7 +1774,7 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
         user_loan=user_loan,
         payment_amount=amount,
         payment_date=payment_date,
-        payment_request_id="a123",
+        payment_request_id="a12315",
     )
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
@@ -1839,7 +1839,7 @@ def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
         user_loan=user_loan,
         payment_amount=amount,
         payment_date=payment_date,
-        payment_request_id="a123",
+        payment_request_id="a12316",
     )
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
@@ -1880,7 +1880,7 @@ def _pay_minimum_amount_bill_2(session: Session) -> None:
         user_loan=user_loan,
         payment_amount=Decimal(110),
         payment_date=parse_date("2020-06-20"),
-        payment_request_id="a123",
+        payment_request_id="a12317",
     )
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
@@ -2091,7 +2091,7 @@ def test_prepayment(session: Session) -> None:
         user_loan=uc,
         payment_amount=Decimal(2000),
         payment_date=parse_date("2020-05-03"),
-        payment_request_id="a123",
+        payment_request_id="a12318",
     )
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
@@ -2264,7 +2264,7 @@ def test_prepayment(session: Session) -> None:
 #     uc = get_user_product(session, 99)
 #
 #     payment_received(
-#         session, uc, Decimal("3000"), payment_date=parse_date("2020-07-01"), payment_request_id="abcde",
+#         session, uc, Decimal("3000"), payment_date=parse_date("2020-07-01"), payment_request_id="abcdef",
 #     )
 #     _, writeoff_amount = get_account_balance_from_str(
 #         session, book_string=f"{uc.loan_id}/loan/writeoff_expenses/e"
@@ -2405,7 +2405,7 @@ def test_moratorium_schedule(session: Session) -> None:
         user_loan=uc,
         payment_amount=amount,
         payment_date=payment_date,
-        payment_request_id="a123",
+        payment_request_id="a12319",
     )
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
