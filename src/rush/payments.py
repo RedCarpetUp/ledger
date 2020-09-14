@@ -8,7 +8,11 @@ from sqlalchemy.orm import Session
 from rush.anomaly_detection import run_anomaly
 from rush.card import BaseLoan
 from rush.card.base_card import BaseBill
-from rush.create_emi import group_bills_to_create_loan_schedule
+from rush.create_emi import (
+    group_bills_to_create_loan_schedule,
+    slide_payments,
+)
+from rush.create_bill import close_bills
 from rush.ledger_events import (
     _adjust_bill,
     _adjust_for_downpayment,
@@ -153,12 +157,8 @@ def payment_received_event(
 def slide_or_close_bills(user_loan, event):
     # This means that the payment closed the loan
     if user_loan.get_total_outstanding() == 0:
-        from rush.create_bill import close_bills
-
         close_bills(user_loan=user_loan, payment_date=event.post_date)
     else:
-        from rush.create_emi import slide_payments
-
         slide_payments(user_loan=user_loan, payment_event=event)
 
 
