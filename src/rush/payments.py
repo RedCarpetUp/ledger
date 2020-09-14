@@ -8,7 +8,11 @@ from sqlalchemy.orm import Session
 from rush.anomaly_detection import run_anomaly
 from rush.card import BaseLoan
 from rush.card.base_card import BaseBill
-from rush.create_emi import group_bills_to_create_loan_schedule
+from rush.create_emi import (
+    group_bills_to_create_loan_schedule,
+    slide_payments,
+)
+from rush.create_bill import close_bills
 from rush.ledger_events import (
     _adjust_bill,
     _adjust_for_downpayment,
@@ -18,11 +22,7 @@ from rush.ledger_utils import (
     create_ledger_entry_from_str,
     get_account_balance_from_str,
 )
-from rush.models import (
-    CardTransaction,
-    LedgerTriggerEvent,
-    LoanData,
-)
+from rush.models import LedgerTriggerEvent
 from rush.utils import (
     div,
     mul,
@@ -149,9 +149,17 @@ def payment_received_event(
     if is_in_write_off:
         recovery_event(user_loan, event)
         # TODO set loan status to recovered.
-    from rush.create_emi import slide_payments
 
-    slide_payments(user_loan=user_loan, payment_event=event)
+    # We will either slide or close bills
+    slide_or_close_bills(user_loan, event)
+
+
+def slide_or_close_bills(user_loan, event):
+    # This means that the payment closed the loan
+    if user_loan.get_total_outstanding() == 0:
+        close_bills(user_loan=user_loan, payment_date=event.post_date)
+    else:
+        slide_payments(user_loan=user_loan, payment_event=event)
 
 
 def find_amount_to_slide_in_bills(user_loan: BaseLoan, total_amount_to_slide: Decimal) -> list:
