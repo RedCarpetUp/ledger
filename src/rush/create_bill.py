@@ -274,4 +274,4 @@ def close_bills(user_loan: BaseLoan, payment_date: DateTime):
 
     from rush.create_emi import group_bills_to_create_loan_schedule
 
-    group_bills_to_create_loan_schedule(user_loan=user_loan, called_from_closing=True)
+    group_bills_to_create_loan_schedule(user_loan=user_loan)

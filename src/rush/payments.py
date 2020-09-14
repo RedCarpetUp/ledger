@@ -149,9 +149,16 @@ def payment_received_event(
     if is_in_write_off:
         recovery_event(user_loan, event)
         # TODO set loan status to recovered.
-    from rush.create_emi import slide_payments
 
-    slide_payments(user_loan=user_loan, payment_event=event)
+    # This means that the payment closed the loan
+    if user_loan.get_total_outstanding() <= 0:
+        from rush.create_bill import close_bills
+
+        close_bills(user_loan=user_loan, payment_date=event.post_date)
+    else:
+        from rush.create_emi import slide_payments
+
+        slide_payments(user_loan=user_loan, payment_event=event)
 
 
 def find_amount_to_slide_in_bills(user_loan: BaseLoan, total_amount_to_slide: Decimal) -> list:

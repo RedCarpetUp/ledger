@@ -120,7 +120,6 @@ def create_emis_for_bill(
 def slide_payments(
     user_loan: BaseLoan,
     payment_event: Optional[LedgerTriggerEvent] = None,
-    called_from_closing: bool = False,
 ) -> None:
     def slide_payments_repeated_logic(
         all_emis,
@@ -129,7 +128,6 @@ def slide_payments(
         last_payment_date,
         last_paid_emi_number,
     ) -> None:
-        last_emi_number = all_emis[-1].emi_number
         total_payment_till_now = payment_received_and_adjusted
         for emi in all_emis:
             total_payment_till_now += (
@@ -154,26 +152,6 @@ def slide_payments(
             )
             emi.dpd = (last_payment_date.date() - emi.due_date).days
             if payment_received_and_adjusted:
-                actual_closing_balance = emi.total_closing_balance_post_due_date
-                if last_payment_date.date() <= emi.due_date:
-                    actual_closing_balance = emi.total_closing_balance
-                if (
-                    total_payment_till_now >= actual_closing_balance > 0
-                    and (
-                        (
-                            emi.due_date
-                            >= last_payment_date.date()
-                            > (emi.due_date + relativedelta(months=-1))
-                        )
-                        or emi.emi_number == last_emi_number
-                    )
-                    and not called_from_closing
-                ):
-                    # Got to close all bills if all payment is done
-                    from rush.create_bill import close_bills
-
-                    close_bills(user_loan, last_payment_date)
-                    break
                 diff = emi.total_due_amount - payment_received_and_adjusted
                 if diff >= 0:
                     if diff == 0:
@@ -616,7 +594,7 @@ def check_moratorium_eligibility(user_loan: BaseLoan):
         group_bills_to_create_loan_schedule(user_loan=user_loan)
 
 
-def group_bills_to_create_loan_schedule(user_loan: BaseLoan, called_from_closing: bool = False):
+def group_bills_to_create_loan_schedule(user_loan: BaseLoan):
     session = user_loan.session
 
     # Get all loan level emis of the user
@@ -691,7 +669,7 @@ def group_bills_to_create_loan_schedule(user_loan: BaseLoan, called_from_closing
         emi_number += 1
 
     # Slide all payments
-    slide_payments(user_loan=user_loan, called_from_closing=called_from_closing)
+    slide_payments(user_loan=user_loan)
     session.flush()
 
 
