@@ -153,6 +153,9 @@ def slide_payments(
             emi.dpd = (last_payment_date.date() - emi.due_date).days
             if payment_received_and_adjusted:
                 diff = emi.total_due_amount - payment_received_and_adjusted
+                interest_actually_received = (
+                    late_fee_actually_received
+                ) = atm_fee_actually_received = principal_actually_received = Decimal(0)
                 if diff >= 0:
                     if diff == 0:
                         last_paid_emi_number = emi.emi_number
@@ -173,10 +176,10 @@ def slide_payments(
                             emi_number=emi.emi_number,
                             payment_date=last_payment_date,
                             payment_request_id=payment_request_id,
-                            interest_received=emi.interest_received,
-                            late_fee_received=emi.late_fee_received,
-                            atm_fee_received=emi.atm_fee_received,
-                            principal_received=emi.payment_received,
+                            interest_received=Decimal(0),
+                            late_fee_received=Decimal(0),
+                            atm_fee_received=payment_received_and_adjusted,
+                            principal_received=Decimal(0),
                         )
                         break
                     else:
@@ -202,10 +205,10 @@ def slide_payments(
                                 emi_number=emi.emi_number,
                                 payment_date=last_payment_date,
                                 payment_request_id=payment_request_id,
-                                interest_received=emi.interest_received,
-                                late_fee_received=emi.late_fee_received,
-                                atm_fee_received=emi.atm_fee_received,
-                                principal_received=emi.payment_received,
+                                interest_received=Decimal(0),
+                                late_fee_received=payment_received_and_adjusted,
+                                atm_fee_received=atm_fee_actually_received,
+                                principal_received=Decimal(0),
                             )
                             break
                         else:
@@ -237,10 +240,10 @@ def slide_payments(
                                     emi_number=emi.emi_number,
                                     payment_date=last_payment_date,
                                     payment_request_id=payment_request_id,
-                                    interest_received=emi.interest_received,
-                                    late_fee_received=emi.late_fee_received,
-                                    atm_fee_received=emi.atm_fee_received,
-                                    principal_received=emi.payment_received,
+                                    interest_received=payment_received_and_adjusted,
+                                    late_fee_received=late_fee_actually_received,
+                                    atm_fee_received=atm_fee_actually_received,
+                                    principal_received=Decimal(0),
                                 )
                                 break
                             else:
@@ -269,24 +272,37 @@ def slide_payments(
                                         emi_number=emi.emi_number,
                                         payment_date=last_payment_date,
                                         payment_request_id=payment_request_id,
-                                        interest_received=emi.interest_received,
-                                        late_fee_received=emi.late_fee_received,
-                                        atm_fee_received=emi.atm_fee_received,
-                                        principal_received=emi.payment_received,
+                                        interest_received=interest_actually_received,
+                                        late_fee_received=late_fee_actually_received,
+                                        atm_fee_received=atm_fee_actually_received,
+                                        principal_received=payment_received_and_adjusted,
                                     )
                                     break
 
                 principal_actually_received = emi.due_amount - emi.payment_received
                 emi.payment_received = emi.due_amount
-                # Maybe will require this later
-                # emi.total_closing_balance -= principal_actually_received
-                # emi.total_closing_balance_post_due_date -= principal_actually_received
-                payment_received_and_adjusted -= principal_actually_received
-
                 # Safekeeping in case missed in loops ~ remove later
                 emi.late_fee_received = emi.late_fee
                 emi.interest_received = emi.interest
                 emi.atm_fee_received = emi.atm_fee
+                if (
+                    atm_fee_actually_received == Decimal(0)
+                    and late_fee_actually_received == Decimal(0)
+                    and interest_actually_received == Decimal(0)
+                ):
+                    atm_fee_actually_received = emi.atm_fee_received
+                    late_fee_actually_received = emi.late_fee_received
+                    interest_actually_received = emi.interest_received
+
+                # Maybe will require this later
+                # emi.total_closing_balance -= principal_actually_received
+                # emi.total_closing_balance_post_due_date -= principal_actually_received
+                payment_received_and_adjusted -= (
+                    principal_actually_received
+                    + atm_fee_actually_received
+                    + late_fee_actually_received
+                    + interest_actually_received
+                )
 
                 emi.payment_status = "Paid"
                 emi.dpd = 0
@@ -298,10 +314,10 @@ def slide_payments(
                     emi_number=emi.emi_number,
                     payment_date=last_payment_date,
                     payment_request_id=payment_request_id,
-                    interest_received=emi.interest_received,
-                    late_fee_received=emi.late_fee_received,
-                    atm_fee_received=emi.atm_fee_received,
-                    principal_received=emi.payment_received,
+                    interest_received=interest_actually_received,
+                    late_fee_received=late_fee_actually_received,
+                    atm_fee_received=atm_fee_actually_received,
+                    principal_received=principal_actually_received,
                 )
                 payment_received_and_adjusted = abs(diff)
 
@@ -326,9 +342,38 @@ def slide_payments(
     if not payment_event:
         for event in events:
             payment_received_and_adjusted = Decimal(0)
-            payment_received_and_adjusted += event.amount
             payment_request_id = event.extra_details.get("payment_request_id")
             last_payment_date = event.post_date
+            # Mark all mappings inactive
+            all_payment_mappings = (
+                session.query(EmiPaymentMapping)
+                .filter(
+                    EmiPaymentMapping.loan_id == user_loan.loan_id,
+                    EmiPaymentMapping.payment_request_id == payment_request_id,
+                    EmiPaymentMapping.row_status == "active",
+                )
+                .all()
+            )
+            # The exception of checking length is for cases in which
+            # the users closes his entire loan with the very first payment
+            if not all_payment_mappings and (
+                user_loan.get_total_outstanding() == 0 and len(events) == 1
+            ):
+                payment_received_and_adjusted += event.amount
+            elif not all_payment_mappings:
+                continue
+            else:
+                for mapping in all_payment_mappings:
+                    # We have to mark is inactive because new mapping can be something else altogether
+                    mapping.row_status = "inactive"
+                    payment_received_and_adjusted += (
+                        mapping.principal_received
+                        + mapping.interest_received
+                        + mapping.late_fee_received
+                        + mapping.atm_fee_received
+                    )
+            assert payment_received_and_adjusted <= event.amount
+
             slide_payments_repeated_logic(
                 all_emis=all_emis,
                 payment_received_and_adjusted=payment_received_and_adjusted,
@@ -610,14 +655,6 @@ def group_bills_to_create_loan_schedule(user_loan: BaseLoan):
     )
     for emi in all_emis:
         emi.row_status = "inactive"
-
-    all_payment_mappings = (
-        session.query(EmiPaymentMapping)
-        .filter(EmiPaymentMapping.loan_id == user_loan.loan_id, EmiPaymentMapping.row_status == "active")
-        .all()
-    )
-    for mapping in all_payment_mappings:
-        mapping.row_status = "inactive"
 
     grouped_values = (
         session.query(
