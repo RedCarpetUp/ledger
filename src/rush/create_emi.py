@@ -259,6 +259,9 @@ def slide_payments(
                                     # emi.total_closing_balance_post_due_date -= interest_actually_received
                                     payment_received_and_adjusted -= interest_actually_received
                                 if payment_received_and_adjusted <= emi.due_amount:
+                                    principal_actually_received = (
+                                        payment_received_and_adjusted - emi.payment_received
+                                    )
                                     emi.payment_received = payment_received_and_adjusted
                                     # Maybe will require this later
                                     # emi.total_closing_balance -= payment_received_and_adjusted
@@ -275,7 +278,7 @@ def slide_payments(
                                         interest_received=interest_actually_received,
                                         late_fee_received=late_fee_actually_received,
                                         atm_fee_received=atm_fee_actually_received,
-                                        principal_received=payment_received_and_adjusted,
+                                        principal_received=principal_actually_received,
                                     )
                                     break
 
