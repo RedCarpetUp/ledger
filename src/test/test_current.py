@@ -235,14 +235,14 @@ def test_closing_bill(session: Session) -> None:
     )
 
     accrue_interest_on_all_bills(
-        session=session, post_date=bill.table.bill_due_date, user_loan=user_loan
+        session=session, post_date=bill.table.bill_due_date + relativedelta(days=1), user_loan=user_loan
     )
 
     bill_date = parse_date("2019-03-01 00:00:00")
     bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
 
     accrue_interest_on_all_bills(
-        session=session, post_date=bill.table.bill_due_date, user_loan=user_loan
+        session=session, post_date=bill.table.bill_due_date + relativedelta(days=1), user_loan=user_loan
     )
 
     event_date = parse_date("2019-03-15 12:00:00")
@@ -262,7 +262,7 @@ def test_closing_bill(session: Session) -> None:
     bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
 
     accrue_interest_on_all_bills(
-        session=session, post_date=bill.table.bill_due_date, user_loan=user_loan
+        session=session, post_date=bill.table.bill_due_date + relativedelta(days=1), user_loan=user_loan
     )
 
     payment_date = parse_date("2019-04-15")
@@ -279,7 +279,7 @@ def test_closing_bill(session: Session) -> None:
     bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
 
     accrue_interest_on_all_bills(
-        session=session, post_date=bill.table.bill_due_date, user_loan=user_loan
+        session=session, post_date=bill.table.bill_due_date + relativedelta(days=1), user_loan=user_loan
     )
 
     payment_date = parse_date("2019-05-16")
@@ -304,7 +304,7 @@ def test_closing_bill(session: Session) -> None:
     bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
 
     accrue_interest_on_all_bills(
-        session=session, post_date=bill.table.bill_due_date, user_loan=user_loan
+        session=session, post_date=bill.table.bill_due_date + relativedelta(days=1), user_loan=user_loan
     )
 
     event_date = parse_date("2019-06-15 12:00:00")
