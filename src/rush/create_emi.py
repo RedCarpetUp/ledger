@@ -189,7 +189,11 @@ def slide_payments(
                             # Maybe will require this later
                             # emi.total_closing_balance -= atm_fee_actually_received
                             # emi.total_closing_balance_post_due_date -= atm_fee_actually_received
-                            payment_received_and_adjusted -= atm_fee_actually_received
+                            payment_received_and_adjusted -= (
+                                atm_fee_actually_received
+                                if atm_fee_actually_received > 0
+                                else emi.atm_fee_received
+                            )
                         if (
                             emi.late_fee > 0
                             and (emi.late_fee_received + payment_received_and_adjusted) <= emi.late_fee
@@ -222,7 +226,11 @@ def slide_payments(
                                 # Maybe will require this later
                                 # emi.total_closing_balance -= late_fee_actually_received
                                 # emi.total_closing_balance_post_due_date -= late_fee_actually_received
-                                payment_received_and_adjusted -= late_fee_actually_received
+                                payment_received_and_adjusted -= (
+                                    late_fee_actually_received
+                                    if late_fee_actually_received > 0
+                                    else emi.late_fee_received
+                                )
                             if (
                                 last_payment_date.date() > emi.due_date
                                 and emi.interest > 0
@@ -257,7 +265,11 @@ def slide_payments(
                                     # Maybe will require this later
                                     # emi.total_closing_balance -= interest_actually_received
                                     # emi.total_closing_balance_post_due_date -= interest_actually_received
-                                    payment_received_and_adjusted -= interest_actually_received
+                                    payment_received_and_adjusted -= (
+                                        interest_actually_received
+                                        if interest_actually_received > 0
+                                        else emi.interest_received
+                                    )
                                 if payment_received_and_adjusted <= emi.due_amount:
                                     principal_actually_received = (
                                         payment_received_and_adjusted - emi.payment_received
