@@ -31,7 +31,7 @@ def get_user_product(
     card_type: str = "ruby",
     loan_id: Optional[int] = None,
     user_product_id: Optional[int] = None,
-) -> Loan:
+) -> BaseLoan:
     user_product_query = session.query(Loan).filter(
         Loan.user_id == user_id, Loan.product_type == card_type
     )

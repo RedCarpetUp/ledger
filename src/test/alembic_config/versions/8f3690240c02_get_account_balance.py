@@ -20,30 +20,21 @@ def upgrade() -> None:
         """
     create function get_account_balance_by_book_id(
       book_account integer, till_date timestamp DEFAULT now() at time zone 'Asia/Kolkata'
-    ) RETURNS numeric as $$ with balances as (
-      select 
-        $1 as id, 
-        sum(
-          case when debit_account = $1 then l.amount else 0 end
-        ) as debit_balance, 
-        sum(
-          case when credit_account = $1 then l.amount else 0 end
-        ) as credit_balance 
-      from 
-        ledger_entry l,
-        ledger_trigger_event lte
-      where 
-        (debit_account = $1 
-        or credit_account = $1) and lte.id = l.event_id
-        and lte.post_date <= $2 
-      group by 
-        1
-    ) 
+    ) RETURNS numeric as $$
     select 
-      case when book.account_type in ('a', 'e') then debit_balance - credit_balance else credit_balance - debit_balance end as account_balance 
+      case when le.debit_account = $1 then debit_account_balance else credit_account_balance end as account_balance 
     from 
-      balances 
-      join book_account book on book.id = balances.id;
+      ledger_entry le, 
+      ledger_trigger_event lte 
+    where 
+      (
+        le.debit_account = $1 
+        or le.credit_account = $1
+      ) 
+      and lte.id = le.event_id 
+      and post_date <= $2 
+    order by 
+      post_date desc limit 1;
     $$ language SQL;
     """
     )
