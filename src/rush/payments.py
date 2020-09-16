@@ -39,6 +39,7 @@ def payment_received(
     payment_type: Optional[str] = None,
     user_product_id: Optional[int] = None,
     lender_id: Optional[int] = None,
+    skip_closing: bool = False,
 ) -> None:
     assert user_loan is not None or lender_id is not None
 
@@ -62,6 +63,7 @@ def payment_received(
         user_loan=user_loan,
         debit_book_str=f"{user_loan.lender_id if user_loan else lender_id}/lender/pg_account/a",
         event=lt,
+        skip_closing=skip_closing,
     )
 
     # TODO: check if this code is needed for downpayment, since there is no user loan at that point of time.
@@ -107,6 +109,7 @@ def payment_received_event(
     user_loan: BaseLoan,
     debit_book_str: str,
     event: LedgerTriggerEvent,
+    skip_closing: bool = False,
 ) -> None:
     payment_received = Decimal(event.amount)
     if event.name == "merchant_refund":
@@ -151,12 +154,12 @@ def payment_received_event(
         # TODO set loan status to recovered.
 
     # We will either slide or close bills
-    slide_or_close_bills(user_loan, event)
+    slide_or_close_bills(user_loan, event, skip_closing)
 
 
-def slide_or_close_bills(user_loan, event):
+def slide_or_close_bills(user_loan, event, skip_closing=False):
     # This means that the payment closed the loan
-    if user_loan.get_total_outstanding() == 0:
+    if user_loan.get_total_outstanding() == 0 and not skip_closing:
         close_bills(user_loan=user_loan, payment_date=event.post_date)
     else:
         slide_payments(user_loan=user_loan, payment_event=event)
