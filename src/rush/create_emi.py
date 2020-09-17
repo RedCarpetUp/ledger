@@ -154,6 +154,7 @@ def slide_payments(
                 if last_payment_date:
                     emi.last_payment_date = last_payment_date
                 diff = emi.total_due_amount - payment_received_and_adjusted
+                # Because rounding of balances has happened previously we should round the diff ~ Ananth
                 if -1 < diff <= 0:
                     diff = 0
                 interest_actually_received = (
