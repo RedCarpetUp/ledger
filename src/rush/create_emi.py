@@ -142,21 +142,25 @@ def slide_payments(
                 or emi.payment_status == "Paid"
             ):
                 continue
-            if last_payment_date:
-                emi.last_payment_date = last_payment_date
+
             payment_received_and_adjusted += (
                 emi.payment_received
                 + emi.atm_fee_received
                 + emi.late_fee_received
                 + emi.interest_received
             )
-            emi.dpd = (last_payment_date.date() - emi.due_date).days
+
             if payment_received_and_adjusted:
+                if last_payment_date:
+                    emi.last_payment_date = last_payment_date
                 diff = emi.total_due_amount - payment_received_and_adjusted
+                if -1 < diff <= 0:
+                    diff = 0
                 interest_actually_received = (
                     late_fee_actually_received
                 ) = atm_fee_actually_received = principal_actually_received = Decimal(0)
                 if diff >= 0:
+                    emi.dpd = (last_payment_date.date() - emi.due_date).days
                     if diff == 0:
                         last_paid_emi_number = emi.emi_number
                         emi.payment_status = "Paid"
@@ -296,29 +300,19 @@ def slide_payments(
 
                 principal_actually_received = emi.due_amount - emi.payment_received
                 emi.payment_received = emi.due_amount
-                # Safekeeping in case missed in loops ~ remove later
+
+                # In case the internal loops are missed mapping has to be created correctly
+                if atm_fee_actually_received == Decimal(0) and emi.atm_fee > Decimal(0):
+                    atm_fee_actually_received = emi.atm_fee - emi.atm_fee_received
+                if late_fee_actually_received == Decimal(0) and emi.late_fee > Decimal(0):
+                    late_fee_actually_received = emi.late_fee - emi.late_fee_received
+                if interest_actually_received == Decimal(0) and emi.interest > Decimal(0):
+                    interest_actually_received = emi.interest - emi.interest_received
+
+                # At this point we can assume all amounts were received
                 emi.late_fee_received = emi.late_fee
                 emi.interest_received = emi.interest
                 emi.atm_fee_received = emi.atm_fee
-                # Don't need this ~ Ananth
-                # if (
-                #     atm_fee_actually_received == Decimal(0)
-                #     and late_fee_actually_received == Decimal(0)
-                #     and interest_actually_received == Decimal(0)
-                # ):
-                #     atm_fee_actually_received = emi.atm_fee_received
-                #     late_fee_actually_received = emi.late_fee_received
-                #     interest_actually_received = emi.interest_received
-
-                # Maybe will require this later
-                # emi.total_closing_balance -= principal_actually_received
-                # emi.total_closing_balance_post_due_date -= principal_actually_received
-                # payment_received_and_adjusted -= (
-                #     principal_actually_received
-                #     + atm_fee_actually_received
-                #     + late_fee_actually_received
-                #     + interest_actually_received
-                # )
 
                 emi.payment_status = "Paid"
                 emi.dpd = 0
@@ -336,6 +330,10 @@ def slide_payments(
                     principal_received=principal_actually_received,
                 )
                 payment_received_and_adjusted = abs(diff)
+
+            else:
+                # If no payment is left to adjust, it is safe to break
+                break
 
     session = user_loan.session
     all_emis = (
