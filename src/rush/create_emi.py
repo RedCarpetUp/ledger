@@ -300,24 +300,25 @@ def slide_payments(
                 emi.late_fee_received = emi.late_fee
                 emi.interest_received = emi.interest
                 emi.atm_fee_received = emi.atm_fee
-                if (
-                    atm_fee_actually_received == Decimal(0)
-                    and late_fee_actually_received == Decimal(0)
-                    and interest_actually_received == Decimal(0)
-                ):
-                    atm_fee_actually_received = emi.atm_fee_received
-                    late_fee_actually_received = emi.late_fee_received
-                    interest_actually_received = emi.interest_received
+                # Don't need this ~ Ananth
+                # if (
+                #     atm_fee_actually_received == Decimal(0)
+                #     and late_fee_actually_received == Decimal(0)
+                #     and interest_actually_received == Decimal(0)
+                # ):
+                #     atm_fee_actually_received = emi.atm_fee_received
+                #     late_fee_actually_received = emi.late_fee_received
+                #     interest_actually_received = emi.interest_received
 
                 # Maybe will require this later
                 # emi.total_closing_balance -= principal_actually_received
                 # emi.total_closing_balance_post_due_date -= principal_actually_received
-                payment_received_and_adjusted -= (
-                    principal_actually_received
-                    + atm_fee_actually_received
-                    + late_fee_actually_received
-                    + interest_actually_received
-                )
+                # payment_received_and_adjusted -= (
+                #     principal_actually_received
+                #     + atm_fee_actually_received
+                #     + late_fee_actually_received
+                #     + interest_actually_received
+                # )
 
                 emi.payment_status = "Paid"
                 emi.dpd = 0

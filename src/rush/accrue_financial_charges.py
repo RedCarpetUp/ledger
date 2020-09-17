@@ -92,9 +92,10 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loa
             .scalar()
         )
 
-        accrue_event.amount += interest_to_charge
-        accrue_interest_event(session, bill, accrue_event, interest_to_charge)
-        add_max_amount_event(session, bill, accrue_event, interest_to_charge)
+        if interest_to_charge:
+            accrue_event.amount += interest_to_charge
+            accrue_interest_event(session, bill, accrue_event, interest_to_charge)
+            add_max_amount_event(session, bill, accrue_event, interest_to_charge)
 
 
 def is_late_fee_valid(session: Session, user_loan: BaseLoan) -> bool:
