@@ -8,11 +8,11 @@ from sqlalchemy.orm import Session
 from rush.anomaly_detection import run_anomaly
 from rush.card import BaseLoan
 from rush.card.base_card import BaseBill
+from rush.create_bill import close_bills
 from rush.create_emi import (
     group_bills_to_create_loan_schedule,
     slide_payments,
 )
-from rush.create_bill import close_bills
 from rush.ledger_events import (
     _adjust_bill,
     _adjust_for_downpayment,
