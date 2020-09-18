@@ -370,10 +370,10 @@ def test_generate_bill_1(session: Session) -> None:
     _, min_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/min/a")
     assert min_amount == 114
 
-    update_event_with_dpd(user_loan=user_loan, post_date=parse_date("2020-05-21 00:05:00"))
-
-    dpd_events = session.query(EventDpd).filter_by(loan_id=uc.loan_id).all()
-    assert dpd_events[0].balance == Decimal(1000)
+    # update_event_with_dpd(user_loan=user_loan, post_date=parse_date("2020-05-21 00:05:00"))
+    #
+    # dpd_events = session.query(EventDpd).filter_by(loan_id=uc.loan_id).all()
+    # assert dpd_events[0].balance == Decimal(1000)
 
 
 def _accrue_interest_on_bill_1(session: Session) -> None:
@@ -1743,6 +1743,8 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
         session, book_string=f"{bill.id}/bill/principal_receivable/a"
     )
     assert principal_due == Decimal(0)
+    assert user_loan.get_total_outstanding() == 0
+    assert is_bill_closed(session, bill) is True
 
 
 def test_interest_reversal_multiple_bills(session: Session) -> None:
