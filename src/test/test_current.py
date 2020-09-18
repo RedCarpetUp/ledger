@@ -1582,12 +1582,18 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
 def test_interest_reversal_interest_already_settled(session: Session) -> None:
     test_generate_bill_1(session)
     _partial_payment_bill_1(session)
-    _accrue_interest_on_bill_1(session)
-    _accrue_late_fine_bill_1(session)
-    _pay_minimum_amount_bill_1(session)
-
-    #  Pay 500 rupees
     user_loan = get_user_product(session, 99)
+
+    # Pay min amount before interest is accrued.
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_amount=Decimal("132"),
+        payment_date=parse_date("2020-05-05 19:23:11"),
+        payment_request_id="aasdf123",
+    )
+    # Accrue interest.
+    _accrue_interest_on_bill_1(session)
 
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{user_loan.loan_id}/loan/lender_payable/l"
@@ -1595,7 +1601,7 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
     assert lender_payable == Decimal("769")
 
     payment_date = parse_date("2020-05-14 19:23:11")
-    amount = Decimal("886")
+    amount = Decimal("786")
     unpaid_bills = user_loan.get_unpaid_bills()
     payment_received(
         session=session,
@@ -1610,7 +1616,7 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{user_loan.loan_id}/loan/lender_payable/l"
     )
-    assert lender_payable == Decimal("-116.5")
+    assert lender_payable == Decimal("-16.5")
 
     bill = unpaid_bills[0]
 

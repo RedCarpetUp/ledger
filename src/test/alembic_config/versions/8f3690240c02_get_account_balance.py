@@ -34,7 +34,7 @@ def upgrade() -> None:
       and lte.id = le.event_id 
       and post_date <= $2 
     order by 
-      post_date desc limit 1;
+      le.id desc limit 1;
     $$ language SQL;
     """
     )
