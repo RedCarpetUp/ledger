@@ -65,7 +65,11 @@ def get_or_create_bill_for_card_swipe(user_loan: BaseLoan, txn_time: DateTime) -
     return {"result": "success", "bill": new_bill}
 
 
-def bill_generate(user_loan: BaseLoan, creation_time: DateTime = get_current_ist_time()) -> BaseBill:
+def bill_generate(
+    user_loan: BaseLoan,
+    creation_time: DateTime = get_current_ist_time(),
+    skip_bill_schedule_creation: bool = False,
+) -> BaseBill:
     session = user_loan.session
     bill = user_loan.get_latest_bill_to_generate()  # Get the first bill which is not generated.
     if not bill:
@@ -107,7 +111,8 @@ def bill_generate(user_loan: BaseLoan, creation_time: DateTime = get_current_ist
     # After the bill has generated. Call the min generation event on all unpaid bills.
     add_min_to_all_bills(session=session, post_date=bill.table.bill_close_date, user_loan=user_loan)
 
-    create_emis_for_bill(session=session, user_loan=user_loan, bill=bill)
+    if not skip_bill_schedule_creation:
+        create_emis_for_bill(session=session, user_loan=user_loan, bill=bill)
 
     atm_transactions_sum = bill.sum_of_atm_transactions()
     if atm_transactions_sum > 0:
@@ -117,6 +122,7 @@ def bill_generate(user_loan: BaseLoan, creation_time: DateTime = get_current_ist
             post_date=bill.table.bill_close_date,
             atm_transactions_amount=atm_transactions_sum,
             user_loan=user_loan,
+            skip_schedule_grouping=skip_bill_schedule_creation,
         )
 
     return bill
@@ -197,6 +203,7 @@ def add_atm_fee(
     post_date: DateTime,
     atm_transactions_amount: Decimal,
     user_loan: BaseLoan,
+    skip_schedule_grouping: bool = False,
 ) -> None:
     atm_fee_perc = Decimal(2)
     atm_fee_without_gst = mul(atm_transactions_amount / 100, atm_fee_perc)
@@ -215,9 +222,10 @@ def add_atm_fee(
     )
     event.amount = fee.gross_amount
 
-    from rush.create_emi import adjust_atm_fee_in_emis
+    if not skip_schedule_grouping:
+        from rush.create_emi import adjust_atm_fee_in_emis
 
-    adjust_atm_fee_in_emis(session, user_loan, bill)
+        adjust_atm_fee_in_emis(session, user_loan, bill)
 
 
 def close_bills(user_loan: BaseLoan, payment_date: DateTime):
@@ -265,4 +273,13 @@ def close_bills(user_loan: BaseLoan, payment_date: DateTime):
                 emi.total_closing_balance = (
                     emi.total_closing_balance_post_due_date
                 ) = emi.interest = emi.interest_current_month = emi.interest_next_month = 0
-                emi.due_amount = emi.total_due_amount = actual_closing_balance
+                if payment_date.date() > emi.due_date:
+                    only_principal = actual_closing_balance - (emi.interest + emi.atm_fee + emi.late_fee)
+                else:
+                    only_principal = actual_closing_balance - emi.atm_fee
+                emi.total_due_amount = actual_closing_balance
+                emi.due_amount = only_principal
+
+    from rush.create_emi import group_bills_to_create_loan_schedule
+
+    group_bills_to_create_loan_schedule(user_loan=user_loan)

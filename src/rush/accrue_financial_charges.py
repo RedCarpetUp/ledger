@@ -74,9 +74,22 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loa
     session.add(accrue_event)
     session.flush()
     for bill in unpaid_bills:
-        accrue_interest_event(session, bill, accrue_event, bill.table.interest_to_charge)
-        accrue_event.amount += bill.table.interest_to_charge
-        add_max_amount_event(session, bill, accrue_event, bill.table.interest_to_charge)
+        interest_to_charge = (
+            session.query(CardEmis.interest)
+            .filter(
+                CardEmis.bill_id == bill.id,
+                CardEmis.due_date < post_date,
+                CardEmis.row_status == "active",
+            )
+            .order_by(CardEmis.due_date.desc())
+            .limit(1)
+            .scalar()
+        )
+
+        if interest_to_charge:
+            accrue_event.amount += interest_to_charge
+            accrue_interest_event(session, bill, accrue_event, interest_to_charge)
+            add_max_amount_event(session, bill, accrue_event, interest_to_charge)
 
 
 def is_late_fee_valid(session: Session, user_loan: BaseLoan) -> bool:
