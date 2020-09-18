@@ -295,11 +295,11 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("event_id", sa.Integer(), nullable=False),
         sa.Column("debit_account", sa.Integer(), nullable=False),
+        sa.Column("debit_account_balance", sa.DECIMAL(), nullable=False),
         sa.Column("credit_account", sa.Integer(), nullable=False),
+        sa.Column("credit_account_balance", sa.DECIMAL(), nullable=False),
         sa.Column("amount", sa.DECIMAL(), nullable=False),
-        sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
-        sa.Column("performed_by", sa.Integer(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["event_id"], ["ledger_trigger_event.id"], name="fk_fee_event_id"),
     )

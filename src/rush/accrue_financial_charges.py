@@ -38,11 +38,10 @@ from rush.utils import (
 )
 
 
-def can_remove_interest(
+def can_remove_latest_accrued_interest(
     session: Session,
     user_loan: BaseLoan,
     interest_event: LedgerTriggerEvent,
-    event_date: Optional[DateTime] = None,
 ) -> bool:
     """
     We check if the payment has come before the due date and if the total outstanding amount is
@@ -54,20 +53,15 @@ def can_remove_interest(
     latest_bill = user_loan.get_latest_generated_bill()
     # First check if there is even interest accrued in the latest bill.
     _, interest_accrued = get_account_balance_from_str(
-        session, f"{latest_bill.id}/bill/interest_accrued/r"
+        session, f"{latest_bill.table.id}/bill/interest_accrued/r"
     )
     if interest_accrued == 0:
         return False  # Nothing to remove.
 
-    due_date = latest_bill.bill_start_date + timedelta(days=user_loan.interest_free_period_in_days)
-    payment_came_after_due_date = event_date.date() > due_date
-    if payment_came_after_due_date:
-        return False
-
-    this_month_interest = interest_event.amount  # The total interest amount which we last accrued.
-    total_outstanding = user_loan.get_total_outstanding()  # TODO outstanding as of due_date.
-
-    if total_outstanding <= this_month_interest:  # the amount has been paid sans interest.
+    total_interest_accrued = interest_event.amount  # The total interest amount which we last accrued.
+    remaining_amount = user_loan.get_remaining_max()
+    # If the only amount that's left is less than or equal to the interest that was wrongly accrued.
+    if remaining_amount <= total_interest_accrued:
         return True
     return False
 
@@ -111,11 +105,10 @@ def is_late_fee_valid(session: Session, user_loan: BaseLoan) -> bool:
     if late_fee_accrued == 0:
         return False  # Nothing to remove.
 
-    due_date = latest_bill.bill_start_date + timedelta(days=user_loan.interest_free_period_in_days)
-    min_balance_as_of_due_date = latest_bill.get_remaining_min(due_date)
-    if (
-        min_balance_as_of_due_date > 0
-    ):  # if there's balance pending in min then the late fee charge is valid.
+    remaining_min = latest_bill.get_remaining_min()
+    remaining_min_after_late_fee_removal = remaining_min - late_fee_accrued
+    # if min amount is still left even after removing late fee then the late fee charge is valid.
+    if remaining_min_after_late_fee_removal > 0:
         return True
     return False
 
