@@ -195,7 +195,7 @@ def test_dmi_recon_process_1(session: Session) -> None:
     _, lender_payable_ananth = get_account_balance_from_str(
         session, f"{user_loan_ananth.loan_id}/loan/lender_payable/l"
     )
-    assert lender_payable_ananth == Decimal("6558.73")  # This is incorrect. Earlier it was 6557.24.
+    assert lender_payable_ananth == Decimal("6557.24")
 
     # We generate the two bills.
     bill_raghav = bill_generate(user_loan=user_loan_raghav)
