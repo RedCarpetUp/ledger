@@ -1,6 +1,9 @@
+from datetime import timedelta
 from decimal import Decimal
+from typing import Optional
 
 from pendulum import DateTime
+from pendulum.constants import USECS_PER_SEC
 from sqlalchemy.orm import Session
 
 from rush.card.base_card import (
@@ -27,6 +30,7 @@ from rush.models import (
     LedgerEntry,
     LedgerTriggerEvent,
     LoanData,
+    UserCard,
 )
 from rush.utils import (
     get_current_ist_time,
@@ -176,8 +180,10 @@ def reverse_interest_charges(
     session: Session, event_to_reverse: LedgerTriggerEvent, user_loan: BaseLoan, payment_date: DateTime
 ) -> None:
     """
-    Removes the interest in case the payment got adjusted late. For example user paid complete payment
-    on 15th but it came in our system on 17th. Meanwhile we accrued our interest on 16th.
+    This event is intended only when the complete amount has been paid and we need to remove the
+    interest that we accrued before due_date. For example, interest gets accrued on 1st. Last date is
+    15th. If user pays the complete principal before 15th, we remove the interest. Removing interest
+    is more convenient than adding it on 16th.
     """
     event = LedgerTriggerEvent(
         name="reverse_interest_charges", loan_id=user_loan.loan_id, post_date=payment_date
@@ -200,12 +206,6 @@ def reverse_interest_charges(
         .all()
     )
 
-    # Convert bill to basebill instance.
-    bills_and_ledger_entry = [
-        [user_loan.convert_to_bill_class(bill), ledger_entry]
-        for bill, ledger_entry in bills_and_ledger_entry
-    ]
-
     inter_bill_movement_entries = []
     # I don't think this needs to be a list but I'm not sure. Ideally only one bill should be open.
     bills_to_slide = []
@@ -224,9 +224,6 @@ def reverse_interest_charges(
                 credit_book_str=f"{bill.id}/bill/interest_receivable/a",
                 amount=interest_due,
             )
-            from rush.payments import adjust_for_min_max_accounts
-
-            adjust_for_min_max_accounts(bill, interest_due, event.id)
 
         # We need to remove the amount that got adjusted in interest. interest_earned account needs
         # to be removed by the interest_that_was_added amount.
@@ -245,9 +242,6 @@ def reverse_interest_charges(
             remaining_amount = _adjust_bill(
                 session, bill, entry["amount"], event.id, debit_acc_str=entry["acc_to_remove_from"]
             )
-            from rush.payments import adjust_for_min_max_accounts
-
-            adjust_for_min_max_accounts(bill, entry["amount"], event.id)
             # if not all of it got adjusted in this bill, move remaining amount to next bill.
             # if got adjusted then this will be 0.
             entry["amount"] = remaining_amount
@@ -290,14 +284,15 @@ def reverse_incorrect_late_charges(
         .one_or_none()
     )
 
-    bill = user_loan.convert_to_bill_class(bill)
-
     if fee.fee_status == "UNPAID":
-        # Remove from min and max what's remaining.
-        from rush.payments import adjust_for_min_max_accounts
-
-        adjust_for_min_max_accounts(bill, fee.gross_amount - fee.gross_amount_paid, event.id)
-
+        # Remove from min. But only what's remaining. Rest doesn't matter.
+        create_ledger_entry_from_str(
+            session,
+            event_id=event.id,
+            debit_book_str=f"{bill.id}/bill/min/l",
+            credit_book_str=f"{bill.id}/bill/min/a",
+            amount=fee.gross_amount - fee.gross_amount_paid,
+        )
     if fee.gross_amount_paid > 0:
         # Need to remove money from all these accounts and slide them back to the same bill.
         acc_info = [
@@ -312,10 +307,6 @@ def reverse_incorrect_late_charges(
             remaining_amount = _adjust_bill(
                 session, bill, acc["amount"], event.id, acc["acc_to_remove_from"]
             )
-            from rush.payments import adjust_for_min_max_accounts
-
-            adjust_for_min_max_accounts(bill, acc["amount"], event.id)
-
             acc["amount"] = remaining_amount
         # Check if there's still amount that's left. If yes, then we received extra prepayment.
         is_payment_left = any(d["amount"] > 0 for d in acc_info)
