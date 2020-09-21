@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 # for now, these imports are required by get_product_class method to fetch all class within card module.
 from rush.card.base_card import BaseLoan
 from rush.card.health_card import HealthCard
+from rush.card.reset_card import ResetCard
 from rush.card.ruby_card import RubyCard
 from rush.card.term_loan import TermLoan
 from rush.card.term_loan2 import TermLoan2
