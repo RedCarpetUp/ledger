@@ -118,6 +118,7 @@ def add_pre_product_fee(
         ).id
 
     f = ProductFee(
+        user_id=user_id,
         event_id=event.id,
         identifier_id=user_product_id,
         name=fee_name,
@@ -156,6 +157,7 @@ def add_reload_fee(
     session.flush()
 
     f = LoanFee(
+        user_id=user_loan.user_id,
         identifier_id=user_loan.id,
         event_id=event.id,
         name="card_reload_fees",

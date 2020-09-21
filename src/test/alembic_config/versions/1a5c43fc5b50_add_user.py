@@ -37,7 +37,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.TIMESTAMP(), autoincrement=False, nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), autoincrement=False, nullable=False),
         sa.Column("v3_user_history_id", sa.INTEGER(), autoincrement=False, nullable=True),
-        sa.Column("phone_number", sa.VARCHAR(length=20), autoincrement=False, nullable=False),
+        # sa.Column("phone_number", sa.VARCHAR(length=20), autoincrement=False, nullable=False),
         sa.PrimaryKeyConstraint("id", name="v3_users_pkey"),
         postgresql_ignore_search_path=False,
     )
