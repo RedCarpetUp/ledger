@@ -483,6 +483,33 @@ class EmiPaymentMapping(AuditMixin):
     row_status = Column(String(length=10), nullable=False, default="active")
 
 
+class PaymentMapping(AuditMixin):
+    __tablename__ = "payment_mapping"
+    payment_request_id = Column(String(), nullable=False)
+    external_id = Column(
+        String(50), nullable=False
+    )  # can be the emi id in case of principal & interest. etc.
+    amount_settled_for = Column(String(15), nullable=False)  # principal, late fee, processing fee etc.
+    amount_settled = Column(Numeric, nullable=False)
+
+
+class LoanSchedule(AuditMixin):
+    __tablename__ = "loan_schedule"
+    loan_id = Column(Integer, ForeignKey(Loan.id))
+    bill_id = Column(Integer, ForeignKey(LoanData.id), nullable=True)  # hate this. - Raghav
+    emi_number = Column(Integer, nullable=False)
+    due_date = Column(Date, nullable=False)
+    principal_due = Column(Numeric, nullable=False)
+    interest_due = Column(Numeric, nullable=False)
+    # total_due_amount = Column(Numeric, nullable=False)  # This should be a calculated column.
+    dpd = Column(Integer, nullable=True)
+    last_payment_date = Column(TIMESTAMP, nullable=True)
+    total_closing_balance = Column(Numeric, nullable=False)
+    total_closing_balance_post_due_date = Column(Numeric, nullable=False)
+    payment_received = Column(Numeric, nullable=True)
+    payment_status = Column(String(length=6), nullable=False, default="UnPaid")
+
+
 class LoanMoratorium(AuditMixin):
     __tablename__ = "loan_moratorium"
 
