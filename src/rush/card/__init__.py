@@ -5,6 +5,7 @@ from typing import (
     Optional,
 )
 
+from pendulum import Date
 from sqlalchemy.orm import Session
 
 # for now, these imports are required by get_product_class method to fetch all class within card module.
@@ -88,12 +89,15 @@ def get_product_class(card_type: str) -> Any:
     return next(_subclasses(card_type=card_type))
 
 
-def activate_card(session: Session, user_loan: BaseLoan, user_card: UserCard) -> None:
+def activate_card(
+    session: Session, user_loan: BaseLoan, user_card: UserCard, post_date: Optional[Date] = None
+) -> None:
+    activation_date = get_current_ist_time().date() if not post_date else post_date
     event = LedgerTriggerEvent(
         name="card_activation",
         loan_id=user_loan.loan_id,
         amount=Decimal("0"),
-        post_date=get_current_ist_time().date(),
+        post_date=activation_date,
         extra_details={},
     )
 
@@ -101,11 +105,10 @@ def activate_card(session: Session, user_loan: BaseLoan, user_card: UserCard) ->
     session.flush()
 
     if not user_loan.amortization_date:
-        user_loan.amortization_date = get_current_ist_time().date()
+        user_loan.amortization_date = activation_date
 
-    # TODO: add this code later with test cases.
-    # user_card.status = "ACTIVE"
-    user_card.card_activation_date = user_loan.amortization_date
+    user_card.status = "ACTIVE"
+    user_card.card_activation_date = activation_date
 
 
 def disburse_card(
