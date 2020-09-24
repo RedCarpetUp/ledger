@@ -168,7 +168,7 @@ class BaseLoan(Loan):
 
     @classmethod
     def create(cls, session: Session, **kwargs) -> Loan:
-        user_product_id = kwargs.get("user_product_id")
+        user_product_id = kwargs.pop("user_product_id", None)
         card_type = kwargs.pop("card_type")
         if not user_product_id:
             user_product_id = create_user_product_mapping(
