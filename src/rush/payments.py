@@ -130,9 +130,8 @@ def payment_received_event(
                 event.id,
                 debit_acc_str=debit_book_str,
             )
-            assert (
-                remaining_amount == 0
-            )  # The amount to adjust is computed for this bill. It should all settle.
+            # The amount to adjust is computed for this bill. It should all settle.
+            assert remaining_amount == 0
             payment_received -= bill_data["amount_to_adjust"]
         if user_loan.should_reinstate_limit_on_payment:
             user_loan.reinstate_limit_on_payment(event=event, amount=actual_payment)
@@ -171,7 +170,7 @@ def find_amount_to_slide_in_bills(user_loan: BaseLoan, total_amount_to_slide: De
         {
             "bill": bill,
             "total_outstanding": bill.get_outstanding_amount(),
-            "monthly_instalment": bill.get_scheduled_min_amount(),
+            "monthly_instalment": bill.get_scheduled_min_amount() or bill.get_remaining_min(),
             "amount_to_adjust": 0,
         }
         for bill in unpaid_bills

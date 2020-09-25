@@ -346,7 +346,7 @@ class BookAccount(AuditMixin):
     identifier_type = Column(String(50))  # bill, emi, user, lender etc.
     book_name = Column(String(50))
     account_type = Column(String(50))
-    book_date = Column(Date())
+    balance = Column(DECIMAL, default=0)
 
 
 @py_dataclass
@@ -394,12 +394,16 @@ class LedgerTriggerEvent(AuditMixin):
     payment_type = pg_json_property("extra_details", "payment_type", String, default=None)
 
 
-class LedgerEntry(AuditMixin):
+class LedgerEntry(Base):
     __tablename__ = "ledger_entry"
-    event_id = Column(Integer, ForeignKey(LedgerTriggerEvent.id))
-    debit_account = Column(Integer, ForeignKey(BookAccount.id))
-    credit_account = Column(Integer, ForeignKey(BookAccount.id))
-    amount = Column(DECIMAL)
+    id = Column(Integer, primary_key=True)
+    event_id = Column(Integer, ForeignKey(LedgerTriggerEvent.id), nullable=False)
+    debit_account = Column(Integer, ForeignKey(BookAccount.id), nullable=False)
+    debit_account_balance = Column(DECIMAL, nullable=False)
+    credit_account = Column(Integer, ForeignKey(BookAccount.id), nullable=False)
+    credit_account_balance = Column(DECIMAL, nullable=False)
+    amount = Column(DECIMAL, nullable=False)
+    created_at = Column(TIMESTAMP, default=get_current_ist_time(), nullable=False)
 
 
 class LoanData(AuditMixin):
