@@ -23,6 +23,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.ext.indexable import index_property
 from sqlalchemy.orm import (
     Session,
@@ -508,6 +509,10 @@ class LoanSchedule(AuditMixin):
     total_closing_balance_post_due_date = Column(Numeric, nullable=False)
     payment_received = Column(Numeric, nullable=True)
     payment_status = Column(String(length=6), nullable=False, default="UnPaid")
+
+    @hybrid_property
+    def total_due_amount(self):
+        return self.principal_due + self.interest_due
 
 
 class LoanMoratorium(AuditMixin):

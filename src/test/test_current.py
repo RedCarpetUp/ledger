@@ -375,6 +375,13 @@ def test_generate_bill_1(session: Session) -> None:
     dpd_events = session.query(EventDpd).filter_by(loan_id=uc.loan_id).all()
     assert dpd_events[0].balance == Decimal(1000)
 
+    emis = uc.get_loan_schedule()
+    assert emis[0].total_due_amount == Decimal(114)
+    assert emis[0].principal_due == Decimal("83.33")
+    assert emis[0].interest_due == Decimal("30.67")
+    assert emis[0].due_date == parse_date("2020-05-15").date()
+    assert emis[0].emi_number == 1
+
 
 def _accrue_interest_on_bill_1(session: Session) -> None:
     user_loan = get_user_product(session, 99)
@@ -564,6 +571,10 @@ def _partial_payment_bill_1(session: Session) -> None:
         session, book_string=f"{user_loan.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable == Decimal("900.5")
+
+    emis = user_loan.get_loan_schedule()
+    assert emis[0].payment_received == Decimal("100")
+    assert emis[0].payment_status == "UnPaid"
 
 
 def test_partial_payment_bill_1(session: Session) -> None:
@@ -872,6 +883,21 @@ def _generate_bill_2(session: Session) -> None:
         session, parse_date("2020-06-01").date(), parse_date("2020-06-30").date()
     )
     assert total_revenue_earned == Decimal("0")
+
+    emis = uc.get_loan_schedule()
+    assert emis[0].total_due_amount == Decimal(114)
+    assert emis[0].principal_due == Decimal("83.33")
+    assert emis[0].interest_due == Decimal("30.67")
+    assert emis[0].due_date == parse_date("2020-05-15").date()
+    assert emis[0].emi_number == 1
+
+    assert emis[1].total_due_amount == Decimal(341)
+    assert emis[12].total_due_amount == Decimal(227)
+    assert emis[1].principal_due == Decimal("250")
+    assert emis[1].interest_due == Decimal("91")
+    assert emis[1].due_date == parse_date("2020-06-15").date()
+    assert emis[1].emi_number == 2
+    assert len(emis) == 13
 
 
 def test_generate_bill_2(session: Session) -> None:

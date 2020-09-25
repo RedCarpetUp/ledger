@@ -26,6 +26,7 @@ from rush.models import (
     Loan,
     LoanData,
     LoanMoratorium,
+    LoanSchedule,
     UserCard,
 )
 from rush.utils import (
@@ -356,3 +357,12 @@ class BaseLoan(Loan):
         all_bills = self.get_all_bills()
         total_outstanding = sum(bill.get_outstanding_amount(date_to_check_against) for bill in all_bills)
         return total_outstanding
+
+    def get_loan_schedule(self) -> List[LoanSchedule]:
+        emis = (
+            self.session.query(LoanSchedule)
+            .filter(LoanSchedule.loan_id == self.loan_id, LoanSchedule.bill_id.is_(None))
+            .order_by(LoanSchedule.emi_number)
+            .all()
+        )
+        return emis
