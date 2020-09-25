@@ -121,5 +121,7 @@ def disburse_card(
         post_date=get_current_ist_time().date(),
         extra_details={"payment_request_id": payment_request_id},
     )
+    session.add(event)
+    session.flush()
 
     limit_assignment_event(session=session, loan_id=user_loan.loan_id, event=event, amount=amount)
