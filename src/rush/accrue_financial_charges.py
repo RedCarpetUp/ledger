@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
 from sqlalchemy.orm import Session
 
@@ -75,6 +76,7 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loa
             .filter(
                 CardEmis.bill_id == bill.id,
                 CardEmis.due_date < post_date,
+                CardEmis.due_date > post_date - relativedelta(months=1),  # Should be within a month
                 CardEmis.row_status == "active",
             )
             .order_by(CardEmis.due_date.desc())
