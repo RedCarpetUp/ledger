@@ -172,8 +172,8 @@ def _adjust_bill(
             credit_book_str = f"{bill_fee.identifier_id}/bill/atm_fee/r"
         elif bill_fee.name == "card_activation_fees":
             credit_book_str = f"{bill_fee.identifier_id}/product/card_activation_fees/r"
-        elif bill_fee.name == "joining_fees":
-            credit_book_str = f"{bill_fee.identifier_id}/product/joining_fees/r"
+        elif bill_fee.name == "reset_joining_fees":
+            credit_book_str = f"{bill_fee.identifier_id}/product/reset_joining_fees/r"
         elif bill_fee.name == "card_reload_fees":
             credit_book_str = f"{bill_fee.identifier_id}/loan/card_reload_fees/r"
         fee_to_adjust = min(payment_to_adjust_from, bill_fee.gross_amount)

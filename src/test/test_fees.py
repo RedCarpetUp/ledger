@@ -122,7 +122,7 @@ def test_add_reload_fee(session: Session) -> None:
     assert reload_fee.fee_status == "UNPAID"
 
 
-def test_reset_joiningg_fees(session: Session) -> None:
+def test_reset_joining_fees(session: Session) -> None:
     create_lenders(session=session)
     create_products(session=session)
     create_user(session=session)
@@ -131,7 +131,7 @@ def test_reset_joiningg_fees(session: Session) -> None:
         session=session,
         user_id=5,
         product_type="term_loan_reset",
-        fee_name="joining_fees",
+        fee_name="reset_joining_fees",
         fee_amount=Decimal(1000),
     )
 

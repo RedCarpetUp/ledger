@@ -67,9 +67,9 @@ class ResetCard(BaseLoan):
             user_id=kwargs["user_id"],
             user_product_id=user_product_id,
             lender_id=kwargs["lender_id"],
-            rc_rate_of_interest_monthly=Decimal(kwargs[
-                "interest_rate"
-            ]),  # this will probably come from user's end.
+            rc_rate_of_interest_monthly=Decimal(
+                kwargs["interest_rate"]
+            ),  # this will probably come from user's end.
             lender_rate_of_interest_annual=Decimal(18),
             amortization_date=kwargs.get(
                 "loan_creation_date",
