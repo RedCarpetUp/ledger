@@ -81,6 +81,24 @@ def has_payment_anomaly(session: Session, user_loan: BaseLoan, payment_date: Dat
     return last_event_date and last_event_date.date() > payment_date.date()
 
 
+def has_payment_anomaly(session: Session, user_loan: BaseLoan, payment_date: DateTime) -> bool:
+    """
+    Assuming that a potential payment anomaly can only occur if last event's post date is greater than payment's date.
+    For example, interest got accrued on 16th. Payment came on 14th. This can be an anomaly.
+    """
+    last_event_date = (
+        session.query(LedgerTriggerEvent.post_date)
+        .filter(
+            LedgerTriggerEvent.loan_id == user_loan.loan_id,
+            LedgerTriggerEvent.name.in_(list(PAYMENT_AFFECTED_EVENTS)),  # Maybe this isn't necessary.
+        )
+        .order_by(LedgerTriggerEvent.id.desc())
+        .limit(1)
+        .scalar()
+    )
+    return last_event_date and last_event_date.date() > payment_date.date()
+
+
 def run_anomaly(session: Session, user_loan: BaseLoan, event_date: DateTime) -> None:
     """
     This checks for any anomalies after we have received the payment. If the interest needs to be
