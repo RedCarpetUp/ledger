@@ -134,6 +134,7 @@ def add_pre_product_fee(
     )
     f.gross_amount = d["gross_amount"]
     session.add(f)
+    session.flush()
 
     return f
 

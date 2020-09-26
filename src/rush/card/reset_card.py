@@ -13,13 +13,13 @@ from rush.card.base_card import (
     BaseLoan,
 )
 from rush.card.term_loan import TermLoanBill
-# from rush.card.utils import add_instrument_to_loan
 from rush.ledger_events import loan_disbursement_event
 from rush.ledger_utils import create_ledger_entry_from_str
 from rush.models import (
     LedgerTriggerEvent,
     Loan,
     LoanData,
+    ProductFee,
 )
 
 
@@ -48,13 +48,28 @@ class ResetCard(BaseLoan):
         user_product_id = kwargs["user_product_id"]
 
         # assert joining fees.
+        joining_fees = (
+            session.query(ProductFee.id)
+            .filter(
+                ProductFee.user_id == kwargs["user_id"],
+                ProductFee.identifier_id == user_product_id,
+                ProductFee.name == "reset_joining_fees",
+                ProductFee.fee_status == "PAID",
+            )
+            .scalar()
+        )
 
+        assert joining_fees is not None
+
+        # create loan.
         loan = cls(
             session=session,
             user_id=kwargs["user_id"],
             user_product_id=user_product_id,
             lender_id=kwargs["lender_id"],
-            rc_rate_of_interest_monthly=Decimal(3),  # this will probably come from user's end.
+            rc_rate_of_interest_monthly=Decimal(kwargs[
+                "interest_rate"
+            ]),  # this will probably come from user's end.
             lender_rate_of_interest_annual=Decimal(18),
             amortization_date=kwargs.get(
                 "loan_creation_date",
@@ -133,17 +148,5 @@ class ResetCard(BaseLoan):
             user_loan=loan,
             bill=bill,
         )
-
-        # add_instrument_to_loan(
-        #     session=session,
-        #     instrument_type="card",
-        #     loan=loan,
-        #     instrument_info={
-        #         "kit_number": kwargs["kit_number"],
-        #         "activation_type": kwargs["activation_type"],
-        #         "activation_date": kwargs["activation_date"],
-        #         "card_name": kwargs["card_name"]
-        #     }
-        # )
 
         return loan

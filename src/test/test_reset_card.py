@@ -8,7 +8,10 @@ from rush.card import (
     get_user_product,
 )
 from rush.card.reset_card import ResetCard
-from rush.card.utils import create_user_product_mapping
+from rush.card.utils import (
+    add_pre_product_fee,
+    create_user_product_mapping,
+)
 from rush.ledger_utils import get_account_balance_from_str
 from rush.models import (
     CardEmis,
@@ -54,6 +57,7 @@ def create_test_term_loan(session: Session, **kwargs) -> ResetCard:  # type: ign
         product_order_date=parse_date(date_str).date(),
         user_product_id=user_product_id,
         downpayment_percent=Decimal("0"),
+        interest_rate=3,
     )
 
     return loan
@@ -74,6 +78,17 @@ def test_create_term_loan(session: Session) -> None:
     user_product = create_user_product_mapping(
         session=session, user_id=6, product_type="term_loan_reset"
     )
+
+    fee = add_pre_product_fee(
+        session=session,
+        user_id=6,
+        product_type="term_loan_reset",
+        fee_name="reset_joining_fees",
+        user_product_id=user_product.id,
+        fee_amount=Decimal("100"),
+    )
+    fee.fee_status = "PAID"
+    session.flush()
 
     loan_creation_data = {"date_str": "2020-08-01", "user_product_id": user_product.id}
 
