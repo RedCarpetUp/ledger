@@ -358,11 +358,11 @@ class BaseLoan(Loan):
         total_outstanding = sum(bill.get_outstanding_amount(date_to_check_against) for bill in all_bills)
         return total_outstanding
 
-    def get_loan_schedule(self) -> List[LoanSchedule]:
-        emis = (
-            self.session.query(LoanSchedule)
-            .filter(LoanSchedule.loan_id == self.loan_id, LoanSchedule.bill_id.is_(None))
-            .order_by(LoanSchedule.emi_number)
-            .all()
+    def get_loan_schedule(self, only_unpaid_emis=False) -> List[LoanSchedule]:
+        q = self.session.query(LoanSchedule).filter(
+            LoanSchedule.loan_id == self.loan_id, LoanSchedule.bill_id.is_(None)
         )
+        if only_unpaid_emis:
+            q = q.filter(LoanSchedule.payment_status == "UnPaid")
+        emis = q.order_by(LoanSchedule.emi_number).all()
         return emis
