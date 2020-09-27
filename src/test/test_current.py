@@ -54,6 +54,7 @@ from rush.models import (
     LoanData,
     LoanMoratorium,
     PaymentMapping,
+    PaymentSplit,
     Product,
     User,
     UserPy,
@@ -578,11 +579,17 @@ def _partial_payment_bill_1(session: Session) -> None:
     assert emis[0].payment_status == "UnPaid"
     assert emis[0].emi_number == 1
 
-    # Check the entry in payment mapping.
+    # Check the entry in payment schedule mapping.
     pm = session.query(PaymentMapping).filter(PaymentMapping.payment_request_id == "a1237").all()
     assert len(pm) == 1
     assert pm[0].emi_id == emis[0].id
     assert pm[0].amount_settled == Decimal("100")
+
+    # Check the entries for payment split
+    payment_splits = session.query(PaymentSplit).filter(PaymentSplit.payment_request_id == "a1237").all()
+    assert len(payment_splits) == 1
+    split = {ps.component: ps.amount_settled for ps in payment_splits}
+    assert split["principal"] == Decimal("100")
 
 
 def test_partial_payment_bill_1(session: Session) -> None:
@@ -771,6 +778,32 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
         session, book_string=f"{user_loan.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable == Decimal("769.0")
+
+    emis = user_loan.get_loan_schedule()
+    assert emis[0].payment_received == Decimal("114")
+    assert emis[0].payment_status == "Paid"
+    assert emis[0].emi_number == 1
+    assert emis[1].emi_number == 2
+    assert emis[1].payment_status == "UnPaid"
+    assert emis[1].payment_received == Decimal("0")
+
+    # Check the entry in payment schedule mapping.
+    pm = (
+        session.query(PaymentMapping)
+        .filter(PaymentMapping.payment_request_id == "a1239")
+        .order_by(PaymentMapping.id)
+        .all()
+    )
+    assert len(pm) == 1
+    assert pm[0].emi_id == emis[0].id
+    assert pm[0].amount_settled == Decimal("14")
+
+    payment_splits = session.query(PaymentSplit).filter(PaymentSplit.payment_request_id == "a1239").all()
+    assert len(payment_splits) == 3
+    split = {ps.component: ps.amount_settled for ps in payment_splits}
+    assert split["late_fine"] == Decimal("100")
+    assert split["igst"] == Decimal("18")
+    assert split["interest"] == Decimal("14")
 
 
 def test_is_bill_paid_bill_1(session: Session) -> None:
