@@ -484,16 +484,6 @@ class EmiPaymentMapping(AuditMixin):
     row_status = Column(String(length=10), nullable=False, default="active")
 
 
-class PaymentMapping(AuditMixin):
-    __tablename__ = "payment_mapping"
-    payment_request_id = Column(String(), nullable=False)
-    external_id = Column(
-        String(50), nullable=False
-    )  # can be the emi id in case of principal & interest. etc.
-    amount_settled_for = Column(String(15), nullable=False)  # principal, late fee, processing fee etc.
-    amount_settled = Column(Numeric, nullable=False)
-
-
 class LoanSchedule(AuditMixin):
     __tablename__ = "loan_schedule"
     loan_id = Column(Integer, ForeignKey(Loan.id))
@@ -507,12 +497,30 @@ class LoanSchedule(AuditMixin):
     last_payment_date = Column(TIMESTAMP, nullable=True)
     total_closing_balance = Column(Numeric, nullable=False)
     total_closing_balance_post_due_date = Column(Numeric, nullable=False)
-    payment_received = Column(Numeric, nullable=True)
+    payment_received = Column(Numeric, nullable=False, default=0)
     payment_status = Column(String(length=6), nullable=False, default="UnPaid")
 
     @hybrid_property
     def total_due_amount(self):
         return self.principal_due + self.interest_due
+
+    @hybrid_property
+    def remaining_amount(self):
+        return self.total_due_amount - self.payment_received
+
+
+class PaymentMapping(AuditMixin):
+    __tablename__ = "emi_payment_mapping_new"
+    payment_request_id = Column(String(), nullable=False, index=True)
+    emi_id = Column(Integer, ForeignKey(LoanSchedule.id), nullable=False)
+    amount_settled = Column(Numeric, nullable=False)
+
+
+class PaymentSplit(AuditMixin):
+    __tablename__ = "payment_split"
+    payment_request_id = Column(String(), nullable=False, index=True)
+    component = Column(String(50), nullable=False)
+    amount_settled = Column(Numeric, nullable=False)
 
 
 class LoanMoratorium(AuditMixin):

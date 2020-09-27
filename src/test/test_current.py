@@ -53,6 +53,7 @@ from rush.models import (
     Lenders,
     LoanData,
     LoanMoratorium,
+    PaymentMapping,
     Product,
     User,
     UserPy,
@@ -575,6 +576,13 @@ def _partial_payment_bill_1(session: Session) -> None:
     emis = user_loan.get_loan_schedule()
     assert emis[0].payment_received == Decimal("100")
     assert emis[0].payment_status == "UnPaid"
+    assert emis[0].emi_number == 1
+
+    # Check the entry in payment mapping.
+    pm = session.query(PaymentMapping).filter(PaymentMapping.payment_request_id == "a1237").all()
+    assert len(pm) == 1
+    assert pm[0].emi_id == emis[0].id
+    assert pm[0].amount_settled == Decimal("100")
 
 
 def test_partial_payment_bill_1(session: Session) -> None:
@@ -1727,6 +1735,33 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
         payment_date=parse_date("2020-05-05 19:23:11"),
         payment_request_id="aasdf123",
     )
+
+    emis = user_loan.get_loan_schedule()
+    assert emis[0].payment_received == Decimal("114")
+    assert emis[0].payment_status == "Paid"
+    assert emis[0].emi_number == 1
+    assert emis[1].emi_number == 2
+    assert emis[1].payment_status == "Paid"
+    assert emis[1].payment_received == Decimal("114")
+    assert emis[2].emi_number == 3
+    assert emis[2].payment_status == "UnPaid"
+    assert emis[2].payment_received == Decimal("4")
+
+    # Check the entry in payment mapping.
+    pm = (
+        session.query(PaymentMapping)
+        .filter(PaymentMapping.payment_request_id == "aasdf123")
+        .order_by(PaymentMapping.id)
+        .all()
+    )
+    assert len(pm) == 3
+    assert pm[0].emi_id == emis[0].id
+    assert pm[0].amount_settled == Decimal("14")
+    assert pm[1].emi_id == emis[1].id
+    assert pm[1].amount_settled == Decimal("114")
+    assert pm[2].emi_id == emis[2].id
+    assert pm[2].amount_settled == Decimal("4")
+
     # Accrue interest.
     _accrue_interest_on_bill_1(session)
 

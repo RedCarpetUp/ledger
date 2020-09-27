@@ -22,7 +22,7 @@ from rush.ledger_utils import (
     create_ledger_entry_from_str,
     get_account_balance_from_str,
 )
-from rush.loan_schedule import reslide_all_payments
+from rush.loan_schedule import slide_payment_to_emis
 from rush.models import LedgerTriggerEvent
 from rush.utils import (
     div,
@@ -155,7 +155,7 @@ def payment_received_event(
 
     # We will either slide or close bills
     slide_or_close_bills(user_loan, event, skip_closing)
-    reslide_all_payments(session, user_loan)
+    slide_payment_to_emis(user_loan, event)
 
 
 def slide_or_close_bills(user_loan, event, skip_closing=False):
@@ -233,7 +233,7 @@ def transaction_refund_event(session: Session, user_loan: BaseLoan, event: Ledge
     )
 
     group_bills_to_create_loan_schedule(user_loan=user_loan)
-    reslide_all_payments(session, user_loan)
+    slide_payment_to_emis(user_loan, event)
 
 
 def settle_payment_in_bank(

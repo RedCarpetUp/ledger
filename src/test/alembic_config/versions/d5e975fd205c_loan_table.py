@@ -376,7 +376,7 @@ def upgrade() -> None:
         sa.Column("last_payment_date", sa.Date(), nullable=True),
         sa.Column("total_closing_balance_post_due_date", sa.DECIMAL(), nullable=False),
         sa.Column("total_closing_balance", sa.DECIMAL(), nullable=False),
-        sa.Column("payment_received", sa.DECIMAL(), nullable=True),
+        sa.Column("payment_received", sa.DECIMAL(), nullable=False),
         sa.Column("payment_status", sa.String(6), nullable=False),
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
@@ -387,11 +387,23 @@ def upgrade() -> None:
     )
 
     op.create_table(
-        "payment_mapping",
+        "emi_payment_mapping_new",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("payment_request_id", sa.String(), nullable=False),
-        sa.Column("external_id", sa.String(), nullable=False),
-        sa.Column("amount_settled_for", sa.String(15), nullable=False),
+        sa.Column("payment_request_id", sa.String(), nullable=False, index=True),
+        sa.Column("emi_id", sa.Integer(), nullable=False, index=True),
+        sa.Column("amount_settled", sa.DECIMAL(), nullable=False),
+        sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
+        sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
+        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.PrimaryKeyConstraint("id"),
+        sa.ForeignKeyConstraint(["emi_id"], ["loan_schedule.id"], name="fk_emi_id_mapping"),
+    )
+
+    op.create_table(
+        "payment_split",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("payment_request_id", sa.String(), nullable=False, index=True),
+        sa.Column("component", sa.String(50), nullable=False),
         sa.Column("amount_settled", sa.DECIMAL(), nullable=False),
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),

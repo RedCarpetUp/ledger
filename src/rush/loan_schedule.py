@@ -1,5 +1,3 @@
-from typing import List
-
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import (
     and_,
@@ -7,7 +5,6 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session
 
-from rush.anomaly_detection import get_payment_events
 from rush.card.base_card import (
     BaseBill,
     BaseLoan,
@@ -15,6 +12,7 @@ from rush.card.base_card import (
 from rush.models import (
     LedgerTriggerEvent,
     LoanSchedule,
+    PaymentMapping,
 )
 
 
@@ -91,30 +89,25 @@ def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
     group_bills(session, user_loan)
 
 
-def reslide_all_payments(session: Session, user_loan: BaseLoan):
-    reset_emis_for_reslide(session, user_loan)
-    payment_events = get_payment_events(session, user_loan)
-    emis = user_loan.get_loan_schedule()
-    for payment_event in payment_events:
-        slide_payment_to_emis(emis, payment_event)
-
-
-def reset_emis_for_reslide(session: Session, user_loan: BaseLoan):
-    session.query(LoanSchedule).filter(
-        LoanSchedule.loan_id == user_loan.loan_id, LoanSchedule.bill_id.is_(None)
-    ).update({"payment_received": 0, "payment_status": "UnPaid", "last_payment_date": None})
-
-
-def slide_payment_to_emis(loan_schedule: List[LoanSchedule], payment_event: LedgerTriggerEvent):
+def slide_payment_to_emis(user_loan: BaseLoan, payment_event: LedgerTriggerEvent):
     amount_to_slide = payment_event.amount
-    for emi in loan_schedule:
-        if emi.payment_status == "Paid":
-            continue
-        if amount_to_slide <= 0:  # This payment is slid so we move to the next one.
+    unpaid_emis = user_loan.get_loan_schedule(only_unpaid_emis=True)
+    # TODO reduce the amount for fee payments.
+    payment_mapping_objects = []
+    for emi in unpaid_emis:
+        if amount_to_slide <= 0:
             break
-        amount_slid = min(emi.total_due_amount, amount_to_slide)
-        emi.payment_received = amount_slid
-        if emi.total_due_amount == emi.payment_received:
+        amount_slid = min(emi.remaining_amount, amount_to_slide)
+        emi.payment_received += amount_slid
+        if emi.remaining_amount == 0:
             emi.payment_status = "Paid"
         emi.last_payment_date = payment_event.post_date
+        # Create entry in emi payment mapping.
+        pm = PaymentMapping(
+            payment_request_id=payment_event.extra_details["payment_request_id"],
+            emi_id=emi.id,
+            amount_settled=amount_slid,
+        )
+        payment_mapping_objects.append(pm)
         amount_to_slide -= amount_slid
+    user_loan.session.bulk_save_objects(payment_mapping_objects)
