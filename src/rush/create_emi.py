@@ -828,7 +828,6 @@ def update_event_with_dpd(
             in [
                 "accrue_interest",
                 "accrue_late_fine",
-                "daily_dpd",
                 "atm_fee_added",
             ]
             and debit_account.identifier_type == "bill"
@@ -846,16 +845,27 @@ def update_event_with_dpd(
         ):
             actual_event_update(session, False, ledger_trigger_event, ledger_entry, debit_account)
 
-        # Can avoid this because it does not make sense, not touching the bill ~ Ananth
-        # elif (
-        #     ledger_trigger_event.name
-        #     in [
-        #         "transaction_refund",
-        #     ]
-        #     and credit_account.identifier_type == "loan"
-        #     and credit_account.book_name == "pre_payment"
-        # ):
-        #     actual_event_update(session, True, ledger_trigger_event, ledger_entry, debit_account)
+        elif (
+            ledger_trigger_event.name
+            in [
+                "daily_dpd",
+            ]
+            and event
+        ):
+            all_emis = (
+                session.query(CardEmis)
+                .filter(
+                    CardEmis.loan_id == user_loan.loan_id,
+                    CardEmis.row_status == "active",
+                    CardEmis.bill_id == None,
+                )
+                .order_by(CardEmis.emi_number.asc())
+                .all()
+            )
+            for emi in all_emis:
+                if emi.payment_status != "Paid":
+                    # Schedule dpd
+                    emi.dpd = (event.post_date.date() - emi.due_date).days
 
         elif (
             ledger_trigger_event.name
