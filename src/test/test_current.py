@@ -28,6 +28,7 @@ from rush.create_bill import (
 from rush.create_card_swipe import create_card_swipe
 from rush.create_emi import (
     check_moratorium_eligibility,
+    daily_dpd_update,
     update_event_with_dpd,
 )
 from rush.ledger_utils import (
@@ -1687,6 +1688,9 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     assert bill_may_principal_due == Decimal("12708.86")
     assert bill_june_principal_due == Decimal("7891.33")
 
+    daily_date = parse_date("2020-08-28 00:05:00")
+    daily_dpd_update(session, uc, daily_date)
+    
 
 def test_interest_reversal_interest_already_settled(session: Session) -> None:
     test_generate_bill_1(session)

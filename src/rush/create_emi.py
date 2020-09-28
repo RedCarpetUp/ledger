@@ -728,7 +728,6 @@ def group_bills_to_create_loan_schedule(user_loan: BaseLoan):
 def update_event_with_dpd(
     user_loan: BaseLoan,
     to_date: DateTime = None,
-    event: LedgerTriggerEvent = None,
     from_date: DateTime = None,
 ) -> None:
     def actual_event_update(
@@ -807,11 +806,7 @@ def update_event_with_dpd(
             credit_book_account.identifier_type == "bill",
         ),
     )
-    if event:
-        events_list.filter(
-            LedgerTriggerEvent.id == event.id,
-        )
-    elif from_date and to_date:
+    if from_date and to_date:
         events_list.filter(
             LedgerTriggerEvent.post_date > from_date,
             LedgerTriggerEvent.post_date <= to_date,
@@ -848,28 +843,6 @@ def update_event_with_dpd(
         elif (
             ledger_trigger_event.name
             in [
-                "daily_dpd",
-            ]
-            and event
-        ):
-            all_emis = (
-                session.query(CardEmis)
-                .filter(
-                    CardEmis.loan_id == user_loan.loan_id,
-                    CardEmis.row_status == "active",
-                    CardEmis.bill_id == None,
-                )
-                .order_by(CardEmis.emi_number.asc())
-                .all()
-            )
-            for emi in all_emis:
-                if emi.payment_status != "Paid":
-                    # Schedule dpd
-                    emi.dpd = (event.post_date.date() - emi.due_date).days
-
-        elif (
-            ledger_trigger_event.name
-            in [
                 "reverse_interest_charges",
                 "reverse_late_charges",
                 "payment_received",
@@ -889,4 +862,22 @@ def update_event_with_dpd(
     if not user_loan.ever_dpd or max_dpd.max_dpd > user_loan.ever_dpd:
         user_loan.ever_dpd = max_dpd.max_dpd
 
+    session.flush()
+
+
+def daily_dpd_update(session, user_loan, post_date):
+    all_emis = (
+        session.query(CardEmis)
+        .filter(
+            CardEmis.loan_id == user_loan.loan_id,
+            CardEmis.row_status == "active",
+            CardEmis.bill_id == None,
+        )
+        .order_by(CardEmis.emi_number.asc())
+        .all()
+    )
+    for emi in all_emis:
+        if emi.payment_status != "Paid":
+            # Schedule dpd
+            emi.dpd = (post_date.date() - emi.due_date).days
     session.flush()
