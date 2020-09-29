@@ -395,8 +395,16 @@ def upgrade() -> None:
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.Column("row_status", sa.String(8), nullable=False, default="active"),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["emi_id"], ["loan_schedule.id"], name="fk_emi_id_mapping"),
+    )
+    op.create_index(
+        "idx_uniq_on_row_status_emi_payment_mapping",
+        "emi_payment_mapping_new",
+        ["payment_request_id", "emi_id"],
+        unique=True,
+        postgresql_where=sa.text("row_status = 'active'"),
     )
 
     op.create_table(

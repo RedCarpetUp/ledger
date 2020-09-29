@@ -514,6 +514,17 @@ class PaymentMapping(AuditMixin):
     payment_request_id = Column(String(), nullable=False, index=True)
     emi_id = Column(Integer, ForeignKey(LoanSchedule.id), nullable=False)
     amount_settled = Column(Numeric, nullable=False)
+    row_status = Column(String(8), nullable=False, default="active")
+
+    __table_args__ = (
+        Index(
+            "idx_uniq_on_row_status_emi_payment_mapping",
+            payment_request_id,
+            emi_id,
+            unique=True,
+            postgresql_where=row_status == "active",
+        ),
+    )
 
 
 class PaymentSplit(AuditMixin):
