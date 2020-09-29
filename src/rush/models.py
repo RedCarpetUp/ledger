@@ -508,11 +508,16 @@ class LoanSchedule(AuditMixin):
     def remaining_amount(self):
         return self.total_due_amount - self.payment_received
 
+    def make_emi_unpaid(self):
+        self.payment_received = 0
+        self.payment_status = "UnPaid"
+        self.last_payment_date = None
+
 
 class PaymentMapping(AuditMixin):
     __tablename__ = "emi_payment_mapping_new"
     payment_request_id = Column(String(), nullable=False, index=True)
-    emi_id = Column(Integer, ForeignKey(LoanSchedule.id), nullable=False)
+    emi_id = Column(Integer, ForeignKey(LoanSchedule.id), nullable=False, index=True)
     amount_settled = Column(Numeric, nullable=False)
     row_status = Column(String(8), nullable=False, default="active")
 

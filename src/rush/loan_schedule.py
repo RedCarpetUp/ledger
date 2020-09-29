@@ -1,3 +1,5 @@
+from datetime import date
+
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import (
     and_,
@@ -87,6 +89,7 @@ def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
         emi_objects.append(bill_schedule)
     session.bulk_save_objects(emi_objects)
     group_bills(session, user_loan)
+    readjust_future_payment(user_loan, bill.table.bill_close_date)
 
 
 def slide_payment_to_emis(user_loan: BaseLoan, payment_event: LedgerTriggerEvent):
@@ -112,7 +115,6 @@ def slide_payment_to_emis(user_loan: BaseLoan, payment_event: LedgerTriggerEvent
         if emi.remaining_amount == 0:
             emi.payment_status = "Paid"
         emi.last_payment_date = payment_event.post_date
-        # Create entry in emi payment mapping.
         pm = PaymentMapping(
             payment_request_id=payment_event.extra_details["payment_request_id"],
             emi_id=emi.id,
@@ -120,4 +122,65 @@ def slide_payment_to_emis(user_loan: BaseLoan, payment_event: LedgerTriggerEvent
         )
         payment_mapping_objects.append(pm)
         amount_to_slide -= amount_slid
+    user_loan.session.bulk_save_objects(payment_mapping_objects)
+
+
+def readjust_future_payment(user_loan: BaseLoan, date_to_check_after: date):
+    """
+    If user has paid more than the current emi then it gets settled in future emis.
+    Once a new bill is generated the schedule gets changed. We need to readjust that
+    future payment according to this new schedule now.
+
+    date_to_check_after: Bill generation date. Any emi which has money adjust after this
+    date needs to be readjust.
+    """
+    session = user_loan.session
+    future_adjusted_emis = (
+        session.query(LoanSchedule)
+        .filter(
+            LoanSchedule.loan_id == user_loan.loan_id,
+            LoanSchedule.bill_id.is_(None),
+            LoanSchedule.due_date >= date_to_check_after,
+            LoanSchedule.payment_received > 0,  # Only if there's amount adjust in future emis.
+        )
+        .all()
+    )
+
+    # There should be at least 2 emis for the readjustment. If there's only one then
+    # it doesn't matter because the amount will still be staying at that emi.
+    if len(future_adjusted_emis) < 2:
+        return
+
+    emi_ids = []
+    for emi in future_adjusted_emis:
+        emi_ids.append(emi.id)
+        emi.make_emi_unpaid()  # reset this emi. will be updating with new data below.
+
+    # Get the payments that were adjusted in these emis.
+    payment_mapping_data = session.query(PaymentMapping).filter(PaymentMapping.emi_id.in_(emi_ids)).all()
+
+    payment_mapping_objects = []
+    for payment_mapping in payment_mapping_data:
+        payment_mapping.row_status = "inactive"
+        session.flush()
+        amount_to_readjust = payment_mapping.amount_settled
+        for emi in future_adjusted_emis:
+            if emi.payment_status == "Paid":  # skip is already paid from previous mapping
+                continue
+            if amount_to_readjust <= 0:
+                break  # this mapping's amount is done. Move to next one.
+            amount_slid = min(emi.remaining_amount, amount_to_readjust)
+            emi.payment_received += amount_slid
+            if emi.remaining_amount == 0:
+                emi.payment_status = "Paid"
+            # TODO get payment request data for payment date.
+            # emi.last_payment_date = payment_event.post_date
+            pm = PaymentMapping(
+                payment_request_id=payment_mapping.payment_request_id,
+                emi_id=emi.id,
+                amount_settled=amount_slid,
+            )
+            payment_mapping_objects.append(pm)
+            amount_to_readjust -= amount_slid
+        assert amount_to_readjust == 0
     user_loan.session.bulk_save_objects(payment_mapping_objects)

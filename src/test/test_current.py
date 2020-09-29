@@ -372,10 +372,10 @@ def test_generate_bill_1(session: Session) -> None:
     _, min_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/min/a")
     assert min_amount == 114
 
-    update_event_with_dpd(user_loan=user_loan, post_date=parse_date("2020-05-21 00:05:00"))
-
-    dpd_events = session.query(EventDpd).filter_by(loan_id=uc.loan_id).all()
-    assert dpd_events[0].balance == Decimal(1000)
+    # update_event_with_dpd(user_loan=user_loan, post_date=parse_date("2020-05-21 00:05:00"))
+    #
+    # dpd_events = session.query(EventDpd).filter_by(loan_id=uc.loan_id).all()
+    # assert dpd_events[0].balance == Decimal(1000)
 
     emis = uc.get_loan_schedule()
     assert emis[0].total_due_amount == Decimal(114)
@@ -580,7 +580,11 @@ def _partial_payment_bill_1(session: Session) -> None:
     assert emis[0].emi_number == 1
 
     # Check the entry in payment schedule mapping.
-    pm = session.query(PaymentMapping).filter(PaymentMapping.payment_request_id == "a1237").all()
+    pm = (
+        session.query(PaymentMapping)
+        .filter(PaymentMapping.payment_request_id == "a1237", PaymentMapping.row_status == "active")
+        .all()
+    )
     assert len(pm) == 1
     assert pm[0].emi_id == emis[0].id
     assert pm[0].amount_settled == Decimal("100")
@@ -790,7 +794,7 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
     # Check the entry in payment schedule mapping.
     pm = (
         session.query(PaymentMapping)
-        .filter(PaymentMapping.payment_request_id == "a1239")
+        .filter(PaymentMapping.payment_request_id == "a1239", PaymentMapping.row_status == "active")
         .order_by(PaymentMapping.id)
         .all()
     )
@@ -1783,7 +1787,7 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
     # Check the entry in payment mapping.
     pm = (
         session.query(PaymentMapping)
-        .filter(PaymentMapping.payment_request_id == "aasdf123")
+        .filter(PaymentMapping.payment_request_id == "aasdf123", PaymentMapping.row_status == "active")
         .order_by(PaymentMapping.id)
         .all()
     )
@@ -2946,3 +2950,63 @@ def test_transaction_before_activation(session: Session) -> None:
     )
 
     assert swipe["result"] == "error"
+
+
+def test_excess_payment_in_future_emis(session: Session) -> None:
+    test_generate_bill_1(session)
+
+    user_loan = get_user_product(session, 99)
+    payment_date = parse_date("2020-05-03")
+    amount = Decimal(450)  # min is 114. Paying for 3 emis. Touching 4th.
+    unpaid_bills = user_loan.get_unpaid_bills()
+
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id="s3234",
+    )
+    emis = user_loan.get_loan_schedule()
+    assert emis[0].payment_status == "Paid"
+    assert emis[1].payment_status == "Paid"
+    assert emis[2].payment_status == "Paid"
+    assert emis[3].payment_status == "UnPaid"
+    assert emis[3].payment_received == Decimal("108")
+
+    pm = (
+        session.query(PaymentMapping)
+        .filter(PaymentMapping.payment_request_id == "s3234", PaymentMapping.row_status == "active")
+        .order_by(PaymentMapping.emi_id)
+        .all()
+    )
+    assert len(pm) == 4
+    assert pm[0].emi_id == emis[0].id
+    assert pm[0].amount_settled == Decimal("114")
+    assert pm[3].amount_settled == Decimal("108")
+
+    # accrue interest of first bill
+    _accrue_interest_on_bill_1(session)
+
+    # Generate 2nd bill. 2nd emi is now 341.
+    # Do transaction to create new bill.
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-05-08 19:23:11"),
+        amount=Decimal(2000),
+        description="BigBasket.com",
+    )
+
+    bill_2 = bill_generate(user_loan=user_loan)
+
+    emis = user_loan.get_loan_schedule()
+
+    pm = (
+        session.query(PaymentMapping)
+        .filter(PaymentMapping.payment_request_id == "s3234", PaymentMapping.row_status == "active")
+        .order_by(PaymentMapping.emi_id)
+        .all()
+    )
+    assert len(pm) == 2
+    assert pm[1].amount_settled == Decimal("336")
