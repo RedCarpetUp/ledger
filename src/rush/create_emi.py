@@ -2,8 +2,9 @@ from decimal import Decimal
 from typing import Optional
 
 from dateutil.relativedelta import relativedelta
+from datetime import datetime
 from pendulum import DateTime
-from sqlalchemy import or_
+from sqlalchemy import or_, and_
 from sqlalchemy.orm import (
     Session,
     aliased,
@@ -729,6 +730,7 @@ def update_event_with_dpd(
     user_loan: BaseLoan,
     to_date: DateTime = None,
     from_date: DateTime = None,
+    event: LedgerTriggerEvent = None,
 ) -> None:
     def actual_event_update(
         session: Session,
@@ -748,7 +750,10 @@ def update_event_with_dpd(
             account_id = account.identifier
             account_balance = ledger_entry.credit_account_balance
 
-        event_post_date = ledger_trigger_event.post_date.date()
+        if isinstance(ledger_trigger_event.post_date, datetime):
+            event_post_date = ledger_trigger_event.post_date.date()
+        else:
+            event_post_date = ledger_trigger_event.post_date
         # In case of moratorium reset all post dates to start of moratorium
         if LoanMoratorium.is_in_moratorium(
             session, loan_id=user_loan.loan_id, date_to_check_against=event_post_date
@@ -758,9 +763,21 @@ def update_event_with_dpd(
             )
             event_post_date = moratorium.start_date
 
+        # We need to get the bill because we have to check if min is paid
+        bill = user_loan.convert_to_bill_class(
+            (
+                session.query(LoanData)
+                .filter(
+                    LoanData.loan_id == user_loan.loan_id,
+                    LoanData.id == account_id,
+                )
+                .first()
+            )
+        )
+
         # Adjust dpd in loan schedule
         first_unpaid_mark = False
-        dpd = 0
+        bill_dpd = 0
         all_emis = (
             session.query(CardEmis)
             .filter(
@@ -776,9 +793,14 @@ def update_event_with_dpd(
                 if not first_unpaid_mark:
                     first_unpaid_mark = True
                     # Bill dpd
-                    dpd = (event_post_date - emi.due_date).days
+                    # Only calculate bill dpd is min is not 0
+                    if bill and bill.get_remaining_min() > 0:
+                        bill_dpd = (event_post_date - emi.due_date).days
                 # Schedule dpd
-                emi.dpd = (event_post_date - emi.due_date).days
+                schedule_dpd = (event_post_date - emi.due_date).days
+                # We should only consider the daily dpd event for increment
+                if schedule_dpd >= emi.dpd:
+                    emi.dpd = schedule_dpd
 
         new_event = EventDpd(
             bill_id=account_id,
@@ -787,7 +809,7 @@ def update_event_with_dpd(
             credit=credit_amount,
             debit=debit_amount,
             balance=account_balance,
-            dpd=dpd,
+            dpd=bill_dpd,
         )
         session.add(new_event)
 
@@ -798,23 +820,22 @@ def update_event_with_dpd(
     events_list = session.query(
         LedgerTriggerEvent, LedgerEntry, debit_book_account, credit_book_account
     ).filter(
-        LedgerTriggerEvent.id == LedgerEntry.event_id,
+        LedgerEntry.event_id == LedgerTriggerEvent.id,
         LedgerEntry.debit_account == debit_book_account.id,
         LedgerEntry.credit_account == credit_book_account.id,
-        or_(
-            debit_book_account.identifier_type == "bill",
-            credit_book_account.identifier_type == "bill",
-        ),
     )
     if from_date and to_date:
-        events_list.filter(
+        events_list = events_list.filter(
             LedgerTriggerEvent.post_date > from_date,
             LedgerTriggerEvent.post_date <= to_date,
         )
-    else:
-        events_list.filter(
+    elif to_date:
+        events_list = events_list.filter(
             LedgerTriggerEvent.post_date <= to_date,
         )
+
+    if event:
+        events_list = events_list.filter(LedgerTriggerEvent.id == event.id)
     events_list = events_list.order_by(LedgerTriggerEvent.post_date.asc()).all()
 
     for ledger_trigger_event, ledger_entry, debit_account, credit_account in events_list:
@@ -822,7 +843,7 @@ def update_event_with_dpd(
             ledger_trigger_event.name
             in [
                 "accrue_interest",
-                "accrue_late_fine",
+                "charge_late_fine",
                 "atm_fee_added",
             ]
             and debit_account.identifier_type == "bill"
@@ -879,5 +900,8 @@ def daily_dpd_update(session, user_loan, post_date):
     for emi in all_emis:
         if emi.payment_status != "Paid":
             # Schedule dpd
-            emi.dpd = (post_date.date() - emi.due_date).days
+            dpd = (post_date.date() - emi.due_date).days
+            # We should only consider the daily dpd event for increment
+            if dpd >= emi.dpd:
+                emi.dpd = dpd
     session.flush()

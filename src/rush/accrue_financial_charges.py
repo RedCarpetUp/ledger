@@ -93,6 +93,11 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loa
             accrue_interest_event(session, bill, accrue_event, interest_to_charge)
             add_max_amount_event(session, bill, accrue_event, interest_to_charge)
 
+    from rush.create_emi import update_event_with_dpd
+
+    # Dpd calculation
+    update_event_with_dpd(user_loan=user_loan, event=accrue_event)
+
 
 def is_late_fee_valid(session: Session, user_loan: BaseLoan) -> bool:
     """
@@ -172,9 +177,10 @@ def accrue_late_charges(
 
         session.flush()
 
-        from rush.create_emi import adjust_late_fee_in_emis
+        from rush.create_emi import adjust_late_fee_in_emis, update_event_with_dpd
 
         adjust_late_fee_in_emis(session=session, user_loan=user_loan, bill=latest_bill)
+        update_event_with_dpd(user_loan=user_loan, event=event)
     return latest_bill
 
 
@@ -262,10 +268,9 @@ def reverse_interest_charges(
                 debit_book_str=entry["acc_to_remove_from"],
             )
 
-    # from rush.create_emi import refresh_schedule
+    from rush.create_emi import update_event_with_dpd
 
-    # # Slide payment in emi
-    # refresh_schedule(user_card=user_card)
+    update_event_with_dpd(user_loan=user_loan, event=event)
 
 
 def reverse_incorrect_late_charges(
@@ -344,7 +349,9 @@ def reverse_incorrect_late_charges(
         emi.late_fee -= fee.gross_amount
         session.flush()
 
-    from rush.create_emi import group_bills_to_create_loan_schedule
+    from rush.create_emi import group_bills_to_create_loan_schedule, update_event_with_dpd
 
     # Recreate loan level emis
     group_bills_to_create_loan_schedule(user_loan=user_loan)
+    # Update dpd
+    update_event_with_dpd(user_loan=user_loan, event=event)
