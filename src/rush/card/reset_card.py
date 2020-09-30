@@ -2,10 +2,14 @@ from decimal import Decimal
 from typing import (
     Dict,
     Type,
+    final,
 )
 
 from dateutil.relativedelta import relativedelta
-from pendulum import Date
+from pendulum import (
+    Date,
+    DateTime,
+)
 from sqlalchemy.orm.session import Session
 
 from rush.card.base_card import (
@@ -16,11 +20,14 @@ from rush.card.term_loan import TermLoanBill
 from rush.ledger_events import loan_disbursement_event
 from rush.ledger_utils import create_ledger_entry_from_str
 from rush.models import (
+    CardEmis,
     LedgerTriggerEvent,
     Loan,
     LoanData,
+    LoanMoratorium,
     ProductFee,
 )
+from rush.utils import get_current_ist_time
 
 
 class ResetBill(TermLoanBill):
@@ -150,3 +157,45 @@ class ResetCard(BaseLoan):
         )
 
         return loan
+
+    def get_remaining_min(self, date_to_check_against: DateTime = None) -> Decimal:
+        # if user is in moratorium then return 0
+        if LoanMoratorium.is_in_moratorium(self.session, self.id, date_to_check_against):
+            return Decimal(0)
+
+        query = self.session.query(
+            CardEmis.total_due_amount, CardEmis.due_date, CardEmis.emi_number
+        ).filter(
+            CardEmis.loan_id == self.id,
+            CardEmis.bill_id.is_(None),
+            CardEmis.row_status == "active",
+            CardEmis.payment_status == "UnPaid",
+        )
+
+        if date_to_check_against:
+            current_date = get_current_ist_time().date()
+            final_date = current_date if current_date < date_to_check_against else date_to_check_against
+            query = query.filter(CardEmis.due_date <= final_date)
+
+        unpaid_emis = query.all()
+        remaining_min_of_all_emis = sum(emi.total_due_amount for emi in unpaid_emis)
+
+        return remaining_min_of_all_emis
+
+    def get_remaining_max(self, date_to_check_against: DateTime = None) -> Decimal:
+        query = self.session.query(CardEmis.total_due_amount).filter(
+            CardEmis.loan_id == self.id,
+            CardEmis.bill_id.is_(None),
+            CardEmis.row_status == "active",
+            CardEmis.payment_status == "UnPaid",
+        )
+
+        if date_to_check_against:
+            query = query.filter(CardEmis.due_date <= date_to_check_against)
+
+        unpaid_emis = query.all()
+        remaining_max_of_all_emis = sum(emi.total_due_amount for emi in unpaid_emis)
+        return remaining_max_of_all_emis
+
+    def get_total_outstanding(self, date_to_check_against: DateTime = None) -> Decimal:
+        return self.get_remaining_max(date_to_check_against=date_to_check_against)
