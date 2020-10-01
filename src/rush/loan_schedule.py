@@ -1,3 +1,4 @@
+from collections import defaultdict
 from datetime import date
 
 from dateutil.relativedelta import relativedelta
@@ -49,20 +50,17 @@ def group_bills(session: Session, user_loan: BaseLoan):
         .order_by(cumulative_values_query.c.due_date)
         .all()
     )
-    new_emi_objects = []
-    update_emi_objects = []
+    # update_emi_objects = []
     for emi_number, cumulative_values in enumerate(q_results, 1):
         cumulative_values_dict = cumulative_values._asdict()
         emi_id = cumulative_values.id
         if emi_id:  # If emi id is present then we update the record.
-            update_emi_objects.append(cumulative_values_dict)
+            session.query(LoanSchedule).filter_by(id=emi_id).update(cumulative_values_dict)
         else:
-            loan_schedule = LoanSchedule(
-                loan_id=user_loan.loan_id, emi_number=emi_number, **cumulative_values_dict
+            _ = LoanSchedule.new(
+                session, loan_id=user_loan.loan_id, emi_number=emi_number, **cumulative_values_dict
             )
-            new_emi_objects.append(loan_schedule)
-    session.bulk_update_mappings(LoanSchedule, update_emi_objects)
-    session.bulk_save_objects(new_emi_objects)
+    # session.bulk_update_mappings(LoanSchedule, update_emi_objects)
 
 
 def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
@@ -106,7 +104,6 @@ def slide_payment_to_emis(user_loan: BaseLoan, payment_event: LedgerTriggerEvent
     amount_to_slide = payment_split.get("principal", 0) + payment_split.get("interest", 0)
     unpaid_emis = user_loan.get_loan_schedule(only_unpaid_emis=True)
     # TODO reduce the amount for fee payments.
-    payment_mapping_objects = []
     for emi in unpaid_emis:
         if amount_to_slide <= 0:
             break
@@ -115,14 +112,13 @@ def slide_payment_to_emis(user_loan: BaseLoan, payment_event: LedgerTriggerEvent
         if emi.remaining_amount == 0:
             emi.payment_status = "Paid"
         emi.last_payment_date = payment_event.post_date
-        pm = PaymentMapping(
+        _ = PaymentMapping.new(
+            user_loan.session,
             payment_request_id=payment_event.extra_details["payment_request_id"],
             emi_id=emi.id,
             amount_settled=amount_slid,
         )
-        payment_mapping_objects.append(pm)
         amount_to_slide -= amount_slid
-    user_loan.session.bulk_save_objects(payment_mapping_objects)
 
 
 def readjust_future_payment(user_loan: BaseLoan, date_to_check_after: date):
@@ -157,13 +153,17 @@ def readjust_future_payment(user_loan: BaseLoan, date_to_check_after: date):
         emi.make_emi_unpaid()  # reset this emi. will be updating with new data below.
 
     # Get the payments that were adjusted in these emis.
-    payment_mapping_data = session.query(PaymentMapping).filter(PaymentMapping.emi_id.in_(emi_ids)).all()
+    payment_mapping_data = (
+        session.query(PaymentMapping)
+        .filter(PaymentMapping.emi_id.in_(emi_ids), PaymentMapping.row_status == "active")
+        .all()
+    )
 
-    payment_mapping_objects = []
+    new_mappings = defaultdict(dict)
     for payment_mapping in payment_mapping_data:
         payment_mapping.row_status = "inactive"
-        session.flush()
         amount_to_readjust = payment_mapping.amount_settled
+        payment_request_id = payment_mapping.payment_request_id
         for emi in future_adjusted_emis:
             if emi.payment_status == "Paid":  # skip is already paid from previous mapping
                 continue
@@ -175,12 +175,18 @@ def readjust_future_payment(user_loan: BaseLoan, date_to_check_after: date):
                 emi.payment_status = "Paid"
             # TODO get payment request data for payment date.
             # emi.last_payment_date = payment_event.post_date
-            pm = PaymentMapping(
-                payment_request_id=payment_mapping.payment_request_id,
-                emi_id=emi.id,
-                amount_settled=amount_slid,
-            )
-            payment_mapping_objects.append(pm)
+            if new_mappings[payment_request_id].get(emi.id):
+                new_mappings[payment_request_id][emi.id] += amount_slid
+            else:
+                new_mappings[payment_request_id][emi.id] = amount_slid
             amount_to_readjust -= amount_slid
         assert amount_to_readjust == 0
-    user_loan.session.bulk_save_objects(payment_mapping_objects)
+
+    for payment_request_id, emi_ids in new_mappings.items():
+        for emi_id, amount_slid in emi_ids.items():
+            _ = PaymentMapping.new(
+                session,
+                payment_request_id=payment_request_id,
+                emi_id=emi_id,
+                amount_settled=amount_slid,
+            )
