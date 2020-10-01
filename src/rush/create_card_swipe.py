@@ -30,11 +30,12 @@ def create_card_swipe(
     description: str,
     source: Optional[str] = "ECOM",
     mcc: Optional[str] = None,
+    skip_activation_check=False,
 ) -> Dict[str, Any]:
     if not hasattr(user_loan, "amortization_date") or not user_loan.amortization_date:
         return {"result": "error", "message": "Card has not been activated"}
 
-    if txn_time.date() < user_loan.amortization_date:
+    if not skip_activation_check and txn_time.date() < user_loan.amortization_date:
         return {"result": "error", "message": "Transaction cannot happen before activation"}
     card_bill = get_or_create_bill_for_card_swipe(user_loan=user_loan, txn_time=txn_time)
     if card_bill["result"] == "error":

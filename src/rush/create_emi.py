@@ -166,7 +166,6 @@ def slide_payments(
                     if diff == 0:
                         last_paid_emi_number = emi.emi_number
                         emi.payment_status = "Paid"
-                        emi.dpd = 0
                     if (
                         emi.atm_fee > 0
                         and (emi.atm_fee_received + payment_received_and_adjusted) <= emi.atm_fee
@@ -317,7 +316,6 @@ def slide_payments(
                 emi.atm_fee_received = emi.atm_fee
 
                 emi.payment_status = "Paid"
-                emi.dpd = 0
                 last_paid_emi_number = emi.emi_number
                 # Create payment mapping
                 create_emi_payment_mapping(
@@ -887,6 +885,10 @@ def update_event_with_dpd(
 
 
 def daily_dpd_update(session, user_loan, post_date):
+    first_unpaid_mark = False
+    loan_level_due_date = None
+    event = LedgerTriggerEvent(name="daily_dpd_update", loan_id=user_loan.loan_id, post_date=post_date)
+    session.add(event)
     all_emis = (
         session.query(CardEmis)
         .filter(
@@ -899,9 +901,33 @@ def daily_dpd_update(session, user_loan, post_date):
     )
     for emi in all_emis:
         if emi.payment_status != "Paid":
+            if not first_unpaid_mark:
+                first_unpaid_mark = True
+                loan_level_due_date = emi.due_date
             # Schedule dpd
             dpd = (post_date.date() - emi.due_date).days
             # We should only consider the daily dpd event for increment
             if dpd >= emi.dpd:
                 emi.dpd = dpd
+
+    unpaid_bills = user_loan.get_unpaid_bills()
+    for bill in unpaid_bills:
+        if first_unpaid_mark and loan_level_due_date:
+            bill_dpd = (post_date.date() - loan_level_due_date).days
+            new_event = EventDpd(
+                bill_id=bill.id,
+                loan_id=user_loan.loan_id,
+                event_id=event.id,
+                credit=Decimal(0),
+                debit=Decimal(0),
+                balance=bill.get_remaining_max(),
+                dpd=bill_dpd,
+            )
+            session.add(new_event)
+
+    # Calculate card level dpd
+    max_dpd = session.query(func.max(EventDpd.dpd).label("max_dpd")).one()
+    user_loan.dpd = max_dpd.max_dpd
+    if not user_loan.ever_dpd or max_dpd.max_dpd > user_loan.ever_dpd:
+        user_loan.ever_dpd = max_dpd.max_dpd
     session.flush()
