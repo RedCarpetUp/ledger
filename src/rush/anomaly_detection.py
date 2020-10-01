@@ -43,6 +43,7 @@ def get_payment_events(session: Session, user_loan: BaseLoan) -> List[LedgerTrig
             LedgerTriggerEvent.loan_id == user_loan.loan_id,
             LedgerTriggerEvent.name.in_(["payment_received", "transaction_refund"]),
         )
+        .order_by(LedgerTriggerEvent.post_date.asc())
         .all()
     )
     return events
