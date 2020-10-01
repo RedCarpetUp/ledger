@@ -11,6 +11,7 @@ from sqlalchemy.orm.session import Session
 from rush.card.base_card import BaseLoan
 from rush.card.ruby_card import RubyCard
 from rush.create_bill import get_or_create_bill_for_card_swipe
+from rush.create_emi import update_event_with_dpd
 from rush.ledger_events import (
     card_transaction_event,
     disburse_money_to_card,
@@ -29,11 +30,12 @@ def create_card_swipe(
     description: str,
     source: Optional[str] = "ECOM",
     mcc: Optional[str] = None,
+    skip_activation_check=False,
 ) -> Dict[str, Any]:
     if not hasattr(user_loan, "amortization_date") or not user_loan.amortization_date:
         return {"result": "error", "message": "Card has not been activated"}
 
-    if txn_time.date() < user_loan.amortization_date:
+    if not skip_activation_check and txn_time.date() < user_loan.amortization_date:
         return {"result": "error", "message": "Transaction cannot happen before activation"}
     card_bill = get_or_create_bill_for_card_swipe(user_loan=user_loan, txn_time=txn_time)
     if card_bill["result"] == "error":
@@ -65,4 +67,7 @@ def create_card_swipe(
         disburse_money_to_card(session=session, user_loan=user_loan, event=lt)
 
     card_transaction_event(session=session, user_loan=user_loan, event=lt, mcc=mcc)
+
+    # Dpd calculation
+    update_event_with_dpd(user_loan=user_loan, event=lt)
     return {"result": "success", "data": swipe}
