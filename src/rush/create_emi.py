@@ -144,19 +144,18 @@ def slide_payments(
             ):
                 continue
 
-            payment_received_and_adjusted += (
-                emi.payment_received
-                + emi.atm_fee_received
-                + emi.late_fee_received
-                + emi.interest_received
-            )
-
             if payment_received_and_adjusted:
                 if last_payment_date:
                     emi.last_payment_date = last_payment_date
-                diff = emi.total_due_amount - payment_received_and_adjusted
+                diff = emi.total_due_amount - (
+                    payment_received_and_adjusted
+                    + emi.payment_received
+                    + emi.atm_fee_received
+                    + emi.late_fee_received
+                    + emi.interest_received
+                )
                 # Because rounding of balances has happened previously we should round the diff ~ Ananth
-                if -1 < diff <= 0:
+                if -1 < diff < 1:
                     diff = 0
                 interest_actually_received = (
                     late_fee_actually_received
@@ -237,8 +236,7 @@ def slide_payments(
                                     else emi.late_fee_received
                                 )
                             if (
-                                last_payment_date.date() > emi.due_date
-                                and emi.interest > 0
+                                emi.interest > 0
                                 and (emi.interest_received + payment_received_and_adjusted)
                                 <= emi.interest
                             ):
@@ -275,7 +273,9 @@ def slide_payments(
                                         if interest_actually_received > 0
                                         else emi.interest_received
                                     )
-                                if payment_received_and_adjusted <= emi.due_amount:
+                                if (payment_received_and_adjusted <= emi.due_amount) or (
+                                    -1 < (payment_received_and_adjusted - emi.due_amount) < 1
+                                ):
                                     principal_actually_received = (
                                         payment_received_and_adjusted - emi.payment_received
                                     )
