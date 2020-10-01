@@ -371,8 +371,6 @@ def test_generate_bill_1(session: Session) -> None:
     _, min_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/min/a")
     assert min_amount == 114
 
-    update_event_with_dpd(user_loan=user_loan, to_date=parse_date("2020-05-21 00:05:00"))
-
     dpd_events = session.query(EventDpd).filter_by(loan_id=uc.loan_id).all()
     assert dpd_events[0].balance == Decimal(1000)
 
@@ -1669,12 +1667,11 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     assert first_emi["interest_received"] == Decimal("387.83")
 
     event_date = parse_date("2020-08-21 00:05:00")
-    update_event_with_dpd(uc, event_date)
 
     dpd_events = session.query(EventDpd).filter_by(loan_id=uc.loan_id).all()
 
-    last_entry_first_bill = dpd_events[-3]
-    last_entry_second_bill = dpd_events[-4]
+    last_entry_first_bill = dpd_events[-2]
+    last_entry_second_bill = dpd_events[-1]
 
     assert last_entry_first_bill.balance == Decimal("12708.86")
     assert last_entry_second_bill.balance == Decimal("7891.33")

@@ -11,6 +11,7 @@ from sqlalchemy.orm.session import Session
 from rush.card.base_card import BaseLoan
 from rush.card.ruby_card import RubyCard
 from rush.create_bill import get_or_create_bill_for_card_swipe
+from rush.create_emi import update_event_with_dpd
 from rush.ledger_events import (
     card_transaction_event,
     disburse_money_to_card,
@@ -65,4 +66,7 @@ def create_card_swipe(
         disburse_money_to_card(session=session, user_loan=user_loan, event=lt)
 
     card_transaction_event(session=session, user_loan=user_loan, event=lt, mcc=mcc)
+
+    # Dpd calculation
+    update_event_with_dpd(user_loan=user_loan, event=lt)
     return {"result": "success", "data": swipe}
