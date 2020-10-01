@@ -2,7 +2,6 @@ from decimal import Decimal
 from typing import (
     Dict,
     Type,
-    final,
 )
 
 from dateutil.relativedelta import relativedelta
