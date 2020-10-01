@@ -131,16 +131,26 @@ def slide_payments(
     ) -> None:
         total_payment_till_now = payment_received_and_adjusted
         for emi in all_emis:
+            one_rupee_leniency = False
             total_payment_till_now += (
                 emi.payment_received
                 + emi.interest_received
                 + emi.atm_fee_received
                 + emi.late_fee_received
             )
+            is_all_emi_paid = (
+                emi.total_due_amount
+                - (
+                    emi.payment_received
+                    + emi.interest_received
+                    + emi.atm_fee_received
+                    + emi.late_fee_received
+                )
+            ) <= 0
             if (
                 emi.emi_number <= last_paid_emi_number
                 or emi.extra_details.get("moratorium")
-                or emi.payment_status == "Paid"
+                or is_all_emi_paid
             ):
                 continue
 
@@ -154,15 +164,16 @@ def slide_payments(
                     + emi.late_fee_received
                     + emi.interest_received
                 )
+                # Just use this diff for marking paid, which is for dpd, not for actual money movement
                 # Because rounding of balances has happened previously we should round the diff ~ Ananth
-                if -1 < diff < 1:
-                    diff = 0
+                if -1 < diff <= 0:
+                    one_rupee_leniency = True
                 interest_actually_received = (
                     late_fee_actually_received
                 ) = atm_fee_actually_received = principal_actually_received = Decimal(0)
                 if diff >= 0:
                     emi.dpd = (last_payment_date.date() - emi.due_date).days
-                    if diff == 0:
+                    if diff == 0 or one_rupee_leniency:
                         last_paid_emi_number = emi.emi_number
                         emi.payment_status = "Paid"
                     if (
@@ -273,9 +284,7 @@ def slide_payments(
                                         if interest_actually_received > 0
                                         else emi.interest_received
                                     )
-                                if (payment_received_and_adjusted <= emi.due_amount) or (
-                                    -1 < (payment_received_and_adjusted - emi.due_amount) < 1
-                                ):
+                                if payment_received_and_adjusted <= emi.due_amount:
                                     principal_actually_received = (
                                         payment_received_and_adjusted - emi.payment_received
                                     )
