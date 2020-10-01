@@ -171,10 +171,10 @@ class ResetCard(BaseLoan):
             CardEmis.payment_status == "UnPaid",
         )
 
-        if date_to_check_against:
-            current_date = get_current_ist_time().date()
-            final_date = current_date if current_date < date_to_check_against else date_to_check_against
-            query = query.filter(CardEmis.due_date <= final_date)
+        if not date_to_check_against:
+            date_to_check_against = get_current_ist_time().date()
+
+        query = query.filter(CardEmis.due_date <= date_to_check_against)
 
         unpaid_emis = query.all()
         remaining_min_of_all_emis = sum(emi.total_due_amount for emi in unpaid_emis)

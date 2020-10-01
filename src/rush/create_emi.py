@@ -4,10 +4,6 @@ from typing import Optional
 
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
-from sqlalchemy import (
-    and_,
-    or_,
-)
 from sqlalchemy.orm import (
     Session,
     aliased,
