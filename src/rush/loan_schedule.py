@@ -19,7 +19,8 @@ from rush.models import (
 )
 
 
-def group_bills(session: Session, user_loan: BaseLoan):
+def group_bills(user_loan: BaseLoan):
+    session = user_loan.session
     cumulative_values_query = (
         session.query(
             LoanSchedule.due_date,
@@ -61,6 +62,7 @@ def group_bills(session: Session, user_loan: BaseLoan):
 def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
     emi_objects = []
     due_date = bill.table.bill_start_date
+    non_rounded_bill_instalment = bill.table.principal / bill.table.bill_tenure
     for emi_number in range(1, bill.table.bill_tenure + 1):
         remaining_tenure = (bill.table.bill_tenure + 1) - emi_number  # Includes the current emi.
         due_date_deltas = bill.get_relative_delta_for_emi(
@@ -75,10 +77,10 @@ def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
             principal_due=bill.table.principal_instalment,
             interest_due=bill.get_interest_to_charge(user_loan.rc_rate_of_interest_monthly),
         )
-        bill_schedule.total_closing_balance = bill_schedule.principal_due * remaining_tenure
+        bill_schedule.total_closing_balance = round(non_rounded_bill_instalment * remaining_tenure, 2)
         emi_objects.append(bill_schedule)
     session.bulk_save_objects(emi_objects)
-    group_bills(session, user_loan)
+    group_bills(user_loan)
     readjust_future_payment(user_loan, bill.table.bill_close_date)
 
 
