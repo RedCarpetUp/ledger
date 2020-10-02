@@ -193,7 +193,7 @@ def find_amount_to_slide_in_bills(user_loan: BaseLoan, total_amount_to_slide: De
                 amount_to_slide_based_on_ratio = total_amount_to_slide
             else:
                 amount_to_slide_based_on_ratio = mul(
-                    div(bill_data["monthly_instalment"], total_min), total_amount_before_sliding
+                    bill_data["monthly_instalment"] / total_min, total_amount_before_sliding
                 )
             amount_to_adjust = min(
                 amount_to_slide_based_on_ratio, total_amount_to_slide, bill_data["total_outstanding"]

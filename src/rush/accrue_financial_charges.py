@@ -177,7 +177,10 @@ def accrue_late_charges(
 
         session.flush()
 
-        from rush.create_emi import adjust_late_fee_in_emis, update_event_with_dpd
+        from rush.create_emi import (
+            adjust_late_fee_in_emis,
+            update_event_with_dpd,
+        )
 
         adjust_late_fee_in_emis(session=session, user_loan=user_loan, bill=latest_bill)
         update_event_with_dpd(user_loan=user_loan, event=event)
@@ -349,7 +352,10 @@ def reverse_incorrect_late_charges(
         emi.late_fee -= fee.gross_amount
         session.flush()
 
-    from rush.create_emi import group_bills_to_create_loan_schedule, update_event_with_dpd
+    from rush.create_emi import (
+        group_bills_to_create_loan_schedule,
+        update_event_with_dpd,
+    )
 
     # Recreate loan level emis
     group_bills_to_create_loan_schedule(user_loan=user_loan)

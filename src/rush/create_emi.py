@@ -1,10 +1,13 @@
+from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
 from dateutil.relativedelta import relativedelta
-from datetime import datetime
 from pendulum import DateTime
-from sqlalchemy import or_, and_
+from sqlalchemy import (
+    and_,
+    or_,
+)
 from sqlalchemy.orm import (
     Session,
     aliased,
