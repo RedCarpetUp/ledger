@@ -26,9 +26,6 @@ def group_bills(session: Session, user_loan: BaseLoan):
             func.sum(LoanSchedule.principal_due).label("principal_due"),
             func.sum(LoanSchedule.interest_due).label("interest_due"),
             func.sum(LoanSchedule.total_closing_balance).label("total_closing_balance"),
-            func.sum(LoanSchedule.total_closing_balance_post_due_date).label(
-                "total_closing_balance_post_due_date"
-            ),
         )
         .filter(
             LoanSchedule.loan_id == user_loan.loan_id,
@@ -50,7 +47,6 @@ def group_bills(session: Session, user_loan: BaseLoan):
         .order_by(cumulative_values_query.c.due_date)
         .all()
     )
-    # update_emi_objects = []
     for emi_number, cumulative_values in enumerate(q_results, 1):
         cumulative_values_dict = cumulative_values._asdict()
         emi_id = cumulative_values.id
@@ -60,7 +56,6 @@ def group_bills(session: Session, user_loan: BaseLoan):
             _ = LoanSchedule.new(
                 session, loan_id=user_loan.loan_id, emi_number=emi_number, **cumulative_values_dict
             )
-    # session.bulk_update_mappings(LoanSchedule, update_emi_objects)
 
 
 def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
@@ -81,9 +76,6 @@ def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
             interest_due=bill.get_interest_to_charge(user_loan.rc_rate_of_interest_monthly),
         )
         bill_schedule.total_closing_balance = bill_schedule.principal_due * remaining_tenure
-        bill_schedule.total_closing_balance_post_due_date = (
-            bill_schedule.total_closing_balance + bill_schedule.interest_due
-        )
         emi_objects.append(bill_schedule)
     session.bulk_save_objects(emi_objects)
     group_bills(session, user_loan)
@@ -127,8 +119,8 @@ def readjust_future_payment(user_loan: BaseLoan, date_to_check_after: date):
     Once a new bill is generated the schedule gets changed. We need to readjust that
     future payment according to this new schedule now.
 
-    date_to_check_after: Bill generation date. Any emi which has money adjust after this
-    date needs to be readjust.
+    date_to_check_after: Bill generation date. Any emi which has money settled after this
+    date needs to be readjusted.
     """
     session = user_loan.session
     future_adjusted_emis = (

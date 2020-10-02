@@ -374,7 +374,6 @@ def upgrade() -> None:
         sa.Column("interest_due", sa.DECIMAL(), nullable=False),
         sa.Column("dpd", sa.Integer(), nullable=True),
         sa.Column("last_payment_date", sa.Date(), nullable=True),
-        sa.Column("total_closing_balance_post_due_date", sa.DECIMAL(), nullable=False),
         sa.Column("total_closing_balance", sa.DECIMAL(), nullable=False),
         sa.Column("payment_received", sa.DECIMAL(), nullable=False),
         sa.Column("payment_status", sa.String(6), nullable=False),

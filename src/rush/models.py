@@ -496,7 +496,6 @@ class LoanSchedule(AuditMixin):
     dpd = Column(Integer, nullable=True)
     last_payment_date = Column(TIMESTAMP, nullable=True)
     total_closing_balance = Column(Numeric, nullable=False)
-    total_closing_balance_post_due_date = Column(Numeric, nullable=False)
     payment_received = Column(Numeric, nullable=False, default=0)
     payment_status = Column(String(length=6), nullable=False, default="UnPaid")
 
