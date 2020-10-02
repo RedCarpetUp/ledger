@@ -74,8 +74,8 @@ def upgrade() -> None:
     op.execute(
         """
     create function get_account_balance(
-      identifier integer, identifier_type char, 
-      book_name char, account_type char, till_date timestamp DEFAULT now() at time zone 'Asia/Kolkata'
+      identifier integer, identifier_type varchar, 
+      book_name varchar, account_type varchar, till_date timestamp DEFAULT now() at time zone 'Asia/Kolkata'
     ) RETURNS numeric as $$ with book as (
       select 
         * 
@@ -97,8 +97,8 @@ def upgrade() -> None:
     op.execute(
         """
     create function get_account_balance_between_periods(
-      identifier integer, identifier_type char, 
-      book_name char, account_type char, from_date timestamp, till_date timestamp DEFAULT now() at time zone 'Asia/Kolkata'
+      identifier integer, identifier_type varchar, 
+      book_name varchar, account_type varchar, from_date timestamp, till_date timestamp DEFAULT now() at time zone 'Asia/Kolkata'
     ) RETURNS numeric as $$ with book as (
       select 
         * 

@@ -5,8 +5,12 @@ from typing import (
     Tuple,
 )
 
+import sqlalchemy
 from pendulum import DateTime
-from sqlalchemy import func
+from sqlalchemy import (
+    cast,
+    func,
+)
 from sqlalchemy.orm import Session
 
 from rush.models import (
@@ -57,27 +61,27 @@ def get_account_balance_from_str(
     book_variables = breakdown_account_variables_from_str(book_string)
     if from_date and to_date:
         f = func.get_account_balance_between_periods(
-            book_variables["identifier"],
-            book_variables["identifier_type"],
-            book_variables["name"],
-            book_variables["account_type"],
-            from_date,
-            to_date,
+            cast(book_variables["identifier"], sqlalchemy.Integer),
+            cast(book_variables["identifier_type"], sqlalchemy.String),
+            cast(book_variables["name"], sqlalchemy.String),
+            cast(book_variables["account_type"], sqlalchemy.String),
+            cast(from_date, sqlalchemy.TIMESTAMP),
+            cast(to_date, sqlalchemy.TIMESTAMP),
         )
     elif to_date:
         f = func.get_account_balance(
-            book_variables["identifier"],
-            book_variables["identifier_type"],
-            book_variables["name"],
-            book_variables["account_type"],
-            to_date,
+            cast(book_variables["identifier"], sqlalchemy.Integer),
+            cast(book_variables["identifier_type"], sqlalchemy.String),
+            cast(book_variables["name"], sqlalchemy.String),
+            cast(book_variables["account_type"], sqlalchemy.String),
+            cast(to_date, sqlalchemy.TIMESTAMP),
         )
     else:
         f = func.get_account_balance(
-            book_variables["identifier"],
-            book_variables["identifier_type"],
-            book_variables["name"],
-            book_variables["account_type"],
+            cast(book_variables["identifier"], sqlalchemy.Integer),
+            cast(book_variables["identifier_type"], sqlalchemy.String),
+            cast(book_variables["name"], sqlalchemy.String),
+            cast(book_variables["account_type"], sqlalchemy.String),
         )
     account_balance = session.query(f).scalar() or 0
     return 0, Decimal(account_balance)
@@ -96,7 +100,7 @@ def breakdown_account_variables_from_str(book_string: str) -> dict:
         "product",
     )
     return {
-        "identifier": identifier,
+        "identifier": int(identifier),
         "identifier_type": identifier_type,
         "name": name,
         "account_type": account_type,
