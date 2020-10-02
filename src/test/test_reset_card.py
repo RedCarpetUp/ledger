@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+import pytest
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
@@ -13,6 +14,7 @@ from rush.card.utils import (
     create_user_product_mapping,
 )
 from rush.ledger_utils import get_account_balance_from_str
+from rush.limit_unlock import limit_unlock
 from rush.models import (
     CardEmis,
     Lenders,
@@ -152,3 +154,103 @@ def test_create_term_loan(session: Session) -> None:
 
     max_amount = user_loan.get_remaining_max()
     assert max_amount == Decimal("13680")
+
+    limit_unlock(session=session, loan=loan, amount=Decimal("1000"))
+
+    _, locked_limit = get_account_balance_from_str(
+        session=session, book_string=f"{loan.id}/card/locked_limit/l"
+    )
+    assert locked_limit == Decimal("9000")
+
+    _, available_limit = get_account_balance_from_str(
+        session=session, book_string=f"{loan.id}/card/available_limit/l"
+    )
+    assert available_limit == Decimal("1000")
+
+
+def test_reset_loan_limit_unlock_success(session: Session) -> None:
+    create_lenders(session=session)
+    create_products(session=session)
+    create_user(session=session)
+
+    user_product = create_user_product_mapping(
+        session=session, user_id=6, product_type="term_loan_reset"
+    )
+
+    fee = add_pre_product_fee(
+        session=session,
+        user_id=6,
+        product_type="term_loan_reset",
+        fee_name="reset_joining_fees",
+        user_product_id=user_product.id,
+        fee_amount=Decimal("100"),
+    )
+    fee.fee_status = "PAID"
+    session.flush()
+
+    loan_creation_data = {"date_str": "2020-08-01", "user_product_id": user_product.id}
+
+    # create loan
+    loan = create_test_term_loan(session=session, **loan_creation_data)
+
+    _, locked_limit = get_account_balance_from_str(
+        session=session, book_string=f"{loan.id}/card/locked_limit/l"
+    )
+
+    assert locked_limit == Decimal("10000")
+
+    _, available_limit = get_account_balance_from_str(
+        session=session, book_string=f"{loan.id}/card/available_limit/l"
+    )
+
+    assert available_limit == Decimal("0")
+
+    limit_unlock(session=session, loan=loan, amount=Decimal("10000"))
+
+    _, locked_limit = get_account_balance_from_str(
+        session=session, book_string=f"{loan.id}/card/locked_limit/l"
+    )
+
+    assert locked_limit == Decimal("0")
+
+    _, available_limit = get_account_balance_from_str(
+        session=session, book_string=f"{loan.id}/card/available_limit/l"
+    )
+
+    assert available_limit == Decimal("10000")
+
+
+def test_reset_loan_limit_unlock_error(session: Session) -> None:
+    create_lenders(session=session)
+    create_products(session=session)
+    create_user(session=session)
+
+    user_product = create_user_product_mapping(
+        session=session, user_id=6, product_type="term_loan_reset"
+    )
+
+    fee = add_pre_product_fee(
+        session=session,
+        user_id=6,
+        product_type="term_loan_reset",
+        fee_name="reset_joining_fees",
+        user_product_id=user_product.id,
+        fee_amount=Decimal("100"),
+    )
+    fee.fee_status = "PAID"
+    session.flush()
+
+    loan_creation_data = {"date_str": "2020-08-01", "user_product_id": user_product.id}
+
+    # create loan
+    loan = create_test_term_loan(session=session, **loan_creation_data)
+
+    _, locked_limit = get_account_balance_from_str(
+        session=session, book_string=f"{loan.id}/card/locked_limit/l"
+    )
+
+    assert locked_limit == Decimal("10000")
+
+    # now trying to unlock more than 10000
+    with pytest.raises(AssertionError):
+        limit_unlock(session=session, loan=loan, amount=Decimal("10001"))

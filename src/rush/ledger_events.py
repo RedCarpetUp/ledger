@@ -440,3 +440,20 @@ def _adjust_for_downpayment(session: Session, event: LedgerTriggerEvent, amount:
         credit_book_str=f"{lender_id}/lender/pg_account/a",
         amount=amount,
     )
+
+
+def limit_unlock_event(
+    session: Session,
+    loan: Loan,
+    event: LedgerTriggerEvent,
+    amount: Decimal,
+    locked_limit_str: str,
+    unlock_limit_str: str,
+) -> None:
+    create_ledger_entry_from_str(
+        session=session,
+        event_id=event.id,
+        debit_book_str=f"{loan.id}/card/{locked_limit_str}/l",
+        credit_book_str=f"{loan.id}/card/{unlock_limit_str}/l",
+        amount=amount,
+    )
