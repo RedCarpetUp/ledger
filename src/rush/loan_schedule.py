@@ -2,6 +2,7 @@ from collections import defaultdict
 from datetime import date
 
 from dateutil.relativedelta import relativedelta
+from pendulum import datetime
 from sqlalchemy import (
     and_,
     func,
@@ -97,7 +98,6 @@ def slide_payment_to_emis(user_loan: BaseLoan, payment_event: LedgerTriggerEvent
     # and interest amount.
     amount_to_slide = payment_split.get("principal", 0) + payment_split.get("interest", 0)
     unpaid_emis = user_loan.get_loan_schedule(only_unpaid_emis=True)
-    # TODO reduce the amount for fee payments.
     for emi in unpaid_emis:
         if amount_to_slide <= 0:
             break
@@ -113,6 +113,53 @@ def slide_payment_to_emis(user_loan: BaseLoan, payment_event: LedgerTriggerEvent
             amount_settled=amount_slid,
         )
         amount_to_slide -= amount_slid
+
+    # After doing the sliding we check if the loan can be closed.
+    if user_loan.get_remaining_max(payment_event.post_date) == 0:
+        close_loan(user_loan, payment_event.post_date)
+
+
+def close_loan(user_loan: BaseLoan, last_payment_date: datetime):
+    """
+    Payment has come which has closed the loan.
+    In case of early payment, we need to nullify all future emis in schedule and set a new
+    principal balance on the current emi.
+    """
+    future_emis = user_loan.get_loan_schedule(only_emis_after_date=last_payment_date.date())
+    if not future_emis:  # Loan has closed naturally.
+        return
+
+    next_emi_due_date = future_emis[0].due_date
+    for emi in future_emis:
+        # set the received amount of first emi to closing balance as of that date.
+        if emi.due_date == next_emi_due_date:
+            emi.payment_received = emi.total_closing_balance
+            emi.payment_status = "Paid"
+            emi.last_payment_date = last_payment_date
+        else:
+            emi.payment_received = 0  # set principal to 0 of remaining future emis.
+            emi.payment_status = "UnPaid"
+            emi.last_payment_date = None
+
+    # Do what we did above for bill emis but for due amount.
+    all_future_bill_emis = (
+        user_loan.session.query(LoanSchedule)
+        .filter(
+            LoanSchedule.bill_id.isnot(None),
+            LoanSchedule.loan_id == user_loan.loan_id,
+            LoanSchedule.due_date >= last_payment_date.date(),
+        )
+        .all()
+    )
+    for bill_emi in all_future_bill_emis:
+        if bill_emi.due_date == next_emi_due_date:
+            bill_emi.principal_due = bill_emi.total_closing_balance
+        else:
+            bill_emi.principal_due = 0
+        bill_emi.interest_due = 0
+
+    # Refresh the due amounts of loan schedule after altering bill's schedule.
+    group_bills(user_loan)
 
 
 def readjust_future_payment(user_loan: BaseLoan, date_to_check_after: date):

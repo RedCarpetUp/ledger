@@ -1,3 +1,6 @@
+from datetime import (
+    date,
+)
 from decimal import Decimal
 from typing import (
     Dict,
@@ -358,11 +361,15 @@ class BaseLoan(Loan):
         total_outstanding = sum(bill.get_outstanding_amount(date_to_check_against) for bill in all_bills)
         return total_outstanding
 
-    def get_loan_schedule(self, only_unpaid_emis=False) -> List[LoanSchedule]:
+    def get_loan_schedule(
+        self, only_unpaid_emis=False, only_emis_after_date: Optional[date] = None
+    ) -> List[LoanSchedule]:
         q = self.session.query(LoanSchedule).filter(
             LoanSchedule.loan_id == self.loan_id, LoanSchedule.bill_id.is_(None)
         )
         if only_unpaid_emis:
             q = q.filter(LoanSchedule.payment_status == "UnPaid")
+        if only_emis_after_date:
+            q = q.filter(LoanSchedule.due_date >= only_emis_after_date)
         emis = q.order_by(LoanSchedule.emi_number).all()
         return emis
