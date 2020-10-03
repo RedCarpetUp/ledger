@@ -39,6 +39,7 @@ from rush.lender_funds import (
     lender_interest_incur,
     m2p_transfer,
 )
+from rush.loan_schedule import extend_schedule
 from rush.models import (
     BillFee,
     CardEmis,
@@ -2847,18 +2848,9 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(session, bill_april.table.bill_due_date + relativedelta(days=1), uc)
 
-    # Get emi list post few bill creations
-    all_emis_query = (
-        session.query(CardEmis)
-        .filter(
-            CardEmis.loan_id == user_loan.id, CardEmis.row_status == "active", CardEmis.bill_id == None
-        )
-        .order_by(CardEmis.emi_number.asc())
-        .all()
-    )
-
     # Extend tenure to 18 months
     extend_tenure(session, uc, 18, parse_date("2020-05-22 22:02:47"))
+    extend_schedule(uc, 18, parse_date("2020-05-22"))
 
     # Get emi list post tenure extension
     all_emis = (
@@ -2882,6 +2874,24 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
     assert last_emi.due_amount == Decimal("3.02")
     # First cycle 18 emis, next bill 19 emis
     assert last_emi.emi_number == 19
+
+    emis = uc.get_loan_schedule()
+    assert emis[0].total_due_amount == Decimal(13)
+    assert emis[0].principal_due == Decimal("9.17")
+    assert emis[0].emi_number == 1
+    assert emis[0].total_closing_balance == Decimal(110)
+    assert emis[1].total_due_amount == Decimal(20)
+    assert emis[1].principal_due == Decimal("13.84")
+    assert emis[1].emi_number == 2
+    assert emis[1].total_closing_balance == Decimal("156.83")
+    assert emis[2].total_due_amount == Decimal("14.53")
+    assert emis[2].principal_due == Decimal("8.75")
+    assert emis[2].emi_number == 3
+    assert emis[2].total_closing_balance == Decimal(143)
+    assert emis[18].total_due_amount == Decimal("4.91")
+    assert emis[18].principal_due == Decimal("3.02")
+    assert emis[18].emi_number == 19
+    assert emis[18].total_closing_balance == Decimal("3.02")
 
 
 def test_intermediate_bill_generation(session: Session) -> None:
