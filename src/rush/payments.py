@@ -18,12 +18,16 @@ from rush.ledger_events import (
     _adjust_bill,
     _adjust_for_downpayment,
     _adjust_for_prepayment,
+    adjust_for_revenue,
 )
 from rush.ledger_utils import (
     create_ledger_entry_from_str,
     get_account_balance_from_str,
 )
-from rush.models import LedgerTriggerEvent
+from rush.models import (
+    LedgerTriggerEvent,
+    ProductFee,
+)
 from rush.utils import (
     div,
     mul,
@@ -43,6 +47,7 @@ def payment_received(
     skip_closing: bool = False,
 ) -> None:
     assert user_loan is not None or lender_id is not None
+    assert user_loan is not None or user_product_id is not None
 
     lt = LedgerTriggerEvent(
         name="payment_received",
@@ -52,7 +57,7 @@ def payment_received(
         extra_details={
             "payment_request_id": payment_request_id,
             "payment_type": payment_type,
-            "user_product_id": user_product_id,
+            "user_product_id": user_product_id if user_product_id else user_loan.user_product_id,
             "lender_id": user_loan.lender_id if user_loan else lender_id,
         },
     )
@@ -65,10 +70,11 @@ def payment_received(
         debit_book_str=f"{user_loan.lender_id if user_loan else lender_id}/lender/pg_account/a",
         event=lt,
         skip_closing=skip_closing,
+        user_product_id=user_product_id if user_product_id else user_loan.user_product_id,
     )
 
     # TODO: check if this code is needed for downpayment, since there is no user loan at that point of time.
-    if payment_type == "downpayment":
+    if payment_type in ("downpayment", "card_activation_fees", "reset_joining_fees"):
         return
 
     run_anomaly(session=session, user_loan=user_loan, event_date=payment_date)
@@ -117,13 +123,44 @@ def payment_received_event(
     debit_book_str: str,
     event: LedgerTriggerEvent,
     skip_closing: bool = False,
+    user_product_id: Optional[int] = None,
 ) -> None:
     payment_received = Decimal(event.amount)
     if event.name == "merchant_refund":
         pass
     elif event.name == "payment_received":
-        if event.extra_details.get("payment_type") == "downpayment":
+        payment_type = event.payment_type
+        if payment_type == "downpayment":
             _adjust_for_downpayment(session=session, event=event, amount=payment_received)
+            return
+        elif payment_type in (
+            "reset_joining_fees",
+            "card_activation_fees",
+        ):
+            # although there should be single product fee for one payment type
+            # assuming there can be multiple.
+
+            assert user_loan is not None or user_product_id is not None
+            if not user_product_id:
+                user_product_id = user_loan.user_product_id
+
+            pre_loan_fees = (
+                session.query(ProductFee)
+                .filter(
+                    ProductFee.fee_status == "UNPAID",
+                    ProductFee.identifier_id == user_product_id,
+                    ProductFee.name == payment_type,
+                )
+                .all()
+            )
+            for fee in pre_loan_fees:
+                payment_received = adjust_for_revenue(
+                    session=session,
+                    event_id=event.id,
+                    payment_to_adjust_from=payment_received,
+                    debit_str=debit_book_str,
+                    fee=fee,
+                )
             return
 
         actual_payment = payment_received

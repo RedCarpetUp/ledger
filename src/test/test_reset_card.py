@@ -22,6 +22,8 @@ from rush.models import (
     Product,
     User,
 )
+from rush.payments import payment_received
+from rush.utils import add_gst_split_to_amount
 
 
 def create_lenders(session: Session) -> None:
@@ -177,7 +179,7 @@ def test_reset_loan_limit_unlock_success(session: Session) -> None:
         session=session, user_id=6, product_type="term_loan_reset"
     )
 
-    fee = add_pre_product_fee(
+    add_pre_product_fee(
         session=session,
         user_id=6,
         product_type="term_loan_reset",
@@ -185,7 +187,28 @@ def test_reset_loan_limit_unlock_success(session: Session) -> None:
         user_product_id=user_product.id,
         fee_amount=Decimal("100"),
     )
-    fee.fee_status = "PAID"
+    session.flush()
+
+    gst_split = add_gst_split_to_amount(
+        net_amount=Decimal("100"),
+        sgst_rate=Decimal("0"),
+        cgst_rate=Decimal("0"),
+        igst_rate=Decimal("18"),
+    )
+
+    assert gst_split["gross_amount"] == Decimal("118")
+    assert gst_split["net_amount"] == Decimal("100")
+
+    payment_received(
+        session=session,
+        user_loan=None,
+        payment_amount=gst_split["gross_amount"],
+        payment_date=parse_date("2020-08-01"),
+        payment_request_id="dummy_reset_fee",
+        payment_type="reset_joining_fees",
+        user_product_id=user_product.id,
+        lender_id=1756833,
+    )
     session.flush()
 
     loan_creation_data = {"date_str": "2020-08-01", "user_product_id": user_product.id}
