@@ -15,12 +15,11 @@ from rush.ledger_events import (
     bill_generate_event,
 )
 from rush.ledger_utils import get_account_balance_from_str
-from rush.loan_schedule import create_bill_schedule
+from rush.loan_schedule.loan_schedule import create_bill_schedule
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
     CardEmis,
     LedgerTriggerEvent,
-    LoanMoratorium,
 )
 from rush.utils import (
     div,

@@ -39,7 +39,7 @@ from rush.lender_funds import (
     lender_interest_incur,
     m2p_transfer,
 )
-from rush.loan_schedule import extend_schedule
+from rush.loan_schedule.extension import extend_schedule
 from rush.models import (
     BillFee,
     CardEmis,

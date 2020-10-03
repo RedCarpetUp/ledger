@@ -23,7 +23,7 @@ from rush.ledger_utils import (
     create_ledger_entry_from_str,
     get_account_balance_from_str,
 )
-from rush.loan_schedule import slide_payment_to_emis
+from rush.loan_schedule.loan_schedule import slide_payment_to_emis
 from rush.models import (
     BookAccount,
     LedgerEntry,
