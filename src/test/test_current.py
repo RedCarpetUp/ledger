@@ -230,13 +230,23 @@ def test_closing_bill(session: Session) -> None:
     bill_date = parse_date("2019-02-01 00:00:00")
     bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
 
-    swipe = create_card_swipe(
+    swipe_date = parse_date("2019-02-02 19:23:11")
+    create_card_swipe(
         session=session,
         user_loan=user_loan,
-        txn_time=parse_date("2019-02-02 19:23:11"),
+        txn_time=swipe_date,
         amount=Decimal(3000),
         description="BigB.com",
     )
+
+    daily_txn_1 = user_loan.get_daily_total_transactions(date_to_check_against=swipe_date.date())
+    assert daily_txn_1 == 1
+
+    daily_spent_1 = user_loan.get_daily_spend(date_to_check_against=swipe_date.date())
+    assert daily_spent_1 == Decimal("3000")
+
+    weekly_spent_1 = user_loan.get_weekly_spend(date_to_check_against=swipe_date.date())
+    assert weekly_spent_1 == Decimal("3000")
 
     accrue_interest_on_all_bills(
         session=session, post_date=bill.table.bill_due_date + relativedelta(days=1), user_loan=user_loan
@@ -303,6 +313,11 @@ def test_closing_bill(session: Session) -> None:
         amount=Decimal(3000),
         description="BigB.com",
     )
+
+    daily_txn_2 = user_loan.get_daily_total_transactions(
+        date_to_check_against=parse_date("2019-05-20").date()
+    )
+    assert daily_txn_2 == 1
 
     bill_date = parse_date("2019-06-01 00:00:00")
     bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
