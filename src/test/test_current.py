@@ -1688,8 +1688,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     last_entry_first_bill = dpd_events[-2]
     last_entry_second_bill = dpd_events[-1]
 
-    assert last_entry_first_bill.balance == Decimal("12708.86")
-    assert last_entry_second_bill.balance == Decimal("7891.33")
+    assert last_entry_first_bill.balance == Decimal("12714.41")
+    assert last_entry_second_bill.balance == Decimal("7885.78")
 
     _, bill_may_principal_due = get_account_balance_from_str(
         session, book_string=f"{bill_may.id}/bill/principal_receivable/a"
@@ -1697,8 +1697,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     _, bill_june_principal_due = get_account_balance_from_str(
         session, book_string=f"{bill_june.id}/bill/principal_receivable/a"
     )
-    assert bill_may_principal_due == Decimal("12708.86")
-    assert bill_june_principal_due == Decimal("7891.33")
+    assert bill_may_principal_due == Decimal("12714.41")
+    assert bill_june_principal_due == Decimal("7885.78")
 
     daily_date = parse_date("2020-08-28 00:05:00")
     daily_dpd_update(session, uc, daily_date)
