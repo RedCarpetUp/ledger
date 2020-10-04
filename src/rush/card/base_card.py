@@ -126,7 +126,7 @@ class BaseBill:
     def sum_of_atm_transactions(self):
         atm_transactions_sum = (
             self.session.query(func.sum(CardTransaction.amount))
-            .filter_by(loan_id=self.table.id, source="ATM")
+            .filter_by(loan_id=self.table.id, source="ATM", status="CONFIRMED")
             .group_by(CardTransaction.loan_id)
             .scalar()
         )
@@ -369,6 +369,7 @@ class BaseLoan(Loan):
                 LoanData.loan_id == self.id,
                 LoanData.user_id == self.user_id,
                 func.date_trunc("day", CardTransaction.txn_time) == date_to_check_against,
+                CardTransaction.status == "CONFIRMED",
             )
             .group_by(LoanData.loan_id)
             .scalar()
@@ -388,6 +389,7 @@ class BaseLoan(Loan):
                 LoanData.loan_id == self.id,
                 LoanData.user_id == self.user_id,
                 func.date_trunc("day", CardTransaction.txn_time).between(to_date, date_to_check_against),
+                CardTransaction.status == "CONFIRMED",
             )
             .group_by(LoanData.loan_id)
             .scalar()
@@ -405,6 +407,7 @@ class BaseLoan(Loan):
                 LoanData.loan_id == self.id,
                 LoanData.user_id == self.user_id,
                 func.date_trunc("day", CardTransaction.txn_time) == date_to_check_against,
+                CardTransaction.status == "CONFIRMED",
             )
             .group_by(LoanData.loan_id)
             .scalar()

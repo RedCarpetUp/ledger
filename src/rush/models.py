@@ -435,6 +435,9 @@ class CardTransaction(AuditMixin):
     source = Column(String(30), nullable=False)
     description = Column(String(100), nullable=False)
     mcc = Column(String(10), nullable=True)
+    trace_no = Column(String(20), nullable=True)
+    txn_ref_no = Column(String(50), nullable=True)
+    status = Column(String(15), nullable=False)
 
 
 class CardEmis(AuditMixin):
