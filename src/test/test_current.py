@@ -2496,10 +2496,10 @@ def test_moratorium(session: Session) -> None:
     assert emis[2].due_date == parse_date("2020-04-15").date()
     assert emis[2].total_closing_balance == Decimal("2291.67")
     assert emis[4].emi_number == 5  # emi after moratorium
-    assert emis[1].principal_due == Decimal("208.33")
-    assert emis[1].interest_due == Decimal("302.68")  # Interest of 3 emis + this month's interest.
-    assert emis[1].due_date == parse_date("2020-06-15").date()
-    assert emis[1].total_closing_balance == Decimal("2291.67")
+    assert emis[4].principal_due == Decimal("208.33")
+    assert emis[4].interest_due == Decimal("302.68")  # Interest of 3 emis + this month's interest.
+    assert emis[4].due_date == parse_date("2020-06-15").date()
+    assert emis[4].total_closing_balance == Decimal("2291.67")
 
 
 def test_moratorium_schedule(session: Session) -> None:
