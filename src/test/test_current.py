@@ -40,6 +40,7 @@ from rush.lender_funds import (
     m2p_transfer,
 )
 from rush.loan_schedule.extension import extend_schedule
+from rush.loan_schedule.moratorium import provide_moratorium
 from rush.models import (
     BillFee,
     CardEmis,
@@ -2468,6 +2469,7 @@ def test_moratorium(session: Session) -> None:
 
     # Apply moratorium
     check_moratorium_eligibility(user_loan)
+    provide_moratorium(user_loan, m.start_date.date(), m.end_date.date())
 
     # Check if scehdule has been updated according to moratorium
     all_emis_query = (
@@ -2481,6 +2483,23 @@ def test_moratorium(session: Session) -> None:
 
     last_emi = emis_dict[-1]
     assert last_emi["emi_number"] == 15
+
+    emis = user_loan.get_loan_schedule()
+
+    assert len(emis) == 15  # 3 new emis got added for moratorium
+    assert emis[1].emi_number == 2
+    assert emis[1].total_due_amount == 0
+    assert emis[1].due_date == parse_date("2020-03-15").date()
+    assert emis[1].total_closing_balance == Decimal("2291.67")
+    assert emis[2].emi_number == 3
+    assert emis[2].total_due_amount == 0
+    assert emis[2].due_date == parse_date("2020-04-15").date()
+    assert emis[2].total_closing_balance == Decimal("2291.67")
+    assert emis[4].emi_number == 5  # emi after moratorium
+    assert emis[1].principal_due == Decimal("208.33")
+    assert emis[1].interest_due == Decimal("302.68")  # Interest of 3 emis + this month's interest.
+    assert emis[1].due_date == parse_date("2020-06-15").date()
+    assert emis[1].total_closing_balance == Decimal("2291.67")
 
 
 def test_moratorium_schedule(session: Session) -> None:
@@ -2579,6 +2598,7 @@ def test_moratorium_schedule(session: Session) -> None:
 
     # Apply moratorium
     check_moratorium_eligibility(user_loan)
+    provide_moratorium(user_loan, m.start_date.date(), m.end_date.date())
 
     # Get list post refresh
     all_emis_query = (
@@ -2766,6 +2786,7 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
 
     # Apply moratorium
     check_moratorium_eligibility(user_loan)
+    provide_moratorium(user_loan, m.start_date.date(), m.end_date.date())
 
     # Get emi list post few bill creations
     all_emis_query = (
