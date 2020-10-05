@@ -2998,7 +2998,6 @@ def test_excess_payment_in_future_emis(session: Session) -> None:
     user_loan = get_user_product(session, 99)
     payment_date = parse_date("2020-05-03")
     amount = Decimal(450)  # min is 114. Paying for 3 emis. Touching 4th.
-    unpaid_bills = user_loan.get_unpaid_bills()
 
     payment_received(
         session=session,
@@ -3050,3 +3049,59 @@ def test_excess_payment_in_future_emis(session: Session) -> None:
     )
     assert len(pm) == 2
     assert pm[1].amount_settled == Decimal("336")
+
+
+def test_one_rupee_leniency(session: Session) -> None:
+    test_generate_bill_1(session)
+
+    user_loan = get_user_product(session, 99)
+    payment_date = parse_date("2020-05-03")
+    amount = Decimal("113.50")  # min is 114. Paying half paisa less.
+
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id="s32224",
+    )
+    emis = user_loan.get_loan_schedule()
+    assert emis[0].payment_status == "Paid"
+    assert emis[0].remaining_amount == Decimal("0.5")
+
+    pm = (
+        session.query(PaymentMapping)
+        .filter(PaymentMapping.payment_request_id == "s32224", PaymentMapping.row_status == "active")
+        .order_by(PaymentMapping.emi_id)
+        .all()
+    )
+    assert len(pm) == 1
+    assert pm[0].emi_id == emis[0].id
+    assert pm[0].amount_settled == Decimal("113.50")
+
+    # Make another payment of 10 rupees.
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_amount=Decimal(10),
+        payment_date=payment_date,
+        payment_request_id="f1234",
+    )
+
+    emis = user_loan.get_loan_schedule()
+    assert emis[0].payment_status == "Paid"
+    assert emis[0].remaining_amount == Decimal(0)
+    assert emis[1].remaining_amount == Decimal("104.50")
+    assert emis[1].payment_status == "UnPaid"
+
+    pm = (
+        session.query(PaymentMapping)
+        .filter(PaymentMapping.payment_request_id == "f1234", PaymentMapping.row_status == "active")
+        .order_by(PaymentMapping.emi_id)
+        .all()
+    )
+    assert len(pm) == 2
+    assert pm[0].emi_id == emis[0].id
+    assert pm[0].amount_settled == Decimal("0.5")
+    assert pm[1].emi_id == emis[1].id
+    assert pm[1].amount_settled == Decimal("9.5")

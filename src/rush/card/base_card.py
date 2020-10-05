@@ -82,13 +82,9 @@ class BaseBill:
         return min_scheduled
 
     def get_min_amount_to_add(
-        self, date_to_check_against: DateTime = get_current_ist_time().date()
+        self
     ) -> Decimal:
-        # only charge interest if in moratorium.
-        if LoanMoratorium.is_in_moratorium(self.session, self.loan_id, date_to_check_against):
-            scheduled_minimum_amount = self.table.interest_to_charge
-        else:
-            scheduled_minimum_amount = self.get_scheduled_min_amount()
+        scheduled_minimum_amount = self.get_scheduled_min_amount()
         max_remaining_amount = self.get_remaining_max()
         amount_already_present_in_min = self.get_remaining_min()
         if amount_already_present_in_min == max_remaining_amount:
@@ -366,7 +362,8 @@ class BaseLoan(Loan):
             LoanSchedule.loan_id == self.loan_id, LoanSchedule.bill_id.is_(None)
         )
         if only_unpaid_emis:
-            q = q.filter(LoanSchedule.payment_status == "UnPaid")
+            # Status doesn't determine if emi is completely settled or not.
+            q = q.filter(LoanSchedule.remaining_amount != 0)
         if only_emis_after_date:
             q = q.filter(LoanSchedule.due_date >= only_emis_after_date)
         emis = q.order_by(LoanSchedule.emi_number).all()

@@ -103,7 +103,7 @@ def slide_payment_to_emis(user_loan: BaseLoan, payment_event: LedgerTriggerEvent
             break
         amount_slid = min(emi.remaining_amount, amount_to_slide)
         emi.payment_received += amount_slid
-        if emi.remaining_amount == 0:
+        if emi.can_mark_emi_paid():
             emi.payment_status = "Paid"
         emi.last_payment_date = payment_event.post_date
         _ = PaymentMapping.new(
@@ -212,7 +212,7 @@ def readjust_future_payment(user_loan: BaseLoan, date_to_check_after: date):
                 break  # this mapping's amount is done. Move to next one.
             amount_slid = min(emi.remaining_amount, amount_to_readjust)
             emi.payment_received += amount_slid
-            if emi.remaining_amount == 0:
+            if emi.can_mark_emi_paid():
                 emi.payment_status = "Paid"
             # TODO get payment request data for payment date.
             # emi.last_payment_date = payment_event.post_date

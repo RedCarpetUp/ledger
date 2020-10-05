@@ -512,6 +512,9 @@ class LoanSchedule(AuditMixin):
         self.payment_status = "UnPaid"
         self.last_payment_date = None
 
+    def can_mark_emi_paid(self) -> bool:
+        return self.remaining_amount <= Decimal(1)
+
 
 class PaymentMapping(AuditMixin):
     __tablename__ = "emi_payment_mapping_new"
