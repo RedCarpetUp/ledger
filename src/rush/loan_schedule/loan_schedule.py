@@ -141,7 +141,7 @@ def close_loan(user_loan: BaseLoan, last_payment_date: datetime):
             emi.payment_status = "UnPaid"
             emi.last_payment_date = None
 
-    # Do what we did above for bill emis but for due amount.
+    # Do what we did above but for bill emis and for due amount.
     all_future_bill_emis = (
         user_loan.session.query(LoanSchedule)
         .filter(
