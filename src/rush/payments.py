@@ -21,6 +21,7 @@ from rush.ledger_events import (
     _adjust_for_downpayment,
     _adjust_for_prepayment,
     adjust_for_revenue,
+    adjust_non_bill_payments,
 )
 from rush.ledger_utils import (
     create_ledger_entry_from_str,
@@ -140,52 +141,35 @@ def payment_received_event(
     skip_closing: bool = False,
     user_product_id: Optional[int] = None,
 ) -> None:
-    payment_received = Decimal(event.amount)
-    if event.name == "merchant_refund":
-        pass
-    elif event.name == "payment_received":
-        payment_type = event.payment_type
-        if not user_loan or payment_type == "card_reload_fees":
-            # not user_loan is to represent pre-loan fees
+    payment_received_amt = Decimal(event.amount)
 
-            assert user_product_id is not None
+    payment_type = event.payment_type
+    if not user_loan or payment_type == "card_reload_fees":
+        assert user_product_id is not None
 
-            if payment_type == "downpayment":
-                _adjust_for_downpayment(session=session, event=event, amount=payment_received)
-                return
-
-            # although there should be single product fee for one payment type
-            # assuming there can be multiple.
-
+        if payment_type == "downpayment":
+            _adjust_for_downpayment(session=session, event=event, amount=payment_received_amt)
+        else:
             if not user_loan:
                 identifier = "product"
                 assert payment_type != "card_reload_fees"
             else:
                 identifier = "loan"
+                assert payment_type == "card_reload_fees"
 
-            # obvious problem here is why there are multiple fees of same payment_type
-            pre_loan_fees = (
-                session.query(Fee)
-                .filter(
-                    Fee.fee_status == "UNPAID",
-                    Fee.identifier_id == user_product_id,
-                    Fee.name == payment_type,
-                    Fee.identifier == identifier,
-                )
-                .all()
+            adjust_non_bill_payments(
+                session=session,
+                event=event,
+                amount=payment_received_amt,
+                user_product_id=user_product_id,
+                payment_type=payment_type,
+                identifier=identifier,
+                debit_book_str=debit_book_str,
             )
-            for fee in pre_loan_fees:
-                payment_received = adjust_for_revenue(
-                    session=session,
-                    event_id=event.id,
-                    payment_to_adjust_from=payment_received,
-                    debit_str=debit_book_str,
-                    fee=fee,
-                )
-            return
 
-        actual_payment = payment_received
-        bills_data = find_amount_to_slide_in_bills(user_loan, payment_received)
+    else:
+        actual_payment = payment_received_amt
+        bills_data = find_amount_to_slide_in_bills(user_loan, payment_received_amt)
         for bill_data in bills_data:
             adjust_for_min_max_accounts(bill_data["bill"], bill_data["amount_to_adjust"], event.id)
             remaining_amount = _adjust_bill(
@@ -197,30 +181,32 @@ def payment_received_event(
             )
             # The amount to adjust is computed for this bill. It should all settle.
             assert remaining_amount == 0
-            payment_received -= bill_data["amount_to_adjust"]
+            payment_received_amt -= bill_data["amount_to_adjust"]
         if user_loan.should_reinstate_limit_on_payment:
             user_loan.reinstate_limit_on_payment(event=event, amount=actual_payment)
 
-    if payment_received > 0:  # if there's payment left to be adjusted.
-        _adjust_for_prepayment(
-            session=session,
-            loan_id=user_loan.loan_id,
-            event_id=event.id,
-            amount=payment_received,
-            debit_book_str=debit_book_str,
+        if payment_received_amt > 0:  # if there's payment left to be adjusted.
+            _adjust_for_prepayment(
+                session=session,
+                loan_id=user_loan.loan_id,
+                event_id=event.id,
+                amount=payment_received_amt,
+                debit_book_str=debit_book_str,
+            )
+
+        is_in_write_off = (
+            get_account_balance_from_str(session, f"{user_loan.loan_id}/loan/write_off_expenses/e")[1]
+            > 0
         )
+        if is_in_write_off:
+            recovery_event(user_loan, event)
+            # TODO set loan status to recovered.
 
-    is_in_write_off = (
-        get_account_balance_from_str(session, f"{user_loan.loan_id}/loan/write_off_expenses/e")[1] > 0
-    )
-    if is_in_write_off:
-        recovery_event(user_loan, event)
-        # TODO set loan status to recovered.
+        # We will either slide or close bills
+        slide_or_close_bills(user_loan, event, skip_closing)
+        slide_payment_to_emis(user_loan, event)
 
-    # We will either slide or close bills
-    slide_or_close_bills(user_loan, event, skip_closing)
     create_payment_split(session, event)
-    slide_payment_to_emis(user_loan, event)
 
 
 def slide_or_close_bills(user_loan, event, skip_closing=False):
@@ -405,6 +391,8 @@ def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
         "atm_fee",
         "card_activation_fees",
         "card_reload_fees",
+        "downpayment",
+        "reset_joining_fees",
     )
     # unbilled and principal belong to same component.
     updated_component_names = {
