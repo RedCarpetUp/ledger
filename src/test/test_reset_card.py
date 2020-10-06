@@ -15,6 +15,7 @@ from rush.card.utils import (
 )
 from rush.ledger_utils import get_account_balance_from_str
 from rush.limit_unlock import limit_unlock
+from rush.min_payment import add_min_to_all_bills
 from rush.models import (
     CardEmis,
     Lenders,
@@ -91,7 +92,28 @@ def test_create_term_loan(session: Session) -> None:
         user_product_id=user_product.id,
         fee_amount=Decimal("100"),
     )
-    fee.fee_status = "PAID"
+    session.flush()
+
+    gst_split = add_gst_split_to_amount(
+        net_amount=Decimal("100"),
+        sgst_rate=Decimal("0"),
+        cgst_rate=Decimal("0"),
+        igst_rate=Decimal("18"),
+    )
+
+    assert gst_split["gross_amount"] == Decimal("118")
+    assert gst_split["net_amount"] == Decimal("100")
+
+    payment_received(
+        session=session,
+        user_loan=None,
+        payment_amount=gst_split["gross_amount"],
+        payment_date=parse_date("2020-08-01"),
+        payment_request_id="dummy_reset_fee",
+        payment_type="reset_joining_fees",
+        user_product_id=user_product.id,
+        lender_id=1756833,
+    )
     session.flush()
 
     loan_creation_data = {"date_str": "2020-08-01", "user_product_id": user_product.id}
@@ -151,8 +173,12 @@ def test_create_term_loan(session: Session) -> None:
     assert emis_dict[-1]["interest"] == Decimal("306.67")
     assert emis_dict[-1]["total_due_amount"] % 10 == 0
 
+    # add min amount for months in between.
+    add_min_to_all_bills(session=session, post_date=parse_date("2020-09-01"), user_loan=loan)
+    add_min_to_all_bills(session=session, post_date=parse_date("2020-10-01"), user_loan=loan)
+
     min_amount = user_loan.get_remaining_min(date_to_check_against=parse_date("2020-11-01").date())
-    assert min_amount == Decimal("1140")
+    assert min_amount == Decimal("3420")
 
     max_amount = user_loan.get_remaining_max()
     assert max_amount == Decimal("13680")
@@ -260,7 +286,28 @@ def test_reset_loan_limit_unlock_error(session: Session) -> None:
         user_product_id=user_product.id,
         fee_amount=Decimal("100"),
     )
-    fee.fee_status = "PAID"
+    session.flush()
+
+    gst_split = add_gst_split_to_amount(
+        net_amount=Decimal("100"),
+        sgst_rate=Decimal("0"),
+        cgst_rate=Decimal("0"),
+        igst_rate=Decimal("18"),
+    )
+
+    assert gst_split["gross_amount"] == Decimal("118")
+    assert gst_split["net_amount"] == Decimal("100")
+
+    payment_received(
+        session=session,
+        user_loan=None,
+        payment_amount=gst_split["gross_amount"],
+        payment_date=parse_date("2020-08-01"),
+        payment_request_id="dummy_reset_fee",
+        payment_type="reset_joining_fees",
+        user_product_id=user_product.id,
+        lender_id=1756833,
+    )
     session.flush()
 
     loan_creation_data = {"date_str": "2020-08-01", "user_product_id": user_product.id}

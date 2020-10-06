@@ -456,7 +456,7 @@ def adjust_non_bill_payments(
     session: Session,
     event: LedgerTriggerEvent,
     amount: Decimal,
-    user_product_id: int,
+    identifier_id: int,
     payment_type: str,
     identifier: str,
     debit_book_str: str,
@@ -466,7 +466,7 @@ def adjust_non_bill_payments(
         session.query(Fee)
         .filter(
             Fee.fee_status == "UNPAID",
-            Fee.identifier_id == user_product_id,
+            Fee.identifier_id == identifier_id,
             Fee.name == payment_type,
             Fee.identifier == identifier,
         )

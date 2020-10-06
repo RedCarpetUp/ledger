@@ -152,18 +152,20 @@ def payment_received_event(
         else:
             if not user_loan:
                 identifier = "product"
+                identifier_id = user_product_id
                 assert payment_type != "card_reload_fees"
             else:
                 identifier = "loan"
+                identifier_id = user_loan.id
                 assert payment_type == "card_reload_fees"
 
             adjust_non_bill_payments(
                 session=session,
                 event=event,
                 amount=payment_received_amt,
-                user_product_id=user_product_id,
                 payment_type=payment_type,
                 identifier=identifier,
+                identifier_id=identifier_id,
                 debit_book_str=debit_book_str,
             )
 
