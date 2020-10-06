@@ -133,6 +133,7 @@ def slide_payments(
         last_paid_emi_number,
     ) -> None:
         total_payment_till_now = payment_received_and_adjusted
+        # Do we even need to slide it in emi schedule. Can't we just put it in emi mapping?
         for emi in all_emis:
             one_rupee_leniency = False
             total_payment_till_now += (

@@ -229,7 +229,7 @@ def test_dmi_recon_process_1(session: Session) -> None:
         user_loan=user_loan_ananth,
         payment_amount=500,
         payment_date=parse_date("2020-02-13 15:33:20"),
-        payment_request_id="r23gs23",
+        payment_request_id="r23gs24",
     )
 
     # Got adjusted in principal because interest is not accrued yet.
@@ -265,14 +265,14 @@ def test_dmi_recon_process_1(session: Session) -> None:
         user_loan=user_loan_raghav,
         payment_amount=100,
         payment_date=parse_date("2020-02-26 15:23:20"),
-        payment_request_id="r23gs23",
+        payment_request_id="r23gs25",
     )
     payment_received(
         session=session,
         user_loan=user_loan_ananth,
         payment_amount=50,
         payment_date=parse_date("2020-02-25 15:33:20"),
-        payment_request_id="r23gs23",
+        payment_request_id="r23gs26",
     )
 
     _, interest_due_raghav = get_account_balance_from_str(

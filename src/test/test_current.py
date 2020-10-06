@@ -40,6 +40,8 @@ from rush.lender_funds import (
     lender_interest_incur,
     m2p_transfer,
 )
+from rush.loan_schedule.extension import extend_schedule
+from rush.loan_schedule.moratorium import provide_moratorium
 from rush.models import (
     BillFee,
     CardEmis,
@@ -54,6 +56,8 @@ from rush.models import (
     Lenders,
     LoanData,
     LoanMoratorium,
+    PaymentMapping,
+    PaymentSplit,
     Product,
     User,
     UserPy,
@@ -374,6 +378,16 @@ def test_generate_bill_1(session: Session) -> None:
     dpd_events = session.query(EventDpd).filter_by(loan_id=uc.loan_id).all()
     assert dpd_events[0].balance == Decimal(1000)
 
+    emis = uc.get_loan_schedule()
+    assert emis[0].total_due_amount == Decimal(114)
+    assert emis[0].principal_due == Decimal("83.33")
+    assert emis[0].interest_due == Decimal("30.67")
+    assert emis[0].due_date == parse_date("2020-05-15").date()
+    assert emis[0].emi_number == 1
+    assert emis[0].total_closing_balance == Decimal(1000)
+    assert emis[1].total_closing_balance == Decimal("916.67")
+    assert emis[11].total_closing_balance == Decimal("83.33")
+
 
 def _accrue_interest_on_bill_1(session: Session) -> None:
     user_loan = get_user_product(session, 99)
@@ -564,6 +578,27 @@ def _partial_payment_bill_1(session: Session) -> None:
     )
     assert lender_payable == Decimal("900.5")
 
+    emis = user_loan.get_loan_schedule()
+    assert emis[0].payment_received == Decimal("100")
+    assert emis[0].payment_status == "UnPaid"
+    assert emis[0].emi_number == 1
+
+    # Check the entry in payment schedule mapping.
+    pm = (
+        session.query(PaymentMapping)
+        .filter(PaymentMapping.payment_request_id == "a1237", PaymentMapping.row_status == "active")
+        .all()
+    )
+    assert len(pm) == 1
+    assert pm[0].emi_id == emis[0].id
+    assert pm[0].amount_settled == Decimal("100")
+
+    # Check the entries for payment split
+    payment_splits = session.query(PaymentSplit).filter(PaymentSplit.payment_request_id == "a1237").all()
+    assert len(payment_splits) == 1
+    split = {ps.component: ps.amount_settled for ps in payment_splits}
+    assert split["principal"] == Decimal("100")
+
 
 def test_partial_payment_bill_1(session: Session) -> None:
     test_generate_bill_1(session)
@@ -752,6 +787,32 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
     )
     assert lender_payable == Decimal("769.0")
 
+    emis = user_loan.get_loan_schedule()
+    assert emis[0].payment_received == Decimal("114")
+    assert emis[0].payment_status == "Paid"
+    assert emis[0].emi_number == 1
+    assert emis[1].emi_number == 2
+    assert emis[1].payment_status == "UnPaid"
+    assert emis[1].payment_received == Decimal("0")
+
+    # Check the entry in payment schedule mapping.
+    pm = (
+        session.query(PaymentMapping)
+        .filter(PaymentMapping.payment_request_id == "a1239", PaymentMapping.row_status == "active")
+        .order_by(PaymentMapping.id)
+        .all()
+    )
+    assert len(pm) == 1
+    assert pm[0].emi_id == emis[0].id
+    assert pm[0].amount_settled == Decimal("14")
+
+    payment_splits = session.query(PaymentSplit).filter(PaymentSplit.payment_request_id == "a1239").all()
+    assert len(payment_splits) == 3
+    split = {ps.component: ps.amount_settled for ps in payment_splits}
+    assert split["late_fine"] == Decimal("100")
+    assert split["igst"] == Decimal("18")
+    assert split["interest"] == Decimal("14")
+
 
 def test_is_bill_paid_bill_1(session: Session) -> None:
     test_generate_bill_1(session)
@@ -793,6 +854,12 @@ def test_is_bill_paid_bill_1(session: Session) -> None:
         session, book_string=f"{user_loan.loan_id}/loan/lender_payable/l"
     )
     assert lender_payable == Decimal("-147.17")  # negative that implies prepaid
+
+    emis = user_loan.get_loan_schedule()
+    assert emis[1].payment_received == remaining_principal
+    assert emis[1].payment_status == "Paid"
+    assert emis[1].principal_due == remaining_principal
+    assert emis[2].principal_due == Decimal(0)
 
 
 def _generate_bill_2(session: Session) -> None:
@@ -871,6 +938,21 @@ def _generate_bill_2(session: Session) -> None:
         session, parse_date("2020-06-01").date(), parse_date("2020-06-30").date()
     )
     assert total_revenue_earned == Decimal("0")
+
+    emis = uc.get_loan_schedule()
+    assert emis[0].total_due_amount == Decimal(114)
+    assert emis[0].principal_due == Decimal("83.33")
+    assert emis[0].interest_due == Decimal("30.67")
+    assert emis[0].due_date == parse_date("2020-05-15").date()
+    assert emis[0].emi_number == 1
+
+    assert emis[1].total_due_amount == Decimal(341)
+    assert emis[12].total_due_amount == Decimal(227)
+    assert emis[1].principal_due == Decimal("250")
+    assert emis[1].interest_due == Decimal("91")
+    assert emis[1].due_date == parse_date("2020-06-15").date()
+    assert emis[1].emi_number == 2
+    assert len(emis) == 13
 
 
 def test_generate_bill_2(session: Session) -> None:
@@ -1702,6 +1784,33 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
         payment_date=parse_date("2020-05-05 19:23:11"),
         payment_request_id="aasdf123",
     )
+
+    emis = user_loan.get_loan_schedule()
+    assert emis[0].payment_received == Decimal("114")
+    assert emis[0].payment_status == "Paid"
+    assert emis[0].emi_number == 1
+    assert emis[1].emi_number == 2
+    assert emis[1].payment_status == "Paid"
+    assert emis[1].payment_received == Decimal("114")
+    assert emis[2].emi_number == 3
+    assert emis[2].payment_status == "UnPaid"
+    assert emis[2].payment_received == Decimal("4")
+
+    # Check the entry in payment mapping.
+    pm = (
+        session.query(PaymentMapping)
+        .filter(PaymentMapping.payment_request_id == "aasdf123", PaymentMapping.row_status == "active")
+        .order_by(PaymentMapping.id)
+        .all()
+    )
+    assert len(pm) == 3
+    assert pm[0].emi_id == emis[0].id
+    assert pm[0].amount_settled == Decimal("14")
+    assert pm[1].emi_id == emis[1].id
+    assert pm[1].amount_settled == Decimal("114")
+    assert pm[2].emi_id == emis[2].id
+    assert pm[2].amount_settled == Decimal("4")
+
     # Accrue interest.
     _accrue_interest_on_bill_1(session)
 
@@ -2361,6 +2470,7 @@ def test_moratorium(session: Session) -> None:
 
     # Apply moratorium
     check_moratorium_eligibility(user_loan)
+    provide_moratorium(user_loan, m.start_date.date(), m.end_date.date())
 
     # Check if scehdule has been updated according to moratorium
     all_emis_query = (
@@ -2374,6 +2484,23 @@ def test_moratorium(session: Session) -> None:
 
     last_emi = emis_dict[-1]
     assert last_emi["emi_number"] == 15
+
+    emis = user_loan.get_loan_schedule()
+
+    assert len(emis) == 15  # 3 new emis got added for moratorium
+    assert emis[1].emi_number == 2
+    assert emis[1].total_due_amount == 0
+    assert emis[1].due_date == parse_date("2020-03-15").date()
+    assert emis[1].total_closing_balance == Decimal("2291.67")
+    assert emis[2].emi_number == 3
+    assert emis[2].total_due_amount == 0
+    assert emis[2].due_date == parse_date("2020-04-15").date()
+    assert emis[2].total_closing_balance == Decimal("2291.67")
+    assert emis[4].emi_number == 5  # emi after moratorium
+    assert emis[4].principal_due == Decimal("208.33")
+    assert emis[4].interest_due == Decimal("302.68")  # Interest of 3 emis + this month's interest.
+    assert emis[4].due_date == parse_date("2020-06-15").date()
+    assert emis[4].total_closing_balance == Decimal("2291.67")
 
 
 def test_moratorium_schedule(session: Session) -> None:
@@ -2472,6 +2599,7 @@ def test_moratorium_schedule(session: Session) -> None:
 
     # Apply moratorium
     check_moratorium_eligibility(user_loan)
+    provide_moratorium(user_loan, m.start_date.date(), m.end_date.date())
 
     # Get list post refresh
     all_emis_query = (
@@ -2659,6 +2787,7 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
 
     # Apply moratorium
     check_moratorium_eligibility(user_loan)
+    provide_moratorium(user_loan, m.start_date.date(), m.end_date.date())
 
     # Get emi list post few bill creations
     all_emis_query = (
@@ -2741,18 +2870,9 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(session, bill_april.table.bill_due_date + relativedelta(days=1), uc)
 
-    # Get emi list post few bill creations
-    all_emis_query = (
-        session.query(CardEmis)
-        .filter(
-            CardEmis.loan_id == user_loan.id, CardEmis.row_status == "active", CardEmis.bill_id == None
-        )
-        .order_by(CardEmis.emi_number.asc())
-        .all()
-    )
-
     # Extend tenure to 18 months
     extend_tenure(session, uc, 18, parse_date("2020-05-22 22:02:47"))
+    extend_schedule(uc, 18, parse_date("2020-05-22"))
 
     # Get emi list post tenure extension
     all_emis = (
@@ -2776,6 +2896,24 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
     assert last_emi.due_amount == Decimal("3.02")
     # First cycle 18 emis, next bill 19 emis
     assert last_emi.emi_number == 19
+
+    emis = uc.get_loan_schedule()
+    assert emis[0].total_due_amount == Decimal(13)
+    assert emis[0].principal_due == Decimal("9.17")
+    assert emis[0].emi_number == 1
+    assert emis[0].total_closing_balance == Decimal(110)
+    assert emis[1].total_due_amount == Decimal(20)
+    assert emis[1].principal_due == Decimal("13.84")
+    assert emis[1].emi_number == 2
+    assert emis[1].total_closing_balance == Decimal("156.83")
+    assert emis[2].total_due_amount == Decimal("14.53")
+    assert emis[2].principal_due == Decimal("8.75")
+    assert emis[2].emi_number == 3
+    assert emis[2].total_closing_balance == Decimal(143)
+    assert emis[18].total_due_amount == Decimal("4.91")
+    assert emis[18].principal_due == Decimal("3.02")
+    assert emis[18].emi_number == 19
+    assert emis[18].total_closing_balance == Decimal("3.02")
 
 
 def test_intermediate_bill_generation(session: Session) -> None:
@@ -2853,3 +2991,118 @@ def test_transaction_before_activation(session: Session) -> None:
     )
 
     assert swipe["result"] == "error"
+
+
+def test_excess_payment_in_future_emis(session: Session) -> None:
+    test_generate_bill_1(session)
+
+    user_loan = get_user_product(session, 99)
+    payment_date = parse_date("2020-05-03")
+    amount = Decimal(450)  # min is 114. Paying for 3 emis. Touching 4th.
+
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id="s3234",
+    )
+    emis = user_loan.get_loan_schedule()
+    assert emis[0].payment_status == "Paid"
+    assert emis[1].payment_status == "Paid"
+    assert emis[2].payment_status == "Paid"
+    assert emis[3].payment_status == "UnPaid"
+    assert emis[3].payment_received == Decimal("108")
+
+    pm = (
+        session.query(PaymentMapping)
+        .filter(PaymentMapping.payment_request_id == "s3234", PaymentMapping.row_status == "active")
+        .order_by(PaymentMapping.emi_id)
+        .all()
+    )
+    assert len(pm) == 4
+    assert pm[0].emi_id == emis[0].id
+    assert pm[0].amount_settled == Decimal("114")
+    assert pm[3].amount_settled == Decimal("108")
+
+    # accrue interest of first bill
+    _accrue_interest_on_bill_1(session)
+
+    # Generate 2nd bill. 2nd emi is now 341.
+    # Do transaction to create new bill.
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-05-08 19:23:11"),
+        amount=Decimal(2000),
+        description="BigBasket.com",
+    )
+
+    bill_2 = bill_generate(user_loan=user_loan)
+
+    emis = user_loan.get_loan_schedule()
+
+    pm = (
+        session.query(PaymentMapping)
+        .filter(PaymentMapping.payment_request_id == "s3234", PaymentMapping.row_status == "active")
+        .order_by(PaymentMapping.emi_id)
+        .all()
+    )
+    assert len(pm) == 2
+    assert pm[1].amount_settled == Decimal("336")
+
+
+def test_one_rupee_leniency(session: Session) -> None:
+    test_generate_bill_1(session)
+
+    user_loan = get_user_product(session, 99)
+    payment_date = parse_date("2020-05-03")
+    amount = Decimal("113.50")  # min is 114. Paying half paisa less.
+
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id="s32224",
+    )
+    emis = user_loan.get_loan_schedule()
+    assert emis[0].payment_status == "Paid"
+    assert emis[0].remaining_amount == Decimal("0.5")
+
+    pm = (
+        session.query(PaymentMapping)
+        .filter(PaymentMapping.payment_request_id == "s32224", PaymentMapping.row_status == "active")
+        .order_by(PaymentMapping.emi_id)
+        .all()
+    )
+    assert len(pm) == 1
+    assert pm[0].emi_id == emis[0].id
+    assert pm[0].amount_settled == Decimal("113.50")
+
+    # Make another payment of 10 rupees.
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_amount=Decimal(10),
+        payment_date=payment_date,
+        payment_request_id="f1234",
+    )
+
+    emis = user_loan.get_loan_schedule()
+    assert emis[0].payment_status == "Paid"
+    assert emis[0].remaining_amount == Decimal(0)
+    assert emis[1].remaining_amount == Decimal("104.50")
+    assert emis[1].payment_status == "UnPaid"
+
+    pm = (
+        session.query(PaymentMapping)
+        .filter(PaymentMapping.payment_request_id == "f1234", PaymentMapping.row_status == "active")
+        .order_by(PaymentMapping.emi_id)
+        .all()
+    )
+    assert len(pm) == 2
+    assert pm[0].emi_id == emis[0].id
+    assert pm[0].amount_settled == Decimal("0.5")
+    assert pm[1].emi_id == emis[1].id
+    assert pm[1].amount_settled == Decimal("9.5")

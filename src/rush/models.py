@@ -23,6 +23,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.ext.indexable import index_property
 from sqlalchemy.orm import (
     Session,
@@ -481,6 +482,63 @@ class EmiPaymentMapping(AuditMixin):
     atm_fee_received = Column(Numeric, nullable=True, default=Decimal(0))
     principal_received = Column(Numeric, nullable=True, default=Decimal(0))
     row_status = Column(String(length=10), nullable=False, default="active")
+
+
+class LoanSchedule(AuditMixin):
+    __tablename__ = "loan_schedule"
+    loan_id = Column(Integer, ForeignKey(Loan.id))
+    bill_id = Column(Integer, ForeignKey(LoanData.id), nullable=True)  # hate this. - Raghav
+    emi_number = Column(Integer, nullable=False)
+    due_date = Column(Date, nullable=False)
+    principal_due = Column(Numeric, nullable=False)
+    interest_due = Column(Numeric, nullable=False)
+    # total_due_amount = Column(Numeric, nullable=False)  # This should be a calculated column.
+    dpd = Column(Integer, nullable=True)
+    last_payment_date = Column(TIMESTAMP, nullable=True)
+    total_closing_balance = Column(Numeric, nullable=False)
+    payment_received = Column(Numeric, nullable=False, default=0)
+    payment_status = Column(String(length=6), nullable=False, default="UnPaid")
+
+    @hybrid_property
+    def total_due_amount(self):
+        return self.principal_due + self.interest_due
+
+    @hybrid_property
+    def remaining_amount(self):
+        return self.total_due_amount - self.payment_received
+
+    def make_emi_unpaid(self):
+        self.payment_received = 0
+        self.payment_status = "UnPaid"
+        self.last_payment_date = None
+
+    def can_mark_emi_paid(self) -> bool:
+        return self.remaining_amount <= Decimal(1)
+
+
+class PaymentMapping(AuditMixin):
+    __tablename__ = "emi_payment_mapping_new"
+    payment_request_id = Column(String(), nullable=False, index=True)
+    emi_id = Column(Integer, ForeignKey(LoanSchedule.id), nullable=False, index=True)
+    amount_settled = Column(Numeric, nullable=False)
+    row_status = Column(String(8), nullable=False, default="active")
+
+    __table_args__ = (
+        Index(
+            "idx_uniq_on_row_status_emi_payment_mapping",
+            payment_request_id,
+            emi_id,
+            unique=True,
+            postgresql_where=row_status == "active",
+        ),
+    )
+
+
+class PaymentSplit(AuditMixin):
+    __tablename__ = "payment_split"
+    payment_request_id = Column(String(), nullable=False, index=True)
+    component = Column(String(50), nullable=False)
+    amount_settled = Column(Numeric, nullable=False)
 
 
 class LoanMoratorium(AuditMixin):
