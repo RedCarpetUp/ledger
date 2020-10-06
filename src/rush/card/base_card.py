@@ -81,9 +81,7 @@ class BaseBill:
             min_scheduled = self.table.principal_instalment + self.table.interest_to_charge
         return min_scheduled
 
-    def get_min_amount_to_add(
-        self
-    ) -> Decimal:
+    def get_min_amount_to_add(self) -> Decimal:
         scheduled_minimum_amount = self.get_scheduled_min_amount()
         max_remaining_amount = self.get_remaining_max()
         amount_already_present_in_min = self.get_remaining_min()
