@@ -173,26 +173,6 @@ def upgrade() -> None:
             sa.Column("international_usage", sa.BOOLEAN(), server_default="false", nullable=False)
         )
 
-    # op.create_table(
-    #     "user_card",
-    #     sa.Column("id", sa.Integer(), nullable=False),
-    #     sa.Column("user_id", sa.Integer(), nullable=False),
-    #     sa.Column("card_type", sa.String(), nullable=False),
-    #     sa.Column("card_activation_date", sa.Date(), nullable=True),
-    #     sa.Column("statement_period_in_days", sa.Integer(), nullable=False),
-    #     sa.Column("interest_free_period_in_days", sa.Integer, nullable=True),
-    #     sa.Column("rc_rate_of_interest_monthly", sa.Numeric(), nullable=False),
-    #     sa.Column("lender_rate_of_interest_annual", sa.Numeric(), nullable=False),
-    #     sa.Column("dpd", sa.Integer, nullable=True),
-    #     sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
-    #     sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
-    #     sa.Column("performed_by", sa.Integer(), nullable=False),
-    #     sa.PrimaryKeyConstraint("id"),
-    #     sa.ForeignKeyConstraint(["user_id"], ["users.id"], name="fk_user_card_user_id"),
-    #     sa.Column("lender_id", sa.Integer(), nullable=False),
-    #     sa.ForeignKeyConstraint(["lender_id"], ["rc_lenders.id"], name="fk_user_card_lender_id"),
-    # )
-
     op.create_table(
         "loan_data",
         sa.Column("id", sa.Integer(), nullable=False),

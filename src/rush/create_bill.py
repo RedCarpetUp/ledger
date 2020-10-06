@@ -20,6 +20,7 @@ from rush.ledger_events import (
     bill_generate_event,
 )
 from rush.ledger_utils import get_account_balance_from_str
+from rush.loan_schedule.loan_schedule import create_bill_schedule
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
     CardEmis,
@@ -117,6 +118,7 @@ def bill_generate(
 
     if not skip_bill_schedule_creation:
         create_emis_for_bill(session=session, user_loan=user_loan, bill=bill)
+        create_bill_schedule(session, user_loan, bill)
 
     atm_transactions_sum = bill.sum_of_atm_transactions()
     if atm_transactions_sum > 0:

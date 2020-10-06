@@ -3,6 +3,7 @@ from typing import Optional
 
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from rush.anomaly_detection import run_anomaly
@@ -24,10 +25,14 @@ from rush.ledger_utils import (
     create_ledger_entry_from_str,
     get_account_balance_from_str,
 )
+from rush.loan_schedule.loan_schedule import slide_payment_to_emis
 from rush.models import (
+    BookAccount,
     CardTransaction,
+    LedgerEntry,
     LedgerTriggerEvent,
     LoanData,
+    PaymentSplit,
     ProductFee,
 )
 from rush.utils import mul
@@ -222,6 +227,8 @@ def payment_received_event(
 
     # We will either slide or close bills
     slide_or_close_bills(user_loan, event, skip_closing)
+    create_payment_split(session, event)
+    slide_payment_to_emis(user_loan, event)
 
 
 def slide_or_close_bills(user_loan, event, skip_closing=False):
@@ -297,7 +304,8 @@ def transaction_refund_event(session: Session, user_loan: BaseLoan, event: Ledge
         credit_book_str=f"{user_loan.loan_id}/loan/refund_off_balance/l",  # Couldn't find anything relevant.
         amount=Decimal(event.amount),
     )
-
+    create_payment_split(session, event)
+    slide_payment_to_emis(user_loan, event)
     group_bills_to_create_loan_schedule(user_loan=user_loan)
 
 
@@ -382,3 +390,61 @@ def adjust_for_min_max_accounts(bill: BaseBill, payment_to_adjust_from: Decimal,
             credit_book_str=f"{bill.id}/bill/max/a",
             amount=max_to_adjust_in_this_bill,
         )
+
+
+def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
+    split_data = (
+        session.query(BookAccount.book_name, func.sum(LedgerEntry.amount))
+        .filter(
+            LedgerEntry.event_id == event.id,
+            LedgerEntry.credit_account == BookAccount.id,
+        )
+        .group_by(BookAccount.book_name)
+        .all()
+    )
+    allowed_accounts = (
+        "cgst_payable",
+        "igst_payable",
+        "sgst_payable",
+        "interest_receivable",
+        "late_fine",
+        "principal_receivable",
+        "unbilled",
+        "atm_fee",
+        "card_activation_fees",
+        "card_reload_fees",
+    )
+    # unbilled and principal belong to same component.
+    updated_component_names = {
+        "principal_receivable": "principal",
+        "unbilled": "principal",
+        "interest_receivable": "interest",
+        "igst_payable": "igst",
+        "cgst_payable": "cgst",
+        "sgst_payable": "sgst",
+    }
+    normalized_split_data = {}
+    for book_name, amount in split_data:
+        if book_name not in allowed_accounts or amount == 0:
+            continue
+        if book_name in updated_component_names:
+            book_name = updated_component_names[book_name]
+        normalized_split_data[book_name] = normalized_split_data.get(book_name, 0) + amount
+    return normalized_split_data
+
+
+def create_payment_split(session: Session, event: LedgerTriggerEvent):
+    """
+    Create a payment split at ledger level. Has no emi or loan context.
+    Only tells how much principal, interest etc. got settled from x amount of payment.
+    """
+    split_data = get_payment_split_from_event(session, event)
+    new_ps_objects = []
+    for component, amount in split_data.items():
+        ps = PaymentSplit(
+            payment_request_id=event.extra_details["payment_request_id"],
+            component=component,
+            amount_settled=amount,
+        )
+        new_ps_objects.append(ps)
+    session.bulk_save_objects(new_ps_objects)
