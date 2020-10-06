@@ -31,8 +31,7 @@ from rush.models import (
     UserCard,
 )
 from rush.utils import (
-    div,
-    get_current_ist_time,
+    get_reducing_emi,
     mul,
     round_up_decimal_to_nearest,
 )
@@ -49,14 +48,12 @@ class BaseBill:
         self.__dict__.update(loan_data.__dict__)
 
     def get_interest_to_charge(
-        self, rate_of_interest: Decimal, product_price: Optional[Decimal] = None
+        self, rate_of_interest: Decimal, principal: Optional[Decimal] = None
     ) -> Decimal:
-        # TODO get tenure from table.
-        principal = self.table.principal
-        if product_price:
-            principal = product_price
+        if not principal:
+            principal = self.table.principal
 
-        interest_on_principal = mul(principal, div(rate_of_interest, 100))
+        interest_on_principal = mul(principal, rate_of_interest / 100)
         not_rounded_emi = self.table.principal_instalment + interest_on_principal
         rounded_emi = round_up_decimal_to_nearest(not_rounded_emi, to_nearest=self.round_emi_to_nearest)
 
@@ -65,21 +62,49 @@ class BaseBill:
         new_interest = interest_on_principal + rounding_difference
         return new_interest
 
-    def get_scheduled_min_amount(self) -> Decimal:
+    def get_interest_to_charge_2(
+        self,
+        rate_of_interest: Decimal,
+        principal: Optional[Decimal] = None,
+        to_round: Optional[bool] = False,
+    ) -> Decimal:
+        """
+        This interest method only returns the raw interest without any alterations to make the
+        total emi a whole number.
+        """
+        if not principal:
+            principal = self.table.principal
+
+        interest_on_principal = principal * rate_of_interest / 100
+        if to_round:
+            interest_on_principal = round(interest_on_principal, 2)
+        return interest_on_principal
+
+    def get_scheduled_min_amount(self, to_round: Optional[bool] = True) -> Decimal:
         if not self.table.is_generated:
             return Decimal(0)
         user_loan = self.session.query(Loan).filter_by(id=self.table.loan_id).one_or_none()
-        if user_loan.min_tenure:
-            new_instalment = div(self.table.principal, user_loan.min_tenure)
-            min_scheduled = new_instalment + self.table.interest_to_charge
-        elif user_loan.min_multiplier:
-            min_without_scheduled_multiplier = (
-                self.table.principal_instalment + self.table.interest_to_charge
-            )
-            min_scheduled = min_without_scheduled_multiplier * user_loan.min_multiplier
-        else:
-            min_scheduled = self.table.principal_instalment + self.table.interest_to_charge
+        tenure = user_loan.min_tenure or self.table.bill_tenure
+
+        min_scheduled = self.get_instalment_amount(user_loan, tenure)
+        if user_loan.min_multiplier:
+            min_scheduled = min_scheduled * user_loan.min_multiplier
+        if to_round:
+            min_scheduled = round(min_scheduled, 2)
         return min_scheduled
+
+    def get_instalment_amount(self, user_loan: "BaseLoan", tenure: Decimal):
+        if user_loan.interest_type == "reducing":
+            instalment = get_reducing_emi(
+                self.table.principal,
+                user_loan.rc_rate_of_interest_monthly,
+                tenure,
+                to_round=False,
+            )
+        else:
+            principal_instalment = self.table.principal / tenure
+            instalment = principal_instalment + self.table.interest_to_charge
+        return instalment
 
     def get_min_amount_to_add(self) -> Decimal:
         scheduled_minimum_amount = self.get_scheduled_min_amount()
@@ -181,6 +206,7 @@ class BaseLoan(Loan):
             amortization_date=kwargs.get("card_activation_date"),  # TODO: change this later.
             min_tenure=kwargs.pop("min_tenure", None),
             min_multiplier=kwargs.pop("min_multiplier", None),
+            interest_type=kwargs.pop("interest_type", "flat"),
         )
 
         # Don't want to overwrite default value in case of None.

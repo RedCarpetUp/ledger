@@ -63,9 +63,15 @@ def group_bills(user_loan: BaseLoan):
 def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
     emi_objects = []
     due_date = bill.table.bill_start_date
-    non_rounded_bill_instalment = bill.table.principal / bill.table.bill_tenure
+    interest_rate = user_loan.rc_rate_of_interest_monthly
+    instalment = bill.get_instalment_amount(user_loan, bill.table.bill_tenure)
+    closing_balance = bill.table.principal
     for emi_number in range(1, bill.table.bill_tenure + 1):
-        remaining_tenure = (bill.table.bill_tenure + 1) - emi_number  # Includes the current emi.
+        if user_loan.interest_type == "reducing":
+            interest_due = bill.get_interest_to_charge_2(interest_rate, closing_balance)
+        else:
+            interest_due = bill.get_interest_to_charge(interest_rate)
+        principal_due = instalment - interest_due
         due_date_deltas = bill.get_relative_delta_for_emi(
             emi_number=emi_number, amortization_date=user_loan.amortization_date
         )
@@ -75,10 +81,11 @@ def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
             bill_id=bill.table.id,
             emi_number=emi_number,
             due_date=due_date,
-            principal_due=bill.table.principal_instalment,
-            interest_due=bill.get_interest_to_charge(user_loan.rc_rate_of_interest_monthly),
+            interest_due=round(interest_due, 2),
+            principal_due=round(principal_due, 2),
+            total_closing_balance=round(closing_balance, 2),
         )
-        bill_schedule.total_closing_balance = round(non_rounded_bill_instalment * remaining_tenure, 2)
+        closing_balance -= principal_due
         emi_objects.append(bill_schedule)
     session.bulk_save_objects(emi_objects)
     group_bills(user_loan)
