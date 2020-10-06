@@ -17,8 +17,8 @@ depends_on = None
 
 def upgrade() -> None:
     op.add_column("card_transaction", sa.Column("status", sa.String(15), nullable=False))
-    op.add_column("card_transaction", sa.Column("trace_no", sa.String(20), nullable=True))
-    op.add_column("card_transaction", sa.Column("txn_ref_no", sa.String(50), nullable=True))
+    op.add_column("card_transaction", sa.Column("trace_no", sa.String(20), nullable=False))
+    op.add_column("card_transaction", sa.Column("txn_ref_no", sa.String(50), nullable=False))
 
 
 def downgrade() -> None:

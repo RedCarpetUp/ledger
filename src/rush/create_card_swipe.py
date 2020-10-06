@@ -30,11 +30,11 @@ def create_card_swipe(
     txn_time: DateTime,
     amount: Decimal,
     description: str,
+    trace_no: str,
+    txn_ref_no: str,
     source: Optional[str] = "ECOM",
     mcc: Optional[str] = None,
     skip_activation_check: bool = False,
-    trace_no: Optional[str] = None,
-    txn_ref_no: Optional[str] = None,
 ) -> Dict[str, Any]:
     if not hasattr(user_loan, "amortization_date") or not user_loan.amortization_date:
         return {"result": "error", "message": "Card has not been activated"}
