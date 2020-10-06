@@ -9,7 +9,12 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
-from rush.create_emi import create_emis_for_bill
+from rush.create_emi import (
+    adjust_atm_fee_in_emis,
+    create_emis_for_bill,
+    group_bills_to_create_loan_schedule,
+    update_event_with_dpd,
+)
 from rush.ledger_events import (
     add_max_amount_event,
     bill_generate_event,
@@ -165,8 +170,6 @@ def extend_tenure(
                 bill_accumalation_till_date += emi.due_amount
         last_active_emi = pre_post_date_emis[-1]
 
-        from rush.create_emi import create_emis_for_bill
-
         create_emis_for_bill(
             session=session,
             user_loan=user_loan,
@@ -193,8 +196,6 @@ def extend_tenure(
     session.flush()
 
     # Recreate loan level emis
-    from rush.create_emi import group_bills_to_create_loan_schedule
-
     group_bills_to_create_loan_schedule(user_loan=user_loan)
 
 
@@ -224,9 +225,9 @@ def add_atm_fee(
     event.amount = fee.gross_amount
 
     if not skip_schedule_grouping:
-        from rush.create_emi import adjust_atm_fee_in_emis
-
         adjust_atm_fee_in_emis(session, user_loan, bill)
+
+    update_event_with_dpd(user_loan=user_loan, event=event)
 
 
 def close_bills(user_loan: BaseLoan, payment_date: DateTime):
@@ -281,6 +282,5 @@ def close_bills(user_loan: BaseLoan, payment_date: DateTime):
                 emi.total_due_amount = actual_closing_balance
                 emi.due_amount = only_principal
 
-    from rush.create_emi import group_bills_to_create_loan_schedule
-
+    # Recreate loan level emis
     group_bills_to_create_loan_schedule(user_loan=user_loan)

@@ -13,6 +13,7 @@ from rush.create_bill import close_bills
 from rush.create_emi import (
     group_bills_to_create_loan_schedule,
     slide_payments,
+    update_event_with_dpd,
 )
 from rush.ledger_events import (
     _adjust_bill,
@@ -88,6 +89,9 @@ def payment_received(
         user_loan=user_loan,
     )
 
+    # Update dpd
+    update_event_with_dpd(user_loan=user_loan, event=lt)
+
 
 def refund_payment(
     session: Session,
@@ -109,6 +113,9 @@ def refund_payment(
     # Checking if bill is generated or not. if not then reduce from unbilled else treat as payment.
     transaction_refund_event(session=session, user_loan=user_loan, event=lt)
     run_anomaly(session=session, user_loan=user_loan, event_date=payment_date)
+
+    # Update dpd
+    update_event_with_dpd(user_loan=user_loan, event=lt)
 
 
 def payment_received_event(
@@ -195,7 +202,7 @@ def find_amount_to_slide_in_bills(user_loan: BaseLoan, total_amount_to_slide: De
                 amount_to_slide_based_on_ratio = total_amount_to_slide
             else:
                 amount_to_slide_based_on_ratio = mul(
-                    div(bill_data["monthly_instalment"], total_min), total_amount_before_sliding
+                    bill_data["monthly_instalment"] / total_min, total_amount_before_sliding
                 )
             amount_to_adjust = min(
                 amount_to_slide_based_on_ratio, total_amount_to_slide, bill_data["total_outstanding"]

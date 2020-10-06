@@ -28,6 +28,7 @@ from rush.create_bill import (
 from rush.create_card_swipe import create_card_swipe
 from rush.create_emi import (
     check_moratorium_eligibility,
+    daily_dpd_update,
     update_event_with_dpd,
 )
 from rush.ledger_utils import (
@@ -373,8 +374,6 @@ def test_generate_bill_1(session: Session) -> None:
 
     _, min_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/min/a")
     assert min_amount == 114
-
-    update_event_with_dpd(user_loan=user_loan, post_date=parse_date("2020-05-21 00:05:00"))
 
     dpd_events = session.query(EventDpd).filter_by(loan_id=uc.loan_id).all()
     assert dpd_events[0].balance == Decimal(1000)
@@ -1750,15 +1749,14 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     assert first_emi["interest_received"] == Decimal("387.83")
 
     event_date = parse_date("2020-08-21 00:05:00")
-    update_event_with_dpd(uc, event_date)
 
     dpd_events = session.query(EventDpd).filter_by(loan_id=uc.loan_id).all()
 
-    last_entry_first_bill = dpd_events[-1]
-    last_entry_second_bill = dpd_events[-2]
+    last_entry_first_bill = dpd_events[-2]
+    last_entry_second_bill = dpd_events[-1]
 
-    assert last_entry_first_bill.balance == Decimal("12708.86")
-    assert last_entry_second_bill.balance == Decimal("7891.33")
+    assert last_entry_first_bill.balance == Decimal("12714.41")
+    assert last_entry_second_bill.balance == Decimal("7885.78")
 
     _, bill_may_principal_due = get_account_balance_from_str(
         session, book_string=f"{bill_may.id}/bill/principal_receivable/a"
@@ -1766,8 +1764,11 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     _, bill_june_principal_due = get_account_balance_from_str(
         session, book_string=f"{bill_june.id}/bill/principal_receivable/a"
     )
-    assert bill_may_principal_due == Decimal("12708.86")
-    assert bill_june_principal_due == Decimal("7891.33")
+    assert bill_may_principal_due == Decimal("12714.41")
+    assert bill_june_principal_due == Decimal("7885.78")
+
+    daily_date = parse_date("2020-08-28 00:05:00")
+    daily_dpd_update(session, uc, daily_date)
 
 
 def test_interest_reversal_interest_already_settled(session: Session) -> None:

@@ -43,6 +43,7 @@ def get_payment_events(session: Session, user_loan: BaseLoan) -> List[LedgerTrig
             LedgerTriggerEvent.loan_id == user_loan.loan_id,
             LedgerTriggerEvent.name.in_(["payment_received", "transaction_refund"]),
         )
+        .order_by(LedgerTriggerEvent.post_date.asc())
         .all()
     )
     return events
@@ -83,7 +84,7 @@ def run_anomaly(session: Session, user_loan: BaseLoan, event_date: DateTime) -> 
                 reverse_interest_charges(
                     session, event_to_reverse=event, user_loan=user_loan, payment_date=event_date
                 )
-        elif event.name == "accrue_late_fine":
+        elif event.name == "charge_late_fine":
             # TODO this probably isn't tested.
             is_charge_valid = is_late_fee_valid(session=session, user_loan=user_loan)
             if not is_charge_valid:

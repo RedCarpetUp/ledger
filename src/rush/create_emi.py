@@ -1,9 +1,13 @@
+from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
-from sqlalchemy import or_
+from sqlalchemy import (
+    and_,
+    or_,
+)
 from sqlalchemy.orm import (
     Session,
     aliased,
@@ -131,42 +135,51 @@ def slide_payments(
         total_payment_till_now = payment_received_and_adjusted
         # Do we even need to slide it in emi schedule. Can't we just put it in emi mapping?
         for emi in all_emis:
+            one_rupee_leniency = False
             total_payment_till_now += (
                 emi.payment_received
                 + emi.interest_received
                 + emi.atm_fee_received
                 + emi.late_fee_received
             )
+            is_all_emi_paid = (
+                emi.total_due_amount
+                - (
+                    emi.payment_received
+                    + emi.interest_received
+                    + emi.atm_fee_received
+                    + emi.late_fee_received
+                )
+            ) <= 0
             if (
                 emi.emi_number <= last_paid_emi_number
                 or emi.extra_details.get("moratorium")
-                or emi.payment_status == "Paid"
+                or is_all_emi_paid
             ):
                 continue
-
-            payment_received_and_adjusted += (
-                emi.payment_received
-                + emi.atm_fee_received
-                + emi.late_fee_received
-                + emi.interest_received
-            )
 
             if payment_received_and_adjusted:
                 if last_payment_date:
                     emi.last_payment_date = last_payment_date
-                diff = emi.total_due_amount - payment_received_and_adjusted
+                diff = emi.total_due_amount - (
+                    payment_received_and_adjusted
+                    + emi.payment_received
+                    + emi.atm_fee_received
+                    + emi.late_fee_received
+                    + emi.interest_received
+                )
+                # Just use this diff for marking paid, which is for dpd, not for actual money movement
                 # Because rounding of balances has happened previously we should round the diff ~ Ananth
                 if -1 < diff <= 0:
-                    diff = 0
+                    one_rupee_leniency = True
                 interest_actually_received = (
                     late_fee_actually_received
                 ) = atm_fee_actually_received = principal_actually_received = Decimal(0)
                 if diff >= 0:
                     emi.dpd = (last_payment_date.date() - emi.due_date).days
-                    if diff == 0:
+                    if diff == 0 or one_rupee_leniency:
                         last_paid_emi_number = emi.emi_number
                         emi.payment_status = "Paid"
-                        emi.dpd = 0
                     if (
                         emi.atm_fee > 0
                         and (emi.atm_fee_received + payment_received_and_adjusted) <= emi.atm_fee
@@ -238,8 +251,7 @@ def slide_payments(
                                     else emi.late_fee_received
                                 )
                             if (
-                                last_payment_date.date() > emi.due_date
-                                and emi.interest > 0
+                                emi.interest > 0
                                 and (emi.interest_received + payment_received_and_adjusted)
                                 <= emi.interest
                             ):
@@ -317,7 +329,6 @@ def slide_payments(
                 emi.atm_fee_received = emi.atm_fee
 
                 emi.payment_status = "Paid"
-                emi.dpd = 0
                 last_paid_emi_number = emi.emi_number
                 # Create payment mapping
                 create_emi_payment_mapping(
@@ -726,74 +737,34 @@ def group_bills_to_create_loan_schedule(user_loan: BaseLoan):
     session.flush()
 
 
-def entry_checks(
-    ledger_trigger_event,
-    ledger_entry,
-    debit_account,
-    credit_account,
-    event_id,
-    event_type,
-    event_amount,
-    bills_touched,
-) -> bool:
-    verdict = False
-
-    # These are various cases to get the exact events affecting specific bills
-    if ledger_trigger_event.name == event_type and ledger_trigger_event.id == event_id:
-        verdict = True
-    else:
-        verdict = False
-
-    if event_amount and ledger_entry.amount + event_amount == ledger_trigger_event.amount:
-        return False
-
-    # If the specific bill has already been logged, we skip
-    if (credit_account.identifier_type == "bill" and credit_account.identifier in bills_touched) and (
-        debit_account.identifier_type == "bill" and debit_account.identifier not in bills_touched
-    ):
-        return False
-    elif (
-        credit_account.identifier_type == "bill" and credit_account.identifier not in bills_touched
-    ) and (debit_account.identifier_type == "bill" and debit_account.identifier in bills_touched):
-        return False
-    elif (
-        credit_account.identifier_type == "bill" and credit_account.identifier not in bills_touched
-    ) and (debit_account.identifier_type == "bill" and debit_account.identifier not in bills_touched):
-        return False
-    elif (
-        verdict
-        and (credit_account.identifier_type == "bill" and credit_account.identifier in bills_touched)
-        and (debit_account.identifier_type == "bill" and debit_account.identifier in bills_touched)
-    ):
-        verdict = True
-
-    return verdict
-
-
 def update_event_with_dpd(
-    user_loan: BaseLoan, post_date: DateTime = None, event: LedgerTriggerEvent = None
+    user_loan: BaseLoan,
+    to_date: DateTime = None,
+    from_date: DateTime = None,
+    event: LedgerTriggerEvent = None,
 ) -> None:
     def actual_event_update(
-        session: Session, is_debit: bool, ledger_trigger_event, ledger_entry, account
+        session: Session,
+        is_debit: bool,
+        ledger_trigger_event,
+        ledger_entry,
+        account,
     ):
-        if is_debit:
-            debit_amount = ledger_entry.amount
-            credit_amount = Decimal(0)
-        else:
+        if not is_debit:
             debit_amount = Decimal(0)
             credit_amount = ledger_entry.amount
-        bills_touched.append(account.identifier)
-        bill = user_loan.convert_to_bill_class(
-            (
-                session.query(LoanData)
-                .filter(
-                    LoanData.loan_id == user_loan.loan_id,
-                    LoanData.id == account.identifier,
-                )
-                .first()
-            )
-        )
-        event_post_date = ledger_trigger_event.post_date.date()
+            account_id = account.identifier
+            account_balance = ledger_entry.debit_account_balance
+        else:
+            debit_amount = ledger_entry.amount
+            credit_amount = Decimal(0)
+            account_id = account.identifier
+            account_balance = ledger_entry.credit_account_balance
+
+        if isinstance(ledger_trigger_event.post_date, datetime):
+            event_post_date = ledger_trigger_event.post_date.date()
+        else:
+            event_post_date = ledger_trigger_event.post_date
         # In case of moratorium reset all post dates to start of moratorium
         if LoanMoratorium.is_in_moratorium(
             session, loan_id=user_loan.loan_id, date_to_check_against=event_post_date
@@ -802,15 +773,54 @@ def update_event_with_dpd(
                 session.query(LoanMoratorium).filter(LoanMoratorium.loan_id == user_loan.loan_id).first()
             )
             event_post_date = moratorium.start_date
-        dpd = (event_post_date - bill.bill_due_date).days
+
+        # We need to get the bill because we have to check if min is paid
+        bill = user_loan.convert_to_bill_class(
+            (
+                session.query(LoanData)
+                .filter(
+                    LoanData.loan_id == user_loan.loan_id,
+                    LoanData.id == account_id,
+                )
+                .first()
+            )
+        )
+
+        # Adjust dpd in loan schedule
+        first_unpaid_mark = False
+        bill_dpd = 0
+        all_emis = (
+            session.query(CardEmis)
+            .filter(
+                CardEmis.loan_id == user_loan.loan_id,
+                CardEmis.row_status == "active",
+                CardEmis.bill_id == None,
+            )
+            .order_by(CardEmis.emi_number.asc())
+            .all()
+        )
+        for emi in all_emis:
+            if emi.payment_status != "Paid":
+                if not first_unpaid_mark:
+                    first_unpaid_mark = True
+                    # Bill dpd
+                    # Only calculate bill dpd is min is not 0
+                    if bill and bill.get_remaining_min() > 0:
+                        bill_dpd = (event_post_date - emi.due_date).days
+                # Schedule dpd
+                schedule_dpd = (event_post_date - emi.due_date).days
+                # We should only consider the daily dpd event for increment
+                if schedule_dpd >= emi.dpd:
+                    emi.dpd = schedule_dpd
+
         new_event = EventDpd(
-            bill_id=account.identifier,
+            bill_id=account_id,
             loan_id=user_loan.loan_id,
             event_id=ledger_trigger_event.id,
             credit=credit_amount,
             debit=debit_amount,
-            balance=bill.get_outstanding_amount(ledger_trigger_event.post_date),
-            dpd=dpd,
+            balance=account_balance,
+            dpd=bill_dpd,
         )
         session.add(new_event)
 
@@ -818,112 +828,119 @@ def update_event_with_dpd(
 
     debit_book_account = aliased(BookAccount)
     credit_book_account = aliased(BookAccount)
+    events_list = session.query(
+        LedgerTriggerEvent, LedgerEntry, debit_book_account, credit_book_account
+    ).filter(
+        LedgerEntry.event_id == LedgerTriggerEvent.id,
+        LedgerEntry.debit_account == debit_book_account.id,
+        LedgerEntry.credit_account == credit_book_account.id,
+    )
+    if from_date and to_date:
+        events_list = events_list.filter(
+            LedgerTriggerEvent.post_date > from_date,
+            LedgerTriggerEvent.post_date <= to_date,
+        )
+    elif to_date:
+        events_list = events_list.filter(
+            LedgerTriggerEvent.post_date <= to_date,
+        )
+
     if event:
-        events_list = (
-            session.query(LedgerTriggerEvent, LedgerEntry, debit_book_account, credit_book_account)
-            .filter(
-                LedgerTriggerEvent.id == LedgerEntry.event_id,
-                LedgerEntry.debit_account == debit_book_account.id,
-                LedgerEntry.credit_account == credit_book_account.id,
-                LedgerTriggerEvent.id == event.id,
-                or_(
-                    debit_book_account.identifier_type == "bill",
-                    credit_book_account.identifier_type == "bill",
-                ),
-            )
-            .order_by(LedgerTriggerEvent.post_date.asc())
-            .all()
-        )
-    else:
-        events_list = (
-            session.query(LedgerTriggerEvent, LedgerEntry, debit_book_account, credit_book_account)
-            .filter(
-                LedgerTriggerEvent.id == LedgerEntry.event_id,
-                LedgerEntry.debit_account == debit_book_account.id,
-                LedgerEntry.credit_account == credit_book_account.id,
-                LedgerTriggerEvent.post_date <= post_date,
-                or_(
-                    debit_book_account.identifier_type == "bill",
-                    credit_book_account.identifier_type == "bill",
-                ),
-            )
-            .order_by(LedgerTriggerEvent.post_date.asc())
-            .all()
-        )
+        events_list = events_list.filter(LedgerTriggerEvent.id == event.id)
+    events_list = events_list.order_by(LedgerTriggerEvent.post_date.asc()).all()
 
-    event_id = event_type = event_amount = None
-    bills_touched = []
     for ledger_trigger_event, ledger_entry, debit_account, credit_account in events_list:
-        if entry_checks(
-            ledger_trigger_event,
-            ledger_entry,
-            debit_account,
-            credit_account,
-            event_id,
-            event_type,
-            event_amount,
-            bills_touched,
+        if (
+            ledger_trigger_event.name
+            in [
+                "accrue_interest",
+                "charge_late_fine",
+                "atm_fee_added",
+            ]
+            and debit_account.identifier_type == "bill"
+            and debit_account.book_name == "max"
         ):
+            actual_event_update(session, False, ledger_trigger_event, ledger_entry, debit_account)
+
+        elif (
+            ledger_trigger_event.name
+            in [
+                "card_transaction",
+            ]
+            and debit_account.identifier_type == "bill"
+            and debit_account.book_name == "unbilled"
+        ):
+            actual_event_update(session, False, ledger_trigger_event, ledger_entry, debit_account)
+
+        elif (
+            ledger_trigger_event.name
+            in [
+                "reverse_interest_charges",
+                "reverse_late_charges",
+                "payment_received",
+                "transaction_refund",
+            ]
+            and credit_account.identifier_type == "bill"
+            and credit_account.book_name == "max"
+        ):
+            actual_event_update(session, True, ledger_trigger_event, ledger_entry, credit_account)
+
+        else:
             continue
-        bills_touched = []
-        if ledger_trigger_event.name in [
-            "accrue_interest",
-            "accrue_late_fine",
-            "card_transaction",
-            "daily_dpd",
-            "atm_fee_added",
-        ]:
-            if debit_account.identifier_type == "bill" and debit_account.identifier not in bills_touched:
-                event_id = ledger_trigger_event.id
-                event_type = ledger_trigger_event.name
-                event_amount = ledger_entry.amount
-                actual_event_update(session, False, ledger_trigger_event, ledger_entry, debit_account)
 
-            if (
-                credit_account.identifier_type == "bill"
-                and credit_account.identifier not in bills_touched
-            ):
-                event_id = ledger_trigger_event.id
-                event_type = ledger_trigger_event.name
-                event_amount = ledger_entry.amount
-                actual_event_update(session, False, ledger_trigger_event, ledger_entry, credit_account)
-
-        elif ledger_trigger_event.name in [
-            "reverse_interest_charges",
-            "reverse_late_charges",
-            "payment_received",
-            "transaction_refund",
-        ]:
-            if debit_account.identifier_type == "bill" and debit_account.identifier not in bills_touched:
-                event_id = ledger_trigger_event.id
-                event_type = ledger_trigger_event.name
-                event_amount = ledger_entry.amount
-                actual_event_update(session, True, ledger_trigger_event, ledger_entry, debit_account)
-
-            if (
-                credit_account.identifier_type == "bill"
-                and credit_account.identifier not in bills_touched
-            ):
-                event_id = ledger_trigger_event.id
-                event_type = ledger_trigger_event.name
-                event_amount = ledger_entry.amount
-                actual_event_update(session, True, ledger_trigger_event, ledger_entry, credit_account)
-
-    # Adjust dpd in schedule
-    # TODO Introduce schedule level updation when this converts to a DAG system
-    # all_emis = (
-    #     session.query(CardEmis)
-    #     .filter(CardEmis.loan_id == user_card.loan_id, CardEmis.row_status == "active")
-    #     .order_by(CardEmis.emi_number.asc())
-    #     .all()
-    # )
-    # for emi in all_emis:
-    #     if emi.payment_status != "Paid":
-    #         emi.dpd = (post_date.date() - emi.due_date).days
-
+    # Calculate card level dpd
     max_dpd = session.query(func.max(EventDpd.dpd).label("max_dpd")).one()
     user_loan.dpd = max_dpd.max_dpd
     if not user_loan.ever_dpd or max_dpd.max_dpd > user_loan.ever_dpd:
         user_loan.ever_dpd = max_dpd.max_dpd
 
+    session.flush()
+
+
+def daily_dpd_update(session, user_loan, post_date):
+    first_unpaid_mark = False
+    loan_level_due_date = None
+    event = LedgerTriggerEvent(name="daily_dpd_update", loan_id=user_loan.loan_id, post_date=post_date)
+    session.add(event)
+    all_emis = (
+        session.query(CardEmis)
+        .filter(
+            CardEmis.loan_id == user_loan.loan_id,
+            CardEmis.row_status == "active",
+            CardEmis.bill_id == None,
+        )
+        .order_by(CardEmis.emi_number.asc())
+        .all()
+    )
+    for emi in all_emis:
+        if emi.payment_status != "Paid":
+            if not first_unpaid_mark:
+                first_unpaid_mark = True
+                loan_level_due_date = emi.due_date
+            # Schedule dpd
+            dpd = (post_date.date() - emi.due_date).days
+            # We should only consider the daily dpd event for increment
+            if dpd >= emi.dpd:
+                emi.dpd = dpd
+
+    unpaid_bills = user_loan.get_unpaid_bills()
+    for bill in unpaid_bills:
+        if first_unpaid_mark and loan_level_due_date:
+            bill_dpd = (post_date.date() - loan_level_due_date).days
+            new_event = EventDpd(
+                bill_id=bill.id,
+                loan_id=user_loan.loan_id,
+                event_id=event.id,
+                credit=Decimal(0),
+                debit=Decimal(0),
+                balance=bill.get_remaining_max(),
+                dpd=bill_dpd,
+            )
+            session.add(new_event)
+
+    # Calculate card level dpd
+    max_dpd = session.query(func.max(EventDpd.dpd).label("max_dpd")).one()
+    user_loan.dpd = max_dpd.max_dpd
+    if not user_loan.ever_dpd or max_dpd.max_dpd > user_loan.ever_dpd:
+        user_loan.ever_dpd = max_dpd.max_dpd
     session.flush()
