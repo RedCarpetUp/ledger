@@ -65,42 +65,42 @@ def create_test_term_loan(session: Session, **kwargs) -> TermLoan:  # type: igno
 
 
 def test_product_amortization_1() -> None:
-    amortization_date = TermLoan.calculate_amortization_date(
+    amortization_date = TermLoan.calculate_first_emi_date(
         product_order_date=parse_date("2020-08-01").date()
     )
     assert amortization_date == parse_date("2020-08-01").date()
 
 
 def test_product_amortization_2() -> None:
-    amortization_date = TermLoan.calculate_amortization_date(
+    amortization_date = TermLoan.calculate_first_emi_date(
         product_order_date=parse_date("2020-08-05").date()
     )
     assert amortization_date == parse_date("2020-08-05").date()
 
 
 def test_product_amortization_3() -> None:
-    amortization_date = TermLoan.calculate_amortization_date(
+    amortization_date = TermLoan.calculate_first_emi_date(
         product_order_date=parse_date("2020-08-12").date()
     )
     assert amortization_date == parse_date("2020-08-12").date()
 
 
 def test_product_amortization_4() -> None:
-    amortization_date = TermLoan.calculate_amortization_date(
+    amortization_date = TermLoan.calculate_first_emi_date(
         product_order_date=parse_date("2020-08-15").date()
     )
     assert amortization_date == parse_date("2020-08-15").date()
 
 
 def test_product_amortization_5() -> None:
-    amortization_date = TermLoan.calculate_amortization_date(
+    amortization_date = TermLoan.calculate_first_emi_date(
         product_order_date=parse_date("2020-08-24").date()
     )
     assert amortization_date == parse_date("2020-08-24").date()
 
 
 def test_product_amortization_6() -> None:
-    amortization_date = TermLoan.calculate_amortization_date(
+    amortization_date = TermLoan.calculate_first_emi_date(
         product_order_date=parse_date("2020-08-26").date()
     )
     assert amortization_date == parse_date("2020-08-26").date()

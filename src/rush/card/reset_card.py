@@ -5,10 +5,7 @@ from typing import (
 )
 
 from dateutil.relativedelta import relativedelta
-from pendulum import (
-    Date,
-    DateTime,
-)
+from pendulum import Date
 from sqlalchemy import func
 from sqlalchemy.orm.session import Session
 
@@ -28,10 +25,8 @@ from rush.models import (
     LedgerTriggerEvent,
     Loan,
     LoanData,
-    LoanMoratorium,
     ProductFee,
 )
-from rush.utils import get_current_ist_time
 
 
 class ResetBill(TermLoanBill):
@@ -51,7 +46,7 @@ class ResetCard(BaseLoan):
     __mapper_args__ = {"polymorphic_identity": "term_loan_reset"}
 
     @staticmethod
-    def calculate_amortization_date(product_order_date: Date) -> Date:
+    def calculate_first_emi_date(product_order_date: Date) -> Date:
         return product_order_date.add(months=1)
 
     @classmethod
@@ -82,10 +77,7 @@ class ResetCard(BaseLoan):
                 kwargs["interest_rate"]
             ),  # this will probably come from user's end.
             lender_rate_of_interest_annual=Decimal(18),
-            amortization_date=kwargs.get(
-                "loan_creation_date",
-                cls.calculate_amortization_date(product_order_date=kwargs["product_order_date"]),
-            ),
+            amortization_date=kwargs["product_order_date"],
             downpayment_percent=Decimal("0"),
         )
         session.add(loan)
@@ -94,7 +86,8 @@ class ResetCard(BaseLoan):
         kwargs["loan_id"] = loan.id
 
         bill_start_date, bill_close_date = cls.bill_class.calculate_bill_start_and_close_date(
-            amortization_date=loan.amortization_date, tenure=kwargs["tenure"]
+            first_bill_date=cls.calculate_first_emi_date(product_order_date=loan.amortization_date),
+            tenure=kwargs["tenure"],
         )
 
         principal_instalment = cls.bill_class.calculate_principal_instalment(

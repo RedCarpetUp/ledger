@@ -69,7 +69,7 @@ def create_test_term_loan(session: Session, **kwargs) -> ResetCard:  # type: ign
 
 
 def test_product_amortization_1() -> None:
-    amortization_date = ResetCard.calculate_amortization_date(
+    amortization_date = ResetCard.calculate_first_emi_date(
         product_order_date=parse_date("2020-08-01").date()
     )
     assert amortization_date == parse_date("2020-09-01").date()
@@ -127,7 +127,7 @@ def test_create_term_loan(session: Session) -> None:
     assert rc_cash_balance == Decimal("-10000")
 
     assert loan.product_type == "term_loan_reset"
-    assert loan.amortization_date == parse_date("2020-09-01").date()
+    assert loan.amortization_date == parse_date("2020-08-01").date()
 
     user_loan = get_user_product(
         session=session, user_id=loan.user_id, card_type="term_loan_reset", loan_id=loan.id

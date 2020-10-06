@@ -20,8 +20,8 @@ class TermLoan2Bill(TermLoanBill):
     add_emi_one_to_downpayment: bool = True
 
     @staticmethod
-    def calculate_bill_start_and_close_date(amortization_date: Date, tenure: int) -> Tuple[Date]:
-        bill_start_date = amortization_date
+    def calculate_bill_start_and_close_date(first_bill_date: Date, tenure: int) -> Tuple[Date]:
+        bill_start_date = first_bill_date
         # not sure about bill close date.
 
         if 1 <= bill_start_date.day <= 5:
@@ -73,5 +73,5 @@ class TermLoan2(TermLoan):
     __mapper_args__ = {"polymorphic_identity": "term_loan_2"}
 
     @staticmethod
-    def calculate_amortization_date(product_order_date: Date) -> Date:
+    def calculate_first_emi_date(product_order_date: Date) -> Date:
         return product_order_date

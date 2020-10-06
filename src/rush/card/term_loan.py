@@ -89,8 +89,8 @@ class TermLoanBill(BaseBill):
         return amount
 
     @staticmethod
-    def calculate_bill_start_and_close_date(amortization_date: Date, tenure: int) -> Tuple[Date]:
-        bill_start_date = amortization_date
+    def calculate_bill_start_and_close_date(first_bill_date: Date, tenure: int) -> Tuple[Date]:
+        bill_start_date = first_bill_date
         # not sure about bill close date.
         bill_close_date = bill_start_date.add(months=tenure - 1)
 
@@ -124,7 +124,7 @@ class TermLoan(BaseLoan):
     __mapper_args__ = {"polymorphic_identity": "term_loan"}
 
     @staticmethod
-    def calculate_amortization_date(product_order_date: Date) -> Date:
+    def calculate_first_emi_date(product_order_date: Date) -> Date:
         return product_order_date
 
     @classmethod
@@ -161,10 +161,7 @@ class TermLoan(BaseLoan):
             lender_id=kwargs["lender_id"],
             rc_rate_of_interest_monthly=Decimal(3),
             lender_rate_of_interest_annual=Decimal(18),
-            amortization_date=kwargs.get(
-                "loan_creation_date",
-                cls.calculate_amortization_date(product_order_date=kwargs["product_order_date"]),
-            ),
+            amortization_date=kwargs["product_order_date"],
             downpayment_percent=kwargs["downpayment_percent"],
         )
         session.add(loan)
@@ -173,7 +170,8 @@ class TermLoan(BaseLoan):
         kwargs["loan_id"] = loan.id
 
         bill_start_date, bill_close_date = cls.bill_class.calculate_bill_start_and_close_date(
-            amortization_date=loan.amortization_date, tenure=kwargs["tenure"]
+            first_bill_date=cls.calculate_first_emi_date(product_order_date=loan.amortization_date),
+            tenure=kwargs["tenure"],
         )
 
         principal_instalment = cls.bill_class.calculate_principal_instalment(
