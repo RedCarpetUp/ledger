@@ -9,6 +9,7 @@ from pendulum import (
     Date,
     DateTime,
 )
+from sqlalchemy import func
 from sqlalchemy.orm.session import Session
 
 from rush.card.base_card import (
@@ -16,8 +17,12 @@ from rush.card.base_card import (
     BaseLoan,
 )
 from rush.card.term_loan import TermLoanBill
-from rush.ledger_events import loan_disbursement_event
+from rush.ledger_events import (
+    add_max_amount_event,
+    loan_disbursement_event,
+)
 from rush.ledger_utils import create_ledger_entry_from_str
+from rush.min_payment import add_min_to_all_bills
 from rush.models import (
     CardEmis,
     LedgerTriggerEvent,
@@ -155,46 +160,24 @@ class ResetCard(BaseLoan):
             bill=bill,
         )
 
+        # Due to the way code is written, if max amount is not added first then
+        # bill will be treated as closed. I am not sure of the exact reason behind it.
+
+        total_billed_amount = (
+            session.query(func.sum(CardEmis.total_due_amount))
+            .filter(
+                CardEmis.loan_id == loan.id,
+                CardEmis.bill_id.is_(None),
+                CardEmis.row_status == "active",
+                CardEmis.payment_status == "UnPaid",
+            )
+            .group_by(CardEmis.loan_id)
+            .scalar()
+        )
+
+        assert total_billed_amount >= kwargs["amount"]
+
+        add_max_amount_event(session=session, bill=bill, event=event, amount=total_billed_amount)
+
+        add_min_to_all_bills(session=session, post_date=kwargs["product_order_date"], user_loan=loan)
         return loan
-
-    def get_remaining_min(self, date_to_check_against: DateTime = None) -> Decimal:
-        # if user is in moratorium then return 0
-        if LoanMoratorium.is_in_moratorium(self.session, self.id, date_to_check_against):
-            return Decimal(0)
-
-        query = self.session.query(
-            CardEmis.total_due_amount, CardEmis.due_date, CardEmis.emi_number
-        ).filter(
-            CardEmis.loan_id == self.id,
-            CardEmis.bill_id.is_(None),
-            CardEmis.row_status == "active",
-            CardEmis.payment_status == "UnPaid",
-        )
-
-        if not date_to_check_against:
-            date_to_check_against = get_current_ist_time().date()
-
-        query = query.filter(CardEmis.due_date <= date_to_check_against)
-
-        unpaid_emis = query.all()
-        remaining_min_of_all_emis = sum(emi.total_due_amount for emi in unpaid_emis)
-
-        return remaining_min_of_all_emis
-
-    def get_remaining_max(self, date_to_check_against: DateTime = None) -> Decimal:
-        query = self.session.query(CardEmis.total_due_amount).filter(
-            CardEmis.loan_id == self.id,
-            CardEmis.bill_id.is_(None),
-            CardEmis.row_status == "active",
-            CardEmis.payment_status == "UnPaid",
-        )
-
-        if date_to_check_against:
-            query = query.filter(CardEmis.due_date <= date_to_check_against)
-
-        unpaid_emis = query.all()
-        remaining_max_of_all_emis = sum(emi.total_due_amount for emi in unpaid_emis)
-        return remaining_max_of_all_emis
-
-    def get_total_outstanding(self, date_to_check_against: DateTime = None) -> Decimal:
-        return self.get_remaining_max(date_to_check_against=date_to_check_against)

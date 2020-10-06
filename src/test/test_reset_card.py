@@ -152,7 +152,7 @@ def test_create_term_loan(session: Session) -> None:
     assert emis_dict[-1]["total_due_amount"] % 10 == 0
 
     min_amount = user_loan.get_remaining_min(date_to_check_against=parse_date("2020-11-01").date())
-    assert min_amount == Decimal("3420")
+    assert min_amount == Decimal("1140")
 
     max_amount = user_loan.get_remaining_max()
     assert max_amount == Decimal("13680")
