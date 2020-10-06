@@ -29,11 +29,9 @@ from rush.ledger_utils import (
 from rush.loan_schedule.loan_schedule import slide_payment_to_emis
 from rush.models import (
     BookAccount,
-    CardTransaction,
     Fee,
     LedgerEntry,
     LedgerTriggerEvent,
-    LoanData,
     PaymentSplit,
 )
 from rush.utils import mul
