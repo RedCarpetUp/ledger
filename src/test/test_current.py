@@ -21,6 +21,11 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
+from rush.card.utils import (
+    get_daily_spend,
+    get_daily_total_transactions,
+    get_weekly_spend,
+)
 from rush.create_bill import (
     bill_generate,
     extend_tenure,
@@ -243,13 +248,19 @@ def test_closing_bill(session: Session) -> None:
         description="BigB.com",
     )
 
-    daily_txn_1 = user_loan.get_daily_total_transactions(date_to_check_against=swipe_date.date())
+    daily_txn_1 = get_daily_total_transactions(
+        session=session, loan=user_loan, date_to_check_against=swipe_date.date()
+    )
     assert daily_txn_1 == 1
 
-    daily_spent_1 = user_loan.get_daily_spend(date_to_check_against=swipe_date.date())
+    daily_spent_1 = get_daily_spend(
+        session=session, loan=user_loan, date_to_check_against=swipe_date.date()
+    )
     assert daily_spent_1 == Decimal("3000")
 
-    weekly_spent_1 = user_loan.get_weekly_spend(date_to_check_against=swipe_date.date())
+    weekly_spent_1 = get_weekly_spend(
+        session=session, loan=user_loan, date_to_check_against=swipe_date.date()
+    )
     assert weekly_spent_1 == Decimal("3000")
 
     accrue_interest_on_all_bills(
@@ -310,7 +321,7 @@ def test_closing_bill(session: Session) -> None:
         payment_request_id="a1236",
     )
 
-    swipe = create_card_swipe(
+    create_card_swipe(
         session=session,
         user_loan=user_loan,
         txn_time=parse_date("2019-05-20 19:23:11"),
@@ -318,8 +329,8 @@ def test_closing_bill(session: Session) -> None:
         description="BigB.com",
     )
 
-    daily_txn_2 = user_loan.get_daily_total_transactions(
-        date_to_check_against=parse_date("2019-05-20").date()
+    daily_txn_2 = get_daily_total_transactions(
+        session=session, loan=user_loan, date_to_check_against=parse_date("2019-05-20").date()
     )
     assert daily_txn_2 == 1
 

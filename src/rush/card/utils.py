@@ -6,12 +6,15 @@ from typing import (
 )
 
 from pendulum import Date
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from rush.models import (
+    CardTransaction,
     Fee,
     LedgerTriggerEvent,
     Loan,
+    LoanData,
     LoanFee,
     Product,
     ProductFee,
@@ -49,11 +52,8 @@ def get_user_product_mapping(
     user_id: int,
     product_type: Optional[str],
     user_product_id: Optional[int] = None,
-    _rows: str = "one_or_none",
-    incomplete: bool = True,
     loan_id: Optional[int] = None,
 ) -> Optional[UserProduct]:
-    assert _rows in ("one", "one_or_none")
     assert (product_type or user_product_id) is not None
 
     query = (
@@ -62,10 +62,7 @@ def get_user_product_mapping(
         .filter(UserProduct.user_id == user_id)
     )
 
-    if incomplete:
-        query = query.filter(Loan.id.is_(None))
-    else:
-        assert loan_id is not None
+    if loan_id:
         query = query.filter(Loan.id == loan_id)
 
     if user_product_id:
@@ -74,10 +71,7 @@ def get_user_product_mapping(
     if product_type:
         query = query.filter(UserProduct.product_type == product_type)
 
-    if _rows == "one":
-        user_product = query.one()
-    elif _rows == "one_or_none":
-        user_product = query.one_or_none()
+    user_product = query.order_by(UserProduct.id.desc()).first()
 
     return user_product
 
@@ -254,3 +248,69 @@ def get_downpayment_amount(
     return get_product_class(card_type=product_type).bill_class.calculate_downpayment_amount_payable(
         **request_data
     )
+
+
+def get_daily_spend(
+    session: Session, loan: Loan, date_to_check_against: Optional[Date] = None
+) -> Decimal:
+    if not date_to_check_against:
+        date_to_check_against = get_current_ist_time().date()
+
+    # from sqlalchemy import and_
+    daily_spent = (
+        session.query(func.sum(CardTransaction.amount))
+        .join(LoanData, LoanData.id == CardTransaction.loan_id)
+        .filter(
+            LoanData.loan_id == loan.id,
+            LoanData.user_id == loan.user_id,
+            func.date_trunc("day", CardTransaction.txn_time) == date_to_check_against,
+            CardTransaction.status == "CONFIRMED",
+        )
+        .group_by(LoanData.loan_id)
+        .scalar()
+    )
+    return daily_spent or 0
+
+
+def get_weekly_spend(
+    session: Session, loan: Loan, date_to_check_against: Optional[Date] = None
+) -> Decimal:
+    if not date_to_check_against:
+        date_to_check_against = get_current_ist_time().date()
+
+    to_date = date_to_check_against.subtract(days=7)
+
+    weekly_spent = (
+        session.query(func.sum(CardTransaction.amount))
+        .join(LoanData, LoanData.id == CardTransaction.loan_id)
+        .filter(
+            LoanData.loan_id == loan.id,
+            LoanData.user_id == loan.user_id,
+            func.date_trunc("day", CardTransaction.txn_time).between(to_date, date_to_check_against),
+            CardTransaction.status == "CONFIRMED",
+        )
+        .group_by(LoanData.loan_id)
+        .scalar()
+    )
+    return weekly_spent or 0
+
+
+def get_daily_total_transactions(
+    session: Session, loan: Loan, date_to_check_against: Optional[Date]
+) -> Decimal:
+    if not date_to_check_against:
+        date_to_check_against = get_current_ist_time().date()
+
+    daily_txns = (
+        session.query(func.count(CardTransaction.id))
+        .join(LoanData, LoanData.id == CardTransaction.loan_id)
+        .filter(
+            LoanData.loan_id == loan.id,
+            LoanData.user_id == loan.user_id,
+            func.date_trunc("day", CardTransaction.txn_time) == date_to_check_against,
+            CardTransaction.status == "CONFIRMED",
+        )
+        .group_by(LoanData.loan_id)
+        .scalar()
+    )
+    return daily_txns or 0

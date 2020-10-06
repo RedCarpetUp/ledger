@@ -29,11 +29,11 @@ from rush.loan_schedule.loan_schedule import slide_payment_to_emis
 from rush.models import (
     BookAccount,
     CardTransaction,
+    Fee,
     LedgerEntry,
     LedgerTriggerEvent,
     LoanData,
     PaymentSplit,
-    ProductFee,
 )
 from rush.utils import mul
 from rush.writeoff_and_recovery import recovery_event
@@ -159,26 +159,32 @@ def payment_received_event(
         pass
     elif event.name == "payment_received":
         payment_type = event.payment_type
-        if payment_type == "downpayment":
-            _adjust_for_downpayment(session=session, event=event, amount=payment_received)
-            return
-        elif payment_type in (
-            "reset_joining_fees",
-            "card_activation_fees",
-        ):
+        if not user_loan or payment_type == "card_reload_fees":
+            # not user_loan is to represent pre-loan fees
+
+            assert user_product_id is not None
+
+            if payment_type == "downpayment":
+                _adjust_for_downpayment(session=session, event=event, amount=payment_received)
+                return
+
             # although there should be single product fee for one payment type
             # assuming there can be multiple.
 
-            assert user_loan is not None or user_product_id is not None
-            if not user_product_id:
-                user_product_id = user_loan.user_product_id
+            if not user_loan:
+                identifier = "product"
+                assert payment_type != "card_reload_fees"
+            else:
+                identifier = "loan"
 
+            # obvious problem here is why there are multiple fees of same payment_type
             pre_loan_fees = (
-                session.query(ProductFee)
+                session.query(Fee)
                 .filter(
-                    ProductFee.fee_status == "UNPAID",
-                    ProductFee.identifier_id == user_product_id,
-                    ProductFee.name == payment_type,
+                    Fee.fee_status == "UNPAID",
+                    Fee.identifier_id == user_product_id,
+                    Fee.name == payment_type,
+                    Fee.identifier == identifier,
                 )
                 .all()
             )

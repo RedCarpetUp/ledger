@@ -380,63 +380,6 @@ class BaseLoan(Loan):
         total_outstanding = sum(bill.get_outstanding_amount(date_to_check_against) for bill in all_bills)
         return total_outstanding
 
-    def get_daily_spend(self, date_to_check_against: Optional[Date] = None) -> Decimal:
-        if not date_to_check_against:
-            date_to_check_against = get_current_ist_time().date()
-
-        # from sqlalchemy import and_
-        daily_spent = (
-            self.session.query(func.sum(CardTransaction.amount))
-            .join(LoanData, LoanData.id == CardTransaction.loan_id)
-            .filter(
-                LoanData.loan_id == self.id,
-                LoanData.user_id == self.user_id,
-                func.date_trunc("day", CardTransaction.txn_time) == date_to_check_against,
-                CardTransaction.status == "CONFIRMED",
-            )
-            .group_by(LoanData.loan_id)
-            .scalar()
-        )
-        return daily_spent or 0
-
-    def get_weekly_spend(self, date_to_check_against: Optional[Date] = None) -> Decimal:
-        if not date_to_check_against:
-            date_to_check_against = get_current_ist_time().date()
-
-        to_date = date_to_check_against.subtract(days=7)
-
-        weekly_spent = (
-            self.session.query(func.sum(CardTransaction.amount))
-            .join(LoanData, LoanData.id == CardTransaction.loan_id)
-            .filter(
-                LoanData.loan_id == self.id,
-                LoanData.user_id == self.user_id,
-                func.date_trunc("day", CardTransaction.txn_time).between(to_date, date_to_check_against),
-                CardTransaction.status == "CONFIRMED",
-            )
-            .group_by(LoanData.loan_id)
-            .scalar()
-        )
-        return weekly_spent or 0
-
-    def get_daily_total_transactions(self, date_to_check_against: Optional[Date]) -> Decimal:
-        if not date_to_check_against:
-            date_to_check_against = get_current_ist_time().date()
-
-        daily_txns = (
-            self.session.query(func.count(CardTransaction.id))
-            .join(LoanData, LoanData.id == CardTransaction.loan_id)
-            .filter(
-                LoanData.loan_id == self.id,
-                LoanData.user_id == self.user_id,
-                func.date_trunc("day", CardTransaction.txn_time) == date_to_check_against,
-                CardTransaction.status == "CONFIRMED",
-            )
-            .group_by(LoanData.loan_id)
-            .scalar()
-        )
-        return daily_txns or 0
-
     def get_loan_schedule(
         self, only_unpaid_emis=False, only_emis_after_date: Optional[date] = None
     ) -> List[LoanSchedule]:

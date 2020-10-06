@@ -183,22 +183,6 @@ def _adjust_bill(
 
     remaining_amount = amount_to_adjust_in_this_bill
 
-    # TODO is the order right?
-    # settle reload fees
-    reload_fees = (
-        session.query(LoanFee)
-        .filter(LoanFee.identifier_id == bill.loan_id, LoanFee.fee_status == "UNPAID")
-        .all()
-    )
-    for fee in reload_fees:
-        remaining_amount = remaining_amount = adjust_for_revenue(
-            session=session,
-            event_id=event_id,
-            payment_to_adjust_from=remaining_amount,
-            debit_str=debit_acc_str,
-            fee=fee,
-        )
-
     fees = (
         session.query(BillFee)
         .filter(BillFee.identifier_id == bill.id, BillFee.fee_status == "UNPAID")
