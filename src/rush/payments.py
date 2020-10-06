@@ -10,6 +10,7 @@ from rush.anomaly_detection import run_anomaly
 from rush.card import BaseLoan
 from rush.card.base_card import BaseBill
 from rush.create_bill import close_bills
+from rush.create_card_swipe import refund_card_swipe
 from rush.create_emi import (
     group_bills_to_create_loan_schedule,
     slide_payments,
@@ -123,20 +124,7 @@ def refund_payment(
     session.flush()
 
     if trace_no and txn_ref_no:
-        card_transaction = (
-            session.query(CardTransaction)
-            .join(LoanData, LoanData.id == CardTransaction.loan_id)
-            .filter(
-                LoanData.loan_id == user_loan.id,
-                LoanData.user_id == user_loan.user_id,
-                CardTransaction.status == "CONFIRMED",
-                CardTransaction.txn_ref_no == txn_ref_no,
-                CardTransaction.trace_no == trace_no,
-            )
-            .one()
-        )
-
-        card_transaction.status == "REFUNDED"
+        refund_card_swipe(session=session, loan=user_loan, txn_ref_no=txn_ref_no, trace_no=trace_no)
 
     # Checking if bill is generated or not. if not then reduce from unbilled else treat as payment.
     transaction_refund_event(session=session, user_loan=user_loan, event=lt)
