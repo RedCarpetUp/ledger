@@ -222,7 +222,7 @@ class UserData(AuditMixin):
 
 class User(AuditMixin):
     __tablename__ = "v3_users"
-    phone_number = Column(String(20), nullable=False, default="0000000000")
+
     histories = relationship("UserData", foreign_keys=[UserData.user_id])
     roles = relationship("UserRoles")
     identities = relationship("UserIdentities", back_populates="user")
@@ -389,9 +389,10 @@ class LedgerTriggerEvent(AuditMixin):
     loan_id = Column(Integer, ForeignKey(Loan.id))
     post_date = Column(TIMESTAMP)
     amount = Column(Numeric)
-    extra_details = Column(JSON, default="{}")
+    extra_details = Column(JSON, default={})
 
     user_product_id = pg_json_property("extra_details", "user_product_id", Integer, default=None)
+    payment_type = pg_json_property("extra_details", "payment_type", String, default=None)
 
 
 class LedgerEntry(Base):
@@ -435,6 +436,9 @@ class CardTransaction(AuditMixin):
     source = Column(String(30), nullable=False)
     description = Column(String(100), nullable=False)
     mcc = Column(String(10), nullable=True)
+    trace_no = Column(String(20), nullable=False)
+    txn_ref_no = Column(String(50), nullable=False)
+    status = Column(String(15), nullable=False)
 
 
 class CardEmis(AuditMixin):

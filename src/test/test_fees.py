@@ -37,6 +37,10 @@ def create_products(session: Session) -> None:
     session.add(hc_product)
     session.flush()
 
+    rc_product = Product(product_name="term_loan_reset")
+    session.add(rc_product)
+    session.flush()
+
 
 def card_db_updates(session: Session) -> None:
     create_products(session=session)
@@ -116,3 +120,23 @@ def test_add_reload_fee(session: Session) -> None:
     assert type(reload_fee) == LoanFee
     assert reload_fee.identifier_id == uc.loan_id
     assert reload_fee.fee_status == "UNPAID"
+
+
+def test_reset_joining_fees(session: Session) -> None:
+    create_lenders(session=session)
+    create_products(session=session)
+    create_user(session=session)
+
+    card_activation_fee = add_pre_product_fee(
+        session=session,
+        user_id=5,
+        product_type="term_loan_reset",
+        fee_name="reset_joining_fees",
+        fee_amount=Decimal(1000),
+    )
+
+    sell_book_id = card_activation_fee.identifier_id
+
+    assert type(card_activation_fee) == ProductFee
+    assert sell_book_id is not None
+    assert card_activation_fee.fee_status == "UNPAID"

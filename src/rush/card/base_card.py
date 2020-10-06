@@ -31,6 +31,7 @@ from rush.models import (
     UserCard,
 )
 from rush.utils import (
+    get_current_ist_time,
     get_reducing_emi,
     mul,
     round_up_decimal_to_nearest,
@@ -147,7 +148,7 @@ class BaseBill:
     def sum_of_atm_transactions(self):
         atm_transactions_sum = (
             self.session.query(func.sum(CardTransaction.amount))
-            .filter_by(loan_id=self.table.id, source="ATM")
+            .filter_by(loan_id=self.table.id, source="ATM", status="CONFIRMED")
             .group_by(CardTransaction.loan_id)
             .scalar()
         )
@@ -164,7 +165,7 @@ class BaseLoan(Loan):
     should_reinstate_limit_on_payment: bool = False
     bill_class: Type[B] = BaseBill
     session: Session = None
-    downpayment_perc: Optional[Decimal] = None
+    can_generate_bill: bool = True
 
     __mapper_args__ = {"polymorphic_identity": "base_loan"}
 
@@ -189,7 +190,7 @@ class BaseLoan(Loan):
 
     @classmethod
     def create(cls, session: Session, **kwargs) -> Loan:
-        user_product_id = kwargs.get("user_product_id")
+        user_product_id = kwargs.pop("user_product_id", None)
         card_type = kwargs.pop("card_type")
         if not user_product_id:
             user_product_id = create_user_product_mapping(

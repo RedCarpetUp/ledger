@@ -82,6 +82,8 @@ def _create_user_raghav_and_do_swipes(session: Session) -> BaseLoan:
         txn_time=parse_date("2020-01-01 14:23:11"),
         amount=Decimal(700),
         description="Amazon.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     swipe_2_raghav = create_card_swipe(
         session=session,
@@ -89,6 +91,8 @@ def _create_user_raghav_and_do_swipes(session: Session) -> BaseLoan:
         txn_time=parse_date("2020-01-02 11:22:11"),
         amount=Decimal(200),
         description="Flipkart.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     swipe_3_raghav = create_card_swipe(
         session=session,
@@ -96,6 +100,8 @@ def _create_user_raghav_and_do_swipes(session: Session) -> BaseLoan:
         txn_time=parse_date("2020-01-15 11:22:11"),
         amount=Decimal(200),
         description="Flipkart.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     assert (
         swipe_1_raghav["data"].loan_id
@@ -144,6 +150,8 @@ def _create_user_ananth_and_do_swipes(session: Session) -> BaseLoan:
         txn_time=parse_date("2020-01-15 14:23:11"),
         amount=Decimal(1000),
         description="Amazon.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     swipe_2_ananth = create_card_swipe(
         session=session,
@@ -151,6 +159,8 @@ def _create_user_ananth_and_do_swipes(session: Session) -> BaseLoan:
         txn_time=parse_date("2020-01-12 11:22:11"),
         amount=Decimal(5000),
         description="Flipkart.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     swipe_3_ananth = create_card_swipe(
         session=session,
@@ -158,6 +168,8 @@ def _create_user_ananth_and_do_swipes(session: Session) -> BaseLoan:
         txn_time=parse_date("2020-01-25 11:22:11"),
         amount=Decimal("500.75"),
         description="Flipkart.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     assert (
         swipe_1_ananth["data"].loan_id

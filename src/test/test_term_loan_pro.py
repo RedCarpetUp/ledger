@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session
 
 from rush.card import (
     create_user_product,
-    get_product_class,
     get_user_product,
 )
 from rush.card.term_loan_pro import TermLoanPro

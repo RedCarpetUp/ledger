@@ -2,7 +2,12 @@ from decimal import (
     ROUND_UP,
     Decimal,
 )
-from typing import Optional
+from typing import (
+    Any,
+    Dict,
+    Optional,
+    Union,
+)
 
 import pendulum
 from pendulum import DateTime
@@ -12,11 +17,11 @@ def get_current_ist_time() -> DateTime:
     return pendulum.now("Asia/Kolkata").replace(tzinfo=None)
 
 
-def mul(x: Decimal, y: [Decimal, int, str], fp: Decimal = Decimal(".01")) -> Decimal:
+def mul(x: Decimal, y: Union[Decimal, int, str], fp: Decimal = Decimal(".01")) -> Decimal:
     return (x * y).quantize(fp)
 
 
-def div(x: Decimal, y: [Decimal, int, str], fp: Decimal = Decimal(".01")) -> Decimal:
+def div(x: Decimal, y: Union[Decimal, int, str], fp: Decimal = Decimal(".01")) -> Decimal:
     return (x / y).quantize(fp)
 
 
@@ -39,7 +44,7 @@ def round_up_decimal_to_nearest(val: Decimal, to_nearest: Decimal = Decimal("10"
 
 def get_gst_split_from_amount(
     amount: Decimal, sgst_rate: Decimal, cgst_rate: Decimal, igst_rate: Decimal
-) -> dict:
+) -> Dict[str, Any]:
     sgst_multiplier = sgst_rate / 100
     cgst_multiplier = cgst_rate / 100
     igst_multiplier = igst_rate / 100
@@ -50,7 +55,7 @@ def get_gst_split_from_amount(
 
 def add_gst_split_to_amount(
     net_amount: Decimal, sgst_rate: Decimal, cgst_rate: Decimal, igst_rate: Decimal
-) -> dict:
+) -> Dict[str, Any]:
     sgst_multiplier = sgst_rate / 100
     cgst_multiplier = cgst_rate / 100
     igst_multiplier = igst_rate / 100

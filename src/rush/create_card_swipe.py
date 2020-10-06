@@ -19,6 +19,8 @@ from rush.ledger_events import (
 from rush.models import (
     CardTransaction,
     LedgerTriggerEvent,
+    Loan,
+    LoanData,
 )
 
 
@@ -28,9 +30,11 @@ def create_card_swipe(
     txn_time: DateTime,
     amount: Decimal,
     description: str,
+    trace_no: str,
+    txn_ref_no: str,
     source: Optional[str] = "ECOM",
     mcc: Optional[str] = None,
-    skip_activation_check=False,
+    skip_activation_check: bool = False,
 ) -> Dict[str, Any]:
     if not hasattr(user_loan, "amortization_date") or not user_loan.amortization_date:
         return {"result": "error", "message": "Card has not been activated"}
@@ -48,6 +52,9 @@ def create_card_swipe(
         description=description,
         source=source,
         mcc=mcc,
+        status="CONFIRMED",
+        trace_no=trace_no,
+        txn_ref_no=txn_ref_no,
     )
     session.add(swipe)
     session.flush()
@@ -71,3 +78,25 @@ def create_card_swipe(
     # Dpd calculation
     update_event_with_dpd(user_loan=user_loan, event=lt)
     return {"result": "success", "data": swipe}
+
+
+def refund_card_swipe(
+    session: Session, loan: Loan, txn_ref_no: str, trace_no: str, transaction_id: Optional[int]
+) -> None:
+    card_transaction = (
+        session.query(CardTransaction)
+        .join(LoanData, LoanData.id == CardTransaction.loan_id)
+        .filter(
+            LoanData.loan_id == loan.id,
+            LoanData.user_id == loan.user_id,
+            CardTransaction.status == "CONFIRMED",
+            CardTransaction.txn_ref_no == txn_ref_no,
+            CardTransaction.trace_no == trace_no,
+        )
+    )
+
+    if transaction_id:
+        card_transaction = card_transaction.filter(CardTransaction.id == transaction_id)
+
+    card_transaction = card_transaction.one()
+    card_transaction.status == "REFUNDED"

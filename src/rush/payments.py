@@ -10,6 +10,7 @@ from rush.anomaly_detection import run_anomaly
 from rush.card import BaseLoan
 from rush.card.base_card import BaseBill
 from rush.create_bill import close_bills
+from rush.create_card_swipe import refund_card_swipe
 from rush.create_emi import (
     group_bills_to_create_loan_schedule,
     slide_payments,
@@ -19,6 +20,8 @@ from rush.ledger_events import (
     _adjust_bill,
     _adjust_for_downpayment,
     _adjust_for_prepayment,
+    adjust_for_revenue,
+    adjust_non_bill_payments,
 )
 from rush.ledger_utils import (
     create_ledger_entry_from_str,
@@ -27,14 +30,12 @@ from rush.ledger_utils import (
 from rush.loan_schedule.loan_schedule import slide_payment_to_emis
 from rush.models import (
     BookAccount,
+    Fee,
     LedgerEntry,
     LedgerTriggerEvent,
     PaymentSplit,
 )
-from rush.utils import (
-    div,
-    mul,
-)
+from rush.utils import mul
 from rush.writeoff_and_recovery import recovery_event
 
 
@@ -50,6 +51,7 @@ def payment_received(
     skip_closing: bool = False,
 ) -> None:
     assert user_loan is not None or lender_id is not None
+    assert user_loan is not None or user_product_id is not None
 
     lt = LedgerTriggerEvent(
         name="payment_received",
@@ -59,7 +61,7 @@ def payment_received(
         extra_details={
             "payment_request_id": payment_request_id,
             "payment_type": payment_type,
-            "user_product_id": user_product_id,
+            "user_product_id": user_product_id if user_product_id else user_loan.user_product_id,
             "lender_id": user_loan.lender_id if user_loan else lender_id,
         },
     )
@@ -72,10 +74,11 @@ def payment_received(
         debit_book_str=f"{user_loan.lender_id if user_loan else lender_id}/lender/pg_account/a",
         event=lt,
         skip_closing=skip_closing,
+        user_product_id=user_product_id if user_product_id else user_loan.user_product_id,
     )
 
     # TODO: check if this code is needed for downpayment, since there is no user loan at that point of time.
-    if payment_type == "downpayment":
+    if payment_type in ("downpayment", "card_activation_fees", "reset_joining_fees"):
         return
 
     run_anomaly(session=session, user_loan=user_loan, event_date=payment_date)
@@ -98,17 +101,29 @@ def refund_payment(
     user_loan: BaseLoan,
     payment_amount: Decimal,
     payment_date: DateTime,
-    payment_request_id: str,
+    payment_request_id: Optional[str] = None,
+    trace_no: Optional[str] = None,
+    txn_ref_no: Optional[str] = None,
 ) -> None:
+
+    assert payment_request_id is not None or (trace_no is not None and txn_ref_no is not None)
+
     lt = LedgerTriggerEvent(
         name="transaction_refund",
         loan_id=user_loan.loan_id,
         amount=payment_amount,
         post_date=payment_date,
-        extra_details={"payment_request_id": payment_request_id},
+        extra_details={
+            "payment_request_id": payment_request_id,
+            "trace_no": trace_no,
+            "txn_ref_no": txn_ref_no,
+        },
     )
     session.add(lt)
     session.flush()
+
+    if trace_no and txn_ref_no:
+        refund_card_swipe(session=session, loan=user_loan, txn_ref_no=txn_ref_no, trace_no=trace_no)
 
     # Checking if bill is generated or not. if not then reduce from unbilled else treat as payment.
     transaction_refund_event(session=session, user_loan=user_loan, event=lt)
@@ -124,10 +139,36 @@ def payment_received_event(
     debit_book_str: str,
     event: LedgerTriggerEvent,
     skip_closing: bool = False,
+    user_product_id: Optional[int] = None,
 ) -> None:
     payment_received_amt = Decimal(event.amount)
-    if event.extra_details.get("payment_type") == "downpayment":
-        _adjust_for_downpayment(session=session, event=event, amount=payment_received_amt)
+
+    payment_type = event.payment_type
+    if not user_loan or payment_type == "card_reload_fees":
+        assert user_product_id is not None
+
+        if payment_type == "downpayment":
+            _adjust_for_downpayment(session=session, event=event, amount=payment_received_amt)
+        else:
+            if not user_loan:
+                identifier = "product"
+                identifier_id = user_product_id
+                assert payment_type != "card_reload_fees"
+            else:
+                identifier = "loan"
+                identifier_id = user_loan.id
+                assert payment_type == "card_reload_fees"
+
+            adjust_non_bill_payments(
+                session=session,
+                event=event,
+                amount=payment_received_amt,
+                payment_type=payment_type,
+                identifier=identifier,
+                identifier_id=identifier_id,
+                debit_book_str=debit_book_str,
+            )
+
     else:
         actual_payment = payment_received_amt
         bills_data = find_amount_to_slide_in_bills(user_loan, payment_received_amt)
@@ -353,7 +394,7 @@ def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
         "card_activation_fees",
         "card_reload_fees",
         "downpayment",
-        "reset_joining_fees"
+        "reset_joining_fees",
     )
     # unbilled and principal belong to same component.
     updated_component_names = {

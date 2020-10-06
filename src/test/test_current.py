@@ -21,6 +21,11 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
+from rush.card.utils import (
+    get_daily_spend,
+    get_daily_total_transactions,
+    get_weekly_spend,
+)
 from rush.create_bill import (
     bill_generate,
     extend_tenure,
@@ -185,6 +190,8 @@ def test_card_swipe(session: Session) -> None:
         txn_time=parse_date("2020-05-01 14:23:11"),
         amount=Decimal(700),
         description="Amazon.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     swipe1 = swipe1["data"]
 
@@ -194,6 +201,8 @@ def test_card_swipe(session: Session) -> None:
         txn_time=parse_date("2020-05-02 11:22:11"),
         amount=Decimal(200),
         description="Flipkart.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     swipe2 = swipe2["data"]
 
@@ -234,13 +243,31 @@ def test_closing_bill(session: Session) -> None:
     bill_date = parse_date("2019-02-01 00:00:00")
     bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
 
-    swipe = create_card_swipe(
+    swipe_date = parse_date("2019-02-02 19:23:11")
+    create_card_swipe(
         session=session,
         user_loan=user_loan,
-        txn_time=parse_date("2019-02-02 19:23:11"),
+        txn_time=swipe_date,
         amount=Decimal(3000),
         description="BigB.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
+
+    daily_txn_1 = get_daily_total_transactions(
+        session=session, loan=user_loan, date_to_check_against=swipe_date.date()
+    )
+    assert daily_txn_1 == 1
+
+    daily_spent_1 = get_daily_spend(
+        session=session, loan=user_loan, date_to_check_against=swipe_date.date()
+    )
+    assert daily_spent_1 == Decimal("3000")
+
+    weekly_spent_1 = get_weekly_spend(
+        session=session, loan=user_loan, date_to_check_against=swipe_date.date()
+    )
+    assert weekly_spent_1 == Decimal("3000")
 
     accrue_interest_on_all_bills(
         session=session, post_date=bill.table.bill_due_date + relativedelta(days=1), user_loan=user_loan
@@ -300,13 +327,20 @@ def test_closing_bill(session: Session) -> None:
         payment_request_id="a1236",
     )
 
-    swipe = create_card_swipe(
+    create_card_swipe(
         session=session,
         user_loan=user_loan,
         txn_time=parse_date("2019-05-20 19:23:11"),
         amount=Decimal(3000),
         description="BigB.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
+
+    daily_txn_2 = get_daily_total_transactions(
+        session=session, loan=user_loan, date_to_check_against=parse_date("2019-05-20").date()
+    )
+    assert daily_txn_2 == 1
 
     bill_date = parse_date("2019-06-01 00:00:00")
     bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
@@ -345,6 +379,8 @@ def test_generate_bill_1(session: Session) -> None:
         txn_time=parse_date("2020-04-08 19:23:11"),
         amount=Decimal(1000),
         description="BigB.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     bill_id = swipe["data"].loan_id
 
@@ -416,6 +452,8 @@ def test_generate_bill_reducing_interest_1(session: Session) -> None:
         txn_time=parse_date("2020-04-08 19:23:11"),
         amount=Decimal(1200),
         description="BigB.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     bill_id = swipe["data"].loan_id
 
@@ -446,7 +484,7 @@ def test_generate_bill_reducing_interest_1(session: Session) -> None:
     _, min_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/min/a")
     assert min_amount == Decimal("120.55")
 
-    update_event_with_dpd(user_loan=user_loan, post_date=parse_date("2020-05-21 00:05:00"))
+    update_event_with_dpd(user_loan=user_loan, to_date=parse_date("2020-05-21 00:05:00"))
 
     dpd_events = session.query(EventDpd).filter_by(loan_id=uc.loan_id).all()
     assert dpd_events[0].balance == Decimal(1200)
@@ -517,6 +555,8 @@ def test_min_multiplier(session: Session) -> None:
         txn_time=parse_date("2020-04-08 19:23:11"),
         amount=Decimal(12000),
         description="BigB.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     bill_id = swipe["data"].loan_id
 
@@ -578,6 +618,8 @@ def test_min_tenure(session: Session) -> None:
         txn_time=parse_date("2020-04-08 19:23:11"),
         amount=Decimal(12000),
         description="BigB.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     bill_id = swipe["data"].loan_id
 
@@ -957,6 +999,8 @@ def _generate_bill_2(session: Session) -> None:
         txn_time=parse_date("2020-05-08 19:23:11"),
         amount=Decimal(2000),
         description="BigBasket.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
 
     _, user_loan_balance = get_account_balance_from_str(
@@ -1065,6 +1109,8 @@ def test_generate_bill_3(session: Session) -> None:
         txn_time=parse_date("2020-05-08 20:23:11"),
         amount=Decimal(1500),
         description="Flipkart.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
 
     generate_date = parse_date("2020-06-01").date()
@@ -1119,6 +1165,8 @@ def test_emi_creation(session: Session) -> None:
         txn_time=parse_date("2020-04-08 19:23:11"),
         amount=Decimal(6000),
         description="BigBasket.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
 
     user_loan = get_user_product(session, a.id)
@@ -1174,6 +1222,8 @@ def test_subsequent_emi_creation(session: Session) -> None:
         txn_time=parse_date("2020-04-08 19:23:11"),
         amount=Decimal(6000),
         description="BigBasket.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
 
     generate_date = parse_date("2020-05-01").date()
@@ -1191,6 +1241,8 @@ def test_subsequent_emi_creation(session: Session) -> None:
         txn_time=parse_date("2020-05-08 19:23:11"),
         amount=Decimal(6000),
         description="BigBasket.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
 
     # Interest event to be fired separately now
@@ -1256,6 +1308,8 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
         txn_time=parse_date("2020-05-08 19:23:11"),
         amount=Decimal(6000),
         description="BigBasket.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
 
     generate_date = parse_date("2020-06-01").date()
@@ -1403,6 +1457,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-20 17:23:01"),
         amount=Decimal(129),
         description="PAYTM                  Noida         IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1410,6 +1466,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-22 09:33:18"),
         amount=Decimal(115),
         description="TPL*UDIO               MUMBAI        IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1417,6 +1475,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-22 09:50:46"),
         amount=Decimal(500),
         description="AIRTELMONEY            MUMBAI        IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     refunded_swipe = create_card_swipe(
         session=session,
@@ -1424,6 +1484,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-22 12:50:05"),
         amount=Decimal(2),
         description="PHONEPE RECHARGE.      GURGAON       IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1431,6 +1493,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-23 01:18:54"),
         amount=Decimal(100),
         description="WWW YESBANK IN         GURGAON       IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1438,6 +1502,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-23 01:42:51"),
         amount=Decimal(54),
         description="WWW YESBANK IN         GURGAON       IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1445,6 +1511,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-23 01:49:44"),
         amount=Decimal(1100),
         description="Payu Payments Pvt ltd  Gurgaon       IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1452,6 +1520,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-23 13:12:33"),
         amount=Decimal(99),
         description="ULLU DIGITAL PRIVATE L MUMBAI        IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
 
     # Merchant Refund
@@ -1466,6 +1536,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         amount=Decimal(2500),
         description="WWW YESBANK IN         GURGAON       IND",
         source="ATM",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1473,6 +1545,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-24 22:09:42"),
         amount=Decimal(99),
         description="PayTM*KookuDigitalPriP Mumbai        IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1480,6 +1554,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-25 08:33:40"),
         amount=Decimal(1400),
         description="WWW YESBANK IN         GURGAON       IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1487,6 +1563,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-25 10:26:12"),
         amount=Decimal(380),
         description="WWW YESBANK IN         GURGAON       IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1494,6 +1572,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-25 11:40:05"),
         amount=Decimal(199),
         description="PAYTM                  Noida         IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1501,6 +1581,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-25 11:57:15"),
         amount=Decimal(298),
         description="PAYTM                  Noida         IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1508,6 +1590,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-25 12:25:57"),
         amount=Decimal(298),
         description="PAYTM                  Noida         IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1515,6 +1599,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-26 08:04:47"),
         amount=Decimal(1450),
         description="WWW YESBANK IN         GURGAON       IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1522,6 +1608,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-26 14:47:41"),
         amount=Decimal(110),
         description="TPL*UDIO               MUMBAI        IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1529,6 +1617,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-26 16:37:27"),
         amount=Decimal(700),
         description="WWW YESBANK IN         GURGAON       IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     one_sixty_rupee = create_card_swipe(
         session=session,
@@ -1536,6 +1626,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-26 22:10:58"),
         amount=Decimal(160),
         description="Linkyun Technology Pri Gurgaon       IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1543,6 +1635,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-27 12:25:25"),
         amount=Decimal(299),
         description="PAYTM                  Noida         IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1550,6 +1644,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-28 20:38:02"),
         amount=Decimal(199),
         description="Linkyun Technology Pri Gurgaon       IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1557,6 +1653,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-28 21:45:55"),
         amount=Decimal(800),
         description="WWW YESBANK IN         GURGAON       IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1564,6 +1662,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-29 10:05:58"),
         amount=Decimal(525),
         description="Payu Payments Pvt ltd  Gurgaon       IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1571,6 +1671,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-30 16:04:21"),
         amount=Decimal(1400),
         description="WWW YESBANK IN         GURGAON       IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
 
     # Generate bill
@@ -1595,6 +1697,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-03 13:20:40"),
         amount=Decimal("150"),
         description="JUNE",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     one_rupee_1 = create_card_swipe(
         session=session,
@@ -1602,6 +1706,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-07 17:09:57"),
         amount=Decimal("1"),
         description="JUNE",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     one_rupee_2 = create_card_swipe(
         session=session,
@@ -1609,6 +1715,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-07 17:12:01"),
         amount=Decimal("1"),
         description="JUNE",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     one_rupee_3 = create_card_swipe(
         session=session,
@@ -1616,6 +1724,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-07 17:26:54"),
         amount=Decimal("1"),
         description="JUNE",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     one_rupee_4 = create_card_swipe(
         session=session,
@@ -1623,6 +1733,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-07 18:02:08"),
         amount=Decimal("1"),
         description="JUNE",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1630,6 +1742,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-08 20:03:37"),
         amount=Decimal("281.52"),
         description="JUNE",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1637,6 +1751,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-09 14:58:57"),
         amount=Decimal("810"),
         description="JUNE",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1644,6 +1760,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-09 15:02:50"),
         amount=Decimal("939.96"),
         description="JUNE",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1651,6 +1769,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-09 15:43:12"),
         amount=Decimal("240.54"),
         description="JUNE",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1658,6 +1778,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-09 15:51:18"),
         amount=Decimal("240.08"),
         description="JUNE",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1665,6 +1787,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-10 09:37:59"),
         amount=Decimal("10"),
         description="JUNE",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1672,6 +1796,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-10 15:21:01"),
         amount=Decimal("1700.84"),
         description="JUNE",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1679,6 +1805,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-10 23:27:06"),
         amount=Decimal("273.39"),
         description="JUNE",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1686,6 +1814,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-10 23:31:55"),
         amount=Decimal("273.39"),
         description="JUNE",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1693,6 +1823,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-12 17:11:11"),
         amount=Decimal("1254.63"),
         description="JUNE",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1700,6 +1832,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-13 11:59:50"),
         amount=Decimal("281.52"),
         description="JUNE",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1707,6 +1841,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-13 12:06:56"),
         amount=Decimal("281.52"),
         description="JUNE",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     create_card_swipe(
         session=session,
@@ -1714,6 +1850,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-13 12:17:49"),
         amount=Decimal("1340.64"),
         description="JUNE",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
 
     # Interest event to be fired separately now
@@ -2121,6 +2259,8 @@ def test_refund_1(session: Session) -> None:
         txn_time=parse_date("2020-05-10 19:23:11"),
         amount=Decimal(1500),
         description="BigBB.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     refund_payment(session, user_loan, 1500, parse_date("2020-05-15 15:24:34"), "af423g2")
 
@@ -2155,6 +2295,8 @@ def test_lender_incur(session: Session) -> None:
         txn_time=parse_date("2020-06-08 19:23:11"),
         amount=Decimal(1000),
         description="BigBasket.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     bill_id = swipe["data"].loan_id
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
@@ -2177,6 +2319,8 @@ def test_lender_incur(session: Session) -> None:
         txn_time=parse_date("2020-06-29 19:23:11"),
         amount=Decimal(1500),
         description="BigBasket.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     bill = bill_generate(user_loan)
 
@@ -2204,6 +2348,8 @@ def test_lender_incur(session: Session) -> None:
         txn_time=parse_date("2020-07-29 19:23:11"),
         amount=Decimal(1500),
         description="Flipkart.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     lender_interest_incur(
         session, from_date=parse_date("2020-07-01").date(), to_date=parse_date("2020-07-31").date()
@@ -2239,6 +2385,8 @@ def test_lender_incur_two(session: Session) -> None:
         txn_time=parse_date("2020-07-29 19:23:11"),
         amount=Decimal(500),
         description="BigBasket.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     swipe = create_card_swipe(
         session=session,
@@ -2246,6 +2394,8 @@ def test_lender_incur_two(session: Session) -> None:
         txn_time=parse_date("2020-07-29 10:23:11"),
         amount=Decimal(500),
         description="BigBasket.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     user_loan = get_user_product(session, a.id)
     bill = bill_generate(user_loan)
@@ -2329,6 +2479,8 @@ def test_prepayment(session: Session) -> None:
         txn_time=parse_date("2020-05-08 19:23:11"),
         amount=Decimal(1000),
         description="BigBasket.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
     bill_id = swipe["data"].loan_id
 
@@ -2518,6 +2670,8 @@ def test_moratorium(session: Session) -> None:
         txn_time=parse_date("2020-01-24 16:29:25"),
         amount=Decimal(2500),
         description="WWW YESBANK IN         GURGAON       IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
 
     # Generate bill
@@ -2604,6 +2758,8 @@ def test_moratorium_schedule(session: Session) -> None:
         txn_time=parse_date("2020-04-08 19:23:11"),
         amount=Decimal(6000),
         description="BigBasket.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
 
     generate_date = parse_date("2020-05-01").date()
@@ -2643,6 +2799,8 @@ def test_moratorium_schedule(session: Session) -> None:
         txn_time=parse_date("2020-05-08 19:23:11"),
         amount=Decimal(6000),
         description="BigBasket.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
 
     # Interest event to be fired separately now
@@ -2723,6 +2881,8 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
         txn_time=parse_date("2020-01-24 16:29:25"),
         amount=Decimal(2500),
         description="WWW YESBANK IN         GURGAON       IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
 
     uc = get_user_product(session, a.id)
@@ -2805,6 +2965,8 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
         txn_time=parse_date("2020-03-19 21:33:53"),
         amount=Decimal(10),
         description="TRUEBALANCE IO         GURGAON       IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
 
     create_card_swipe(
@@ -2813,6 +2975,8 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
         txn_time=parse_date("2020-03-24 14:01:35"),
         amount=Decimal(100),
         description="PAY*TRUEBALANCE IO     GURGAON       IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
 
     uc = get_user_product(session, a.id)
@@ -2829,6 +2993,8 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
         txn_time=parse_date("2020-04-03 17:41:43"),
         amount=Decimal(4),
         description="TRUEBALANCE IO         GURGAON       IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
 
     create_card_swipe(
@@ -2837,6 +3003,8 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
         txn_time=parse_date("2020-04-12 22:02:47"),
         amount=Decimal(52),
         description="PAYU PAYMENTS PVT LTD  0001243054000 IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
 
     # Interest event to be fired separately now
@@ -2909,6 +3077,8 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
         txn_time=parse_date("2020-03-19 21:33:53"),
         amount=Decimal(10),
         description="TRUEBALANCE IO         GURGAON       IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
 
     create_card_swipe(
@@ -2917,6 +3087,8 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
         txn_time=parse_date("2020-03-24 14:01:35"),
         amount=Decimal(100),
         description="PAY*TRUEBALANCE IO     GURGAON       IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
 
     uc = get_user_product(session, a.id)
@@ -2928,6 +3100,8 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
         txn_time=parse_date("2020-04-03 17:41:43"),
         amount=Decimal(4),
         description="TRUEBALANCE IO         GURGAON       IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
 
     create_card_swipe(
@@ -2936,6 +3110,8 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
         txn_time=parse_date("2020-04-12 22:02:47"),
         amount=Decimal(52),
         description="PAYU PAYMENTS PVT LTD  0001243054000 IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
 
     # Interest event to be fired separately now
@@ -3011,6 +3187,8 @@ def test_intermediate_bill_generation(session: Session) -> None:
         txn_time=parse_date("2020-10-02 11:22:11"),
         amount=Decimal(200),
         description="Flipkart.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
 
     bill_2 = bill_generate(user_loan)
@@ -3063,6 +3241,8 @@ def test_transaction_before_activation(session: Session) -> None:
         txn_time=parse_date("2020-05-02 11:22:11"),
         amount=Decimal(200),
         description="Flipkart.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
 
     assert swipe["result"] == "error"
@@ -3111,6 +3291,8 @@ def test_excess_payment_in_future_emis(session: Session) -> None:
         txn_time=parse_date("2020-05-08 19:23:11"),
         amount=Decimal(2000),
         description="BigBasket.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
     )
 
     bill_2 = bill_generate(user_loan=user_loan)
