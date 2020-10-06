@@ -66,42 +66,42 @@ def create_test_term_loan(session: Session, **kwargs) -> TermLoanPro:  # type: i
 
 
 def test_product_amortization_1() -> None:
-    amortization_date = TermLoanPro.calculate_amortization_date(
+    amortization_date = TermLoanPro.calculate_first_emi_date(
         product_order_date=parse_date("2020-08-01").date()
     )
     assert amortization_date == parse_date("2020-09-01").date()
 
 
 def test_product_amortization_2() -> None:
-    amortization_date = TermLoanPro.calculate_amortization_date(
+    amortization_date = TermLoanPro.calculate_first_emi_date(
         product_order_date=parse_date("2020-08-05").date()
     )
     assert amortization_date == parse_date("2020-09-05").date()
 
 
 def test_product_amortization_3() -> None:
-    amortization_date = TermLoanPro.calculate_amortization_date(
+    amortization_date = TermLoanPro.calculate_first_emi_date(
         product_order_date=parse_date("2020-08-12").date()
     )
     assert amortization_date == parse_date("2020-09-12").date()
 
 
 def test_product_amortization_4() -> None:
-    amortization_date = TermLoanPro.calculate_amortization_date(
+    amortization_date = TermLoanPro.calculate_first_emi_date(
         product_order_date=parse_date("2020-08-15").date()
     )
     assert amortization_date == parse_date("2020-09-15").date()
 
 
 def test_product_amortization_5() -> None:
-    amortization_date = TermLoanPro.calculate_amortization_date(
+    amortization_date = TermLoanPro.calculate_first_emi_date(
         product_order_date=parse_date("2020-08-24").date()
     )
     assert amortization_date == parse_date("2020-09-24").date()
 
 
 def test_product_amortization_6() -> None:
-    amortization_date = TermLoanPro.calculate_amortization_date(
+    amortization_date = TermLoanPro.calculate_first_emi_date(
         product_order_date=parse_date("2020-08-26").date()
     )
     assert amortization_date == parse_date("2020-09-26").date()
@@ -171,7 +171,7 @@ def test_create_term_loan(session: Session) -> None:
     assert rc_cash_balance == Decimal("-10000")
 
     assert loan.product_type == "term_loan_pro"
-    assert loan.amortization_date == parse_date("2020-09-01").date()
+    assert loan.amortization_date == parse_date("2020-08-01").date()
 
     user_loan = get_user_product(
         session=session, user_id=loan.user_id, card_type="term_loan_pro", loan_id=loan.id
@@ -278,7 +278,7 @@ def test_create_term_loan_2(session: Session) -> None:
     assert rc_cash_balance == Decimal("-10000")
 
     assert loan.product_type == "term_loan_pro"
-    assert loan.amortization_date == parse_date("2018-11-22").date()
+    assert loan.amortization_date == parse_date("2018-10-22").date()
 
     user_loan = get_user_product(
         session=session, user_id=loan.user_id, card_type="term_loan_pro", loan_id=loan.id

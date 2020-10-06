@@ -41,7 +41,7 @@ class TermLoanPro2(TermLoan):
     __mapper_args__ = {"polymorphic_identity": "term_loan_pro_2"}
 
     @staticmethod
-    def calculate_amortization_date(product_order_date: Date) -> Date:
+    def calculate_first_emi_date(product_order_date: Date) -> Date:
         if 1 <= product_order_date.day <= 5:
             return product_order_date.add(months=1).replace(day=1)
         elif 6 <= product_order_date.day <= 25:
