@@ -411,7 +411,7 @@ def loan_disbursement_event(
             amount=downpayment_amount,
         )
 
-        create_ledger_entry_from_str(
+        create_ledger_entry_from_str(  # TODO This is wrong.
             session=session,
             event_id=event.id,
             debit_book_str=f"{loan.loan_id}/loan/lender_payable/l",
@@ -434,7 +434,7 @@ def _adjust_for_downpayment(session: Session, event: LedgerTriggerEvent, amount:
     create_ledger_entry_from_str(
         session=session,
         event_id=event.id,
-        debit_book_str=f"{user_product_id}/product/lender_payable/l",  # TODO: confirm this.
+        debit_book_str=f"{user_product_id}/product/lender_payable/l",  # TODO: This is wrong.
         credit_book_str=f"{lender_id}/lender/pg_account/a",
         amount=amount,
     )

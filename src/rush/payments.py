@@ -125,16 +125,12 @@ def payment_received_event(
     event: LedgerTriggerEvent,
     skip_closing: bool = False,
 ) -> None:
-    payment_received = Decimal(event.amount)
-    if event.name == "merchant_refund":
-        pass
-    elif event.name == "payment_received":
-        if event.extra_details.get("payment_type") == "downpayment":
-            _adjust_for_downpayment(session=session, event=event, amount=payment_received)
-            return
-
-        actual_payment = payment_received
-        bills_data = find_amount_to_slide_in_bills(user_loan, payment_received)
+    payment_received_amt = Decimal(event.amount)
+    if event.extra_details.get("payment_type") == "downpayment":
+        _adjust_for_downpayment(session=session, event=event, amount=payment_received_amt)
+    else:
+        actual_payment = payment_received_amt
+        bills_data = find_amount_to_slide_in_bills(user_loan, payment_received_amt)
         for bill_data in bills_data:
             adjust_for_min_max_accounts(bill_data["bill"], bill_data["amount_to_adjust"], event.id)
             remaining_amount = _adjust_bill(
@@ -146,30 +142,32 @@ def payment_received_event(
             )
             # The amount to adjust is computed for this bill. It should all settle.
             assert remaining_amount == 0
-            payment_received -= bill_data["amount_to_adjust"]
+            payment_received_amt -= bill_data["amount_to_adjust"]
         if user_loan.should_reinstate_limit_on_payment:
             user_loan.reinstate_limit_on_payment(event=event, amount=actual_payment)
 
-    if payment_received > 0:  # if there's payment left to be adjusted.
-        _adjust_for_prepayment(
-            session=session,
-            loan_id=user_loan.loan_id,
-            event_id=event.id,
-            amount=payment_received,
-            debit_book_str=debit_book_str,
+        if payment_received_amt > 0:  # if there's payment left to be adjusted.
+            _adjust_for_prepayment(
+                session=session,
+                loan_id=user_loan.loan_id,
+                event_id=event.id,
+                amount=payment_received_amt,
+                debit_book_str=debit_book_str,
+            )
+
+        is_in_write_off = (
+            get_account_balance_from_str(session, f"{user_loan.loan_id}/loan/write_off_expenses/e")[1]
+            > 0
         )
+        if is_in_write_off:
+            recovery_event(user_loan, event)
+            # TODO set loan status to recovered.
 
-    is_in_write_off = (
-        get_account_balance_from_str(session, f"{user_loan.loan_id}/loan/write_off_expenses/e")[1] > 0
-    )
-    if is_in_write_off:
-        recovery_event(user_loan, event)
-        # TODO set loan status to recovered.
+        # We will either slide or close bills
+        slide_or_close_bills(user_loan, event, skip_closing)
+        slide_payment_to_emis(user_loan, event)
 
-    # We will either slide or close bills
-    slide_or_close_bills(user_loan, event, skip_closing)
     create_payment_split(session, event)
-    slide_payment_to_emis(user_loan, event)
 
 
 def slide_or_close_bills(user_loan, event, skip_closing=False):
@@ -354,6 +352,8 @@ def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
         "atm_fee",
         "card_activation_fees",
         "card_reload_fees",
+        "downpayment",
+        "reset_joining_fees"
     )
     # unbilled and principal belong to same component.
     updated_component_names = {
