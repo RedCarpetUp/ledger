@@ -390,6 +390,81 @@ def test_generate_bill_1(session: Session) -> None:
     assert emis[11].total_closing_balance == Decimal("83.33")
 
 
+def test_generate_bill_reducing_interest_1(session: Session) -> None:
+    test_lenders(session)
+    card_db_updates(session)
+    # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
+    a = User(
+        id=99,
+        performed_by=123,
+    )
+    session.add(a)
+    session.flush()
+
+    # assign card
+    uc = create_user_product(
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2020-04-02").date(),
+        card_type="ruby",
+        lender_id=62311,
+        interest_type="reducing",
+    )
+
+    swipe = create_card_swipe(
+        session=session,
+        user_loan=uc,
+        txn_time=parse_date("2020-04-08 19:23:11"),
+        amount=Decimal(1200),
+        description="BigB.com",
+    )
+    bill_id = swipe["data"].loan_id
+
+    _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
+    assert unbilled_amount == 1200
+
+    user_loan = get_user_product(session, a.id)
+    bill = bill_generate(user_loan=user_loan)
+    # Interest event to be fired separately now
+
+    # check latest bill method
+    latest_bill = user_loan.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
+    assert bill.bill_start_date == parse_date("2020-04-02").date()
+    assert bill.table.is_generated is True
+
+    _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
+    # Should be 0 because it has moved to billed account.
+    assert unbilled_amount == 0
+
+    _, billed_amount = get_account_balance_from_str(
+        session, book_string=f"{bill_id}/bill/principal_receivable/a"
+    )
+    assert billed_amount == 1200
+
+    _, min_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/min/a")
+    assert min_amount == Decimal("120.55")
+
+    update_event_with_dpd(user_loan=user_loan, post_date=parse_date("2020-05-21 00:05:00"))
+
+    dpd_events = session.query(EventDpd).filter_by(loan_id=uc.loan_id).all()
+    assert dpd_events[0].balance == Decimal(1200)
+
+    emis = uc.get_loan_schedule()
+    assert emis[0].total_due_amount == Decimal("120.55")
+    assert emis[0].principal_due == Decimal("84.55")
+    assert emis[0].interest_due == Decimal("36")
+    assert emis[0].due_date == parse_date("2020-05-15").date()
+    assert emis[0].emi_number == 1
+    assert emis[0].total_closing_balance == Decimal(1200)
+    assert emis[1].total_closing_balance == Decimal("1115.45")
+    assert emis[11].principal_due == Decimal("117.04")
+    assert emis[11].interest_due == Decimal("3.51")
+    assert emis[11].total_closing_balance == Decimal("117.04")
+
+
 def _accrue_interest_on_bill_1(session: Session) -> None:
     user_loan = get_user_product(session, 99)
     bill = user_loan.get_all_bills()[0]

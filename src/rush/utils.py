@@ -2,6 +2,7 @@ from decimal import (
     ROUND_UP,
     Decimal,
 )
+from typing import Optional
 
 import pendulum
 from pendulum import DateTime
@@ -62,24 +63,16 @@ def add_gst_split_to_amount(
     return d
 
 
-EMI_FORMULA_DICT = {
-    "loan_id": None,
-    "due_date": None,
-    "due_amount": Decimal(0),
-    "total_due_amount": Decimal(0),
-    "interest_current_month": Decimal(0),
-    "interest_next_month": Decimal(0),
-    "interest": Decimal(0),
-    "emi_number": Decimal(0),
-    "late_fee": Decimal(0),
-    "row_status": Decimal(0),
-    "dpd": Decimal(0),
-    "last_payment_date": Decimal(0),
-    "total_closing_balance": Decimal(0),
-    "total_closing_balance_post_due_date": Decimal(0),
-    "late_fee_received": Decimal(0),
-    "interest_received": Decimal(0),
-    "payment_received": Decimal(0),
-    "payment_status": "Paid",
-    "extra_details": {},
-}
+def get_reducing_emi(
+    principal: Decimal, interest_rate_monthly: Decimal, tenure: Decimal, to_round: Optional[bool] = False
+) -> Decimal:
+    emi = (
+        principal
+        * interest_rate_monthly
+        / 100
+        * pow((1 + (interest_rate_monthly / 100)), tenure)
+        / (pow((1 + (interest_rate_monthly / 100)), tenure) - 1)
+    )
+    if to_round:
+        emi = round(emi, 2)
+    return emi

@@ -220,7 +220,7 @@ class TermLoan(BaseLoan):
         bill = cls.bill_class(session=session, loan_data=loan_data)
         loan_data.interest_to_charge = bill.get_interest_to_charge(
             rate_of_interest=loan.rc_rate_of_interest_monthly,
-            product_price=bill.net_product_price(
+            principal=bill.net_product_price(
                 product_price=kwargs["amount"], downpayment_perc=downpayment_percent
             ),
         )
