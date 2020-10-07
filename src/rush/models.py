@@ -497,7 +497,7 @@ class LoanSchedule(AuditMixin):
     principal_due = Column(Numeric, nullable=False)
     interest_due = Column(Numeric, nullable=False)
     # total_due_amount = Column(Numeric, nullable=False)  # This should be a calculated column.
-    dpd = Column(Integer, nullable=True)
+    dpd = Column(Integer, nullable=False, default=-999)
     last_payment_date = Column(TIMESTAMP, nullable=True)
     total_closing_balance = Column(Numeric, nullable=False)
     payment_received = Column(Numeric, nullable=False, default=0)

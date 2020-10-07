@@ -9,12 +9,7 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
-from rush.create_emi import (
-    adjust_atm_fee_in_emis,
-    create_emis_for_bill,
-    group_bills_to_create_loan_schedule,
-    update_event_with_dpd,
-)
+from rush.create_emi import update_event_with_dpd
 from rush.ledger_events import (
     add_max_amount_event,
     bill_generate_event,
@@ -22,10 +17,7 @@ from rush.ledger_events import (
 from rush.ledger_utils import get_account_balance_from_str
 from rush.loan_schedule.loan_schedule import create_bill_schedule
 from rush.min_payment import add_min_to_all_bills
-from rush.models import (
-    CardEmis,
-    LedgerTriggerEvent,
-)
+from rush.models import LedgerTriggerEvent
 from rush.utils import (
     div,
     get_current_ist_time,
@@ -117,7 +109,6 @@ def bill_generate(
     add_min_to_all_bills(session=session, post_date=bill.table.bill_close_date, user_loan=user_loan)
 
     if not skip_bill_schedule_creation:
-        create_emis_for_bill(session=session, user_loan=user_loan, bill=bill)
         create_bill_schedule(session, user_loan, bill)
 
     atm_transactions_sum = bill.sum_of_atm_transactions()
@@ -132,71 +123,6 @@ def bill_generate(
         )
 
     return bill
-
-
-def extend_tenure(
-    session: Session, user_loan: BaseLoan, new_tenure: int, post_date: DateTime, bill: BaseBill = None
-) -> None:
-    def extension(bill: BaseBill):
-        list_of_bills.append(bill.id)
-        bill.table.bill_tenure = new_tenure
-        principal_instalment = div(bill.table.principal, bill.table.bill_tenure)
-        # Update the bill rows here
-        bill.table.principal_instalment = principal_instalment
-        bill.table.interest_to_charge = bill.get_interest_to_charge(
-            rate_of_interest=user_loan.rc_rate_of_interest_monthly
-        )
-
-        # Get all emis of the bill
-        all_emis = (
-            session.query(CardEmis)
-            .filter(
-                CardEmis.loan_id == user_loan.id,
-                CardEmis.row_status == "active",
-                CardEmis.bill_id == bill.id,
-            )
-            .order_by(CardEmis.emi_number.asc())
-            .all()
-        )
-        for emi in all_emis:
-            if emi.due_date >= post_date.date():
-                emi.row_status = "inactive"
-
-        # Get emis pre post date. This is done to get per bill amount till date as well
-        bill_accumalation_till_date = Decimal(0)
-        pre_post_date_emis = [emi for emi in all_emis if emi.due_date < post_date.date()]
-        for emi in pre_post_date_emis:
-            if not emi.extra_details.get("moratorium"):
-                bill_accumalation_till_date += emi.due_amount
-        last_active_emi = pre_post_date_emis[-1]
-
-        create_emis_for_bill(
-            session=session,
-            user_loan=user_loan,
-            bill=bill,
-            last_emi=last_active_emi,
-            bill_accumalation_till_date=bill_accumalation_till_date,
-        )
-
-    list_of_bills = []
-    if not bill:
-        unpaid_bills = user_loan.get_unpaid_generated_bills()
-        for unpaid_bill in unpaid_bills:
-            extension(bill=unpaid_bill)
-    else:
-        extension(bill=bill)
-
-    event = LedgerTriggerEvent(
-        name="tenure_extended",
-        loan_id=user_loan.id,
-        post_date=post_date,
-        extra_details={"bills": list_of_bills},
-    )
-    session.add(event)
-    session.flush()
-
-    # Recreate loan level emis
-    group_bills_to_create_loan_schedule(user_loan=user_loan)
 
 
 def add_atm_fee(
@@ -224,63 +150,4 @@ def add_atm_fee(
     )
     event.amount = fee.gross_amount
 
-    if not skip_schedule_grouping:
-        adjust_atm_fee_in_emis(session, user_loan, bill)
-
     update_event_with_dpd(user_loan=user_loan, event=event)
-
-
-def close_bills(user_loan: BaseLoan, payment_date: DateTime):
-    session = user_loan.session
-    all_bills = user_loan.get_closed_bills()
-
-    for bill in all_bills:
-        all_paid = False
-        bill_emis = (
-            session.query(CardEmis)
-            .filter(
-                CardEmis.loan_id == user_loan.loan_id,
-                CardEmis.row_status == "active",
-                CardEmis.bill_id == bill.id,
-            )
-            .order_by(CardEmis.emi_number.asc())
-            .all()
-        )
-        last_emi_number = bill_emis[-1].emi_number
-        for emi in bill_emis:
-            if all_paid:
-                emi.payment_received = (
-                    emi.atm_fee_received
-                ) = (
-                    emi.late_fee_received
-                ) = (
-                    emi.interest_received
-                ) = (
-                    emi.due_amount
-                ) = (
-                    emi.total_due_amount
-                ) = (
-                    emi.total_closing_balance
-                ) = (
-                    emi.total_closing_balance_post_due_date
-                ) = emi.interest_current_month = emi.interest_next_month = emi.interest = Decimal(0)
-                continue
-            actual_closing_balance = emi.total_closing_balance_post_due_date
-            if payment_date.date() <= emi.due_date:
-                actual_closing_balance = emi.total_closing_balance
-            if (
-                emi.due_date >= payment_date.date() > (emi.due_date + relativedelta(months=-1))
-            ) or emi.emi_number == last_emi_number:
-                all_paid = True
-                emi.total_closing_balance = (
-                    emi.total_closing_balance_post_due_date
-                ) = emi.interest = emi.interest_current_month = emi.interest_next_month = 0
-                if payment_date.date() > emi.due_date:
-                    only_principal = actual_closing_balance - (emi.interest + emi.atm_fee + emi.late_fee)
-                else:
-                    only_principal = actual_closing_balance - emi.atm_fee
-                emi.total_due_amount = actual_closing_balance
-                emi.due_amount = only_principal
-
-    # Recreate loan level emis
-    group_bills_to_create_loan_schedule(user_loan=user_loan)

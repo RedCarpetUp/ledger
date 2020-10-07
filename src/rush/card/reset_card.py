@@ -21,10 +21,10 @@ from rush.ledger_events import (
 from rush.ledger_utils import create_ledger_entry_from_str
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
-    CardEmis,
     LedgerTriggerEvent,
     Loan,
     LoanData,
+    LoanSchedule,
     ProductFee,
 )
 
@@ -139,7 +139,7 @@ class ResetCard(BaseLoan):
         # unlock some limit if required.
 
         # create emis for term loan.
-        from rush.create_emi import create_emis_for_bill
+        from rush.loan_schedule.loan_schedule import create_bill_schedule
 
         bill = cls.bill_class(session=session, loan_data=loan_data)
         loan_data.interest_to_charge = bill.get_interest_to_charge(
@@ -147,7 +147,7 @@ class ResetCard(BaseLoan):
             principal=kwargs["amount"],
         )
 
-        create_emis_for_bill(
+        create_bill_schedule(
             session=session,
             user_loan=loan,
             bill=bill,
@@ -157,14 +157,13 @@ class ResetCard(BaseLoan):
         # bill will be treated as closed. I am not sure of the exact reason behind it.
 
         total_billed_amount = (
-            session.query(func.sum(CardEmis.total_due_amount))
+            session.query(func.sum(LoanSchedule.total_due_amount()))
             .filter(
-                CardEmis.loan_id == loan.id,
-                CardEmis.bill_id.is_(None),
-                CardEmis.row_status == "active",
-                CardEmis.payment_status == "UnPaid",
+                LoanSchedule.loan_id == loan.id,
+                LoanSchedule.bill_id.is_(None),
+                LoanSchedule.payment_status == "UnPaid",
             )
-            .group_by(CardEmis.loan_id)
+            .group_by(LoanSchedule.loan_id)
             .scalar()
         )
 

@@ -17,7 +17,6 @@ from rush.ledger_utils import get_account_balance_from_str
 from rush.limit_unlock import limit_unlock
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
-    CardEmis,
     Lenders,
     LoanData,
     Product,
@@ -150,28 +149,19 @@ def test_create_term_loan(session: Session) -> None:
     )
     assert loan_lender_payable == Decimal("10000")
 
-    all_emis_query = (
-        session.query(CardEmis)
-        .filter(
-            CardEmis.loan_id == user_loan.loan_id,
-            CardEmis.row_status == "active",
-            CardEmis.bill_id == None,
-        )
-        .order_by(CardEmis.emi_number.asc())
-    )
-    emis_dict = [u.as_dict() for u in all_emis_query.all()]
+    all_emis = user_loan.get_loan_schedule()
 
-    assert len(emis_dict) == 12
-    assert emis_dict[0]["due_date"] == parse_date("2020-09-01").date()
-    assert emis_dict[0]["emi_number"] == 1
-    assert emis_dict[0]["interest"] == Decimal("306.67")
-    assert emis_dict[0]["total_due_amount"] % 10 == 0
-    assert emis_dict[0]["total_due_amount"] == Decimal("1140")
+    assert len(all_emis) == 12
+    assert all_emis[0].due_date == parse_date("2020-09-01").date()
+    assert all_emis[0].emi_number == 1
+    assert all_emis[0].interest_due == Decimal("306.67")
+    assert all_emis[0].total_due_amount() % 10 == 0
+    assert all_emis[0].total_due_amount() == Decimal("1140")
 
-    assert emis_dict[-1]["due_date"] == parse_date("2021-08-01").date()
-    assert emis_dict[-1]["emi_number"] == 12
-    assert emis_dict[-1]["interest"] == Decimal("306.67")
-    assert emis_dict[-1]["total_due_amount"] % 10 == 0
+    assert all_emis[-1].due_date == parse_date("2021-08-01").date()
+    assert all_emis[-1].emi_number == 12
+    assert all_emis[-1].interest_due == Decimal("306.67")
+    assert all_emis[-1].total_due_amount() % 10 == 0
 
     # add min amount for months in between.
     add_min_to_all_bills(session=session, post_date=parse_date("2020-09-01"), user_loan=loan)
