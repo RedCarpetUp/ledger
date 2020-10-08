@@ -214,7 +214,7 @@ class TermLoan(BaseLoan):
         )
 
         # create emis for term loan.
-        from rush.create_emi import create_emis_for_bill
+        from rush.loan_schedule.loan_schedule import create_bill_schedule
 
         bill = cls.bill_class(session=session, loan_data=loan_data)
         loan_data.interest_to_charge = bill.get_interest_to_charge(
@@ -224,7 +224,7 @@ class TermLoan(BaseLoan):
             ),
         )
 
-        create_emis_for_bill(
+        create_bill_schedule(
             session=session,
             user_loan=loan,
             bill=bill,

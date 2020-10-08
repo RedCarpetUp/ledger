@@ -26,12 +26,11 @@ from rush.ledger_utils import (
 from rush.models import (
     BillFee,
     BookAccount,
-    CardEmis,
     Fee,
     LedgerEntry,
     LedgerTriggerEvent,
     LoanData,
-    UserCard,
+    LoanSchedule,
 )
 from rush.utils import (
     get_current_ist_time,
@@ -76,14 +75,13 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loa
     session.flush()
     for bill in unpaid_bills:
         interest_to_charge = (
-            session.query(CardEmis.interest)
+            session.query(LoanSchedule.interest_due)
             .filter(
-                CardEmis.bill_id == bill.id,
-                CardEmis.due_date < post_date,
-                CardEmis.due_date > post_date - relativedelta(months=1),  # Should be within a month
-                CardEmis.row_status == "active",
+                LoanSchedule.bill_id == bill.id,
+                LoanSchedule.due_date < post_date,
+                LoanSchedule.due_date > post_date - relativedelta(months=1),  # Should be within a month
             )
-            .order_by(CardEmis.due_date.desc())
+            .order_by(LoanSchedule.due_date.desc())
             .limit(1)
             .scalar()
         )
@@ -177,12 +175,8 @@ def accrue_late_charges(
 
         session.flush()
 
-        from rush.create_emi import (
-            adjust_late_fee_in_emis,
-            update_event_with_dpd,
-        )
+        from rush.create_emi import update_event_with_dpd
 
-        adjust_late_fee_in_emis(session=session, user_loan=user_loan, bill=latest_bill)
         update_event_with_dpd(user_loan=user_loan, event=event)
     return latest_bill
 
@@ -334,30 +328,7 @@ def reverse_incorrect_late_charges(
                 )
     fee.fee_status = "REVERSED"
 
-    # Adjust reversal of late fee in bill
-    emi = (
-        session.query(CardEmis)
-        .filter(
-            CardEmis.loan_id == user_loan.loan_id,
-            CardEmis.bill_id == bill.id,
-            CardEmis.emi_number == 1,
-            CardEmis.row_status == "active",
-        )
-        .order_by(CardEmis.emi_number.asc())
-        .first()
-    )
-    if fee and fee.gross_amount > 0:
-        emi.total_closing_balance_post_due_date -= fee.gross_amount
-        emi.total_due_amount -= fee.gross_amount
-        emi.late_fee -= fee.gross_amount
-        session.flush()
+    from rush.create_emi import update_event_with_dpd
 
-    from rush.create_emi import (
-        group_bills_to_create_loan_schedule,
-        update_event_with_dpd,
-    )
-
-    # Recreate loan level emis
-    group_bills_to_create_loan_schedule(user_loan=user_loan)
     # Update dpd
     update_event_with_dpd(user_loan=user_loan, event=event)
