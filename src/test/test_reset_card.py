@@ -155,13 +155,13 @@ def test_create_term_loan(session: Session) -> None:
     assert all_emis[0].due_date == parse_date("2020-09-01").date()
     assert all_emis[0].emi_number == 1
     assert all_emis[0].interest_due == Decimal("306.67")
-    assert all_emis[0].total_due_amount() % 10 == 0
-    assert all_emis[0].total_due_amount() == Decimal("1140")
+    assert all_emis[0].total_due_amount % 10 == 0
+    assert all_emis[0].total_due_amount == Decimal("1140")
 
     assert all_emis[-1].due_date == parse_date("2021-08-01").date()
     assert all_emis[-1].emi_number == 12
     assert all_emis[-1].interest_due == Decimal("306.67")
-    assert all_emis[-1].total_due_amount() % 10 == 0
+    assert all_emis[-1].total_due_amount % 10 == 0
 
     # add min amount for months in between.
     add_min_to_all_bills(session=session, post_date=parse_date("2020-09-01"), user_loan=loan)
@@ -171,7 +171,7 @@ def test_create_term_loan(session: Session) -> None:
     assert min_amount == Decimal("3420")
 
     max_amount = user_loan.get_remaining_max()
-    assert max_amount == Decimal("13680")
+    assert max_amount == Decimal("10000")
 
     limit_unlock(session=session, loan=loan, amount=Decimal("1000"))
 

@@ -206,12 +206,12 @@ def test_create_term_loan(session: Session) -> None:
     assert all_emis[0].due_date == parse_date("2020-09-01").date()
     assert all_emis[0].emi_number == 1
     assert all_emis[0].interest_due == Decimal("243.33")
-    assert all_emis[0].total_due_amount() % 10 == 0
+    assert all_emis[0].total_due_amount % 10 == 0
 
     assert all_emis[-1].due_date == parse_date("2021-08-01").date()
     assert all_emis[-1].emi_number == 12
     assert all_emis[-1].interest_due == Decimal("243.33")
-    assert all_emis[-1].total_due_amount() % 10 == 0
+    assert all_emis[-1].total_due_amount % 10 == 0
 
 
 def test_create_term_loan_2(session: Session) -> None:
@@ -306,14 +306,14 @@ def test_create_term_loan_2(session: Session) -> None:
     assert all_emis[0].due_date == parse_date("2019-02-01").date()
     assert all_emis[0].emi_number == 1
     assert all_emis[0].interest_due == Decimal("243.33")
-    assert all_emis[0].total_due_amount() % 10 == 0
+    assert all_emis[0].total_due_amount % 10 == 0
 
     assert all_emis[1].due_date == parse_date("2019-03-01").date()
     assert all_emis[1].emi_number == 2
     assert all_emis[1].interest_due == Decimal("243.33")
-    assert all_emis[1].total_due_amount() % 10 == 0
+    assert all_emis[1].total_due_amount % 10 == 0
 
     assert all_emis[-1].due_date == parse_date("2020-01-01").date()
     assert all_emis[-1].emi_number == 12
     assert all_emis[-1].interest_due == Decimal("243.33")
-    assert all_emis[-1].total_due_amount() % 10 == 0
+    assert all_emis[-1].total_due_amount % 10 == 0
