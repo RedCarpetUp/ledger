@@ -153,23 +153,7 @@ class ResetCard(BaseLoan):
             bill=bill,
         )
 
-        # Due to the way code is written, if max amount is not added first then
-        # bill will be treated as closed. I am not sure of the exact reason behind it.
-
-        total_billed_amount = (
-            session.query(func.sum(LoanSchedule.total_due_amount()))
-            .filter(
-                LoanSchedule.loan_id == loan.id,
-                LoanSchedule.bill_id.is_(None),
-                LoanSchedule.payment_status == "UnPaid",
-            )
-            .group_by(LoanSchedule.loan_id)
-            .scalar()
-        )
-
-        assert total_billed_amount >= kwargs["amount"]
-
-        add_max_amount_event(session=session, bill=bill, event=event, amount=total_billed_amount)
+        add_max_amount_event(session=session, bill=bill, event=event, amount=kwargs["amount"])
 
         add_min_to_all_bills(session=session, post_date=kwargs["product_order_date"], user_loan=loan)
         return loan
