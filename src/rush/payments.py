@@ -402,7 +402,7 @@ def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
 
 def create_payment_split(session: Session, event: LedgerTriggerEvent):
     """
-    Create a payment split at ledger level. Has no emi or loan context.
+    Create a payment split at ledger level. Has no emi context.
     Only tells how much principal, interest etc. got settled from x amount of payment.
     """
     split_data = get_payment_split_from_event(session, event)
@@ -412,6 +412,7 @@ def create_payment_split(session: Session, event: LedgerTriggerEvent):
             payment_request_id=event.extra_details["payment_request_id"],
             component=component,
             amount_settled=amount,
+            loan_id=event.loan_id
         )
         new_ps_objects.append(ps)
     session.bulk_save_objects(new_ps_objects)
