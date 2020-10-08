@@ -70,21 +70,20 @@ def update_event_with_dpd(
 
         # Adjust dpd in loan schedule
         first_unpaid_mark = False
-        bill_dpd = 0
-        all_emis = user_loan.get_loan_schedule()
+        bill_dpd = -999
+        all_emis = user_loan.get_loan_schedule(only_unpaid_emis=True)
         for emi in all_emis:
-            if emi.payment_status != "Paid":
-                if not first_unpaid_mark:
-                    first_unpaid_mark = True
-                    # Bill dpd
-                    # Only calculate bill dpd is min is not 0
-                    if bill and bill.get_remaining_min() > 0:
-                        bill_dpd = (event_post_date - emi.due_date).days
-                # Schedule dpd
-                schedule_dpd = (event_post_date - emi.due_date).days
-                # We should only consider the daily dpd event for increment
-                if schedule_dpd >= emi.dpd:
-                    emi.dpd = schedule_dpd
+            if not first_unpaid_mark:
+                first_unpaid_mark = True
+                # Bill dpd
+                # Only calculate bill dpd is min is not 0
+                if bill and bill.get_remaining_min() > 0:
+                    bill_dpd = (event_post_date - emi.due_date).days
+            # Schedule dpd
+            schedule_dpd = (event_post_date - emi.due_date).days
+            # We should only consider the daily dpd event for increment
+            if schedule_dpd >= emi.dpd:
+                emi.dpd = schedule_dpd
 
         new_event = EventDpd(
             bill_id=account_id,
@@ -162,10 +161,12 @@ def update_event_with_dpd(
             continue
 
     # Calculate card level dpd
-    max_dpd = session.query(func.max(EventDpd.dpd).label("max_dpd")).one()
-    user_loan.dpd = max_dpd.max_dpd
-    if not user_loan.ever_dpd or max_dpd.max_dpd > user_loan.ever_dpd:
-        user_loan.ever_dpd = max_dpd.max_dpd
+    unpaid_emis = user_loan.get_loan_schedule(only_unpaid_emis=True)
+    if unpaid_emis:
+        first_unpaid_emi = unpaid_emis[0]
+        user_loan.dpd = first_unpaid_emi.dpd
+        if not user_loan.ever_dpd or first_unpaid_emi.dpd > user_loan.ever_dpd:
+            user_loan.ever_dpd = first_unpaid_emi.dpd
 
     session.flush()
 
@@ -175,17 +176,16 @@ def daily_dpd_update(session, user_loan, post_date):
     loan_level_due_date = None
     event = LedgerTriggerEvent(name="daily_dpd_update", loan_id=user_loan.loan_id, post_date=post_date)
     session.add(event)
-    all_emis = user_loan.get_loan_schedule()
+    all_emis = user_loan.get_loan_schedule(only_unpaid_emis=True)
     for emi in all_emis:
-        if emi.payment_status != "Paid":
-            if not first_unpaid_mark:
-                first_unpaid_mark = True
-                loan_level_due_date = emi.due_date
-            # Schedule dpd
-            dpd = (post_date.date() - emi.due_date).days
-            # We should only consider the daily dpd event for increment
-            if dpd >= emi.dpd:
-                emi.dpd = dpd
+        if not first_unpaid_mark:
+            first_unpaid_mark = True
+            loan_level_due_date = emi.due_date
+        # Schedule dpd
+        dpd = (post_date.date() - emi.due_date).days
+        # We should only consider the daily dpd event for increment
+        if dpd >= emi.dpd:
+            emi.dpd = dpd
 
     unpaid_bills = user_loan.get_unpaid_bills()
     for bill in unpaid_bills:
@@ -203,8 +203,10 @@ def daily_dpd_update(session, user_loan, post_date):
             session.add(new_event)
 
     # Calculate card level dpd
-    max_dpd = session.query(func.max(EventDpd.dpd).label("max_dpd")).one()
-    user_loan.dpd = max_dpd.max_dpd
-    if not user_loan.ever_dpd or max_dpd.max_dpd > user_loan.ever_dpd:
-        user_loan.ever_dpd = max_dpd.max_dpd
+    unpaid_emis = user_loan.get_loan_schedule(only_unpaid_emis=True)
+    if unpaid_emis:
+        first_unpaid_emi = unpaid_emis[0]
+        user_loan.dpd = first_unpaid_emi.dpd
+        if not user_loan.ever_dpd or first_unpaid_emi.dpd > user_loan.ever_dpd:
+            user_loan.ever_dpd = first_unpaid_emi.dpd
     session.flush()
