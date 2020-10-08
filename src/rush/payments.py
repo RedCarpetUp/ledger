@@ -412,7 +412,7 @@ def create_payment_split(session: Session, event: LedgerTriggerEvent):
             payment_request_id=event.extra_details["payment_request_id"],
             component=component,
             amount_settled=amount,
-            loan_id=event.loan_id
+            loan_id=event.loan_id,
         )
         new_ps_objects.append(ps)
     session.bulk_save_objects(new_ps_objects)
