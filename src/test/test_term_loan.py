@@ -112,6 +112,7 @@ def test_calculate_downpayment_amount() -> None:
     assert downpayment_amount == Decimal("2910")
 
 
+@pytest.mark.run_these_please
 def test_create_term_loan(session: Session) -> None:
     create_lenders(session=session)
     create_products(session=session)
@@ -130,7 +131,7 @@ def test_create_term_loan(session: Session) -> None:
         session=session,
         user_loan=None,
         payment_amount=_downpayment_amount,
-        payment_date=parse_date("2020-08-01").date(),
+        payment_date=parse_date("2020-08-01"),
         payment_request_id="dummy_downpayment",
         payment_type="downpayment",
         user_product_id=user_product.id,
@@ -232,7 +233,7 @@ def test_create_term_loan_2(session: Session) -> None:
         session=session,
         user_loan=None,
         payment_amount=_downpayment_amount,
-        payment_date=parse_date(loan_creation_data["date_str"]).date(),
+        payment_date=parse_date(loan_creation_data["date_str"]),
         payment_request_id="dummy_downpayment",
         payment_type="downpayment",
         user_product_id=user_product.id,

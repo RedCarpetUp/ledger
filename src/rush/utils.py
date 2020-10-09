@@ -1,3 +1,4 @@
+import math
 from decimal import (
     ROUND_UP,
     Decimal,
@@ -40,6 +41,10 @@ def round_up_decimal_to_nearest(val: Decimal, to_nearest: Decimal = Decimal("10"
         rounded_val = rounded_val - remainder + to_nearest
 
     return rounded_val
+
+
+def round_up_to_ten(val: Decimal) -> Decimal:
+    return Decimal(math.ceil(val / 10) * 10)
 
 
 def get_gst_split_from_amount(

@@ -141,7 +141,7 @@ class ResetCard(BaseLoan):
         # create emis for term loan.
         from rush.loan_schedule.loan_schedule import create_bill_schedule
 
-        bill = cls.bill_class(session=session, loan_data=loan_data)
+        bill = loan.convert_to_bill_class(loan_data)
         loan_data.interest_to_charge = bill.get_interest_to_charge(
             rate_of_interest=loan.rc_rate_of_interest_monthly,
             principal=kwargs["amount"],

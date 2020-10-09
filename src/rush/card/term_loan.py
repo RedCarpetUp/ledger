@@ -33,11 +33,6 @@ class TermLoanBill(BaseBill):
     round_emi_to_nearest: Decimal = Decimal("10")
     add_emi_one_to_downpayment: bool = True
 
-    def __init__(self, session: Session, loan_data: LoanData):
-        self.session = session
-        self.table = loan_data
-        self.__dict__.update(loan_data.__dict__)
-
     @classmethod
     def get_downpayment_amount(cls, product_price: Decimal, downpayment_perc: Decimal) -> Decimal:
         downpayment_amount = product_price * downpayment_perc * Decimal("0.01")
@@ -114,6 +109,9 @@ class TermLoanBill(BaseBill):
 
     def sum_of_atm_transactions(self):
         return Decimal("0")
+
+    def get_downpayment(self, include_first_emi=True) -> Decimal:
+        return super().get_downpayment(include_first_emi)
 
 
 class TermLoan(BaseLoan):
@@ -216,13 +214,14 @@ class TermLoan(BaseLoan):
         # create emis for term loan.
         from rush.loan_schedule.loan_schedule import create_bill_schedule
 
-        bill = cls.bill_class(session=session, loan_data=loan_data)
+        bill = loan.convert_to_bill_class(loan_data)
         loan_data.interest_to_charge = bill.get_interest_to_charge(
             rate_of_interest=loan.rc_rate_of_interest_monthly,
             principal=bill.net_product_price(
                 product_price=kwargs["amount"], downpayment_perc=downpayment_percent
             ),
         )
+        bill.downpayment = actual_downpayment_amount
 
         create_bill_schedule(
             session=session,

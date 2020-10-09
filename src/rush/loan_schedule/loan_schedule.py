@@ -64,18 +64,19 @@ def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
     emi_objects = []
     due_date = bill.table.bill_start_date
     interest_rate = user_loan.rc_rate_of_interest_monthly
-    instalment = bill.get_instalment_amount(user_loan, bill.table.bill_tenure)
+    instalment = bill.get_instalment_amount()
     closing_balance = bill.table.principal
+    downpayment = bill.get_downpayment()
     for emi_number in range(1, bill.table.bill_tenure + 1):
         if user_loan.interest_type == "reducing":
             interest_due = bill.get_interest_to_charge_2(interest_rate, closing_balance)
         else:
-            interest_due = bill.get_interest_to_charge(interest_rate)
+            interest_due = bill.table.interest_to_charge
         principal_due = instalment - interest_due
         due_date_deltas = bill.get_relative_delta_for_emi(
             emi_number=emi_number, amortization_date=user_loan.amortization_date
         )
-        due_date += relativedelta(months=due_date_deltas["months"], day=due_date_deltas["days"])
+        due_date += relativedelta(**due_date_deltas)
         bill_schedule = LoanSchedule(
             loan_id=bill.table.loan_id,
             bill_id=bill.table.id,
@@ -86,6 +87,8 @@ def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
             total_closing_balance=round(closing_balance, 2),
         )
         closing_balance -= principal_due
+        if emi_number == 1 and downpayment:  # add downpayment in first emi
+            bill_schedule.principal_due = downpayment - bill_schedule.interest_due
         emi_objects.append(bill_schedule)
     session.bulk_save_objects(emi_objects)
     group_bills(user_loan)

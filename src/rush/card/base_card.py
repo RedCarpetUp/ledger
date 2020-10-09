@@ -31,10 +31,10 @@ from rush.models import (
     UserCard,
 )
 from rush.utils import (
-    get_current_ist_time,
     get_reducing_emi,
     mul,
     round_up_decimal_to_nearest,
+    round_up_to_ten,
 )
 
 
@@ -42,10 +42,12 @@ class BaseBill:
     session: Session = None
     table: LoanData = None
     round_emi_to_nearest: Decimal = Decimal("1")
+    user_loan: "BaseLoan"
 
-    def __init__(self, session: Session, loan_data: LoanData):
+    def __init__(self, session: Session, user_loan: "BaseLoan", loan_data: LoanData):
         self.session = session
         self.table = loan_data
+        self.user_loan = user_loan
         self.__dict__.update(loan_data.__dict__)
 
     def get_interest_to_charge(
@@ -87,23 +89,27 @@ class BaseBill:
         user_loan = self.session.query(Loan).filter_by(id=self.table.loan_id).one_or_none()
         tenure = user_loan.min_tenure or self.table.bill_tenure
 
-        min_scheduled = self.get_instalment_amount(user_loan, tenure)
+        min_scheduled = self.get_instalment_amount(tenure)
         if user_loan.min_multiplier:
             min_scheduled = min_scheduled * user_loan.min_multiplier
         if to_round:
             min_scheduled = round(min_scheduled, 2)
         return min_scheduled
 
-    def get_instalment_amount(self, user_loan: "BaseLoan", tenure: Decimal):
-        if user_loan.interest_type == "reducing":
+    def get_instalment_amount(self, tenure: Optional[Decimal] = None):
+        if not tenure:
+            tenure = self.table.bill_tenure
+        downpayment = self.get_downpayment(include_first_emi=False)
+        principal = self.table.principal - downpayment
+        if self.user_loan.interest_type == "reducing":
             instalment = get_reducing_emi(
-                self.table.principal,
-                user_loan.rc_rate_of_interest_monthly,
+                principal,
+                self.user_loan.rc_rate_of_interest_monthly,
                 tenure,
                 to_round=False,
             )
         else:
-            principal_instalment = self.table.principal / tenure
+            principal_instalment = principal / tenure
             instalment = principal_instalment + self.table.interest_to_charge
         return instalment
 
@@ -155,7 +161,19 @@ class BaseBill:
         return atm_transactions_sum or 0
 
     def get_relative_delta_for_emi(self, emi_number: int, amortization_date: Date) -> Dict[str, int]:
-        return {"months": 1, "days": 15}
+        return {"months": 1, "day": 15}
+
+    def get_downpayment(self, include_first_emi=False) -> Decimal:
+        non_rounded_downpayment = self.table.principal * (
+            self.user_loan.downpayment_percent / Decimal(100)
+        )
+        rounded_downpayment = round_up_to_ten(non_rounded_downpayment)
+
+        if not include_first_emi or rounded_downpayment == 0:
+            return rounded_downpayment
+        first_emi = self.get_instalment_amount()
+        rounded_downpayment = round_up_to_ten(rounded_downpayment + first_emi)
+        return rounded_downpayment
 
 
 B = TypeVar("B", bound=BaseBill)
@@ -250,7 +268,7 @@ class BaseLoan(Loan):
     def convert_to_bill_class(self, bill: LoanData):
         if not bill:
             return None
-        return self.bill_class(self.session, bill)
+        return self.bill_class(session=self.session, user_loan=self, loan_data=bill)
 
     def create_bill(
         self,

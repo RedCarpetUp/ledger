@@ -131,7 +131,7 @@ def test_create_term_loan(session: Session) -> None:
         session=session,
         user_loan=None,
         payment_amount=_downpayment_amount,
-        payment_date=parse_date("2020-08-01").date(),
+        payment_date=parse_date("2020-08-01"),
         payment_request_id="dummy_downpayment",
         payment_type="downpayment",
         user_product_id=user_product.id,
