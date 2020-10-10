@@ -12,7 +12,6 @@ from sqlalchemy import (
     DECIMAL,
     TIMESTAMP,
     Boolean,
-    CheckConstraint,
     Column,
     Date,
     ForeignKey,

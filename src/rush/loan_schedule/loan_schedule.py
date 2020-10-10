@@ -13,6 +13,7 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
+from rush.loan_schedule.calculations import get_interest_to_charge
 from rush.models import (
     LedgerTriggerEvent,
     LoanSchedule,
@@ -66,12 +67,12 @@ def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
     interest_rate = user_loan.rc_rate_of_interest_monthly
     instalment = bill.get_instalment_amount()
     closing_balance = bill.table.principal
-    downpayment = bill.get_downpayment()
+    downpayment = bill.get_down_payment()
     for emi_number in range(1, bill.table.bill_tenure + 1):
         if user_loan.interest_type == "reducing":
-            interest_due = bill.get_interest_to_charge_2(interest_rate, closing_balance)
+            interest_due = get_interest_to_charge(closing_balance, interest_rate, to_round=False)
         else:
-            interest_due = bill.table.interest_to_charge
+            interest_due = bill.get_interest_to_charge()
         principal_due = instalment - interest_due
         due_date_deltas = bill.get_relative_delta_for_emi(
             emi_number=emi_number, amortization_date=user_loan.amortization_date

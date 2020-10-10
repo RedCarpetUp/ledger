@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+import pytest
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
@@ -11,6 +12,7 @@ from rush.card import (
 from rush.card.term_loan2 import TermLoan2
 from rush.card.utils import create_user_product_mapping
 from rush.ledger_utils import get_account_balance_from_str
+from rush.loan_schedule.calculations import get_down_payment
 from rush.models import (
     LedgerTriggerEvent,
     Lenders,
@@ -106,13 +108,6 @@ def test_product_amortization_6() -> None:
     assert amortization_date == parse_date("2020-08-26").date()
 
 
-def test_calculate_downpayment_amount() -> None:
-    downpayment_amount = TermLoan2.bill_class.calculate_downpayment_amount_payable(
-        product_price=Decimal(10000), tenure=12, downpayment_perc=Decimal("20")
-    )
-    assert downpayment_amount == Decimal("2910")
-
-
 def test_create_term_loan(session: Session) -> None:
     create_lenders(session=session)
     create_products(session=session)
@@ -122,8 +117,13 @@ def test_create_term_loan(session: Session) -> None:
 
     loan_creation_data = {"date_str": "2020-08-01", "user_product_id": user_product.id}
 
-    _downpayment_amount = TermLoan2.bill_class.calculate_downpayment_amount_payable(
-        product_price=Decimal("10000"), tenure=12, downpayment_perc=Decimal("20")
+    _downpayment_amount = get_down_payment(
+        principal=Decimal("10000"),
+        down_payment_percentage=Decimal("20"),
+        interest_rate_monthly=Decimal(3),
+        interest_type="flat",
+        number_of_instalments=12,
+        include_first_emi_amount=True,
     )
 
     # downpayment
@@ -221,8 +221,13 @@ def test_create_term_loan_2(session: Session) -> None:
 
     loan_creation_data = {"date_str": "2018-12-22", "user_product_id": user_product.id}
 
-    _downpayment_amount = TermLoan2.bill_class.calculate_downpayment_amount_payable(
-        product_price=Decimal("10000"), tenure=12, downpayment_perc=Decimal("20")
+    _downpayment_amount = get_down_payment(
+        principal=Decimal("10000"),
+        down_payment_percentage=Decimal("20"),
+        interest_rate_monthly=Decimal(3),
+        interest_type="flat",
+        number_of_instalments=12,
+        include_first_emi_amount=True,
     )
 
     # downpayment

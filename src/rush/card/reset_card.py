@@ -1,12 +1,8 @@
 from decimal import Decimal
-from typing import (
-    Dict,
-    Type,
-)
+from typing import Type
 
 from dateutil.relativedelta import relativedelta
 from pendulum import Date
-from sqlalchemy import func
 from sqlalchemy.orm.session import Session
 
 from rush.card.base_card import (
@@ -24,19 +20,12 @@ from rush.models import (
     LedgerTriggerEvent,
     Loan,
     LoanData,
-    LoanSchedule,
     ProductFee,
 )
 
 
 class ResetBill(TermLoanBill):
-    round_emi_to_nearest: Decimal = Decimal("10")
-    add_emi_one_to_downpayment: bool = False
-
-    def get_relative_delta_for_emi(self, emi_number: int, amortization_date: Date) -> Dict[str, int]:
-        if emi_number == 1:
-            return {"months": 0, "days": 0}
-        return {"months": 1, "days": 0}
+    round_emi_to = "one"
 
 
 class ResetCard(BaseLoan):
@@ -90,12 +79,6 @@ class ResetCard(BaseLoan):
             tenure=kwargs["tenure"],
         )
 
-        principal_instalment = cls.bill_class.calculate_principal_instalment(
-            product_price=kwargs["amount"],
-            tenure=kwargs["tenure"],
-            downpayment_perc=loan.downpayment_percent,
-        )
-
         loan_data = LoanData(
             user_id=kwargs["user_id"],
             loan_id=kwargs["loan_id"],
@@ -105,7 +88,6 @@ class ResetCard(BaseLoan):
             is_generated=True,
             bill_tenure=kwargs["tenure"],
             principal=kwargs["amount"],
-            principal_instalment=principal_instalment,
         )
         session.add(loan_data)
         session.flush()
@@ -142,10 +124,6 @@ class ResetCard(BaseLoan):
         from rush.loan_schedule.loan_schedule import create_bill_schedule
 
         bill = loan.convert_to_bill_class(loan_data)
-        loan_data.interest_to_charge = bill.get_interest_to_charge(
-            rate_of_interest=loan.rc_rate_of_interest_monthly,
-            principal=kwargs["amount"],
-        )
 
         create_bill_schedule(
             session=session,

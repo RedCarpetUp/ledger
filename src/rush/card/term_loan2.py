@@ -1,4 +1,3 @@
-from decimal import Decimal
 from typing import (
     Dict,
     Tuple,
@@ -16,9 +15,6 @@ from rush.card.term_loan import (
 
 
 class TermLoan2Bill(TermLoanBill):
-    round_emi_to_nearest: Decimal = Decimal("10")
-    add_emi_one_to_downpayment: bool = True
-
     @staticmethod
     def calculate_bill_start_and_close_date(first_bill_date: Date, tenure: int) -> Tuple[Date]:
         bill_start_date = first_bill_date

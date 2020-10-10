@@ -6,7 +6,6 @@ from decimal import (
 from typing import (
     Any,
     Dict,
-    Optional,
     Union,
 )
 
@@ -26,13 +25,20 @@ def div(x: Decimal, y: Union[Decimal, int, str], fp: Decimal = Decimal(".01")) -
     return (x / y).quantize(fp)
 
 
-def round_up_decimal(val: Decimal, fp: Decimal = Decimal("1.")) -> Decimal:
-    rounded_up = val.quantize(fp, rounding=ROUND_UP)
+def round_up(to: str, val: Decimal) -> Decimal:
+    if to == "one":
+        return round_up_to_one(val)
+    elif to == "ten":
+        return round_up_to_ten(val)
+
+
+def round_up_to_one(val: Decimal) -> Decimal:
+    rounded_up = val.quantize(Decimal("1."), rounding=ROUND_UP)
     return rounded_up
 
 
 def round_up_decimal_to_nearest(val: Decimal, to_nearest: Decimal = Decimal("10")) -> Decimal:
-    rounded_val = round_up_decimal(val)
+    rounded_val = round_up_to_one(val)
     if to_nearest == Decimal("1"):
         return rounded_val
 
@@ -71,18 +77,3 @@ def add_gst_split_to_amount(
     d = {"net_amount": net_amount.quantize(Decimal(".01")), "sgst": sgst, "cgst": cgst, "igst": igst}
     d["gross_amount"] = d["net_amount"] + d["sgst"] + d["cgst"] + d["igst"]
     return d
-
-
-def get_reducing_emi(
-    principal: Decimal, interest_rate_monthly: Decimal, tenure: Decimal, to_round: Optional[bool] = False
-) -> Decimal:
-    emi = (
-        principal
-        * interest_rate_monthly
-        / 100
-        * pow((1 + (interest_rate_monthly / 100)), tenure)
-        / (pow((1 + (interest_rate_monthly / 100)), tenure) - 1)
-    )
-    if to_round:
-        emi = round(emi, 2)
-    return emi
