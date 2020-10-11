@@ -543,7 +543,7 @@ class PaymentSplit(AuditMixin):
     payment_request_id = Column(String(), nullable=False, index=True)
     component = Column(String(50), nullable=False)
     amount_settled = Column(Numeric, nullable=False)
-    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
+    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=True)
 
 
 class LoanMoratorium(AuditMixin):
