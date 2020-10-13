@@ -16,10 +16,9 @@ def get_down_payment(
     include_first_emi_amount: Optional[bool] = False,
 ):
     down_payment_by_percentage = principal * (down_payment_percentage / 100)
-    rounded_downpayment = round_up_to_ten(down_payment_by_percentage)
 
-    if not include_first_emi_amount or rounded_downpayment == 0:
-        return down_payment_by_percentage
+    if not include_first_emi_amount or down_payment_by_percentage == 0:
+        return round_up_to_ten(down_payment_by_percentage)
 
     first_emi = get_monthly_instalment(
         principal=principal,
