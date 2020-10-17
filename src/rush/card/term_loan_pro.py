@@ -12,7 +12,7 @@ from rush.card.term_loan import (
 
 
 class TermLoanProBill(TermLoanBill):
-    def get_down_payment(self, include_first_emi=False) -> Decimal:
+    def get_down_payment(self, include_first_emi: bool = False) -> Decimal:
         return super().get_down_payment(include_first_emi)
 
 

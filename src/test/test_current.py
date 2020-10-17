@@ -14,7 +14,10 @@ from rush.accrue_financial_charges import (
     accrue_late_charges,
 )
 from rush.card import (
+    RubyCard,
+    ZetaCard,
     create_user_product,
+    get_product_class,
     get_user_product,
 )
 from rush.card.base_card import (
@@ -3216,3 +3219,11 @@ def test_one_rupee_leniency(session: Session) -> None:
     assert pm[0].amount_settled == Decimal("0.5")
     assert pm[1].emi_id == emis[1].id
     assert pm[1].amount_settled == Decimal("9.5")
+
+
+def test_get_product_class() -> None:
+    ruby_klass = get_product_class(card_type="ruby")
+    assert ruby_klass is RubyCard
+
+    zeta_klass = get_product_class(card_type="zeta_card")
+    assert zeta_klass is ZetaCard

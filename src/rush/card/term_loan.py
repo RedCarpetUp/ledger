@@ -53,7 +53,7 @@ class TermLoanBill(BaseBill):
     def sum_of_atm_transactions(self):
         return Decimal("0")
 
-    def get_down_payment(self, include_first_emi=True) -> Decimal:
+    def get_down_payment(self, include_first_emi: bool = True) -> Decimal:
         return super().get_down_payment(include_first_emi)
 
 
