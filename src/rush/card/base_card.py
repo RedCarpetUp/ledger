@@ -8,6 +8,7 @@ from typing import (
     TypeVar,
 )
 
+from dateutil.relativedelta import relativedelta
 from pendulum import (
     Date,
     DateTime,
@@ -149,6 +150,21 @@ class BaseBill:
             include_first_emi_amount=include_first_emi,
         )
         return down_payment
+
+    def get_interest_to_accrue(self, for_date: date):
+        # Get the previous emi's interest for cards.
+        interest_to_accrue = (
+            self.session.query(LoanSchedule.interest_due)
+            .filter(
+                LoanSchedule.bill_id == self.table.id,
+                LoanSchedule.due_date < for_date,
+                LoanSchedule.due_date > for_date - relativedelta(months=1),  # Should be within a month
+            )
+            .order_by(LoanSchedule.due_date)
+            .limit(1)
+            .scalar()
+        )
+        return interest_to_accrue
 
 
 B = TypeVar("B", bound=BaseBill)
