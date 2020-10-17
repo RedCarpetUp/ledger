@@ -16,7 +16,6 @@ from rush.models import (
     LedgerTriggerEvent,
     LoanSchedule,
 )
-from rush.utils import div
 
 
 def extend_bill_schedule(user_loan: BaseLoan, bill: BaseBill, from_date: date, new_tenure: int):
@@ -27,9 +26,7 @@ def extend_bill_schedule(user_loan: BaseLoan, bill: BaseBill, from_date: date, n
         post_date=from_date,
         extra_details={"bill_id": bill.table.id, "new_tenure": new_tenure},
     )
-    new_instalment = div(bill.table.principal, new_tenure)
     # Update bill variables.
-    bill.table.principal_instalment = new_instalment  # This is required for interest calc.
     bill.table.bill_tenure = new_tenure
 
     future_bill_emis = (
@@ -65,7 +62,7 @@ def extend_bill_schedule(user_loan: BaseLoan, bill: BaseBill, from_date: date, n
     for bill_emi in future_bill_emis:
         remaining_tenure = new_tenure - bill_emi.emi_number + 1  # plus one to consider current emi
         bill_emi.principal_due = round(non_rounded_bill_instalment, 2)
-        bill_emi.interest_due = bill.get_interest_to_charge(user_loan.rc_rate_of_interest_monthly)
+        bill_emi.interest_due = round(bill.get_interest_to_charge(), 2)
         bill_emi.total_closing_balance = round(non_rounded_bill_instalment * remaining_tenure, 2)
 
     bill.session.bulk_save_objects(newly_created_emis)

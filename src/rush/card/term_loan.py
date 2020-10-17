@@ -21,72 +21,10 @@ from rush.models import (
     Loan,
     LoanData,
 )
-from rush.utils import (
-    div,
-    round_up_decimal_to_nearest,
-)
 
 
 class TermLoanBill(BaseBill):
-    session: Session = None
-    table: LoanData = None
-    round_emi_to_nearest: Decimal = Decimal("10")
-    add_emi_one_to_downpayment: bool = True
-
-    def __init__(self, session: Session, loan_data: LoanData):
-        self.session = session
-        self.table = loan_data
-        self.__dict__.update(loan_data.__dict__)
-
-    @classmethod
-    def get_downpayment_amount(cls, product_price: Decimal, downpayment_perc: Decimal) -> Decimal:
-        downpayment_amount = product_price * downpayment_perc * Decimal("0.01")
-        downpayment_amount = round_up_decimal_to_nearest(
-            downpayment_amount, to_nearest=cls.round_emi_to_nearest
-        )
-
-        return downpayment_amount
-
-    @classmethod
-    def calculate_downpayment_amount_payable(
-        cls,
-        product_price: Decimal,
-        downpayment_perc: Decimal,
-        tenure: int,
-        interest_rate: Decimal = Decimal("3"),
-    ) -> Decimal:
-        downpayment_amount = cls.get_downpayment_amount(
-            product_price=product_price, downpayment_perc=downpayment_perc
-        )
-
-        if cls.add_emi_one_to_downpayment:
-            chargeable_principal = product_price - downpayment_amount
-            chargeable_principal *= 1 + (Decimal(0.01) * interest_rate * tenure)
-            monthly_emi = chargeable_principal / Decimal(tenure)
-            monthly_emi = round_up_decimal_to_nearest(monthly_emi, to_nearest=cls.round_emi_to_nearest)
-
-            downpayment_amount += monthly_emi
-
-        return downpayment_amount
-
-    @classmethod
-    def calculate_principal_instalment(
-        cls, product_price: Decimal, downpayment_perc: Decimal, tenure: int
-    ) -> Decimal:
-        amount = cls.net_product_price(product_price=product_price, downpayment_perc=downpayment_perc)
-        principal_instalment = div(amount, tenure)
-
-        return principal_instalment
-
-    @classmethod
-    def net_product_price(cls, product_price: Decimal, downpayment_perc: Decimal) -> Decimal:
-        downpayment_amount = cls.get_downpayment_amount(
-            product_price=product_price,
-            downpayment_perc=downpayment_perc,
-        )
-
-        amount = product_price - downpayment_amount
-        return amount
+    round_emi_to = "ten"
 
     @staticmethod
     def calculate_bill_start_and_close_date(first_bill_date: Date, tenure: int) -> Tuple[Date]:
@@ -114,6 +52,9 @@ class TermLoanBill(BaseBill):
 
     def sum_of_atm_transactions(self):
         return Decimal("0")
+
+    def get_down_payment(self, include_first_emi: bool = True) -> Decimal:
+        return super().get_down_payment(include_first_emi)
 
 
 class TermLoan(BaseLoan):
@@ -143,17 +84,6 @@ class TermLoan(BaseLoan):
             .scalar()
         )
 
-        downpayment_percent = kwargs["downpayment_percent"]
-
-        actual_downpayment_amount = cls.bill_class.calculate_downpayment_amount_payable(
-            product_price=kwargs["amount"],
-            tenure=kwargs["tenure"],
-            downpayment_perc=downpayment_percent,
-            interest_rate=Decimal(3),
-        )
-
-        assert total_downpayment == actual_downpayment_amount
-
         loan = cls(
             session=session,
             user_id=kwargs["user_id"],
@@ -174,12 +104,6 @@ class TermLoan(BaseLoan):
             tenure=kwargs["tenure"],
         )
 
-        principal_instalment = cls.bill_class.calculate_principal_instalment(
-            product_price=kwargs["amount"],
-            tenure=kwargs["tenure"],
-            downpayment_perc=loan.downpayment_percent,
-        )
-
         loan_data = LoanData(
             user_id=kwargs["user_id"],
             loan_id=kwargs["loan_id"],
@@ -189,10 +113,15 @@ class TermLoan(BaseLoan):
             is_generated=True,
             bill_tenure=kwargs["tenure"],
             principal=kwargs["amount"],
-            principal_instalment=principal_instalment,
         )
         session.add(loan_data)
         session.flush()
+
+        bill = loan.convert_to_bill_class(loan_data)
+
+        actual_downpayment_amount = bill.get_down_payment()
+
+        assert total_downpayment == actual_downpayment_amount
 
         event = LedgerTriggerEvent(
             performed_by=kwargs["user_id"],
@@ -215,14 +144,6 @@ class TermLoan(BaseLoan):
 
         # create emis for term loan.
         from rush.loan_schedule.loan_schedule import create_bill_schedule
-
-        bill = cls.bill_class(session=session, loan_data=loan_data)
-        loan_data.interest_to_charge = bill.get_interest_to_charge(
-            rate_of_interest=loan.rc_rate_of_interest_monthly,
-            principal=bill.net_product_price(
-                product_price=kwargs["amount"], downpayment_perc=downpayment_percent
-            ),
-        )
 
         create_bill_schedule(
             session=session,

@@ -19,7 +19,6 @@ from rush.loan_schedule.loan_schedule import create_bill_schedule
 from rush.min_payment import add_min_to_all_bills
 from rush.models import LedgerTriggerEvent
 from rush.utils import (
-    div,
     get_current_ist_time,
     mul,
 )
@@ -93,14 +92,9 @@ def bill_generate(
         session=session, book_string=f"{bill.id}/bill/principal_receivable/a"
     )
     lt.amount = billed_amount  # Set the amount for event
-    principal_instalment = div(billed_amount, bill.table.bill_tenure)
 
     # Update the bill row here.
     bill.table.principal = billed_amount
-    bill.table.principal_instalment = principal_instalment
-    bill.table.interest_to_charge = bill.get_interest_to_charge(
-        rate_of_interest=user_loan.rc_rate_of_interest_monthly
-    )
 
     # Add to max amount to pay account.
     add_max_amount_event(session, bill, lt, billed_amount)

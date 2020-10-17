@@ -12,7 +12,6 @@ from sqlalchemy import (
     DECIMAL,
     TIMESTAMP,
     Boolean,
-    CheckConstraint,
     Column,
     Date,
     ForeignKey,
@@ -259,7 +258,7 @@ class Loan(AuditMixin):
     min_multiplier = Column(Numeric, nullable=True)
     dpd = Column(Integer, nullable=True)
     ever_dpd = Column(Integer, nullable=True)
-    downpayment_percent = Column(Numeric, nullable=True)
+    downpayment_percent = Column(Numeric, nullable=True, default=Decimal(0))
 
     __mapper_args__ = {
         "polymorphic_identity": "loan",

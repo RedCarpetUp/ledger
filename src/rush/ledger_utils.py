@@ -1,6 +1,5 @@
 from decimal import Decimal
 from typing import (
-    Dict,
     Optional,
     Tuple,
 )
@@ -14,7 +13,6 @@ from sqlalchemy import (
 from sqlalchemy.orm import Session
 
 from rush.models import (
-    BillFee,
     BookAccount,
     LedgerEntry,
     LoanData,

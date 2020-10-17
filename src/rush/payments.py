@@ -15,7 +15,6 @@ from rush.ledger_events import (
     _adjust_bill,
     _adjust_for_downpayment,
     _adjust_for_prepayment,
-    adjust_for_revenue,
     adjust_non_bill_payments,
 )
 from rush.ledger_utils import (
@@ -25,7 +24,6 @@ from rush.ledger_utils import (
 from rush.loan_schedule.loan_schedule import slide_payment_to_emis
 from rush.models import (
     BookAccount,
-    Fee,
     LedgerEntry,
     LedgerTriggerEvent,
     PaymentSplit,

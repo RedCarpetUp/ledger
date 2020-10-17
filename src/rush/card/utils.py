@@ -228,28 +228,6 @@ def add_instrument_to_loan(
         return add_card_to_loan(session=session, loan=loan, card_info=instrument_info)
 
 
-def get_downpayment_amount(
-    product_type: str,
-    product_price: Decimal,
-    tenure: int,
-    downpayment_perc: Decimal,
-    interest_rate: Optional[Decimal] = None,
-) -> Decimal:
-    from rush.card import get_product_class
-
-    request_data = {
-        "product_price": product_price,
-        "tenure": tenure,
-        "downpayment_perc": downpayment_perc,
-    }
-    if interest_rate:
-        request_data["interest_rate"] = interest_rate
-
-    return get_product_class(card_type=product_type).bill_class.calculate_downpayment_amount_payable(
-        **request_data
-    )
-
-
 def get_daily_spend(
     session: Session, loan: Loan, date_to_check_against: Optional[Date] = None
 ) -> Decimal:

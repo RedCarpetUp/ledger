@@ -1,10 +1,7 @@
-from datetime import timedelta
 from decimal import Decimal
-from typing import Optional
 
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
-from pendulum.constants import USECS_PER_SEC
 from sqlalchemy.orm import Session
 
 from rush.card.base_card import (

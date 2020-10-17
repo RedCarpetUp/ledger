@@ -12,6 +12,6 @@ class RubyProBill(BaseBill):
 
 
 class RubyProCard(BaseLoan):
-    bill_class: Type[B] = RubyBill
+    bill_class: Type[B] = RubyProBill
 
     __mapper_args__ = {"polymorphic_identity": "rubypro"}

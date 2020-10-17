@@ -1,13 +1,9 @@
 from decimal import Decimal
 
-from pendulum import (
-    Date,
-    DateTime,
-)
+from pendulum import Date
 from sqlalchemy.orm.session import Session
 
 from rush.ledger_events import (
-    get_account_balance_from_str,
     lender_disbursal_event,
     lender_interest_incur_event,
     m2p_transfer_event,
