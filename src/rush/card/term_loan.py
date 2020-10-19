@@ -6,7 +6,10 @@ from typing import (
 )
 
 from dateutil.relativedelta import relativedelta
-from pendulum import Date
+from pendulum import (
+    Date,
+    date,
+)
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -20,6 +23,7 @@ from rush.models import (
     LedgerTriggerEvent,
     Loan,
     LoanData,
+    LoanSchedule,
 )
 
 
@@ -55,6 +59,20 @@ class TermLoanBill(BaseBill):
 
     def get_down_payment(self, include_first_emi: bool = True) -> Decimal:
         return super().get_down_payment(include_first_emi)
+
+    def get_interest_to_accrue(self, for_date: date):
+        # Get the next emi's interest.
+        interest_to_accrue = (
+            self.session.query(LoanSchedule.interest_due)
+            .filter(
+                LoanSchedule.bill_id == self.table.id,
+                LoanSchedule.due_date > for_date,
+            )
+            .order_by(LoanSchedule.due_date)
+            .limit(1)
+            .scalar()
+        )
+        return interest_to_accrue
 
 
 class TermLoan(BaseLoan):
