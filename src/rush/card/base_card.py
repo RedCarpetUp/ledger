@@ -69,18 +69,20 @@ class BaseBill:
             return Decimal(0)
         tenure = self.user_loan.min_tenure or self.table.bill_tenure
 
-        min_scheduled = self.get_instalment_amount(tenure)
+        min_scheduled = self.get_instalment_amount(tenure=tenure)
         if self.user_loan.min_multiplier:
             min_scheduled = min_scheduled * self.user_loan.min_multiplier
         if to_round:
             min_scheduled = round(min_scheduled, 2)
         return min_scheduled
 
-    def get_instalment_amount(self, tenure: Optional[int] = None):
+    def get_instalment_amount(self, principal: Optional[Decimal] = None, tenure: Optional[int] = None):
         if not tenure:
             tenure = self.table.bill_tenure
+        if not principal:
+            principal = self.table.principal
         instalment = get_monthly_instalment(
-            principal=self.table.principal,
+            principal=principal,
             down_payment_percentage=self.user_loan.downpayment_percent,
             interest_type=self.user_loan.interest_type,
             interest_rate_monthly=self.user_loan.rc_rate_of_interest_monthly,
