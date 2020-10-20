@@ -3023,6 +3023,105 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
     assert emis[18].total_closing_balance == Decimal("3.02")
 
 
+def test_reducing_interest_with_extension(session: Session) -> None:
+    test_lenders(session)
+    card_db_updates(session)
+
+    a = User(
+        id=1836540,
+        performed_by=123,
+    )
+    session.add(a)
+    session.flush()
+
+    # assign card
+    user_loan = create_user_product(
+        session=session,
+        card_type="ruby",
+        user_id=a.id,
+        # 16th March actual
+        card_activation_date=parse_date("2020-03-01").date(),
+        lender_id=62311,
+        interest_type="reducing",
+    )
+
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-03-19 21:33:53"),
+        amount=Decimal(10),
+        description="TRUEBALANCE IO         GURGAON       IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
+    )
+
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-03-24 14:01:35"),
+        amount=Decimal(100),
+        description="PAY*TRUEBALANCE IO     GURGAON       IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
+    )
+
+    uc = get_user_product(session, a.id)
+    bill_march = bill_generate(uc)
+
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-04-03 17:41:43"),
+        amount=Decimal(4),
+        description="TRUEBALANCE IO         GURGAON       IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
+    )
+
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-04-12 22:02:47"),
+        amount=Decimal(52),
+        description="PAYU PAYMENTS PVT LTD  0001243054000 IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
+    )
+
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(session, bill_march.table.bill_due_date + relativedelta(days=1), uc)
+
+    bill_april = bill_generate(uc)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(session, bill_april.table.bill_due_date + relativedelta(days=1), uc)
+
+    # Extend tenure to 18 months
+    extend_schedule(uc, 18, parse_date("2020-05-22"))
+
+    emis = uc.get_loan_schedule()
+    assert emis[0].total_due_amount == Decimal("11.05")
+    assert emis[0].principal_due == Decimal("7.75")
+    assert emis[0].interest_due == Decimal("3.30")
+    assert emis[0].emi_number == 1
+    assert emis[0].total_closing_balance == Decimal(110)
+    assert emis[1].total_due_amount == Decimal("16.68")
+    assert emis[1].principal_due == Decimal("11.93")
+    assert emis[1].interest_due == Decimal("4.75")
+    assert emis[1].emi_number == 2
+    assert emis[1].total_closing_balance == Decimal("158.25")
+    assert emis[2].total_due_amount == Decimal("11.46")
+    assert emis[2].principal_due == Decimal("7.07")
+    assert emis[2].interest_due == Decimal("4.39")
+    assert emis[2].emi_number == 3
+    assert emis[2].total_closing_balance == Decimal("146.32")
+    assert emis[18].total_due_amount == Decimal("3.96")
+    assert emis[18].principal_due == Decimal("3.84")
+    assert emis[18].interest_due == Decimal("0.12")
+    # First cycle 18 emis, next bill 19 emis
+    assert emis[18].emi_number == 19
+    assert emis[18].total_closing_balance == Decimal("3.84")
+
+
 def test_intermediate_bill_generation(session: Session) -> None:
     test_card_swipe(session)
     user_loan = get_user_product(session, 2)
