@@ -30,7 +30,10 @@ from rush.card.utils import (
     get_weekly_spend,
 )
 from rush.create_bill import bill_generate
-from rush.create_card_swipe import create_card_swipe
+from rush.create_card_swipe import (
+    create_card_swipe,
+    reverse_card_swipe,
+)
 from rush.create_emi import (
     daily_dpd_update,
     update_event_with_dpd,
@@ -170,7 +173,7 @@ def test_m2p_transfer(session: Session) -> None:
     # assert lender_pool_balance == Decimal(50000)
 
 
-def test_card_swipe(session: Session) -> None:
+def test_card_swipe_and_reversal(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
     uc = create_user_product(
@@ -214,6 +217,29 @@ def test_card_swipe(session: Session) -> None:
 
     _, lender_payable = get_account_balance_from_str(session, f"{uc.loan_id}/loan/lender_payable/l")
     assert lender_payable == 900
+
+    resp = reverse_card_swipe(session, uc, swipe2, parse_date("2020-05-02 13:22:11"))
+    assert resp["result"] == "success"
+
+    _, unbilled_balance = get_account_balance_from_str(session, f"{bill_id}/bill/unbilled/a")
+    assert unbilled_balance == 700
+    # remaining card balance should be -900 because we've not loaded it yet and it's going in negative.
+    _, card_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/available_limit/l")
+    assert card_balance == -700
+
+    _, lender_payable = get_account_balance_from_str(session, f"{uc.loan_id}/loan/lender_payable/l")
+    assert lender_payable == 700
+
+    swipe3 = create_card_swipe(
+        session=session,
+        user_loan=uc,
+        txn_time=parse_date("2020-05-02 17:22:11"),
+        amount=Decimal(200),
+        description="Flipkart.com",
+        txn_ref_no="dummy_txn_ref_no_2",
+        trace_no="123452",
+    )
+    swipe3 = swipe3["data"]
 
 
 def test_closing_bill(session: Session) -> None:
@@ -3123,7 +3149,7 @@ def test_reducing_interest_with_extension(session: Session) -> None:
 
 
 def test_intermediate_bill_generation(session: Session) -> None:
-    test_card_swipe(session)
+    test_card_swipe_and_reversal(session)
     user_loan = get_user_product(session, 2)
     bill_1 = bill_generate(user_loan)
 

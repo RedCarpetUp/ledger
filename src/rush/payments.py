@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 from rush.anomaly_detection import run_anomaly
 from rush.card import BaseLoan
 from rush.card.base_card import BaseBill
-from rush.create_card_swipe import refund_card_swipe
 from rush.create_emi import update_event_with_dpd
 from rush.ledger_events import (
     _adjust_bill,
@@ -94,13 +93,8 @@ def refund_payment(
     user_loan: BaseLoan,
     payment_amount: Decimal,
     payment_date: DateTime,
-    payment_request_id: Optional[str] = None,
-    trace_no: Optional[str] = None,
-    txn_ref_no: Optional[str] = None,
+    payment_request_id: str,
 ) -> None:
-
-    assert payment_request_id is not None or (trace_no is not None and txn_ref_no is not None)
-
     lt = LedgerTriggerEvent(
         name="transaction_refund",
         loan_id=user_loan.loan_id,
@@ -108,15 +102,10 @@ def refund_payment(
         post_date=payment_date,
         extra_details={
             "payment_request_id": payment_request_id,
-            "trace_no": trace_no,
-            "txn_ref_no": txn_ref_no,
         },
     )
     session.add(lt)
     session.flush()
-
-    if trace_no and txn_ref_no:
-        refund_card_swipe(session=session, loan=user_loan, txn_ref_no=txn_ref_no, trace_no=trace_no)
 
     # Checking if bill is generated or not. if not then reduce from unbilled else treat as payment.
     transaction_refund_event(session=session, user_loan=user_loan, event=lt)
