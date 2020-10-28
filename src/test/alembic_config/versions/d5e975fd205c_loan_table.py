@@ -92,7 +92,7 @@ def upgrade() -> None:
     )
 
     op.create_table(
-        "loan",
+        "v3_loans",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("performed_by", sa.Integer(), nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=True),
@@ -131,7 +131,7 @@ def upgrade() -> None:
         sa.Column("row_status", sa.String(length=20), nullable=False),
         sa.ForeignKeyConstraint(
             ["loan_id"],
-            ["loan.id"],
+            ["v3_loans.id"],
         ),
         sa.ForeignKeyConstraint(
             ["kit_number"],
@@ -186,7 +186,7 @@ def upgrade() -> None:
         sa.Column("bill_tenure", sa.Integer(), nullable=False),
         sa.Column("loan_id", sa.Integer(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
-        sa.ForeignKeyConstraint(["loan_id"], ["loan.id"], name="fk_loan_data_loan_id"),
+        sa.ForeignKeyConstraint(["loan_id"], ["v3_loans.id"], name="fk_loan_data_loan_id"),
         sa.Column("is_generated", sa.Boolean(), nullable=False, server_default="false"),
         sa.Column("principal", sa.Numeric(), nullable=True),
         sa.Column("principal_instalment", sa.Numeric(), nullable=True),
@@ -252,7 +252,7 @@ def upgrade() -> None:
         sa.Column("extra_details", sa.JSON(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["bill_id"], ["loan_data.id"], name="fk_card_emis_bill_id"),
-        sa.ForeignKeyConstraint(["loan_id"], ["loan.id"], name="fk_card_emis_loan_id"),
+        sa.ForeignKeyConstraint(["loan_id"], ["v3_loans.id"], name="fk_card_emis_loan_id"),
     )
 
     op.create_table(
@@ -267,7 +267,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
-        sa.ForeignKeyConstraint(["loan_id"], ["loan.id"], name="fk_ledger_trigger_event_loan_id"),
+        sa.ForeignKeyConstraint(["loan_id"], ["v3_loans.id"], name="fk_ledger_trigger_event_loan_id"),
     )
 
     op.create_table(
@@ -300,7 +300,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
-        sa.ForeignKeyConstraint(["loan_id"], ["loan.id"], name="fk_emi_payment_mapping_loan_id"),
+        sa.ForeignKeyConstraint(["loan_id"], ["v3_loans.id"], name="fk_emi_payment_mapping_loan_id"),
     )
 
     op.create_table(
@@ -313,7 +313,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
-        sa.ForeignKeyConstraint(["loan_id"], ["loan.id"], name="fk_loan_moratorium_loan_id"),
+        sa.ForeignKeyConstraint(["loan_id"], ["v3_loans.id"], name="fk_loan_moratorium_loan_id"),
     )
 
     op.create_table(
@@ -338,7 +338,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
-        sa.ForeignKeyConstraint(["loan_id"], ["loan.id"], name="fk_fee_loan_id"),
+        sa.ForeignKeyConstraint(["loan_id"], ["v3_loans.id"], name="fk_fee_loan_id"),
         sa.ForeignKeyConstraint(["bill_id"], ["loan_data.id"], name="fk_fee_bill_id"),
         sa.ForeignKeyConstraint(["event_id"], ["ledger_trigger_event.id"], name="fk_fee_event_id"),
     )
@@ -358,7 +358,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
-        sa.ForeignKeyConstraint(["loan_id"], ["loan.id"], name="fk_event_dpd_loan_id"),
+        sa.ForeignKeyConstraint(["loan_id"], ["v3_loans.id"], name="fk_event_dpd_loan_id"),
         sa.ForeignKeyConstraint(["event_id"], ["ledger_trigger_event.id"], name="fk_event_dpd_event_id"),
         sa.ForeignKeyConstraint(["bill_id"], ["loan_data.id"], name="fk_event_dpd_bill_id"),
     )

@@ -35,7 +35,7 @@ def upgrade() -> None:
         sa.Column("performed_by", sa.Integer(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["bill_id"], ["loan_data.id"], name="fk_card_emis_bill_id"),
-        sa.ForeignKeyConstraint(["loan_id"], ["loan.id"], name="fk_card_emis_loan_id"),
+        sa.ForeignKeyConstraint(["loan_id"], ["v3_loans.id"], name="fk_card_emis_loan_id"),
     )
 
     op.create_table(

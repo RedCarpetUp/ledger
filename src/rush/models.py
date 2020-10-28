@@ -243,7 +243,7 @@ class UserProduct(AuditMixin):
 
 
 class Loan(AuditMixin):
-    __tablename__ = "loan"
+    __tablename__ = "v3_loans"
     user_id = Column(Integer, ForeignKey(User.id))
     user_product_id = Column(Integer, ForeignKey(UserProduct.id), nullable=True)
     amortization_date = Column(TIMESTAMP, nullable=True)
@@ -261,7 +261,7 @@ class Loan(AuditMixin):
     downpayment_percent = Column(Numeric, nullable=True, default=Decimal(0))
 
     __mapper_args__ = {
-        "polymorphic_identity": "loan",
+        "polymorphic_identity": "v3_loans",
         "polymorphic_on": product_type,
     }
 
