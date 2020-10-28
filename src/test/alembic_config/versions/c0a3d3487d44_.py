@@ -16,7 +16,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("loan", sa.Column("downpayment_percent", sa.Numeric(), nullable=True))
+    op.add_column("v3_loans", sa.Column("downpayment_percent", sa.Numeric(), nullable=True))
 
 
 def downgrade() -> None:

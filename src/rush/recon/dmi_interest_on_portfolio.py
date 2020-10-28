@@ -4,7 +4,7 @@ with recursive all_cards AS (
     id as loan_id, 
     1 + lender_rate_of_interest_annual / 100 / 365 as per_day_interest 
   from 
-    loan
+    v3_loans
 ), 
 lender_payable_balance_change_dates as (
   select 
