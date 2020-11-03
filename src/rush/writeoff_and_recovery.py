@@ -1,7 +1,12 @@
+from decimal import Decimal
+
 from sqlalchemy import and_
 
 from rush.card import BaseLoan
-from rush.ledger_utils import create_ledger_entry_from_str
+from rush.ledger_utils import (
+    create_ledger_entry_from_str,
+    get_account_balance_from_str,
+)
 from rush.models import (
     BillFee,
     LedgerTriggerEvent,
@@ -18,10 +23,14 @@ def write_off_loan(user_loan: BaseLoan) -> None:
     reverse_all_unpaid_fees(user_loan=user_loan)  # Remove all unpaid fees.
     total_outstanding = user_loan.get_total_outstanding()
     event = LedgerTriggerEvent(
+        loan_id=user_loan.id,
         name="loan_written_off",
         amount=total_outstanding,
         post_date=get_current_ist_time(),
     )
+    user_loan.session.add(event)
+    user_loan.session.flush()
+
     write_off_event(user_loan=user_loan, event=event)
     # user_card.loan_status = 'WRITTEN_OFF'  # uncomment after user_loan PR is merged.
 
@@ -33,10 +42,24 @@ def write_off_event(user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
     create_ledger_entry_from_str(
         session=user_loan.session,
         event_id=event.id,
-        debit_book_str=f"{user_loan.loan_id}/loan/write_off_expenses/e",
+        debit_book_str=f"{user_loan.id}/loan/writeoff_expenses/e",
         credit_book_str=f"{user_loan.lender_id}/lender/lender_receivable/a",
         amount=event.amount,
     )
+
+    # if loan is reset, settle all remaining locked limit against write off expenses account.
+    if user_loan.product_type == "term_loan_reset":
+        _, locked_limit = get_account_balance_from_str(
+            session=user_loan.session, book_string=f"{user_loan.id}/card/locked_limit/l"
+        )
+        assert locked_limit > Decimal("0")
+        create_ledger_entry_from_str(
+            session=user_loan.session,
+            event_id=event.id,
+            debit_book_str=f"{user_loan.id}/card/locked_limit/l",
+            credit_book_str=f"{user_loan.id}/loan/writeoff_expenses/e",
+            amount=locked_limit,
+        )
 
 
 def recovery_event(user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
@@ -46,19 +69,21 @@ def recovery_event(user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
         user_loan.session,
         event_id=event.id,
         debit_book_str=f"{user_loan.lender_id}/lender/lender_receivable/a",
-        credit_book_str=f"{user_loan.loan_id}/loan/write_off_expenses/e",
+        credit_book_str=f"{user_loan.loan_id}/loan/writeoff_expenses/e",
         amount=event.amount,
     )
 
 
 def reverse_all_unpaid_fees(user_loan: BaseLoan) -> None:
     session = user_loan.session
-    fee = (
+    fees = (
         session.query(BillFee)
         .join(
             LoanData, and_(LoanData.loan_id == user_loan.loan_id, BillFee.identifier_id == LoanData.id)
         )
-        .filter(BillFee.loan_id == user_loan.loan_id, BillFee.fee_status == "UNPAID")
+        .filter(BillFee.identifier_id == user_loan.loan_id, BillFee.fee_status == "UNPAID")
         .all()
     )
-    fee.fee_status = "REVERSED"
+
+    for fee in fees:
+        fee.fee_status = "REVERSED"

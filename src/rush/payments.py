@@ -179,8 +179,7 @@ def payment_received_event(
             )
 
         is_in_write_off = (
-            get_account_balance_from_str(session, f"{user_loan.loan_id}/loan/write_off_expenses/e")[1]
-            > 0
+            get_account_balance_from_str(session, f"{user_loan.loan_id}/loan/writeoff_expenses/e")[1] > 0
         )
         if is_in_write_off:
             recovery_event(user_loan, event)
