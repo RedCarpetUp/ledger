@@ -8,6 +8,7 @@ from typing import (
     TypeVar,
 )
 
+from dateutil.relativedelta import relativedelta
 from pendulum import (
     Date,
     DateTime,
@@ -21,6 +22,11 @@ from rush.ledger_utils import (
     get_account_balance_from_str,
     is_bill_closed,
 )
+from rush.loan_schedule.calculations import (
+    get_down_payment,
+    get_interest_for_integer_emi,
+    get_monthly_instalment,
+)
 from rush.models import (
     CardTransaction,
     LedgerTriggerEvent,
@@ -30,81 +36,60 @@ from rush.models import (
     LoanSchedule,
     UserCard,
 )
-from rush.utils import (
-    get_current_ist_time,
-    get_reducing_emi,
-    mul,
-    round_up_decimal_to_nearest,
-)
 
 
 class BaseBill:
     session: Session = None
     table: LoanData = None
-    round_emi_to_nearest: Decimal = Decimal("1")
+    user_loan: "BaseLoan"
+    round_emi_to = "one"
 
-    def __init__(self, session: Session, loan_data: LoanData):
+    def __init__(self, session: Session, user_loan: "BaseLoan", loan_data: LoanData):
         self.session = session
         self.table = loan_data
+        self.user_loan = user_loan
         self.__dict__.update(loan_data.__dict__)
 
-    def get_interest_to_charge(
-        self, rate_of_interest: Decimal, principal: Optional[Decimal] = None
-    ) -> Decimal:
+    def get_interest_to_charge(self, principal: Optional[Decimal] = None) -> Decimal:
         if not principal:
-            principal = self.table.principal
+            down_payment = self.get_down_payment(include_first_emi=False)
+            principal = self.table.principal - down_payment
 
-        interest_on_principal = mul(principal, rate_of_interest / 100)
-        not_rounded_emi = self.table.principal_instalment + interest_on_principal
-        rounded_emi = round_up_decimal_to_nearest(not_rounded_emi, to_nearest=self.round_emi_to_nearest)
-
-        rounding_difference = rounded_emi - not_rounded_emi
-
-        new_interest = interest_on_principal + rounding_difference
-        return new_interest
-
-    def get_interest_to_charge_2(
-        self,
-        rate_of_interest: Decimal,
-        principal: Optional[Decimal] = None,
-        to_round: Optional[bool] = False,
-    ) -> Decimal:
-        """
-        This interest method only returns the raw interest without any alterations to make the
-        total emi a whole number.
-        """
-        if not principal:
-            principal = self.table.principal
-
-        interest_on_principal = principal * rate_of_interest / 100
-        if to_round:
-            interest_on_principal = round(interest_on_principal, 2)
-        return interest_on_principal
+        interest = get_interest_for_integer_emi(
+            principal=principal,
+            number_of_instalments=self.table.bill_tenure,
+            interest_rate_monthly=self.user_loan.rc_rate_of_interest_monthly,
+            to_round=False,
+            round_to=self.round_emi_to,
+        )
+        return interest
 
     def get_scheduled_min_amount(self, to_round: Optional[bool] = True) -> Decimal:
         if not self.table.is_generated:
             return Decimal(0)
-        user_loan = self.session.query(Loan).filter_by(id=self.table.loan_id).one_or_none()
-        tenure = user_loan.min_tenure or self.table.bill_tenure
+        tenure = self.user_loan.min_tenure or self.table.bill_tenure
 
-        min_scheduled = self.get_instalment_amount(user_loan, tenure)
-        if user_loan.min_multiplier:
-            min_scheduled = min_scheduled * user_loan.min_multiplier
+        min_scheduled = self.get_instalment_amount(tenure=tenure)
+        if self.user_loan.min_multiplier:
+            min_scheduled = min_scheduled * self.user_loan.min_multiplier
         if to_round:
             min_scheduled = round(min_scheduled, 2)
         return min_scheduled
 
-    def get_instalment_amount(self, user_loan: "BaseLoan", tenure: Decimal):
-        if user_loan.interest_type == "reducing":
-            instalment = get_reducing_emi(
-                self.table.principal,
-                user_loan.rc_rate_of_interest_monthly,
-                tenure,
-                to_round=False,
-            )
-        else:
-            principal_instalment = self.table.principal / tenure
-            instalment = principal_instalment + self.table.interest_to_charge
+    def get_instalment_amount(self, principal: Optional[Decimal] = None, tenure: Optional[int] = None):
+        if not tenure:
+            tenure = self.table.bill_tenure
+        if not principal:
+            principal = self.table.principal
+        instalment = get_monthly_instalment(
+            principal=principal,
+            down_payment_percentage=self.user_loan.downpayment_percent,
+            interest_type=self.user_loan.interest_type,
+            interest_rate_monthly=self.user_loan.rc_rate_of_interest_monthly,
+            number_of_instalments=tenure,
+            to_round=False,
+            round_to=self.round_emi_to,
+        )
         return instalment
 
     def get_min_amount_to_add(self) -> Decimal:
@@ -155,7 +140,33 @@ class BaseBill:
         return atm_transactions_sum or 0
 
     def get_relative_delta_for_emi(self, emi_number: int, amortization_date: Date) -> Dict[str, int]:
-        return {"months": 1, "days": 15}
+        return {"months": 1, "day": 15}
+
+    def get_down_payment(self, include_first_emi=False) -> Decimal:
+        down_payment = get_down_payment(
+            principal=self.table.principal,
+            down_payment_percentage=self.user_loan.downpayment_percent,
+            interest_rate_monthly=self.user_loan.rc_rate_of_interest_monthly,
+            interest_type=self.user_loan.interest_type,
+            number_of_instalments=self.table.bill_tenure,
+            include_first_emi_amount=include_first_emi,
+        )
+        return down_payment
+
+    def get_interest_to_accrue(self, for_date: date):
+        # Get the previous emi's interest for cards.
+        interest_to_accrue = (
+            self.session.query(LoanSchedule.interest_due)
+            .filter(
+                LoanSchedule.bill_id == self.table.id,
+                LoanSchedule.due_date < for_date,
+                LoanSchedule.due_date > for_date - relativedelta(months=1),  # Should be within a month
+            )
+            .order_by(LoanSchedule.due_date)
+            .limit(1)
+            .scalar()
+        )
+        return interest_to_accrue
 
 
 B = TypeVar("B", bound=BaseBill)
@@ -250,7 +261,7 @@ class BaseLoan(Loan):
     def convert_to_bill_class(self, bill: LoanData):
         if not bill:
             return None
-        return self.bill_class(self.session, bill)
+        return self.bill_class(session=self.session, user_loan=self, loan_data=bill)
 
     def create_bill(
         self,

@@ -39,10 +39,10 @@ def upgrade() -> None:
     op.add_column("fee", sa.Column("identifier", sa.String(), nullable=False))
     op.add_column("fee", sa.Column("identifier_id", sa.Integer(), nullable=False))
 
-    op.drop_column("loan", "product_id")
-    op.add_column("loan", sa.Column("user_product_id", sa.Integer(), nullable=True))
-    op.create_foreign_key(None, "loan", "user_product", ["user_product_id"], ["id"])
-    op.create_foreign_key(None, "loan", "product", ["product_type"], ["product_name"])
+    op.drop_column("v3_loans", "product_id")
+    op.add_column("v3_loans", sa.Column("user_product_id", sa.Integer(), nullable=True))
+    op.create_foreign_key(None, "v3_loans", "user_product", ["user_product_id"], ["id"])
+    op.create_foreign_key(None, "v3_loans", "product", ["product_type"], ["product_name"])
 
 
 def downgrade() -> None:

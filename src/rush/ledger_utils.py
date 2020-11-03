@@ -1,6 +1,5 @@
 from decimal import Decimal
 from typing import (
-    Dict,
     Optional,
     Tuple,
 )
@@ -14,9 +13,9 @@ from sqlalchemy import (
 from sqlalchemy.orm import Session
 
 from rush.models import (
-    BillFee,
     BookAccount,
     LedgerEntry,
+    LedgerTriggerEvent,
     LoanData,
     get_or_create,
 )
@@ -128,3 +127,15 @@ def is_bill_closed(session: Session, bill: LoanData, to_date: Optional[DateTime]
     if max_balance != 0:
         return False
     return True
+
+
+def reverse_event(session: Session, event_to_reverse: LedgerTriggerEvent, event: LedgerTriggerEvent):
+    ledger_entries = session.query(LedgerEntry).filter(LedgerEntry.event_id == event_to_reverse.id).all()
+    for entry in ledger_entries:
+        create_ledger_entry(
+            session,
+            event_id=event.id,
+            debit_book_id=entry.credit_account,
+            credit_book_id=entry.debit_account,
+            amount=entry.amount,
+        )

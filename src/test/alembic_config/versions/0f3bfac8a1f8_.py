@@ -42,7 +42,7 @@ def upgrade() -> None:
         sa.Column("international_usage", sa.BOOLEAN(), server_default="false", nullable=False),
         sa.ForeignKeyConstraint(
             ["loan_id"],
-            ["loan.id"],
+            ["v3_loans.id"],
         ),
         sa.ForeignKeyConstraint(
             ["user_id"],

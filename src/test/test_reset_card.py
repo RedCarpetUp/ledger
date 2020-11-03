@@ -137,7 +137,6 @@ def test_create_term_loan(session: Session) -> None:
 
     assert loan_data.bill_start_date == parse_date("2020-09-01").date()
     assert loan_data.bill_close_date == parse_date("2021-08-01").date()
-    assert loan_data.principal_instalment == Decimal("833.33")
 
     _, principal_receivable = get_account_balance_from_str(
         session=session, book_string=f"{loan_data.id}/bill/principal_receivable/a"
@@ -154,21 +153,20 @@ def test_create_term_loan(session: Session) -> None:
     assert len(all_emis) == 12
     assert all_emis[0].due_date == parse_date("2020-09-01").date()
     assert all_emis[0].emi_number == 1
-    assert all_emis[0].interest_due == Decimal("306.67")
-    assert all_emis[0].total_due_amount % 10 == 0
-    assert all_emis[0].total_due_amount == Decimal("1140")
+    assert all_emis[0].interest_due == Decimal("300.67")
+    assert all_emis[0].total_due_amount == Decimal("1134")
 
     assert all_emis[-1].due_date == parse_date("2021-08-01").date()
     assert all_emis[-1].emi_number == 12
-    assert all_emis[-1].interest_due == Decimal("306.67")
-    assert all_emis[-1].total_due_amount % 10 == 0
+    assert all_emis[-1].interest_due == Decimal("300.67")
+    assert all_emis[-1].total_due_amount == Decimal("1134")
 
     # add min amount for months in between.
     add_min_to_all_bills(session=session, post_date=parse_date("2020-09-01"), user_loan=loan)
     add_min_to_all_bills(session=session, post_date=parse_date("2020-10-01"), user_loan=loan)
 
     min_amount = user_loan.get_remaining_min(date_to_check_against=parse_date("2020-11-01").date())
-    assert min_amount == Decimal("3420")
+    assert min_amount == Decimal("3402")
 
     max_amount = user_loan.get_remaining_max()
     assert max_amount == Decimal("10000")

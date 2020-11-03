@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+import pytest
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
@@ -10,6 +11,7 @@ from rush.card import (
 from rush.card.term_loan import TermLoan
 from rush.card.utils import create_user_product_mapping
 from rush.ledger_utils import get_account_balance_from_str
+from rush.loan_schedule.calculations import get_down_payment
 from rush.models import (
     LedgerTriggerEvent,
     Lenders,
@@ -106,8 +108,13 @@ def test_product_amortization_6() -> None:
 
 
 def test_calculate_downpayment_amount() -> None:
-    downpayment_amount = TermLoan.bill_class.calculate_downpayment_amount_payable(
-        product_price=Decimal(10000), tenure=12, downpayment_perc=Decimal("20")
+    downpayment_amount = get_down_payment(
+        principal=Decimal("10000"),
+        down_payment_percentage=Decimal("20"),
+        interest_rate_monthly=Decimal(3),
+        interest_type="flat",
+        number_of_instalments=12,
+        include_first_emi_amount=True,
     )
     assert downpayment_amount == Decimal("2910")
 
@@ -121,8 +128,13 @@ def test_create_term_loan(session: Session) -> None:
 
     loan_creation_data = {"date_str": "2020-08-01", "user_product_id": user_product.id}
 
-    _downpayment_amount = TermLoan.bill_class.calculate_downpayment_amount_payable(
-        product_price=Decimal("10000"), tenure=12, downpayment_perc=Decimal("20")
+    _downpayment_amount = get_down_payment(
+        principal=Decimal("10000"),
+        down_payment_percentage=Decimal("20"),
+        interest_rate_monthly=Decimal(3),
+        interest_type="flat",
+        number_of_instalments=12,
+        include_first_emi_amount=True,
     )
 
     # downpayment
@@ -130,7 +142,7 @@ def test_create_term_loan(session: Session) -> None:
         session=session,
         user_loan=None,
         payment_amount=_downpayment_amount,
-        payment_date=parse_date("2020-08-01").date(),
+        payment_date=parse_date("2020-08-01"),
         payment_request_id="dummy_downpayment",
         payment_type="downpayment",
         user_product_id=user_product.id,
@@ -180,7 +192,6 @@ def test_create_term_loan(session: Session) -> None:
 
     assert loan_data.bill_start_date == parse_date("2020-08-01").date()
     assert loan_data.bill_close_date == parse_date("2021-07-01").date()
-    assert loan_data.principal_instalment == Decimal("666.67")
 
     _, principal_receivable = get_account_balance_from_str(
         session=session, book_string=f"{loan_data.id}/bill/principal_receivable/a"
@@ -203,12 +214,13 @@ def test_create_term_loan(session: Session) -> None:
     assert all_emis[0].due_date == parse_date("2020-08-01").date()
     assert all_emis[0].emi_number == 1
     assert all_emis[0].interest_due == Decimal("243.33")
-    assert all_emis[0].total_due_amount % 10 == 0
     assert all_emis[0].total_due_amount == Decimal("2910")
+    assert all_emis[0].total_due_amount % 10 == 0
 
     assert all_emis[-1].due_date == parse_date("2021-07-01").date()
     assert all_emis[-1].emi_number == 12
     assert all_emis[-1].interest_due == Decimal("243.33")
+    assert all_emis[-1].total_due_amount == Decimal("910")
     assert all_emis[-1].total_due_amount % 10 == 0
 
 
@@ -221,8 +233,13 @@ def test_create_term_loan_2(session: Session) -> None:
 
     loan_creation_data = {"date_str": "2015-10-09", "user_product_id": user_product.id}
 
-    _downpayment_amount = TermLoan.bill_class.calculate_downpayment_amount_payable(
-        product_price=Decimal("10000"), tenure=12, downpayment_perc=Decimal("20")
+    _downpayment_amount = get_down_payment(
+        principal=Decimal("10000"),
+        down_payment_percentage=Decimal("20"),
+        interest_rate_monthly=Decimal(3),
+        interest_type="flat",
+        number_of_instalments=12,
+        include_first_emi_amount=True,
     )
 
     assert _downpayment_amount == Decimal("2910")
@@ -232,7 +249,7 @@ def test_create_term_loan_2(session: Session) -> None:
         session=session,
         user_loan=None,
         payment_amount=_downpayment_amount,
-        payment_date=parse_date(loan_creation_data["date_str"]).date(),
+        payment_date=parse_date(loan_creation_data["date_str"]),
         payment_request_id="dummy_downpayment",
         payment_type="downpayment",
         user_product_id=user_product.id,

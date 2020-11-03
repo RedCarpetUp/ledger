@@ -14,7 +14,10 @@ from rush.accrue_financial_charges import (
     accrue_late_charges,
 )
 from rush.card import (
+    RubyCard,
+    ZetaCard,
     create_user_product,
+    get_product_class,
     get_user_product,
 )
 from rush.card.base_card import (
@@ -27,7 +30,10 @@ from rush.card.utils import (
     get_weekly_spend,
 )
 from rush.create_bill import bill_generate
-from rush.create_card_swipe import create_card_swipe
+from rush.create_card_swipe import (
+    create_card_swipe,
+    reverse_card_swipe,
+)
 from rush.create_emi import (
     daily_dpd_update,
     update_event_with_dpd,
@@ -167,7 +173,7 @@ def test_m2p_transfer(session: Session) -> None:
     # assert lender_pool_balance == Decimal(50000)
 
 
-def test_card_swipe(session: Session) -> None:
+def test_card_swipe_and_reversal(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
     uc = create_user_product(
@@ -211,6 +217,29 @@ def test_card_swipe(session: Session) -> None:
 
     _, lender_payable = get_account_balance_from_str(session, f"{uc.loan_id}/loan/lender_payable/l")
     assert lender_payable == 900
+
+    resp = reverse_card_swipe(session, uc, swipe2, parse_date("2020-05-02 13:22:11"))
+    assert resp["result"] == "success"
+
+    _, unbilled_balance = get_account_balance_from_str(session, f"{bill_id}/bill/unbilled/a")
+    assert unbilled_balance == 700
+    # remaining card balance should be -900 because we've not loaded it yet and it's going in negative.
+    _, card_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/available_limit/l")
+    assert card_balance == -700
+
+    _, lender_payable = get_account_balance_from_str(session, f"{uc.loan_id}/loan/lender_payable/l")
+    assert lender_payable == 700
+
+    swipe3 = create_card_swipe(
+        session=session,
+        user_loan=uc,
+        txn_time=parse_date("2020-05-02 17:22:11"),
+        amount=Decimal(200),
+        description="Flipkart.com",
+        txn_ref_no="dummy_txn_ref_no_2",
+        trace_no="123452",
+    )
+    swipe3 = swipe3["data"]
 
 
 def test_closing_bill(session: Session) -> None:
@@ -3020,8 +3049,107 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
     assert emis[18].total_closing_balance == Decimal("3.02")
 
 
+def test_reducing_interest_with_extension(session: Session) -> None:
+    test_lenders(session)
+    card_db_updates(session)
+
+    a = User(
+        id=1836540,
+        performed_by=123,
+    )
+    session.add(a)
+    session.flush()
+
+    # assign card
+    user_loan = create_user_product(
+        session=session,
+        card_type="ruby",
+        user_id=a.id,
+        # 16th March actual
+        card_activation_date=parse_date("2020-03-01").date(),
+        lender_id=62311,
+        interest_type="reducing",
+    )
+
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-03-19 21:33:53"),
+        amount=Decimal(10),
+        description="TRUEBALANCE IO         GURGAON       IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
+    )
+
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-03-24 14:01:35"),
+        amount=Decimal(100),
+        description="PAY*TRUEBALANCE IO     GURGAON       IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
+    )
+
+    uc = get_user_product(session, a.id)
+    bill_march = bill_generate(uc)
+
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-04-03 17:41:43"),
+        amount=Decimal(4),
+        description="TRUEBALANCE IO         GURGAON       IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
+    )
+
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-04-12 22:02:47"),
+        amount=Decimal(52),
+        description="PAYU PAYMENTS PVT LTD  0001243054000 IND",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
+    )
+
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(session, bill_march.table.bill_due_date + relativedelta(days=1), uc)
+
+    bill_april = bill_generate(uc)
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(session, bill_april.table.bill_due_date + relativedelta(days=1), uc)
+
+    # Extend tenure to 18 months
+    extend_schedule(uc, 18, parse_date("2020-05-22"))
+
+    emis = uc.get_loan_schedule()
+    assert emis[0].total_due_amount == Decimal("11.05")
+    assert emis[0].principal_due == Decimal("7.75")
+    assert emis[0].interest_due == Decimal("3.30")
+    assert emis[0].emi_number == 1
+    assert emis[0].total_closing_balance == Decimal(110)
+    assert emis[1].total_due_amount == Decimal("16.68")
+    assert emis[1].principal_due == Decimal("11.93")
+    assert emis[1].interest_due == Decimal("4.75")
+    assert emis[1].emi_number == 2
+    assert emis[1].total_closing_balance == Decimal("158.25")
+    assert emis[2].total_due_amount == Decimal("11.46")
+    assert emis[2].principal_due == Decimal("7.07")
+    assert emis[2].interest_due == Decimal("4.39")
+    assert emis[2].emi_number == 3
+    assert emis[2].total_closing_balance == Decimal("146.32")
+    assert emis[18].total_due_amount == Decimal("3.96")
+    assert emis[18].principal_due == Decimal("3.84")
+    assert emis[18].interest_due == Decimal("0.12")
+    # First cycle 18 emis, next bill 19 emis
+    assert emis[18].emi_number == 19
+    assert emis[18].total_closing_balance == Decimal("3.84")
+
+
 def test_intermediate_bill_generation(session: Session) -> None:
-    test_card_swipe(session)
+    test_card_swipe_and_reversal(session)
     user_loan = get_user_product(session, 2)
     bill_1 = bill_generate(user_loan)
 
@@ -3216,3 +3344,11 @@ def test_one_rupee_leniency(session: Session) -> None:
     assert pm[0].amount_settled == Decimal("0.5")
     assert pm[1].emi_id == emis[1].id
     assert pm[1].amount_settled == Decimal("9.5")
+
+
+def test_get_product_class() -> None:
+    ruby_klass = get_product_class(card_type="ruby")
+    assert ruby_klass is RubyCard
+
+    zeta_klass = get_product_class(card_type="zeta_card")
+    assert zeta_klass is ZetaCard

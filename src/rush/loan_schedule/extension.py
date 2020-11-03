@@ -8,6 +8,7 @@ from pendulum import date
 
 from rush.card import BaseLoan
 from rush.card.base_card import BaseBill
+from rush.loan_schedule.calculations import get_interest_to_charge
 from rush.loan_schedule.loan_schedule import (
     group_bills,
     readjust_future_payment,
@@ -16,7 +17,6 @@ from rush.models import (
     LedgerTriggerEvent,
     LoanSchedule,
 )
-from rush.utils import div
 
 
 def extend_bill_schedule(user_loan: BaseLoan, bill: BaseBill, from_date: date, new_tenure: int):
@@ -27,9 +27,7 @@ def extend_bill_schedule(user_loan: BaseLoan, bill: BaseBill, from_date: date, n
         post_date=from_date,
         extra_details={"bill_id": bill.table.id, "new_tenure": new_tenure},
     )
-    new_instalment = div(bill.table.principal, new_tenure)
     # Update bill variables.
-    bill.table.principal_instalment = new_instalment  # This is required for interest calc.
     bill.table.bill_tenure = new_tenure
 
     future_bill_emis = (
@@ -61,12 +59,22 @@ def extend_bill_schedule(user_loan: BaseLoan, bill: BaseBill, from_date: date, n
     future_bill_emis += newly_created_emis
 
     # Correct amounts in all future emis.
-    non_rounded_bill_instalment = first_emi.total_closing_balance / len(future_bill_emis)
+    interest_rate = user_loan.rc_rate_of_interest_monthly
+    closing_balance = first_emi.total_closing_balance
+    instalment = bill.get_instalment_amount(
+        principal=closing_balance, tenure=len(future_bill_emis)
+    )  # Used only for reducing.
+    principal_due = first_emi.total_closing_balance / len(future_bill_emis)
     for bill_emi in future_bill_emis:
-        remaining_tenure = new_tenure - bill_emi.emi_number + 1  # plus one to consider current emi
-        bill_emi.principal_due = round(non_rounded_bill_instalment, 2)
-        bill_emi.interest_due = bill.get_interest_to_charge(user_loan.rc_rate_of_interest_monthly)
-        bill_emi.total_closing_balance = round(non_rounded_bill_instalment * remaining_tenure, 2)
+        if user_loan.interest_type == "reducing":
+            interest_due = get_interest_to_charge(closing_balance, interest_rate, to_round=False)
+            principal_due = instalment - interest_due
+        else:
+            interest_due = bill.get_interest_to_charge()
+        bill_emi.principal_due = round(principal_due, 2)
+        bill_emi.interest_due = round(interest_due, 2)
+        bill_emi.total_closing_balance = round(closing_balance, 2)
+        closing_balance -= principal_due
 
     bill.session.bulk_save_objects(newly_created_emis)
 

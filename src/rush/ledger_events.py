@@ -1,10 +1,7 @@
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import (
-    Date,
-    and_,
-)
+from sqlalchemy import Date
 from sqlalchemy.orm import Session
 
 from rush.card.base_card import (
@@ -22,8 +19,6 @@ from rush.models import (
     LedgerTriggerEvent,
     Loan,
     LoanData,
-    LoanFee,
-    ProductFee,
 )
 from rush.recon.dmi_interest_on_portfolio import interest_on_dmi_portfolio
 from rush.utils import get_gst_split_from_amount

@@ -5,7 +5,10 @@ from typing import (
     Optional,
 )
 
-from pendulum import DateTime
+from pendulum import (
+    DateTime,
+    datetime,
+)
 from sqlalchemy.orm.session import Session
 
 from rush.card.base_card import BaseLoan
@@ -16,10 +19,10 @@ from rush.ledger_events import (
     card_transaction_event,
     disburse_money_to_card,
 )
+from rush.ledger_utils import reverse_event
 from rush.models import (
     CardTransaction,
     LedgerTriggerEvent,
-    Loan,
     LoanData,
 )
 
@@ -80,23 +83,32 @@ def create_card_swipe(
     return {"result": "success", "data": swipe}
 
 
-def refund_card_swipe(
-    session: Session, loan: Loan, txn_ref_no: str, trace_no: str, transaction_id: Optional[int]
-) -> None:
-    card_transaction = (
-        session.query(CardTransaction)
-        .join(LoanData, LoanData.id == CardTransaction.loan_id)
+def reverse_card_swipe(
+    session: Session, user_loan: BaseLoan, card_transaction: CardTransaction, post_date: datetime
+) -> Dict:
+
+    bill = session.query(LoanData).filter(LoanData.id == card_transaction.loan_id).one()
+    if bill.is_generated:  # Can't reverse if already generated. # TODO what to do?
+        return {"result": "error", "message": "Bill is already generated."}
+
+    original_event = (
+        session.query(LedgerTriggerEvent)
         .filter(
-            LoanData.loan_id == loan.id,
-            LoanData.user_id == loan.user_id,
-            CardTransaction.status == "CONFIRMED",
-            CardTransaction.txn_ref_no == txn_ref_no,
-            CardTransaction.trace_no == trace_no,
+            LedgerTriggerEvent.loan_id == user_loan.loan_id,
+            LedgerTriggerEvent.extra_details["swipe_id"].astext == str(card_transaction.id),
         )
+        .one()
     )
 
-    if transaction_id:
-        card_transaction = card_transaction.filter(CardTransaction.id == transaction_id)
-
-    card_transaction = card_transaction.one()
-    card_transaction.status == "REFUNDED"
+    reversal_event = LedgerTriggerEvent.new(
+        session,
+        performed_by=user_loan.user_id,
+        name="transaction_reversal",
+        loan_id=user_loan.loan_id,
+        post_date=post_date,
+        amount=card_transaction.amount,
+        extra_details={"swipe_id": card_transaction.id},
+    )
+    reverse_event(session=session, event_to_reverse=original_event, event=reversal_event)
+    card_transaction.status = "REVERSED"
+    return {"result": "success"}

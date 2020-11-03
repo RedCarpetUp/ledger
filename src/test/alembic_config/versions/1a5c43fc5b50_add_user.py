@@ -217,19 +217,6 @@ def upgrade() -> None:
     op.create_foreign_key(None, "v3_user_data", "v3_users", ["assigned_to"], ["id"])
     op.add_column("v3_user_data", sa.Column("lender_id", sa.Integer(), nullable=True))
 
-    op.create_table(
-        "v3_loans",
-        sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False),
-        sa.Column("user_id", sa.INTEGER(), autoincrement=False, nullable=False),
-        sa.Column("created_at", sa.TIMESTAMP(), autoincrement=False, nullable=False),
-        sa.Column("updated_at", sa.TIMESTAMP(), autoincrement=False, nullable=False),
-        sa.Column("is_deleted", sa.BOOLEAN(), autoincrement=False, nullable=True),
-        sa.ForeignKeyConstraint(["user_id"], ["v3_users.id"], name="fk_rails_c5de6289f4"),
-        sa.PrimaryKeyConstraint("id", name="v3_loans_pkey"),
-        postgresql_ignore_search_path=False,
-    )
-    op.create_index("index_on_v3_loans_user_id_and_id", "v3_loans", ["user_id", "id"], unique=False)
-
 
 def downgrade() -> None:
     pass

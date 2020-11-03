@@ -1,10 +1,7 @@
-from datetime import timedelta
 from decimal import Decimal
-from typing import Optional
 
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
-from pendulum.constants import USECS_PER_SEC
 from sqlalchemy.orm import Session
 
 from rush.card.base_card import (
@@ -74,7 +71,7 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loa
     session.add(accrue_event)
     session.flush()
     for bill in unpaid_bills:
-        interest_to_charge = (
+        interest_to_accrue = (
             session.query(LoanSchedule.interest_due)
             .filter(
                 LoanSchedule.bill_id == bill.id,
@@ -86,10 +83,10 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loa
             .scalar()
         )
 
-        if interest_to_charge:
-            accrue_event.amount += interest_to_charge
-            accrue_interest_event(session, bill, accrue_event, interest_to_charge)
-            add_max_amount_event(session, bill, accrue_event, interest_to_charge)
+        if interest_to_accrue:
+            accrue_event.amount += interest_to_accrue
+            accrue_interest_event(session, bill, accrue_event, interest_to_accrue)
+            add_max_amount_event(session, bill, accrue_event, interest_to_accrue)
 
     from rush.create_emi import update_event_with_dpd
 
