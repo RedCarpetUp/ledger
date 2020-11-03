@@ -395,11 +395,13 @@ def create_payment_split(session: Session, event: LedgerTriggerEvent):
     split_data = get_payment_split_from_event(session, event)
     new_ps_objects = []
     for component, amount in split_data.items():
-        ps = PaymentSplit(
-            payment_request_id=event.extra_details["payment_request_id"],
-            component=component,
-            amount_settled=amount,
-            loan_id=event.loan_id,
+        new_ps_objects.append(
+            {
+                "payment_request_id": event.extra_details["payment_request_id"],
+                "component": component,
+                "amount_settled": amount,
+                "loan_id": event.loan_id,
+            }
         )
-        new_ps_objects.append(ps)
-    session.bulk_save_objects(new_ps_objects)
+
+    session.bulk_insert_mappings(PaymentSplit, new_ps_objects)

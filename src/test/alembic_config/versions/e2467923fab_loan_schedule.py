@@ -66,12 +66,14 @@ def upgrade() -> None:
         sa.Column("payment_request_id", sa.String(), nullable=False, index=True),
         sa.Column("component", sa.String(50), nullable=False),
         sa.Column("amount_settled", sa.DECIMAL(), nullable=False),
-        sa.Column("loan_id", sa.Integer(), nullable=False),
+        sa.Column(
+            "loan_id", sa.Integer(), nullable=True
+        ),  # this will be fixed later, doing this for testing purposes.
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("performed_by", sa.Integer(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
-        sa.ForeignKeyConstraint(["loan_id"], ["loan.id"], name="fk_payment_split_loan_id"),
+        sa.ForeignKeyConstraint(["loan_id"], ["v3_loans.id"], name="fk_payment_split_loan_id"),
     )
 
 
