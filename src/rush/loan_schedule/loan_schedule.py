@@ -184,16 +184,8 @@ def readjust_future_payment(user_loan: BaseLoan, date_to_check_after: date):
     date needs to be readjusted.
     """
     session = user_loan.session
-    future_adjusted_emis = (
-        session.query(LoanSchedule)
-        .filter(
-            LoanSchedule.loan_id == user_loan.loan_id,
-            LoanSchedule.bill_id.is_(None),
-            LoanSchedule.due_date >= date_to_check_after,
-            LoanSchedule.payment_received > 0,  # Only if there's amount adjust in future emis.
-        )
-        .all()
-    )
+    future_emis = user_loan.get_loan_schedule(only_emis_after_date=date_to_check_after)
+    future_adjusted_emis = [emi for emi in future_emis if emi.payment_received > 0]
 
     if len(future_adjusted_emis) == 0:
         return
@@ -211,7 +203,7 @@ def readjust_future_payment(user_loan: BaseLoan, date_to_check_after: date):
     )
 
     new_mappings = defaultdict(dict)
-    future_emis = user_loan.get_loan_schedule(only_emis_after_date=date_to_check_after)
+
     for payment_mapping in payment_mapping_data:
         payment_mapping.row_status = "inactive"
         amount_to_readjust = payment_mapping.amount_settled
