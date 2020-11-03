@@ -198,7 +198,7 @@ def find_amount_to_slide_in_bills(user_loan: BaseLoan, total_amount_to_slide: De
         {
             "bill": bill,
             "total_outstanding": bill.get_outstanding_amount(),
-            "monthly_instalment": bill.get_scheduled_min_amount() or bill.get_remaining_min(),
+            "monthly_instalment": bill.get_remaining_min() or bill.get_scheduled_min_amount(),
             "amount_to_adjust": 0,
         }
         for bill in unpaid_bills

@@ -1664,7 +1664,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         .filter(BillFee.identifier_id == bill_may.id, BillFee.name == "atm_fee")
         .one_or_none()
     )
-    assert atm_fee_due.gross_amount == 50
+    assert atm_fee_due.gross_amount == 59
 
     create_card_swipe(
         session=session,
@@ -1865,8 +1865,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert lender_amount == Decimal("0")
 
-    assert uc.get_remaining_max() == Decimal("13027.83")
-    assert uc.get_total_outstanding() == Decimal("21109.86")
+    assert uc.get_remaining_max() == Decimal("13036.83")
+    assert uc.get_total_outstanding() == Decimal("21118.86")
 
     bill_june = bill_generate(uc)
 
@@ -1925,8 +1925,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     last_entry_first_bill = dpd_events[-2]
     last_entry_second_bill = dpd_events[-1]
 
-    assert last_entry_first_bill.balance == Decimal("12714.41")
-    assert last_entry_second_bill.balance == Decimal("7885.78")
+    assert last_entry_first_bill.balance == Decimal("12689.43")
+    assert last_entry_second_bill.balance == Decimal("7919.76")
 
     _, bill_may_principal_due = get_account_balance_from_str(
         session, book_string=f"{bill_may.id}/bill/principal_receivable/a"
@@ -1934,8 +1934,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     _, bill_june_principal_due = get_account_balance_from_str(
         session, book_string=f"{bill_june.id}/bill/principal_receivable/a"
     )
-    assert bill_may_principal_due == Decimal("12714.41")
-    assert bill_june_principal_due == Decimal("7885.78")
+    assert bill_may_principal_due == Decimal("12689.43")
+    assert bill_june_principal_due == Decimal("7919.76")
 
     daily_date = parse_date("2020-08-28 00:05:00")
     daily_dpd_update(session, uc, daily_date)

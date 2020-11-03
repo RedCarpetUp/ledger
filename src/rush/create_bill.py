@@ -105,16 +105,16 @@ def bill_generate(
     if not skip_bill_schedule_creation:
         create_bill_schedule(session, user_loan, bill)
 
-    atm_transactions_sum = bill.sum_of_atm_transactions()
-    if atm_transactions_sum > 0:
-        add_atm_fee(
-            session=session,
-            bill=bill,
-            post_date=bill.table.bill_close_date,
-            atm_transactions_amount=atm_transactions_sum,
-            user_loan=user_loan,
-            skip_schedule_grouping=skip_bill_schedule_creation,
-        )
+        atm_transactions_sum = bill.sum_of_atm_transactions()
+        if atm_transactions_sum > 0:
+            add_atm_fee(
+                session=session,
+                bill=bill,
+                post_date=bill.table.bill_close_date,
+                atm_transactions_amount=atm_transactions_sum,
+                user_loan=user_loan,
+                skip_schedule_grouping=skip_bill_schedule_creation,
+            )
 
     return bill
 

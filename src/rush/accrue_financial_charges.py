@@ -1,3 +1,4 @@
+from typing import Optional
 from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
@@ -30,6 +31,7 @@ from rush.models import (
     LoanSchedule,
 )
 from rush.utils import (
+    add_gst_split_to_amount,
     get_current_ist_time,
     get_gst_split_from_amount,
 )
@@ -122,6 +124,7 @@ def create_bill_fee_entry(
     event: LedgerTriggerEvent,
     fee_name: str,
     gross_fee_amount: Decimal,
+    include_gst_from_gross_amount: Optional[bool] = False,
 ) -> Fee:
     f = BillFee(
         user_id=user_id,
@@ -132,9 +135,14 @@ def create_bill_fee_entry(
         cgst_rate=Decimal(0),
         igst_rate=Decimal(18),
     )
-    d = get_gst_split_from_amount(
-        gross_fee_amount, sgst_rate=f.sgst_rate, cgst_rate=f.cgst_rate, igst_rate=f.igst_rate
-    )
+    if include_gst_from_gross_amount:
+        d = get_gst_split_from_amount(
+            gross_fee_amount, sgst_rate=f.sgst_rate, cgst_rate=f.cgst_rate, igst_rate=f.igst_rate
+        )
+    else:
+        d = add_gst_split_to_amount(
+            gross_fee_amount, sgst_rate=f.sgst_rate, cgst_rate=f.cgst_rate, igst_rate=f.igst_rate
+        )
     f.net_amount = d["net_amount"]
     f.gross_amount = d["gross_amount"]
     session.add(f)
@@ -151,7 +159,9 @@ def accrue_late_charges(
     late_fee_to_charge_incl_tax: Decimal = Decimal(100),
 ) -> BaseBill:
     latest_bill = user_loan.get_latest_generated_bill()
-    can_charge_fee = user_loan.get_remaining_min() > 0
+    # Production does not do any checks before levying late fees, so we don't need to here as well. ~ Ananth
+    # can_charge_fee = user_loan.get_remaining_min() > 0
+    can_charge_fee = True
     if can_charge_fee:  # if min isn't paid charge late fine.
         # TODO get correct date here.
         # Adjust for rounding because total due amount has to be rounded
@@ -167,6 +177,7 @@ def accrue_late_charges(
             event=event,
             fee_name="late_fee",
             gross_fee_amount=late_fee_to_charge_incl_tax,
+            include_gst_from_gross_amount=True
         )
         event.amount = fee.gross_amount
 
