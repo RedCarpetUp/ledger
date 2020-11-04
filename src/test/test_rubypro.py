@@ -21,7 +21,6 @@ from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import get_account_balance_from_str
 from rush.models import (
-    BillFee,
     CardKitNumbers,
     CardNames,
     EmiPaymentMapping,

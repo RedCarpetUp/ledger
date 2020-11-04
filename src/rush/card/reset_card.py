@@ -20,7 +20,7 @@ from rush.models import (
     LedgerTriggerEvent,
     Loan,
     LoanData,
-    ProductFee,
+    Fee,
 )
 
 
@@ -44,12 +44,13 @@ class ResetCard(BaseLoan):
 
         # assert joining fees.
         joining_fees = (
-            session.query(ProductFee.id)
+            session.query(Fee.id)
             .filter(
-                ProductFee.user_id == kwargs["user_id"],
-                ProductFee.identifier_id == user_product_id,
-                ProductFee.name == "reset_joining_fees",
-                ProductFee.fee_status == "PAID",
+                Fee.user_id == kwargs["user_id"],
+                Fee.identifier_id == user_product_id,
+                Fee.name == "reset_joining_fees",
+                Fee.fee_status == "PAID",
+                Fee.identifier == "product",
             )
             .scalar()
         )

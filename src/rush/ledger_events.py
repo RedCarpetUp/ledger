@@ -179,7 +179,7 @@ def _adjust_bill(
 
     fees = (
         session.query(Fee)
-        .filter(Fee.identifier_id == bill.id, Fee.fee_status == "UNPAID", Fee.identifier="bill")
+        .filter(Fee.identifier_id == bill.id, Fee.fee_status == "UNPAID", Fee.identifier == "bill")
         .all()
     )
     for fee in fees:

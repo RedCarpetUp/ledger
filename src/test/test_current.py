@@ -50,7 +50,6 @@ from rush.lender_funds import (
 from rush.loan_schedule.extension import extend_schedule
 from rush.loan_schedule.moratorium import provide_moratorium
 from rush.models import (
-    BillFee,
     CardKitNumbers,
     CardNames,
     EmiPaymentMapping,
@@ -752,8 +751,8 @@ def _accrue_late_fine_bill_1(session: Session) -> None:
     bill = accrue_late_charges(session, user_loan, event_date, Decimal(118))
 
     fee_due = (
-        session.query(BillFee)
-        .filter(BillFee.identifier_id == bill.id, BillFee.name == "late_fee")
+        session.query(Fee)
+        .filter(Fee.identifier_id == bill.id, Fee.name == "late_fee", Fee.identifier == "bill")
         .one_or_none()
     )
     assert fee_due.net_amount == Decimal(100)
@@ -770,9 +769,9 @@ def _accrue_late_fine_bill_2(session: Session) -> None:
     bill = accrue_late_charges(session, user_loan, event_date, Decimal(118))
 
     fee_due = (
-        session.query(BillFee)
-        .filter(BillFee.identifier_id == bill.id, BillFee.name == "late_fee")
-        .order_by(BillFee.id.desc())
+        session.query(Fee)
+        .filter(Fee.identifier_id == bill.id, Fee.name == "late_fee", Fee.identifier == "bill")
+        .order_by(Fee.id.desc())
         .one_or_none()
     )
     assert fee_due.net_amount == Decimal(100)
@@ -803,9 +802,12 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
     bill = unpaid_bills[0]
 
     fee_id = (
-        session.query(BillFee.id)
+        session.query(Fee.id)
         .filter(
-            BillFee.identifier_id == bill.id, BillFee.name == "late_fee", BillFee.fee_status == "UNPAID"
+            Fee.identifier_id == bill.id,
+            Fee.name == "late_fee",
+            Fee.fee_status == "UNPAID",
+            Fee.identifier == "bill",
         )
         .scalar()
     )
@@ -890,8 +892,8 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
     assert min_due == Decimal(0)
 
     fee_due = (
-        session.query(BillFee)
-        .filter(BillFee.identifier_id == bill.id, BillFee.name == "late_fee")
+        session.query(Fee)
+        .filter(Fee.identifier_id == bill.id, Fee.name == "late_fee", Fee.identifier == "bill")
         .one_or_none()
     )
     assert fee_due.fee_status == "PAID"
@@ -1660,8 +1662,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
 
     # Check for atm fee.
     atm_fee_due = (
-        session.query(BillFee)
-        .filter(BillFee.identifier_id == bill_may.id, BillFee.name == "atm_fee")
+        session.query(Fee)
+        .filter(Fee.identifier_id == bill_may.id, Fee.name == "atm_fee", Fee.identifier == "bill")
         .one_or_none()
     )
     assert atm_fee_due.gross_amount == 50

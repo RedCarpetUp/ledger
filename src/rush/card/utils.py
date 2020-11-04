@@ -15,9 +15,7 @@ from rush.models import (
     LedgerTriggerEvent,
     Loan,
     LoanData,
-    LoanFee,
     Product,
-    ProductFee,
     UserCard,
     UserInstrument,
     UserProduct,
@@ -111,9 +109,10 @@ def add_pre_product_fee(
             session=session, user_id=user_id, product_type=product_type
         ).id
 
-    f = ProductFee(
+    f = Fee(
         user_id=user_id,
         event_id=event.id,
+        identifier="product",
         identifier_id=user_product_id,
         name=fee_name,
         fee_status="UNPAID",
@@ -151,8 +150,9 @@ def add_reload_fee(
     session.add(event)
     session.flush()
 
-    f = LoanFee(
+    f = Fee(
         user_id=user_loan.user_id,
+        identifier="loan",
         identifier_id=user_loan.id,
         event_id=event.id,
         name="card_reload_fees",

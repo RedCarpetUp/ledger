@@ -15,10 +15,9 @@ from rush.card.utils import (
 from rush.models import (
     CardKitNumbers,
     CardNames,
+    Fee,
     Lenders,
-    LoanFee,
     Product,
-    ProductFee,
     User,
 )
 
@@ -91,7 +90,7 @@ def test_add_pre_product_fees(session: Session) -> None:
 
     sell_book_id = card_activation_fee.identifier_id
 
-    assert type(card_activation_fee) == ProductFee
+    assert type(card_activation_fee) == Fee
     assert sell_book_id is not None
     assert card_activation_fee.fee_status == "UNPAID"
 
@@ -117,7 +116,7 @@ def test_add_reload_fee(session: Session) -> None:
         post_date=parse_date("2020-08-01").date(),
     )
 
-    assert type(reload_fee) == LoanFee
+    assert type(reload_fee) == Fee
     assert reload_fee.identifier_id == uc.loan_id
     assert reload_fee.fee_status == "UNPAID"
 
@@ -137,6 +136,6 @@ def test_reset_joining_fees(session: Session) -> None:
 
     sell_book_id = card_activation_fee.identifier_id
 
-    assert type(card_activation_fee) == ProductFee
+    assert type(card_activation_fee) == Fee
     assert sell_book_id is not None
     assert card_activation_fee.fee_status == "UNPAID"

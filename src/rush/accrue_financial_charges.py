@@ -281,7 +281,11 @@ def reverse_incorrect_late_charges(
 
     fee, bill = (
         session.query(Fee, LoanData)
-        .filter(Fee.event_id == event_to_reverse.id, LoanData.id == Fee.identifier_id, Fee.identifier="bill")
+        .filter(
+            Fee.event_id == event_to_reverse.id,
+            LoanData.id == Fee.identifier_id,
+            Fee.identifier == "bill",
+        )
         .one_or_none()
     )
 
