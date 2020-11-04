@@ -83,7 +83,7 @@ def test_rubpro_user(session: Session) -> None:
     swipe = create_card_swipe(
         session=session,
         user_loan=user_card,
-        txn_time=parse_date("2020-11-08 19:23:11"),
+        txn_time=parse_date("2020-11-03 19:23:11"),
         amount=Decimal(1200),
         description="thor.com",
         txn_ref_no="dummy_txn_ref_no",
@@ -92,7 +92,7 @@ def test_rubpro_user(session: Session) -> None:
     session.flush()
     bill_id = swipe["data"].loan_id
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
-    assert unbilled_amount == 0
+    assert unbilled_amount == 1200
     user_loan = get_user_product(session, 4369, card_type="rubypro")
     bill_date = parse_date("2020-12-01 00:00:00")
     bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
@@ -103,10 +103,12 @@ def test_rubpro_user(session: Session) -> None:
     assert bill.bill_start_date == parse_date("2020-11-01").date()
     assert bill.table.is_generated is True
 
-    _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
+    _, unbilled_amount = get_account_balance_from_str(
+        session, book_string=f"{bill_id}/bill/unbilled/a", to_date=bill_date
+    )
     assert unbilled_amount == 0
 
     _, billed_amount = get_account_balance_from_str(
-        session, book_string=f"{bill_id}/bill/principal_receivable/a"
+        session, book_string=f"{bill_id}/bill/principal_receivable/a", to_date=bill_date
     )
     assert billed_amount == 1200
