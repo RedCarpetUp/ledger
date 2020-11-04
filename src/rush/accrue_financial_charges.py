@@ -21,7 +21,6 @@ from rush.ledger_utils import (
     is_bill_closed,
 )
 from rush.models import (
-    BillFee,
     BookAccount,
     Fee,
     LedgerEntry,
@@ -123,9 +122,10 @@ def create_bill_fee_entry(
     fee_name: str,
     gross_fee_amount: Decimal,
 ) -> Fee:
-    f = BillFee(
+    f = Fee(
         user_id=user_id,
         event_id=event.id,
+        identifier="bill",
         identifier_id=bill.id,
         name=fee_name,
         sgst_rate=Decimal(0),
@@ -280,8 +280,8 @@ def reverse_incorrect_late_charges(
     session.flush()
 
     fee, bill = (
-        session.query(BillFee, LoanData)
-        .filter(BillFee.event_id == event_to_reverse.id, LoanData.id == BillFee.identifier_id)
+        session.query(Fee, LoanData)
+        .filter(Fee.event_id == event_to_reverse.id, LoanData.id == Fee.identifier_id, Fee.identifier="bill")
         .one_or_none()
     )
 

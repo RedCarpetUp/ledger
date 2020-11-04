@@ -13,7 +13,6 @@ from rush.ledger_utils import (
     get_account_balance_from_str,
 )
 from rush.models import (
-    BillFee,
     CardTransaction,
     Fee,
     LedgerTriggerEvent,
@@ -179,8 +178,8 @@ def _adjust_bill(
     remaining_amount = amount_to_adjust_in_this_bill
 
     fees = (
-        session.query(BillFee)
-        .filter(BillFee.identifier_id == bill.id, BillFee.fee_status == "UNPAID")
+        session.query(Fee)
+        .filter(Fee.identifier_id == bill.id, Fee.fee_status == "UNPAID", Fee.identifier="bill")
         .all()
     )
     for fee in fees:
