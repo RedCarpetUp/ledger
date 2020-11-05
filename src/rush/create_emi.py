@@ -26,7 +26,11 @@ def update_event_with_dpd(
     event: LedgerTriggerEvent = None,
 ) -> None:
     def actual_event_update(
-        session: Session, is_debit: bool, ledger_trigger_event, ledger_entry, account,
+        session: Session,
+        is_debit: bool,
+        ledger_trigger_event,
+        ledger_entry,
+        account,
     ):
         if not is_debit:
             debit_amount = Decimal(0)
@@ -56,7 +60,10 @@ def update_event_with_dpd(
         bill = user_loan.convert_to_bill_class(
             (
                 session.query(LoanData)
-                .filter(LoanData.loan_id == user_loan.loan_id, LoanData.id == account_id,)
+                .filter(
+                    LoanData.loan_id == user_loan.loan_id,
+                    LoanData.id == account_id,
+                )
                 .first()
             )
         )
@@ -102,10 +109,13 @@ def update_event_with_dpd(
     )
     if from_date and to_date:
         events_list = events_list.filter(
-            LedgerTriggerEvent.post_date > from_date, LedgerTriggerEvent.post_date <= to_date,
+            LedgerTriggerEvent.post_date > from_date,
+            LedgerTriggerEvent.post_date <= to_date,
         )
     elif to_date:
-        events_list = events_list.filter(LedgerTriggerEvent.post_date <= to_date,)
+        events_list = events_list.filter(
+            LedgerTriggerEvent.post_date <= to_date,
+        )
 
     if event:
         events_list = events_list.filter(LedgerTriggerEvent.id == event.id)
@@ -113,14 +123,22 @@ def update_event_with_dpd(
 
     for ledger_trigger_event, ledger_entry, debit_account, credit_account in events_list:
         if (
-            ledger_trigger_event.name in ["accrue_interest", "charge_late_fine", "atm_fee_added",]
+            ledger_trigger_event.name
+            in [
+                "accrue_interest",
+                "charge_late_fine",
+                "atm_fee_added",
+            ]
             and debit_account.identifier_type == "bill"
             and debit_account.book_name == "max"
         ):
             actual_event_update(session, False, ledger_trigger_event, ledger_entry, debit_account)
 
         elif (
-            ledger_trigger_event.name in ["card_transaction",]
+            ledger_trigger_event.name
+            in [
+                "card_transaction",
+            ]
             and debit_account.identifier_type == "bill"
             and debit_account.book_name == "unbilled"
         ):

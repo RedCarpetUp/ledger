@@ -30,7 +30,10 @@ def group_bills(user_loan: BaseLoan):
             func.sum(LoanSchedule.interest_due).label("interest_due"),
             func.sum(LoanSchedule.total_closing_balance).label("total_closing_balance"),
         )
-        .filter(LoanSchedule.loan_id == user_loan.loan_id, LoanSchedule.bill_id.isnot(None),)
+        .filter(
+            LoanSchedule.loan_id == user_loan.loan_id,
+            LoanSchedule.bill_id.isnot(None),
+        )
         .group_by(LoanSchedule.due_date)
     ).subquery()
     q_results = (

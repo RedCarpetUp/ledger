@@ -38,7 +38,9 @@ from rush.utils import (
 
 
 def can_remove_latest_accrued_interest(
-    session: Session, user_loan: BaseLoan, interest_event: LedgerTriggerEvent,
+    session: Session,
+    user_loan: BaseLoan,
+    interest_event: LedgerTriggerEvent,
 ) -> bool:
     """
     We check if the payment has come before the due date and if the total outstanding amount is

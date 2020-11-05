@@ -100,7 +100,9 @@ def refund_payment(
         loan_id=user_loan.loan_id,
         amount=payment_amount,
         post_date=payment_date,
-        extra_details={"payment_request_id": payment_request_id,},
+        extra_details={
+            "payment_request_id": payment_request_id,
+        },
     )
     session.add(lt)
     session.flush()
@@ -345,7 +347,10 @@ def adjust_for_min_max_accounts(bill: BaseBill, payment_to_adjust_from: Decimal,
 def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
     split_data = (
         session.query(BookAccount.book_name, func.sum(LedgerEntry.amount))
-        .filter(LedgerEntry.event_id == event.id, LedgerEntry.credit_account == BookAccount.id,)
+        .filter(
+            LedgerEntry.event_id == event.id,
+            LedgerEntry.credit_account == BookAccount.id,
+        )
         .group_by(BookAccount.book_name)
         .all()
     )
