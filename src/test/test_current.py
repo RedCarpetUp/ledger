@@ -110,40 +110,20 @@ def card_db_updates(session: Session) -> None:
 
 def test_user2(session: Session) -> None:
     # u = User(performed_by=123, id=1, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    u = User(
-        id=1,
-        performed_by=123,
-    )
+    u = User(id=1, performed_by=123,)
     session.add(u)
     session.commit()
     a = session.query(User).first()
-    u = UserPy(
-        id=a.id,
-        performed_by=123,
-        email="sss",
-        name="dfd",
-        fullname="dfdf",
-        nickname="dfdd",
-    )
+    u = UserPy(id=a.id, performed_by=123, email="sss", name="dfd", fullname="dfdf", nickname="dfdd",)
 
 
 def test_user(session: Session) -> None:
     # u = User(id=2, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    u = User(
-        id=2,
-        performed_by=123,
-    )
+    u = User(id=2, performed_by=123,)
     session.add(u)
     session.commit()
     a = session.query(User).first()
-    u = UserPy(
-        id=a.id,
-        performed_by=123,
-        email="sss",
-        name="dfd",
-        fullname="dfdf",
-        nickname="dfdd",
-    )
+    u = UserPy(id=a.id, performed_by=123, email="sss", name="dfd", fullname="dfdf", nickname="dfdd",)
 
 
 def test_lenders(session: Session) -> None:
@@ -247,10 +227,7 @@ def test_closing_bill(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
 
-    a = User(
-        id=230,
-        performed_by=123,
-    )
+    a = User(id=230, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -380,10 +357,7 @@ def test_generate_bill_1(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
     # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    a = User(
-        id=99,
-        performed_by=123,
-    )
+    a = User(id=99, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -452,10 +426,7 @@ def test_generate_bill_reducing_interest_1(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
     # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    a = User(
-        id=99,
-        performed_by=123,
-    )
+    a = User(id=99, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -555,10 +526,7 @@ def test_min_multiplier(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
     # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    a = User(
-        id=99,
-        performed_by=123,
-    )
+    a = User(id=99, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -618,10 +586,7 @@ def test_min_tenure(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
     # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    a = User(
-        id=99,
-        performed_by=123,
-    )
+    a = User(id=99, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -1096,10 +1061,7 @@ def test_generate_bill_3(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
     # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    a = User(
-        id=99,
-        performed_by=123,
-    )
+    a = User(id=99, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -1152,10 +1114,7 @@ def test_emi_creation(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
     # a = User(id=108, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    a = User(
-        id=108,
-        performed_by=123,
-    )
+    a = User(id=108, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -1202,10 +1161,7 @@ def test_subsequent_emi_creation(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
     # a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    a = User(
-        id=160,
-        performed_by=123,
-    )
+    a = User(id=160, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -1281,10 +1237,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
     # a = User(id=1991, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    a = User(
-        id=1991,
-        performed_by=123,
-    )
+    a = User(id=1991, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -1409,10 +1362,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     #     nickname="UPENDRA",
     #     email="upsigh921067@gmail.com",
     # )
-    a = User(
-        id=1764433,
-        performed_by=123,
-    )
+    a = User(id=1764433, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -2211,10 +2161,7 @@ def test_lender_incur(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
     # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas")
-    a = User(
-        id=99,
-        performed_by=123,
-    )
+    a = User(id=99, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -2301,10 +2248,7 @@ def test_lender_incur_two(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
     # a = User(id=99, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas")
-    a = User(
-        id=99,
-        performed_by=123,
-    )
+    a = User(id=99, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -2558,10 +2502,7 @@ def test_moratorium(session: Session) -> None:
     #     nickname="Ananth",
     #     email="ananth@redcarpetup.com",
     # )
-    a = User(
-        id=38612,
-        performed_by=123,
-    )
+    a = User(id=38612, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -2635,10 +2576,7 @@ def test_moratorium_schedule(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
     # a = User(id=160, performed_by=123, name="dfd", fullname="dfdf", nickname="dfdd", email="asas",)
-    a = User(
-        id=160,
-        performed_by=123,
-    )
+    a = User(id=160, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -2763,10 +2701,7 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
     #     nickname="Ananth",
     #     email="ananth@redcarpetup.com",
     # )
-    a = User(
-        id=38613,
-        performed_by=123,
-    )
+    a = User(id=38613, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -2846,10 +2781,7 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
     #     nickname="Mohammad Shahbaz Mohammad Shafi Qureshi",
     #     email="shahbazq797@gmail.com",
     # )
-    a = User(
-        id=1836540,
-        performed_by=123,
-    )
+    a = User(id=1836540, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -2959,10 +2891,7 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
 
-    a = User(
-        id=1836540,
-        performed_by=123,
-    )
+    a = User(id=1836540, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -3053,10 +2982,7 @@ def test_reducing_interest_with_extension(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
 
-    a = User(
-        id=1836540,
-        performed_by=123,
-    )
+    a = User(id=1836540, performed_by=123,)
     session.add(a)
     session.flush()
 
@@ -3200,20 +3126,12 @@ def test_transaction_before_activation(session: Session) -> None:
     #     nickname="Mohammad Shahbaz Mohammad Shafi Qureshi",
     #     email="shahbazq797@gmail.com",
     # )
-    a = User(
-        id=1836540,
-        performed_by=123,
-    )
+    a = User(id=1836540, performed_by=123,)
     session.add(a)
     session.flush()
 
     # assign card
-    user_loan = create_user_product(
-        session=session,
-        card_type="ruby",
-        user_id=a.id,
-        lender_id=62311,
-    )
+    user_loan = create_user_product(session=session, card_type="ruby", user_id=a.id, lender_id=62311,)
 
     # Swipe before activation
     swipe = create_card_swipe(
@@ -3395,10 +3313,7 @@ def test_readjust_future_payment_with_new_swipe(session: Session) -> None:
 def test_readjust_future_payment_with_extension(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
-    a = User(
-        id=99,
-        performed_by=123,
-    )
+    a = User(id=99, performed_by=123,)
     session.add(a)
     session.flush()
 

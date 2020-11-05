@@ -5,8 +5,7 @@ from rush.loan_schedule.calculations import get_down_payment
 
 def test_get_down_payment_1() -> None:
     downpayment_amount = get_down_payment(
-        principal=Decimal("10000"),
-        down_payment_percentage=Decimal("20"),
+        principal=Decimal("10000"), down_payment_percentage=Decimal("20"),
     )
     assert downpayment_amount == Decimal("2000")
 

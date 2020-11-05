@@ -40,14 +40,8 @@ def upgrade() -> None:
         sa.Column("single_txn_spend_limit", sa.Integer(), nullable=True),
         sa.Column("daily_spend_limit", sa.Integer(), nullable=True),
         sa.Column("international_usage", sa.BOOLEAN(), server_default="false", nullable=False),
-        sa.ForeignKeyConstraint(
-            ["loan_id"],
-            ["v3_loans.id"],
-        ),
-        sa.ForeignKeyConstraint(
-            ["user_id"],
-            ["v3_users.id"],
-        ),
+        sa.ForeignKeyConstraint(["loan_id"], ["v3_loans.id"],),
+        sa.ForeignKeyConstraint(["user_id"], ["v3_users.id"],),
         sa.PrimaryKeyConstraint("id"),
     )
 

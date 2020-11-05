@@ -38,9 +38,7 @@ from rush.utils import (
 
 
 def can_remove_latest_accrued_interest(
-    session: Session,
-    user_loan: BaseLoan,
-    interest_event: LedgerTriggerEvent,
+    session: Session, user_loan: BaseLoan, interest_event: LedgerTriggerEvent,
 ) -> bool:
     """
     We check if the payment has come before the due date and if the total outstanding amount is
@@ -177,7 +175,7 @@ def accrue_late_charges(
             event=event,
             fee_name="late_fee",
             gross_fee_amount=late_fee_to_charge_incl_tax,
-            include_gst_from_gross_amount=True
+            include_gst_from_gross_amount=True,
         )
         event.amount = fee.gross_amount
 

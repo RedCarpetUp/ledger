@@ -57,9 +57,7 @@ def get_payment_events(session: Session, user_loan: BaseLoan) -> List[LedgerTrig
             )
         ).all()
     else:
-        events = events.filter(
-            LedgerTriggerEvent.loan_id == user_loan.loan_id,
-        ).all()
+        events = events.filter(LedgerTriggerEvent.loan_id == user_loan.loan_id,).all()
     return events
 
 

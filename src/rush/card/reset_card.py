@@ -112,10 +112,7 @@ class ResetCard(BaseLoan):
         )
 
         loan_disbursement_event(
-            session=session,
-            loan=loan,
-            event=event,
-            bill_id=loan_data.id,
+            session=session, loan=loan, event=event, bill_id=loan_data.id,
         )
 
         # unlock some limit if required.
@@ -126,9 +123,7 @@ class ResetCard(BaseLoan):
         bill = loan.convert_to_bill_class(loan_data)
 
         create_bill_schedule(
-            session=session,
-            user_loan=loan,
-            bill=bill,
+            session=session, user_loan=loan, bill=bill,
         )
 
         add_max_amount_event(session=session, bill=bill, event=event, amount=kwargs["amount"])

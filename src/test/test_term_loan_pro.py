@@ -37,10 +37,7 @@ def create_products(session: Session) -> None:
 
 
 def create_user(session: Session) -> None:
-    u = User(
-        id=4,
-        performed_by=123,
-    )
+    u = User(id=4, performed_by=123,)
     session.add(u)
     session.flush()
 
@@ -109,8 +106,7 @@ def test_product_amortization_6() -> None:
 
 def test_calculate_downpayment_amount() -> None:
     downpayment_amount = get_down_payment(
-        principal=Decimal("10000"),
-        down_payment_percentage=Decimal("20"),
+        principal=Decimal("10000"), down_payment_percentage=Decimal("20"),
     )
     assert downpayment_amount == Decimal("2000")
 
@@ -125,8 +121,7 @@ def test_create_term_loan(session: Session) -> None:
     loan_creation_data = {"date_str": "2020-08-01", "user_product_id": user_product.id}
 
     _downpayment_amount = get_down_payment(
-        principal=Decimal("10000"),
-        down_payment_percentage=Decimal("20"),
+        principal=Decimal("10000"), down_payment_percentage=Decimal("20"),
     )
 
     # downpayment
@@ -224,8 +219,7 @@ def test_create_term_loan_2(session: Session) -> None:
     loan_creation_data = {"date_str": "2018-10-22", "user_product_id": user_product.id}
 
     _downpayment_amount = get_down_payment(
-        principal=Decimal("10000"),
-        down_payment_percentage=Decimal("20"),
+        principal=Decimal("10000"), down_payment_percentage=Decimal("20"),
     )
 
     # downpayment

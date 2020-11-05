@@ -42,16 +42,12 @@ def get_monthly_instalment(
     round_to: Optional[str] = "one",
 ):
     down_payment = get_down_payment(
-        principal=principal,
-        down_payment_percentage=down_payment_percentage,
+        principal=principal, down_payment_percentage=down_payment_percentage,
     )
     principal_without_down_payment = principal - down_payment
     if interest_type == "reducing":
         instalment = get_reducing_emi(
-            principal_without_down_payment,
-            interest_rate_monthly,
-            number_of_instalments,
-            to_round=False,
+            principal_without_down_payment, interest_rate_monthly, number_of_instalments, to_round=False,
         )
     else:
         principal_instalment = principal_without_down_payment / number_of_instalments

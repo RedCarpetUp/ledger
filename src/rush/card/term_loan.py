@@ -64,10 +64,7 @@ class TermLoanBill(BaseBill):
         # Get the next emi's interest.
         interest_to_accrue = (
             self.session.query(LoanSchedule.interest_due)
-            .filter(
-                LoanSchedule.bill_id == self.table.id,
-                LoanSchedule.due_date > for_date,
-            )
+            .filter(LoanSchedule.bill_id == self.table.id, LoanSchedule.due_date > for_date,)
             .order_by(LoanSchedule.due_date)
             .limit(1)
             .scalar()
@@ -164,9 +161,7 @@ class TermLoan(BaseLoan):
         from rush.loan_schedule.loan_schedule import create_bill_schedule
 
         create_bill_schedule(
-            session=session,
-            user_loan=loan,
-            bill=bill,
+            session=session, user_loan=loan, bill=bill,
         )
 
         return loan

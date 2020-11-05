@@ -193,19 +193,13 @@ def _adjust_bill(
         )
 
     remaining_amount = adjust_for_receivable(
-        remaining_amount,
-        to_acc=debit_acc_str,
-        from_acc=f"{bill.id}/bill/unbilled/a",
+        remaining_amount, to_acc=debit_acc_str, from_acc=f"{bill.id}/bill/unbilled/a",
     )
     remaining_amount = adjust_for_receivable(
-        remaining_amount,
-        to_acc=debit_acc_str,
-        from_acc=f"{bill.id}/bill/interest_receivable/a",
+        remaining_amount, to_acc=debit_acc_str, from_acc=f"{bill.id}/bill/interest_receivable/a",
     )
     remaining_amount = adjust_for_receivable(
-        remaining_amount,
-        to_acc=debit_acc_str,
-        from_acc=f"{bill.id}/bill/principal_receivable/a",
+        remaining_amount, to_acc=debit_acc_str, from_acc=f"{bill.id}/bill/principal_receivable/a",
     )
     return remaining_amount
 
@@ -394,10 +388,7 @@ def adjust_for_revenue(
 
     fee_to_adjust = min(payment_to_adjust_from, fee.gross_amount)
     gst_split = get_gst_split_from_amount(
-        amount=fee_to_adjust,
-        sgst_rate=fee.sgst_rate,
-        cgst_rate=fee.cgst_rate,
-        igst_rate=fee.igst_rate,
+        amount=fee_to_adjust, sgst_rate=fee.sgst_rate, cgst_rate=fee.cgst_rate, igst_rate=fee.igst_rate,
     )
     assert gst_split["gross_amount"] == fee_to_adjust
     # Settle for net fee
