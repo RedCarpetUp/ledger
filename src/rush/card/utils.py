@@ -168,6 +168,7 @@ def add_reload_fee(
         fee_amount, sgst_rate=f.sgst_rate, cgst_rate=f.cgst_rate, igst_rate=f.igst_rate
     )
     f.gross_amount = d["gross_amount"]
+    event.amount = d["gross_amount"]
     session.add(f)
 
     # Update DPD and Journal Entries
