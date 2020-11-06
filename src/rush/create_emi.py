@@ -18,10 +18,8 @@ from rush.models import (
     LedgerTriggerEvent,
     LoanData,
     LoanMoratorium,
-    User,
     UserData,
 )
-from rush.utils import get_gst_split_from_amount
 
 
 def update_event_with_dpd(
@@ -216,150 +214,237 @@ def daily_dpd_update(session, user_loan, post_date):
             user_loan.ever_dpd = first_unpaid_emi.dpd
     session.flush()
 
-    def create_journal_entry(
-        session,
-        voucher_type,
-        date_ledger,
-        ledger,
-        alias,
-        group_name,
-        debit,
-        credit,
-        narration,
-        instrument_date,
-        sort_order,
-        ptype,
-        event_id,
+
+def create_journal_entry(
+    session,
+    voucher_type,
+    date_ledger,
+    ledger,
+    alias,
+    group_name,
+    debit,
+    credit,
+    narration,
+    instrument_date,
+    sort_order,
+    ptype,
+    event_id,
+):
+    entry = JournalEntry(
+        voucher_type=voucher_type,
+        date_ledger=date_ledger,
+        ledger=ledger,
+        alias=alias,
+        group_name=group_name,
+        debit=debit,
+        credit=credit,
+        narration=narration,
+        instrument_date=instrument_date,
+        sort_order=sort_order,
+        ptype=ptype,
+        event_id=event_id,
+    )
+    session.add(entry)
+    session.flush()
+    return entry
+
+
+def get_journal_entry_narration(event_name) -> String:
+    if event_name == "charge_late_fine":
+        return "Late Fee"
+    elif event_name == "atm_fee_added":
+        return "ATM Fee"
+    elif event_name == "reload_fee_added":
+        return "Reload Fee"
+    elif event_name == "processing_fee_added":
+        return "Processing Fee"
+    elif event_name == "payment_received":
+        return "Receipt-Import"
+    elif event_name == "transaction_refund":
+        return "Payment Received From Merchant"
+
+
+def get_journal_entry_ptype(event_name) -> String:
+    if event_name == "charge_late_fine":
+        return "Late Fee-Card TL-Customer"
+    elif event_name == "atm_fee_added":
+        return "CF ATM Fee-Customer"
+    elif event_name == "reload_fee_added":
+        return "CF Reload Fee-Customer"
+    elif event_name == "processing_fee_added":
+        return "CF Processing Fee-Customer"
+    elif event_name == "payment_received":
+        return "CF-Customer"
+    elif event_name == "transaction_refund":
+        return "CF-Merchant"
+
+
+def get_journal_entry_ledger_for_payment(event_name) -> String:
+    if event_name == "payment_received":
+        return "Axis Bank Ltd-Collections A/c"
+    elif event_name == "transaction_refund":
+        return "Cards Upload A/c"
+
+
+def update_journal_entry(
+    user_loan: BaseLoan,
+    event: LedgerTriggerEvent,
+) -> None:
+    # TODO Think about alias accounts. Also what is processing and reload event?
+    session = user_loan.session
+    user_name = ""
+    user_data = (
+        session.query(UserData)
+        .filter(UserData.row_status == "active", UserData.user_id == user_loan.user_id)
+        .one_or_none()
+    )
+    if user_data:
+        user_name = user_data.first_name + " " + user_data.last_name
+    if event.name == "card_transaction":
+        create_journal_entry(
+            session,
+            "Journal-Disbursement",
+            event.post_date,
+            user_name,
+            "",
+            "RedCarpet",
+            event.amount,
+            0,
+            "RedCarpet Disbursement",
+            event.post_date,
+            1,
+            "Disbursal Card",
+            event.id,
+        )
+        create_journal_entry(
+            session,
+            "",
+            event.post_date,
+            "Cards Upload A/C",
+            "",
+            "RedCarpet",
+            0,
+            event.amount,
+            "",
+            event.post_date,
+            2,
+            "Disbursal Card",
+            event.id,
+        )
+    elif (
+        event.name == "charge_late_fine"
+        or event.name == "atm_fee_added"
+        or event.name == "reload_fee_added"
     ):
-        entry = JournalEntry(
-            voucher_type=voucher_type,
-            date_ledger=date_ledger,
-            ledger=ledger,
-            alias=alias,
-            group_name=group_name,
-            debit=debit,
-            credit=credit,
-            narration=narration,
-            instrument_date=instrument_date,
-            sort_order=sort_order,
-            ptype=ptype,
-            event_id=event_id,
+        from rush.utils import get_gst_split_from_amount
+
+        d = get_gst_split_from_amount(
+            event.amount, sgst_rate=Decimal(0), cgst_rate=Decimal(0), igst_rate=Decimal(18)
         )
-        session.add(entry)
-        session.flush()
-        return entry
-
-    def get_journal_entry_narration(event_name) -> String:
-        if event_name == "charge_late_fine":
-            return "Late Fee"
-        elif event_name == "atm_fee_added":
-            return "ATM Fee"
-        elif event_name == "reload_fee_added":
-            return "Reload Fee"
-        elif event_name == "processing_fee_added":
-            return "Processing Fee"
-
-    def get_journal_entry_ptype(event_name) -> String:
-        if event_name == "charge_late_fine":
-            return "Late Fee-Card TL-Customer"
-        elif event_name == "atm_fee_added":
-            return "CF ATM Fee-Customer"
-        elif event_name == "reload_fee_added":
-            return "CF Reload Fee-Customer"
-        elif event_name == "processing_fee_added":
-            return "CF Processing Fee-Customer"
-
-    def update_journal_entry(
-        user_loan: BaseLoan,
-        event: LedgerTriggerEvent = None,
-    ) -> None:
-        # TODO Think about alias accounts. Also what is processing and reload event?
-        session = user_loan.session
-        user_name = ""
-        user_data = (
-            session.query(UserData)
-            .filter(UserData.row_status == "active", UserData.user_id == user_loan.user_id)
-            .one_or_none()
+        create_journal_entry(
+            session,
+            "Sales-Import",
+            event.post_date,
+            user_name,
+            "",
+            "RedCarpet",
+            event.amount,
+            0,
+            get_journal_entry_narration(event.name),
+            event.post_date,
+            1,
+            get_journal_entry_ptype(event.name),
+            event.id,
         )
-        if user_data:
-            user_name = user_data.first_name + " " + user_data.last_name
-        if event.name == "card_transaction":
-            create_journal_entry(
-                session,
-                "Journal-Disbursement",
-                event.post_date,
-                user_name,
-                "",
-                "RedCarpet",
-                event.amount,
-                0,
-                "RedCarpet Disbursement",
-                event.post_date,
-                1,
-                "Disbursal Card",
-                event.id,
-            )
-            create_journal_entry(
-                session,
-                "",
-                event.post_date,
-                "Cards Upload A/C",
-                "",
-                "RedCarpet",
-                0,
-                event.amount,
-                "",
-                event.post_date,
-                2,
-                "Disbursal Card",
-                event.id,
-            )
-        elif event.name == "charge_late_fine" or event.name == "atm_fee_added":
-            d = get_gst_split_from_amount(
-                event.amount, sgst_rate=Decimal(0), cgst_rate=Decimal(0), igst_rate=Decimal(18)
-            )
-            create_journal_entry(
-                session,
-                "Sales-Import",
-                event.post_date,
-                user_name,
-                "",
-                "RedCarpet",
-                event.amount,
-                0,
-                get_journal_entry_narration(event.name),
-                event.post_date,
-                1,
-                get_journal_entry_ptype(event.name),
-                event.id,
-            )
-            create_journal_entry(
-                session,
-                "",
-                event.post_date,
-                get_journal_entry_narration(event.name),
-                "",
-                "RedCarpet",
-                0,
-                d["net_amount"],
-                "",
-                event.post_date,
-                2,
-                get_journal_entry_ptype(event.name),
-                event.id,
-            )
-            create_journal_entry(
-                session,
-                "",
-                event.post_date,
-                "IGST",
-                "",
-                "RedCarpet",
-                0,
-                d["igst"],
-                "",
-                event.post_date,
-                3,
-                get_journal_entry_ptype(event.name),
-                event.id,
-            )
+        create_journal_entry(
+            session,
+            "",
+            event.post_date,
+            get_journal_entry_narration(event.name),
+            "",
+            "RedCarpet",
+            0,
+            d["net_amount"],
+            "",
+            event.post_date,
+            2,
+            get_journal_entry_ptype(event.name),
+            event.id,
+        )
+        create_journal_entry(
+            session,
+            "",
+            event.post_date,
+            "IGST",
+            "",
+            "RedCarpet",
+            0,
+            d["igst"],
+            "",
+            event.post_date,
+            3,
+            get_journal_entry_ptype(event.name),
+            event.id,
+        )
+    elif event.name == "payment_received" or event.name == "transaction_refund":
+        create_journal_entry(
+            session,
+            "Receipt-Import",
+            event.post_date,
+            get_journal_entry_ledger_for_payment(event.name),
+            "",
+            "RedCarpet",
+            event.amount,
+            0,
+            get_journal_entry_narration(event.name),
+            event.post_date,
+            1,
+            get_journal_entry_ptype(event.name),
+            event.id,
+        )
+        create_journal_entry(
+            session,
+            "",
+            event.post_date,
+            user_name,
+            "",
+            "RedCarpet",
+            0,
+            event.amount,
+            "",
+            event.post_date,
+            2,
+            get_journal_entry_ptype(event.name),
+            event.id,
+        )
+    elif event.name == "bill_generate":
+        create_journal_entry(
+            session,
+            "Journal-Import",
+            event.post_date,
+            user_name,
+            "",
+            "RedCarpet",
+            event.amount,
+            0,
+            "From/To",
+            event.post_date,
+            1,
+            "CF To TL",
+            event.id,
+        )
+        create_journal_entry(
+            session,
+            "Journal-Import",
+            event.post_date,
+            user_name,
+            "",
+            "RedCarpet",
+            0,
+            event.amount,
+            "From/To",
+            event.post_date,
+            2,
+            "CF To TL",
+            event.id,
+        )

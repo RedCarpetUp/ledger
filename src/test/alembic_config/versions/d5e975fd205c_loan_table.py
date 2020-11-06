@@ -363,6 +363,31 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["bill_id"], ["loan_data.id"], name="fk_event_dpd_bill_id"),
     )
 
+    op.create_table(
+        "journal_entries",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("voucher_type", sa.String(50), nullable=False),
+        sa.Column("date_ledger", sa.TIMESTAMP(), nullable=False),
+        sa.Column("ledger", sa.String(50), nullable=False),
+        sa.Column("alias", sa.String(50), nullable=True),
+        sa.Column("group_name", sa.String(50), nullable=False),
+        sa.Column("debit", sa.Numeric(), nullable=False),
+        sa.Column("credit", sa.Numeric(), nullable=False),
+        sa.Column("narration", sa.String(50), nullable=True),
+        sa.Column("instrument_date", sa.TIMESTAMP(), nullable=False),
+        sa.Column("sort_order", sa.Integer(), nullable=False),
+        sa.Column("ptype", sa.String(50), nullable=False),
+        sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
+        sa.Column("row_status", sa.String(length=20), nullable=False),
+        sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
+        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.Column("event_id", sa.Integer(), nullable=False),
+        sa.PrimaryKeyConstraint("id"),
+        sa.ForeignKeyConstraint(
+            ["event_id"], ["ledger_trigger_event.id"], name="fk_journal_entries_event_id"
+        ),
+    )
+
 
 def downgrade() -> None:
     pass
