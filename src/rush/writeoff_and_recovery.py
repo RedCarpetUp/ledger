@@ -47,20 +47,6 @@ def write_off_event(user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
         amount=event.amount,
     )
 
-    # if loan is reset, settle all remaining locked limit against write off expenses account.
-    if user_loan.product_type == "term_loan_reset":
-        _, locked_limit = get_account_balance_from_str(
-            session=user_loan.session, book_string=f"{user_loan.id}/card/locked_limit/l"
-        )
-        assert locked_limit > Decimal("0")
-        create_ledger_entry_from_str(
-            session=user_loan.session,
-            event_id=event.id,
-            debit_book_str=f"{user_loan.id}/card/locked_limit/l",
-            credit_book_str=f"{user_loan.id}/loan/writeoff_expenses/e",
-            amount=locked_limit,
-        )
-
 
 def recovery_event(user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
     # Recovery event is reversal of write off event. Add money that we need to receive from lender.
@@ -87,3 +73,27 @@ def reverse_all_unpaid_fees(user_loan: BaseLoan) -> None:
 
     for fee in fees:
         fee.fee_status = "REVERSED"
+
+
+def refund_locked_limit(user_loan: BaseLoan) -> None:
+    _, locked_limit = get_account_balance_from_str(
+        session=user_loan.session, book_string=f"{user_loan.id}/card/locked_limit/l"
+    )
+    assert locked_limit > Decimal("0")
+
+    event = LedgerTriggerEvent(
+        loan_id=user_loan.id,
+        name="refund_locked_limit",
+        amount=locked_limit,
+        post_date=get_current_ist_time(),
+    )
+    user_loan.session.add(event)
+    user_loan.session.flush()
+
+    create_ledger_entry_from_str(
+        session=user_loan.session,
+        event_id=event.id,
+        debit_book_str=f"{user_loan.id}/card/locked_limit/l",
+        credit_book_str=f"{user_loan.id}/loan/writeoff_expenses/e",
+        amount=locked_limit,
+    )

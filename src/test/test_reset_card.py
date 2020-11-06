@@ -17,8 +17,6 @@ from rush.ledger_utils import get_account_balance_from_str
 from rush.limit_unlock import limit_unlock
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
-    LedgerEntry,
-    LedgerTriggerEvent,
     Lenders,
     LoanData,
     Product,
@@ -26,7 +24,10 @@ from rush.models import (
 )
 from rush.payments import payment_received
 from rush.utils import add_gst_split_to_amount
-from rush.writeoff_and_recovery import write_off_loan
+from rush.writeoff_and_recovery import (
+    refund_locked_limit,
+    write_off_loan,
+)
 
 
 def create_lenders(session: Session) -> None:
@@ -186,17 +187,33 @@ def test_create_term_loan(session: Session) -> None:
     )
     assert available_limit == Decimal("1000")
 
+    _, lender_receivable = get_account_balance_from_str(
+        session=session, book_string=f"{loan.lender_id}/lender/lender_receivable/a"
+    )
+    assert lender_receivable == Decimal("0")
+
     write_off_loan(user_loan=loan)
+    # session.commit()
+
+    total_outstanding = user_loan.get_total_outstanding()
+
+    _, new_lender_receivable = get_account_balance_from_str(
+        session=session, book_string=f"{loan.lender_id}/lender/lender_receivable/a"
+    )
+    assert new_lender_receivable == lender_receivable - total_outstanding
+
+    _, writeoff_expenses = get_account_balance_from_str(
+        session=session, book_string=f"{loan.id}/loan/writeoff_expenses/e"
+    )
+    assert writeoff_expenses == total_outstanding
+
+    refund_locked_limit(user_loan=loan)
+    # session.commit()
 
     _, locked_limit = get_account_balance_from_str(
         session=session, book_string=f"{loan.id}/card/locked_limit/l"
     )
     assert locked_limit == Decimal("0")
-
-    _, lender_receivable = get_account_balance_from_str(
-        session=session, book_string=f"{loan.lender_id}/lender/lender_receivable/a"
-    )
-    assert lender_receivable == Decimal("0")
 
     _, writeoff_expenses = get_account_balance_from_str(
         session=session, book_string=f"{loan.id}/loan/writeoff_expenses/e"
