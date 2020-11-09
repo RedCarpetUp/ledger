@@ -229,6 +229,7 @@ def create_journal_entry(
     sort_order,
     ptype,
     event_id,
+    loan_id,
 ):
     entry = JournalEntry(
         voucher_type=voucher_type,
@@ -243,6 +244,7 @@ def create_journal_entry(
         sort_order=sort_order,
         ptype=ptype,
         event_id=event_id,
+        loan_id=loan_id,
     )
     session.add(entry)
     session.flush()
@@ -315,6 +317,7 @@ def update_journal_entry(
             1,
             "Disbursal Card",
             event.id,
+            user_loan.id,
         )
         create_journal_entry(
             session,
@@ -330,6 +333,7 @@ def update_journal_entry(
             2,
             "Disbursal Card",
             event.id,
+            user_loan.id,
         )
     elif (
         event.name == "charge_late_fine"
@@ -355,6 +359,7 @@ def update_journal_entry(
             1,
             get_journal_entry_ptype(event.name),
             event.id,
+            user_loan.id,
         )
         create_journal_entry(
             session,
@@ -370,6 +375,7 @@ def update_journal_entry(
             2,
             get_journal_entry_ptype(event.name),
             event.id,
+            user_loan.id,
         )
         create_journal_entry(
             session,
@@ -385,6 +391,7 @@ def update_journal_entry(
             3,
             get_journal_entry_ptype(event.name),
             event.id,
+            user_loan.id,
         )
     elif event.name == "payment_received" or event.name == "transaction_refund":
         create_journal_entry(
@@ -401,6 +408,7 @@ def update_journal_entry(
             1,
             get_journal_entry_ptype(event.name),
             event.id,
+            user_loan.id,
         )
         create_journal_entry(
             session,
@@ -416,6 +424,7 @@ def update_journal_entry(
             2,
             get_journal_entry_ptype(event.name),
             event.id,
+            user_loan.id,
         )
     elif event.name == "bill_generate":
         create_journal_entry(
@@ -432,6 +441,7 @@ def update_journal_entry(
             1,
             "CF To TL",
             event.id,
+            user_loan.id,
         )
         create_journal_entry(
             session,
@@ -447,4 +457,5 @@ def update_journal_entry(
             2,
             "CF To TL",
             event.id,
+            user_loan.id,
         )
