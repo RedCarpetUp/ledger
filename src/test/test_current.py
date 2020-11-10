@@ -8,6 +8,7 @@ from alembic.command import current as alembic_current
 from dateutil.relativedelta import relativedelta
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import func
 
 from rush.accrue_financial_charges import (
     accrue_interest_on_all_bills,
@@ -56,6 +57,7 @@ from rush.models import (
     EmiPaymentMapping,
     EventDpd,
     Fee,
+    JournalEntry,
     LedgerTriggerEvent,
     LenderPy,
     Lenders,
@@ -1939,6 +1941,16 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
 
     daily_date = parse_date("2020-08-28 00:05:00")
     daily_dpd_update(session, uc, daily_date)
+
+    dc_sum = (
+        session.query(func.sum(JournalEntry.debit), func.sum(JournalEntry.credit))
+        .filter(JournalEntry.loan_id == uc.id)
+        .all()
+    )
+
+    debit_total = dc_sum[0][0]
+    credit_total = dc_sum[0][1]
+    assert debit_total == credit_total
 
 
 def test_interest_reversal_interest_already_settled(session: Session) -> None:
