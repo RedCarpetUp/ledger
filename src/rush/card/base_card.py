@@ -224,7 +224,7 @@ class BaseLoan(Loan):
             user_id=kwargs["user_id"],
             user_product_id=user_product_id,
             lender_id=kwargs.pop("lender_id"),
-            rc_rate_of_interest_monthly=Decimal(3),
+            rc_rate_of_interest_monthly=kwargs.pop("rc_rate_of_interest_monthly"),
             lender_rate_of_interest_annual=Decimal(18),  # this is hardcoded for one lender.
             amortization_date=kwargs.get("card_activation_date"),  # TODO: change this later.
             min_tenure=kwargs.pop("min_tenure", None),
