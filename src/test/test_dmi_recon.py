@@ -71,6 +71,7 @@ def _create_user_raghav_and_do_swipes(session: Session) -> BaseLoan:
         user_id=user_raghav.id,
         card_activation_date=parse_date("2020-01-01").date(),
         card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
         kit_number="11111",
     )
@@ -139,6 +140,7 @@ def _create_user_ananth_and_do_swipes(session: Session) -> BaseLoan:
         user_id=user_ananth.id,
         card_activation_date=parse_date("2020-01-01").date(),
         card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
         kit_number="00000",
     )

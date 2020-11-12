@@ -181,6 +181,7 @@ def test_card_swipe_and_reversal(session: Session) -> None:
         user_id=2,
         card_activation_date=parse_date("2020-05-01").date(),
         card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
     )
 
@@ -260,6 +261,7 @@ def test_closing_bill(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2019-01-02").date(),
         card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
     )
 
@@ -393,6 +395,7 @@ def test_generate_bill_1(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
         card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
     )
 
@@ -465,6 +468,7 @@ def test_generate_bill_reducing_interest_1(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
         card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
         interest_type="reducing",
     )
@@ -505,7 +509,7 @@ def test_generate_bill_reducing_interest_1(session: Session) -> None:
     assert billed_amount == 1200
 
     _, min_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/min/a")
-    assert min_amount == Decimal("120.55")
+    assert min_amount == Decimal("121")
 
     update_event_with_dpd(user_loan=user_loan, to_date=parse_date("2020-05-21 00:05:00"))
 
@@ -513,15 +517,15 @@ def test_generate_bill_reducing_interest_1(session: Session) -> None:
     assert dpd_events[0].balance == Decimal(1200)
 
     emis = uc.get_loan_schedule()
-    assert emis[0].total_due_amount == Decimal("120.55")
+    assert emis[0].total_due_amount == Decimal("121")
     assert emis[0].principal_due == Decimal("84.55")
-    assert emis[0].interest_due == Decimal("36")
+    assert emis[0].interest_due == Decimal("36.45")
     assert emis[0].due_date == parse_date("2020-05-15").date()
     assert emis[0].emi_number == 1
     assert emis[0].total_closing_balance == Decimal(1200)
     assert emis[1].total_closing_balance == Decimal("1115.45")
     assert emis[11].principal_due == Decimal("117.04")
-    assert emis[11].interest_due == Decimal("3.51")
+    assert emis[11].interest_due == Decimal("3.96")
     assert emis[11].total_closing_balance == Decimal("117.04")
 
 
@@ -568,6 +572,7 @@ def test_min_multiplier(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
         card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
         min_multiplier=Decimal(2),
     )
@@ -631,6 +636,7 @@ def test_min_tenure(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
         card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
         min_tenure=24,
     )
@@ -1109,6 +1115,7 @@ def test_generate_bill_3(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
         card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
     )
 
@@ -1163,6 +1170,7 @@ def test_emi_creation(session: Session) -> None:
     uc = create_user_product(
         session=session,
         card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
         lender_id=62311,
@@ -1213,6 +1221,7 @@ def test_subsequent_emi_creation(session: Session) -> None:
     uc = create_user_product(
         session=session,
         card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
         lender_id=62311,
@@ -1292,6 +1301,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     uc = create_user_product(
         session=session,
         card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
         user_id=a.id,
         card_activation_date=parse_date("2020-05-01").date(),
         lender_id=62311,
@@ -1420,6 +1430,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     uc = create_user_product(
         session=session,
         card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
         user_id=a.id,
         card_activation_date=parse_date("2020-05-04").date(),
         lender_id=62311,
@@ -2224,6 +2235,7 @@ def test_lender_incur(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
         card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
     )
     swipe = create_card_swipe(
@@ -2314,6 +2326,7 @@ def test_lender_incur_two(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
         card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
     )
     swipe = create_card_swipe(
@@ -2444,7 +2457,7 @@ def test_prepayment(session: Session) -> None:
 #
 #     # assign card
 #     uc = create_user_product(
-#         session=session, user_id=a.id, card_activation_date=parse_date("2020-03-02"), card_type="ruby", lender_id = 62311,
+#         session=session, user_id=a.id, card_activation_date=parse_date("2020-03-02"), card_type="ruby", rc_rate_of_interest_monthly=Decimal(3), lender_id = 62311,
 #     )
 #
 #
@@ -2570,6 +2583,7 @@ def test_moratorium(session: Session) -> None:
     uc = create_user_product(
         session=session,
         card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
         user_id=a.id,
         card_activation_date=parse_date("2020-01-20").date(),
         interest_free_period_in_days=25,
@@ -2646,6 +2660,7 @@ def test_moratorium_schedule(session: Session) -> None:
     uc = create_user_product(
         session=session,
         card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
         lender_id=62311,
@@ -2774,6 +2789,7 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
         session,
         user_id=a.id,
         card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
         card_activation_date=parse_date("2020-01-20").date(),
         interest_free_period_in_days=25,
         lender_id=62311,
@@ -2857,6 +2873,7 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
     user_loan = create_user_product(
         session=session,
         card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
         user_id=a.id,
         # 16th March actual
         card_activation_date=parse_date("2020-03-01").date(),
@@ -2970,6 +2987,7 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
     user_loan = create_user_product(
         session=session,
         card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
         user_id=a.id,
         # 16th March actual
         card_activation_date=parse_date("2020-03-01").date(),
@@ -3064,6 +3082,7 @@ def test_reducing_interest_with_extension(session: Session) -> None:
     user_loan = create_user_product(
         session=session,
         card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
         user_id=a.id,
         # 16th March actual
         card_activation_date=parse_date("2020-03-01").date(),
@@ -3125,24 +3144,24 @@ def test_reducing_interest_with_extension(session: Session) -> None:
     extend_schedule(uc, 18, parse_date("2020-05-22"))
 
     emis = uc.get_loan_schedule()
-    assert emis[0].total_due_amount == Decimal("11.05")
+    assert emis[0].total_due_amount == Decimal("12")
     assert emis[0].principal_due == Decimal("7.75")
-    assert emis[0].interest_due == Decimal("3.30")
+    assert emis[0].interest_due == Decimal("4.25")
     assert emis[0].emi_number == 1
     assert emis[0].total_closing_balance == Decimal(110)
-    assert emis[1].total_due_amount == Decimal("16.68")
+    assert emis[1].total_due_amount == Decimal("18")  # 12 from first bill. 6 from 2nd.
     assert emis[1].principal_due == Decimal("11.93")
-    assert emis[1].interest_due == Decimal("4.75")
+    assert emis[1].interest_due == Decimal("6.07")
     assert emis[1].emi_number == 2
     assert emis[1].total_closing_balance == Decimal("158.25")
-    assert emis[2].total_due_amount == Decimal("11.46")
+    assert emis[2].total_due_amount == Decimal("12")  # post extension. 8 from first bill. 4 from 2nd.
     assert emis[2].principal_due == Decimal("7.07")
-    assert emis[2].interest_due == Decimal("4.39")
+    assert emis[2].interest_due == Decimal("4.93")
     assert emis[2].emi_number == 3
     assert emis[2].total_closing_balance == Decimal("146.32")
-    assert emis[18].total_due_amount == Decimal("3.96")
+    assert emis[18].total_due_amount == Decimal("4")
     assert emis[18].principal_due == Decimal("3.84")
-    assert emis[18].interest_due == Decimal("0.12")
+    assert emis[18].interest_due == Decimal("0.16")
     # First cycle 18 emis, next bill 19 emis
     assert emis[18].emi_number == 19
     assert emis[18].total_closing_balance == Decimal("3.84")
@@ -3211,6 +3230,7 @@ def test_transaction_before_activation(session: Session) -> None:
     user_loan = create_user_product(
         session=session,
         card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
         user_id=a.id,
         lender_id=62311,
     )
