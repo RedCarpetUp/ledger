@@ -50,16 +50,22 @@ class BaseBill:
         self.user_loan = user_loan
         self.__dict__.update(loan_data.__dict__)
 
-    def get_interest_to_charge(self, principal: Optional[Decimal] = None) -> Decimal:
+    def get_interest_to_charge(
+        self,
+        principal: Optional[Decimal] = None,
+        instalment: Optional[Decimal] = None,  # Updated instalment for bill extension
+    ) -> Decimal:
         if not principal:
             down_payment = self.get_down_payment(include_first_emi=False)
             principal = self.table.principal - down_payment
 
+        if not instalment:
+            instalment = self.get_instalment_amount(to_round=False)
+
         interest = get_interest_for_integer_emi(
             principal=principal,
-            number_of_instalments=self.table.bill_tenure,
+            instalment=instalment,
             interest_rate_monthly=self.user_loan.rc_rate_of_interest_monthly,
-            to_round=False,
             round_to=self.round_emi_to,
         )
         return interest
@@ -76,7 +82,12 @@ class BaseBill:
             min_scheduled = round(min_scheduled, 2)
         return min_scheduled
 
-    def get_instalment_amount(self, principal: Optional[Decimal] = None, tenure: Optional[int] = None):
+    def get_instalment_amount(
+        self,
+        principal: Optional[Decimal] = None,
+        tenure: Optional[int] = None,
+        to_round: Optional[bool] = True,
+    ):
         if not tenure:
             tenure = self.table.bill_tenure
         if not principal:
@@ -87,7 +98,7 @@ class BaseBill:
             interest_type=self.user_loan.interest_type,
             interest_rate_monthly=self.user_loan.rc_rate_of_interest_monthly,
             number_of_instalments=tenure,
-            to_round=False,
+            to_round=to_round,
             round_to=self.round_emi_to,
         )
         return instalment

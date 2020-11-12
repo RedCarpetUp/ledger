@@ -505,7 +505,7 @@ def test_generate_bill_reducing_interest_1(session: Session) -> None:
     assert billed_amount == 1200
 
     _, min_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/min/a")
-    assert min_amount == Decimal("120.55")
+    assert min_amount == Decimal("121")
 
     update_event_with_dpd(user_loan=user_loan, to_date=parse_date("2020-05-21 00:05:00"))
 
@@ -513,15 +513,15 @@ def test_generate_bill_reducing_interest_1(session: Session) -> None:
     assert dpd_events[0].balance == Decimal(1200)
 
     emis = uc.get_loan_schedule()
-    assert emis[0].total_due_amount == Decimal("120.55")
+    assert emis[0].total_due_amount == Decimal("121")
     assert emis[0].principal_due == Decimal("84.55")
-    assert emis[0].interest_due == Decimal("36")
+    assert emis[0].interest_due == Decimal("36.45")
     assert emis[0].due_date == parse_date("2020-05-15").date()
     assert emis[0].emi_number == 1
     assert emis[0].total_closing_balance == Decimal(1200)
     assert emis[1].total_closing_balance == Decimal("1115.45")
     assert emis[11].principal_due == Decimal("117.04")
-    assert emis[11].interest_due == Decimal("3.51")
+    assert emis[11].interest_due == Decimal("3.96")
     assert emis[11].total_closing_balance == Decimal("117.04")
 
 
@@ -3125,24 +3125,24 @@ def test_reducing_interest_with_extension(session: Session) -> None:
     extend_schedule(uc, 18, parse_date("2020-05-22"))
 
     emis = uc.get_loan_schedule()
-    assert emis[0].total_due_amount == Decimal("11.05")
+    assert emis[0].total_due_amount == Decimal("12")
     assert emis[0].principal_due == Decimal("7.75")
-    assert emis[0].interest_due == Decimal("3.30")
+    assert emis[0].interest_due == Decimal("4.25")
     assert emis[0].emi_number == 1
     assert emis[0].total_closing_balance == Decimal(110)
-    assert emis[1].total_due_amount == Decimal("16.68")
+    assert emis[1].total_due_amount == Decimal("18")  # 12 from first bill. 6 from 2nd.
     assert emis[1].principal_due == Decimal("11.93")
-    assert emis[1].interest_due == Decimal("4.75")
+    assert emis[1].interest_due == Decimal("6.07")
     assert emis[1].emi_number == 2
     assert emis[1].total_closing_balance == Decimal("158.25")
-    assert emis[2].total_due_amount == Decimal("11.46")
+    assert emis[2].total_due_amount == Decimal("12")  # post extension. 8 from first bill. 4 from 2nd.
     assert emis[2].principal_due == Decimal("7.07")
-    assert emis[2].interest_due == Decimal("4.39")
+    assert emis[2].interest_due == Decimal("4.93")
     assert emis[2].emi_number == 3
     assert emis[2].total_closing_balance == Decimal("146.32")
-    assert emis[18].total_due_amount == Decimal("3.96")
+    assert emis[18].total_due_amount == Decimal("4")
     assert emis[18].principal_due == Decimal("3.84")
-    assert emis[18].interest_due == Decimal("0.12")
+    assert emis[18].interest_due == Decimal("0.16")
     # First cycle 18 emis, next bill 19 emis
     assert emis[18].emi_number == 19
     assert emis[18].total_closing_balance == Decimal("3.84")
