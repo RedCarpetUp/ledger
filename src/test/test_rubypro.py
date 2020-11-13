@@ -69,6 +69,7 @@ def test_rubpro_user(session: Session) -> None:
     user_card = create_user_product(
         session=session,
         card_type="rubypro",
+        rc_rate_of_interest_monthly=Decimal(3),
         lender_id=1756833,
         interest_free_period_in_days=45,
         user_id=4369,

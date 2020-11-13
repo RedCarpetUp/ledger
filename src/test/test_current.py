@@ -3428,6 +3428,7 @@ def test_readjust_future_payment_with_extension(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-10-01").date(),
         card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
     )
 
