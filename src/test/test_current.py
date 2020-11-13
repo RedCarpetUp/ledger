@@ -1936,8 +1936,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     last_entry_first_bill = dpd_events[-2]
     last_entry_second_bill = dpd_events[-1]
 
-    assert last_entry_first_bill.balance == Decimal("12714.41")
-    assert last_entry_second_bill.balance == Decimal("7885.78")
+    assert last_entry_first_bill.balance == Decimal("12712.17")
+    assert last_entry_second_bill.balance == Decimal("7888.02")
 
     _, bill_may_principal_due = get_account_balance_from_str(
         session, book_string=f"{bill_may.id}/bill/principal_receivable/a"
@@ -1945,8 +1945,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     _, bill_june_principal_due = get_account_balance_from_str(
         session, book_string=f"{bill_june.id}/bill/principal_receivable/a"
     )
-    assert bill_may_principal_due == Decimal("12714.41")
-    assert bill_june_principal_due == Decimal("7885.78")
+    assert bill_may_principal_due == Decimal("12712.17")
+    assert bill_june_principal_due == Decimal("7888.02")
 
     daily_date = parse_date("2020-08-28 00:05:00")
     daily_dpd_update(session, uc, daily_date)
@@ -2047,7 +2047,7 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
     #  Pay 500 rupees
     user_loan = get_user_product(session, 99)
     payment_date = parse_date("2020-06-14 19:23:11")
-    amount = Decimal("3008.34")
+    amount = Decimal("2916.67")
     unpaid_bills = user_loan.get_unpaid_bills()
     first_bill = unpaid_bills[0]
     second_bill = unpaid_bills[1]
@@ -2080,7 +2080,7 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{user_loan.loan_id}/loan/lender_payable/l"
     )
-    assert lender_payable == Decimal("-238.84")
+    assert lender_payable == Decimal("-147.17")
 
     _, interest_earned = get_account_balance_from_str(
         session, book_string=f"{first_bill.id}/bill/interest_accrued/r"
@@ -2151,7 +2151,7 @@ def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
         session, book_string=f"{second_bill.id}/bill/interest_accrued/r"
     )
     assert interest_earned == Decimal("60.33")
-    assert is_bill_closed(session, first_bill) is True
+    assert is_bill_closed(session, first_bill) is False
     assert is_bill_closed(session, second_bill) is False
 
 

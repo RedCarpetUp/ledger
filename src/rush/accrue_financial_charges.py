@@ -181,6 +181,11 @@ def accrue_late_charges(
 def reverse_interest_charges(
     session: Session, event_to_reverse: LedgerTriggerEvent, user_loan: BaseLoan, payment_date: DateTime
 ) -> None:
+    from rush.payments import (
+        adjust_for_min_max_accounts,
+        find_amount_to_slide_in_bills,
+    )
+
     """
     This event is intended only when the complete amount has been paid and we need to remove the
     interest that we accrued before due_date. For example, interest gets accrued on 1st. Last date is
@@ -188,7 +193,10 @@ def reverse_interest_charges(
     is more convenient than adding it on 16th.
     """
     event = LedgerTriggerEvent(
-        name="reverse_interest_charges", loan_id=user_loan.loan_id, post_date=payment_date
+        name="reverse_interest_charges",
+        loan_id=user_loan.loan_id,
+        post_date=payment_date,
+        amount=event_to_reverse.amount,
     )
     session.add(event)
     session.flush()
@@ -209,8 +217,6 @@ def reverse_interest_charges(
     )
 
     inter_bill_movement_entries = []
-    # I don't think this needs to be a list but I'm not sure. Ideally only one bill should be open.
-    bills_to_slide = []
     for bill, ledger_entry in bills_and_ledger_entry:
         interest_that_was_added = ledger_entry.amount
         # We check how much got settled in the interest which we're planning to remove.
@@ -228,28 +234,34 @@ def reverse_interest_charges(
             )
 
         # We need to remove the amount that got adjusted in interest. interest_earned account needs
-        # to be removed by the interest_that_was_added amount.
+        # to be removed by the settled_amount.
         d = {"acc_to_remove_from": f"{bill.id}/bill/interest_accrued/r", "amount": settled_amount}
         inter_bill_movement_entries.append(d)  # Move amount from this bill to some other bill.
 
-        if not is_bill_closed(
-            session, bill
-        ):  # The bill which are open and we slide the above entries in here.
-            bills_to_slide.append(bill)
+    total_amount_to_readjust = sum(d["amount"] for d in inter_bill_movement_entries)
+    bills_data = find_amount_to_slide_in_bills(user_loan, total_amount_to_readjust)
 
-    for bill in bills_to_slide:
+    for bill_data in bills_data:
         for entry in inter_bill_movement_entries:
-            if entry["amount"] == 0:
+            amount_to_adjust_in_this_bill = min(bill_data["amount_to_adjust"], entry["amount"])
+            if amount_to_adjust_in_this_bill == 0:
                 continue
+            adjust_for_min_max_accounts(bill_data["bill"], amount_to_adjust_in_this_bill, event.id)
             remaining_amount = _adjust_bill(
-                session, bill, entry["amount"], event.id, debit_acc_str=entry["acc_to_remove_from"]
+                session,
+                bill_data["bill"],
+                amount_to_adjust_in_this_bill,
+                event.id,
+                debit_acc_str=entry["acc_to_remove_from"],
             )
+            assert remaining_amount == 0
             # if not all of it got adjusted in this bill, move remaining amount to next bill.
             # if got adjusted then this will be 0.
-            entry["amount"] = remaining_amount
+            entry["amount"] -= amount_to_adjust_in_this_bill
+            bill_data["amount_to_adjust"] -= amount_to_adjust_in_this_bill
 
     # Check if there's still amount that's left. If yes, then we received extra prepayment.
-    is_payment_left = any(d["amount"] > 0 for d in inter_bill_movement_entries)
+    is_payment_left = any(e["amount"] > 0 for e in inter_bill_movement_entries)
     if is_payment_left:
         for entry in inter_bill_movement_entries:
             if entry["amount"] == 0:
