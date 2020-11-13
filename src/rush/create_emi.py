@@ -7,15 +7,18 @@ from sqlalchemy.orm import (
     aliased,
 )
 from sqlalchemy.sql import func
+from sqlalchemy.sql.sqltypes import String
 
 from rush.card.base_card import BaseLoan
 from rush.models import (
     BookAccount,
     EventDpd,
+    JournalEntry,
     LedgerEntry,
     LedgerTriggerEvent,
     LoanData,
     LoanMoratorium,
+    UserData,
 )
 
 
@@ -70,21 +73,20 @@ def update_event_with_dpd(
 
         # Adjust dpd in loan schedule
         first_unpaid_mark = False
-        bill_dpd = 0
-        all_emis = user_loan.get_loan_schedule()
+        bill_dpd = -999
+        all_emis = user_loan.get_loan_schedule(only_unpaid_emis=True)
         for emi in all_emis:
-            if emi.payment_status != "Paid":
-                if not first_unpaid_mark:
-                    first_unpaid_mark = True
-                    # Bill dpd
-                    # Only calculate bill dpd is min is not 0
-                    if bill and bill.get_remaining_min() > 0:
-                        bill_dpd = (event_post_date - emi.due_date).days
-                # Schedule dpd
-                schedule_dpd = (event_post_date - emi.due_date).days
-                # We should only consider the daily dpd event for increment
-                if schedule_dpd >= emi.dpd:
-                    emi.dpd = schedule_dpd
+            if not first_unpaid_mark:
+                first_unpaid_mark = True
+                # Bill dpd
+                # Only calculate bill dpd is min is not 0
+                if bill and bill.get_remaining_min() > 0:
+                    bill_dpd = (event_post_date - emi.due_date).days
+            # Schedule dpd
+            schedule_dpd = (event_post_date - emi.due_date).days
+            # We should only consider the daily dpd event for increment
+            if schedule_dpd >= emi.dpd:
+                emi.dpd = schedule_dpd
 
         new_event = EventDpd(
             bill_id=account_id,
@@ -162,10 +164,12 @@ def update_event_with_dpd(
             continue
 
     # Calculate card level dpd
-    max_dpd = session.query(func.max(EventDpd.dpd).label("max_dpd")).one()
-    user_loan.dpd = max_dpd.max_dpd
-    if not user_loan.ever_dpd or max_dpd.max_dpd > user_loan.ever_dpd:
-        user_loan.ever_dpd = max_dpd.max_dpd
+    unpaid_emis = user_loan.get_loan_schedule(only_unpaid_emis=True)
+    if unpaid_emis:
+        first_unpaid_emi = unpaid_emis[0]
+        user_loan.dpd = first_unpaid_emi.dpd
+        if not user_loan.ever_dpd or first_unpaid_emi.dpd > user_loan.ever_dpd:
+            user_loan.ever_dpd = first_unpaid_emi.dpd
 
     session.flush()
 
@@ -175,17 +179,16 @@ def daily_dpd_update(session, user_loan, post_date):
     loan_level_due_date = None
     event = LedgerTriggerEvent(name="daily_dpd_update", loan_id=user_loan.loan_id, post_date=post_date)
     session.add(event)
-    all_emis = user_loan.get_loan_schedule()
+    all_emis = user_loan.get_loan_schedule(only_unpaid_emis=True)
     for emi in all_emis:
-        if emi.payment_status != "Paid":
-            if not first_unpaid_mark:
-                first_unpaid_mark = True
-                loan_level_due_date = emi.due_date
-            # Schedule dpd
-            dpd = (post_date.date() - emi.due_date).days
-            # We should only consider the daily dpd event for increment
-            if dpd >= emi.dpd:
-                emi.dpd = dpd
+        if not first_unpaid_mark:
+            first_unpaid_mark = True
+            loan_level_due_date = emi.due_date
+        # Schedule dpd
+        dpd = (post_date.date() - emi.due_date).days
+        # We should only consider the daily dpd event for increment
+        if dpd >= emi.dpd:
+            emi.dpd = dpd
 
     unpaid_bills = user_loan.get_unpaid_bills()
     for bill in unpaid_bills:
@@ -203,8 +206,256 @@ def daily_dpd_update(session, user_loan, post_date):
             session.add(new_event)
 
     # Calculate card level dpd
-    max_dpd = session.query(func.max(EventDpd.dpd).label("max_dpd")).one()
-    user_loan.dpd = max_dpd.max_dpd
-    if not user_loan.ever_dpd or max_dpd.max_dpd > user_loan.ever_dpd:
-        user_loan.ever_dpd = max_dpd.max_dpd
+    unpaid_emis = user_loan.get_loan_schedule(only_unpaid_emis=True)
+    if unpaid_emis:
+        first_unpaid_emi = unpaid_emis[0]
+        user_loan.dpd = first_unpaid_emi.dpd
+        if not user_loan.ever_dpd or first_unpaid_emi.dpd > user_loan.ever_dpd:
+            user_loan.ever_dpd = first_unpaid_emi.dpd
     session.flush()
+
+
+def create_journal_entry(
+    session,
+    voucher_type,
+    date_ledger,
+    ledger,
+    alias,
+    group_name,
+    debit,
+    credit,
+    narration,
+    instrument_date,
+    sort_order,
+    ptype,
+    event_id,
+    loan_id,
+):
+    entry = JournalEntry(
+        voucher_type=voucher_type,
+        date_ledger=date_ledger,
+        ledger=ledger,
+        alias=alias,
+        group_name=group_name,
+        debit=debit,
+        credit=credit,
+        narration=narration,
+        instrument_date=instrument_date,
+        sort_order=sort_order,
+        ptype=ptype,
+        event_id=event_id,
+        loan_id=loan_id,
+    )
+    session.add(entry)
+    session.flush()
+    return entry
+
+
+def get_journal_entry_narration(event_name) -> String:
+    if event_name == "charge_late_fine":
+        return "Late Fee"
+    elif event_name == "atm_fee_added":
+        return "ATM Fee"
+    elif event_name == "reload_fee_added":
+        return "Reload Fee"
+    elif event_name == "processing_fee_added":
+        return "Processing Fee"
+    elif event_name == "payment_received":
+        return "Receipt-Import"
+    elif event_name == "transaction_refund":
+        return "Payment Received From Merchant"
+
+
+def get_journal_entry_ptype(event_name) -> String:
+    if event_name == "charge_late_fine":
+        return "Late Fee-Card TL-Customer"
+    elif event_name == "atm_fee_added":
+        return "CF ATM Fee-Customer"
+    elif event_name == "reload_fee_added":
+        return "CF Reload Fee-Customer"
+    elif event_name == "processing_fee_added":
+        return "CF Processing Fee-Customer"
+    elif event_name == "payment_received":
+        return "CF-Customer"
+    elif event_name == "transaction_refund":
+        return "CF-Merchant"
+
+
+def get_journal_entry_ledger_for_payment(event_name) -> String:
+    if event_name == "payment_received":
+        return "Axis Bank Ltd-Collections A/c"
+    elif event_name == "transaction_refund":
+        return "Cards Upload A/c"
+
+
+def update_journal_entry(
+    user_loan: BaseLoan,
+    event: LedgerTriggerEvent,
+) -> None:
+    # TODO Think about alias accounts. Also what is processing and reload event?
+    session = user_loan.session
+    user_name = ""
+    user_data = (
+        session.query(UserData)
+        .filter(UserData.row_status == "active", UserData.user_id == user_loan.user_id)
+        .one_or_none()
+    )
+    if user_data:
+        user_name = user_data.first_name + " " + user_data.last_name
+    if event.name == "card_transaction":
+        create_journal_entry(
+            session,
+            "Journal-Disbursement",
+            event.post_date,
+            user_name,
+            "",
+            "RedCarpet",
+            event.amount,
+            0,
+            "RedCarpet Disbursement",
+            event.post_date,
+            1,
+            "Disbursal Card",
+            event.id,
+            user_loan.id,
+        )
+        create_journal_entry(
+            session,
+            "",
+            event.post_date,
+            "Cards Upload A/C",
+            "",
+            "RedCarpet",
+            0,
+            event.amount,
+            "",
+            event.post_date,
+            2,
+            "Disbursal Card",
+            event.id,
+            user_loan.id,
+        )
+    elif (
+        event.name == "charge_late_fine"
+        or event.name == "atm_fee_added"
+        or event.name == "reload_fee_added"
+    ):
+        from rush.utils import get_gst_split_from_amount
+
+        d = get_gst_split_from_amount(
+            event.amount, sgst_rate=Decimal(0), cgst_rate=Decimal(0), igst_rate=Decimal(18)
+        )
+        create_journal_entry(
+            session,
+            "Sales-Import",
+            event.post_date,
+            user_name,
+            "",
+            "RedCarpet",
+            event.amount,
+            0,
+            get_journal_entry_narration(event.name),
+            event.post_date,
+            1,
+            get_journal_entry_ptype(event.name),
+            event.id,
+            user_loan.id,
+        )
+        create_journal_entry(
+            session,
+            "",
+            event.post_date,
+            get_journal_entry_narration(event.name),
+            "",
+            "RedCarpet",
+            0,
+            d["net_amount"],
+            "",
+            event.post_date,
+            2,
+            get_journal_entry_ptype(event.name),
+            event.id,
+            user_loan.id,
+        )
+        create_journal_entry(
+            session,
+            "",
+            event.post_date,
+            "IGST",
+            "",
+            "RedCarpet",
+            0,
+            d["igst"],
+            "",
+            event.post_date,
+            3,
+            get_journal_entry_ptype(event.name),
+            event.id,
+            user_loan.id,
+        )
+    elif event.name == "payment_received" or event.name == "transaction_refund":
+        create_journal_entry(
+            session,
+            "Receipt-Import",
+            event.post_date,
+            get_journal_entry_ledger_for_payment(event.name),
+            "",
+            "RedCarpet",
+            event.amount,
+            0,
+            get_journal_entry_narration(event.name),
+            event.post_date,
+            1,
+            get_journal_entry_ptype(event.name),
+            event.id,
+            user_loan.id,
+        )
+        create_journal_entry(
+            session,
+            "",
+            event.post_date,
+            user_name,
+            "",
+            "RedCarpet",
+            0,
+            event.amount,
+            "",
+            event.post_date,
+            2,
+            get_journal_entry_ptype(event.name),
+            event.id,
+            user_loan.id,
+        )
+    elif event.name == "bill_generate":
+        create_journal_entry(
+            session,
+            "Journal-Import",
+            event.post_date,
+            user_name,
+            "",
+            "RedCarpet",
+            event.amount,
+            0,
+            "From/To",
+            event.post_date,
+            1,
+            "CF To TL",
+            event.id,
+            user_loan.id,
+        )
+        create_journal_entry(
+            session,
+            "Journal-Import",
+            event.post_date,
+            user_name,
+            "",
+            "RedCarpet",
+            0,
+            event.amount,
+            "From/To",
+            event.post_date,
+            2,
+            "CF To TL",
+            event.id,
+            user_loan.id,
+        )

@@ -9,7 +9,10 @@ from sqlalchemy.orm import Session
 from rush.anomaly_detection import run_anomaly
 from rush.card import BaseLoan
 from rush.card.base_card import BaseBill
-from rush.create_emi import update_event_with_dpd
+from rush.create_emi import (
+    update_event_with_dpd,
+    update_journal_entry,
+)
 from rush.ledger_events import (
     _adjust_bill,
     _adjust_for_downpayment,
@@ -86,6 +89,8 @@ def payment_received(
 
     # Update dpd
     update_event_with_dpd(user_loan=user_loan, event=lt)
+    # Update Journal Entry
+    update_journal_entry(user_loan=user_loan, event=lt)
 
 
 def refund_payment(
@@ -113,6 +118,8 @@ def refund_payment(
 
     # Update dpd
     update_event_with_dpd(user_loan=user_loan, event=lt)
+    # Update Journal Entry
+    update_journal_entry(user_loan=user_loan, event=lt)
 
 
 def payment_received_event(
