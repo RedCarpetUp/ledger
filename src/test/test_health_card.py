@@ -70,6 +70,7 @@ def create_test_user_loan(session: Session) -> HealthCard:
         user_id=3,
         card_activation_date=parse_date("2020-07-01").date(),
         card_type="health_card",
+        rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
         kit_number="10000",
     )

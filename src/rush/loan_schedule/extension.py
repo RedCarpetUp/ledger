@@ -59,22 +59,26 @@ def extend_bill_schedule(user_loan: BaseLoan, bill: BaseBill, from_date: date, n
     future_bill_emis += newly_created_emis
 
     # Correct amounts in all future emis.
-    interest_rate = user_loan.rc_rate_of_interest_monthly
-    closing_balance = first_emi.total_closing_balance
+    opening_principal = first_emi.total_closing_balance
     instalment = bill.get_instalment_amount(
-        principal=closing_balance, tenure=len(future_bill_emis)
+        principal=opening_principal, tenure=len(future_bill_emis)
     )  # Used only for reducing.
+    instalment_without_rounding = bill.get_instalment_amount(
+        principal=opening_principal, tenure=len(future_bill_emis), to_round=False
+    )
     principal_due = first_emi.total_closing_balance / len(future_bill_emis)
     for bill_emi in future_bill_emis:
         if user_loan.interest_type == "reducing":
-            interest_due = get_interest_to_charge(closing_balance, interest_rate, to_round=False)
+            interest_due = bill.get_interest_to_charge(
+                principal=opening_principal, instalment=instalment_without_rounding
+            )
             principal_due = instalment - interest_due
         else:
             interest_due = bill.get_interest_to_charge()
         bill_emi.principal_due = round(principal_due, 2)
         bill_emi.interest_due = round(interest_due, 2)
-        bill_emi.total_closing_balance = round(closing_balance, 2)
-        closing_balance -= principal_due
+        bill_emi.total_closing_balance = round(opening_principal, 2)
+        opening_principal -= principal_due
 
     bill.session.bulk_save_objects(newly_created_emis)
 

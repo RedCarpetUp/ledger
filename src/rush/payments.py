@@ -205,31 +205,26 @@ def find_amount_to_slide_in_bills(user_loan: BaseLoan, total_amount_to_slide: De
         {
             "bill": bill,
             "total_outstanding": bill.get_outstanding_amount(),
-            "monthly_instalment": bill.get_remaining_min() or bill.get_scheduled_min_amount(),
             "amount_to_adjust": 0,
         }
         for bill in unpaid_bills
     ]
     total_amount_before_sliding = total_amount_to_slide
     total_loan_outstanding = sum(bill["total_outstanding"] for bill in bills_dict)
-    total_min = sum(bill["monthly_instalment"] for bill in bills_dict)
     # Either nothing is left to slide or loan is completely settled and there is excess payment.
-    while total_amount_to_slide > 0 and total_loan_outstanding > 0:
-        for bill_data in bills_dict:
-            # If bill isn't generated there's no minimum amount scheduled. So can slide entire amount.
-            if not bill_data["bill"].table.is_generated:
-                amount_to_slide_based_on_ratio = total_amount_to_slide
-            else:
-                amount_to_slide_based_on_ratio = mul(
-                    bill_data["monthly_instalment"] / total_min, total_amount_before_sliding
-                )
-            amount_to_adjust = min(
-                amount_to_slide_based_on_ratio, total_amount_to_slide, bill_data["total_outstanding"]
+    for bill_data in bills_dict:
+        # If bill isn't generated there's no minimum amount scheduled. So can slide entire amount.
+        if not bill_data["bill"].table.is_generated:
+            amount_to_slide_based_on_ratio = total_amount_to_slide
+        else:
+            amount_to_slide_based_on_ratio = mul(
+                bill_data["total_outstanding"] / total_loan_outstanding, total_amount_before_sliding
             )
-            bill_data["amount_to_adjust"] += amount_to_adjust
-            bill_data["total_outstanding"] -= amount_to_adjust
-            total_amount_to_slide -= amount_to_adjust
-            total_loan_outstanding -= amount_to_adjust
+        amount_to_adjust = min(
+            amount_to_slide_based_on_ratio, total_amount_to_slide, bill_data["total_outstanding"]
+        )
+        bill_data["amount_to_adjust"] += amount_to_adjust
+        bill_data["total_outstanding"] -= amount_to_adjust
     filtered_bills_dict = filter(lambda x: x["amount_to_adjust"] > 0, bills_dict)
     return filtered_bills_dict
 

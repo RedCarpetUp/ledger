@@ -51,26 +51,27 @@ def get_monthly_instalment(
             principal_without_down_payment,
             interest_rate_monthly,
             number_of_instalments,
-            to_round=False,
+            to_round=to_round,
+            round_to=round_to,
         )
     else:
         principal_instalment = principal_without_down_payment / number_of_instalments
-        interest = get_interest_for_integer_emi(
+        interest = get_interest_to_charge(
             principal=principal_without_down_payment,
-            number_of_instalments=number_of_instalments,
             interest_rate_monthly=interest_rate_monthly,
-            to_round=False,
-            round_to=round_to,
         )
         instalment = principal_instalment + interest
-
-    if to_round:
-        instalment = round(instalment, 2)
+        if to_round:
+            instalment = round_up(to=round_to, val=instalment)
     return instalment
 
 
 def get_reducing_emi(
-    principal: Decimal, interest_rate_monthly: Decimal, tenure: int, to_round: Optional[bool] = False
+    principal: Decimal,
+    interest_rate_monthly: Decimal,
+    tenure: int,
+    to_round: Optional[bool] = False,
+    round_to: Optional[str] = "one",
 ) -> Decimal:
     emi = (
         principal
@@ -80,32 +81,28 @@ def get_reducing_emi(
         / (pow((1 + (interest_rate_monthly / 100)), tenure) - 1)
     )
     if to_round:
-        emi = round(emi, 2)
+        emi = round_up(to=round_to, val=emi)
     return emi
 
 
-def get_interest_to_charge(principal: Decimal, interest_rate_monthly: Decimal, to_round: bool):
+def get_interest_to_charge(
+    principal: Decimal,
+    interest_rate_monthly: Decimal,
+):
     interest = principal * (interest_rate_monthly / 100)
-    if to_round:
-        interest = round(interest, 2)
     return interest
 
 
 def get_interest_for_integer_emi(
     principal: Decimal,
-    number_of_instalments: int,
     interest_rate_monthly: Decimal,
-    to_round: bool,
+    instalment: Decimal,
     round_to: Optional[str] = "one",
 ):
     """
     Returns the interest amount to make the emi a whole number with added rounding difference.
     """
-    principal_instalment = principal / number_of_instalments
-    interest_on_principal = get_interest_to_charge(principal, interest_rate_monthly, to_round=False)
-    instalment = principal_instalment + interest_on_principal
+    interest_on_principal = get_interest_to_charge(principal, interest_rate_monthly)
     rounding_difference = round_up(to=round_to, val=instalment) - instalment
     interest = interest_on_principal + rounding_difference
-    if to_round:
-        interest = round(interest, 2)
     return interest
