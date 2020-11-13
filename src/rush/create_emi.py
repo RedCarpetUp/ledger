@@ -300,8 +300,10 @@ def update_journal_entry(
         .filter(UserData.row_status == "active", UserData.user_id == user_loan.user_id)
         .one_or_none()
     )
-    if user_data:
-        user_name = user_data.first_name + " " + user_data.last_name
+    if user_data and user_data.first_name:
+        user_name = user_data.first_name
+        if user_data.last_name:
+            user_name = user_name + " " + user_data.last_name
     if event.name == "card_transaction":
         create_journal_entry(
             session,
