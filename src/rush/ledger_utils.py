@@ -58,8 +58,9 @@ def get_account_balance_from_str(
     from_date: Optional[DateTime] = None,
 ) -> Tuple[int, Decimal]:
     book_variables = breakdown_account_variables_from_str(book_string)
+    func_call = None
     if from_date and to_date:
-        f = func.get_account_balance_between_periods(
+        func_call = func.get_account_balance_between_periods(
             cast(book_variables["identifier"], sqlalchemy.Integer),
             cast(book_variables["identifier_type"], sqlalchemy.String),
             cast(book_variables["name"], sqlalchemy.String),
@@ -68,21 +69,28 @@ def get_account_balance_from_str(
             cast(to_date, sqlalchemy.TIMESTAMP),
         )
     elif to_date:
-        f = func.get_account_balance(
+        func_call = func.get_account_balance(
             cast(book_variables["identifier"], sqlalchemy.Integer),
             cast(book_variables["identifier_type"], sqlalchemy.String),
             cast(book_variables["name"], sqlalchemy.String),
             cast(book_variables["account_type"], sqlalchemy.String),
             cast(to_date, sqlalchemy.TIMESTAMP),
         )
-    else:
-        f = func.get_account_balance(
-            cast(book_variables["identifier"], sqlalchemy.Integer),
-            cast(book_variables["identifier_type"], sqlalchemy.String),
-            cast(book_variables["name"], sqlalchemy.String),
-            cast(book_variables["account_type"], sqlalchemy.String),
+    # If to_date isn't provided then fetch latest balance from book_account rather than ledger_event.
+    if func_call is None:
+        account_balance = (
+            session.query(BookAccount.balance)
+            .filter(
+                BookAccount.identifier == book_variables["identifier"],
+                BookAccount.identifier_type == book_variables["identifier_type"],
+                BookAccount.book_name == book_variables["name"],
+                BookAccount.account_type == book_variables["account_type"],
+            )
+            .scalar()
+            or 0
         )
-    account_balance = session.query(f).scalar() or 0
+    else:
+        account_balance = session.query(func_call).scalar() or 0
     return 0, Decimal(account_balance)
 
 
