@@ -267,9 +267,6 @@ def test_closing_bill(session: Session) -> None:
         lender_id=62311,
     )
 
-    bill_date = parse_date("2019-02-01 00:00:00")
-    bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
-
     swipe_date = parse_date("2019-02-02 19:23:11")
     create_card_swipe(
         session=session,
@@ -296,6 +293,9 @@ def test_closing_bill(session: Session) -> None:
     )
     assert weekly_spent_1 == Decimal("3000")
 
+    bill_date = parse_date("2019-02-28 23:59:59")
+    bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
+
     accrue_interest_on_all_bills(
         session=session, post_date=bill.table.bill_due_date + relativedelta(days=1), user_loan=user_loan
     )
@@ -307,7 +307,7 @@ def test_closing_bill(session: Session) -> None:
         session=session, post_date=bill.table.bill_due_date + relativedelta(days=1), user_loan=user_loan
     )
 
-    event_date = parse_date("2019-03-15 12:00:00")
+    event_date = parse_date("2019-03-16 00:00:00")
     bill = accrue_late_charges(session, user_loan, event_date, Decimal(100))
 
     payment_date = parse_date("2019-03-27")
