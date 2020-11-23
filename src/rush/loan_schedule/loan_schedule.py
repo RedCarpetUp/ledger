@@ -117,13 +117,6 @@ def slide_payment_to_emis(user_loan: BaseLoan, payment_event: LedgerTriggerEvent
             emi.payment_status = "Paid"
         emi.last_payment_date = payment_event.post_date
         emi.dpd = (emi.last_payment_date.date() - emi.due_date).days
-        payment_mapping_data = (
-            user_loan.session.query(PaymentMapping)
-            .filter(PaymentMapping.emi_id == emi.id, PaymentMapping.row_status == "active")
-            .first()
-        )
-        if payment_mapping_data:
-            payment_mapping_data.row_status = "inactive"
         _ = PaymentMapping.new(
             user_loan.session,
             payment_request_id=payment_event.extra_details["payment_request_id"],
@@ -205,7 +198,6 @@ def readjust_future_payment(user_loan: BaseLoan, date_to_check_after: date):
     payment_mapping_data = (
         session.query(PaymentMapping)
         .filter(PaymentMapping.emi_id.in_(emi_ids), PaymentMapping.row_status == "active")
-        .order_by(PaymentMapping.amount_settled)
         .all()
     )
 
@@ -216,7 +208,7 @@ def readjust_future_payment(user_loan: BaseLoan, date_to_check_after: date):
         amount_to_readjust = payment_mapping.amount_settled
         payment_request_id = payment_mapping.payment_request_id
         for emi in future_emis:
-            if emi.payment_status == "Paid":  # skip is already paid from previous mapping
+            if emi.remaining_amount == 0:  # skip is already paid from previous mapping
                 continue
             if amount_to_readjust <= 0:
                 break  # this mapping's amount is done. Move to next one.
