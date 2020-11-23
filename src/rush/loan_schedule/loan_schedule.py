@@ -208,7 +208,7 @@ def readjust_future_payment(user_loan: BaseLoan, date_to_check_after: date):
         amount_to_readjust = payment_mapping.amount_settled
         payment_request_id = payment_mapping.payment_request_id
         for emi in future_emis:
-            if emi.payment_status == "Paid":  # skip is already paid from previous mapping
+            if emi.remaining_amount == 0:  # skip is already paid from previous mapping
                 continue
             if amount_to_readjust <= 0:
                 break  # this mapping's amount is done. Move to next one.
