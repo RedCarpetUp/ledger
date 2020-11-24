@@ -144,6 +144,7 @@ def add_reload_fee(
     if post_date is None:
         post_date = get_current_ist_time().date()
 
+    # TODO Add segregation for processing fee to split in journal entry
     event = LedgerTriggerEvent(
         name="reload_fee_added",
         post_date=get_current_ist_time().date(),
@@ -167,7 +168,17 @@ def add_reload_fee(
         fee_amount, sgst_rate=f.sgst_rate, cgst_rate=f.cgst_rate, igst_rate=f.igst_rate
     )
     f.gross_amount = d["gross_amount"]
+    event.amount = d["gross_amount"]
     session.add(f)
+
+    # Update DPD and Journal Entries
+    from rush.create_emi import (
+        update_event_with_dpd,
+        update_journal_entry,
+    )
+
+    update_event_with_dpd(user_loan=user_loan, event=event)
+    update_journal_entry(user_loan=user_loan, event=event)
 
     return f
 

@@ -9,7 +9,10 @@ from sqlalchemy.orm import Session
 from rush.anomaly_detection import run_anomaly
 from rush.card import BaseLoan
 from rush.card.base_card import BaseBill
-from rush.create_emi import update_event_with_dpd
+from rush.create_emi import (
+    update_event_with_dpd,
+    update_journal_entry,
+)
 from rush.ledger_events import (
     _adjust_bill,
     _adjust_for_downpayment,
@@ -86,6 +89,8 @@ def payment_received(
 
     # Update dpd
     update_event_with_dpd(user_loan=user_loan, event=lt)
+    # Update Journal Entry
+    update_journal_entry(user_loan=user_loan, event=lt)
 
 
 def refund_payment(
@@ -113,6 +118,8 @@ def refund_payment(
 
     # Update dpd
     update_event_with_dpd(user_loan=user_loan, event=lt)
+    # Update Journal Entry
+    update_journal_entry(user_loan=user_loan, event=lt)
 
 
 def payment_received_event(
@@ -229,13 +236,15 @@ def transaction_refund_event(session: Session, user_loan: BaseLoan, event: Ledge
 
     for bill_data in bills_data:
         adjust_for_min_max_accounts(bill_data["bill"], bill_data["amount_to_adjust"], event.id)
-        refund_amount = _adjust_bill(
+        remaining_amount = _adjust_bill(
             session,
             bill_data["bill"],
             bill_data["amount_to_adjust"],
             event.id,
             debit_acc_str=m2p_pool_account,
         )
+        assert remaining_amount == 0
+        refund_amount -= bill_data["amount_to_adjust"]
     if refund_amount > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
             session=session,

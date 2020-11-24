@@ -8,6 +8,7 @@ from alembic.command import current as alembic_current
 from dateutil.relativedelta import relativedelta
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import func
 
 from rush.accrue_financial_charges import (
     accrue_interest_on_all_bills,
@@ -55,6 +56,7 @@ from rush.models import (
     CardNames,
     EventDpd,
     Fee,
+    JournalEntry,
     LedgerTriggerEvent,
     LenderPy,
     Lenders,
@@ -1674,7 +1676,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         .filter(BillFee.identifier_id == bill_may.id, BillFee.name == "atm_fee")
         .one_or_none()
     )
-    assert atm_fee_due.gross_amount == 50
+    assert atm_fee_due.gross_amount == 59
 
     create_card_swipe(
         session=session,
@@ -1875,8 +1877,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
     assert lender_amount == Decimal("0")
 
-    assert uc.get_remaining_max() == Decimal("13027.83")
-    assert uc.get_total_outstanding() == Decimal("21109.86")
+    assert uc.get_remaining_max() == Decimal("13036.83")
+    assert uc.get_total_outstanding() == Decimal("21118.86")
 
     bill_june = bill_generate(uc)
 
@@ -1935,8 +1937,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     last_entry_first_bill = dpd_events[-2]
     last_entry_second_bill = dpd_events[-1]
 
-    assert last_entry_first_bill.balance == Decimal("12712.17")
-    assert last_entry_second_bill.balance == Decimal("7888.02")
+    assert last_entry_first_bill.balance == Decimal("12720.99")
+    assert last_entry_second_bill.balance == Decimal("7888.20")
 
     _, bill_may_principal_due = get_account_balance_from_str(
         session, book_string=f"{bill_may.id}/bill/principal_receivable/a"
@@ -1944,11 +1946,21 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     _, bill_june_principal_due = get_account_balance_from_str(
         session, book_string=f"{bill_june.id}/bill/principal_receivable/a"
     )
-    assert bill_may_principal_due == Decimal("12712.17")
-    assert bill_june_principal_due == Decimal("7888.02")
+    assert bill_may_principal_due == Decimal("12720.99")
+    assert bill_june_principal_due == Decimal("7888.20")
 
     daily_date = parse_date("2020-08-28 00:05:00")
     daily_dpd_update(session, uc, daily_date)
+
+    dc_sum = (
+        session.query(func.sum(JournalEntry.debit), func.sum(JournalEntry.credit))
+        .filter(JournalEntry.loan_id == uc.id)
+        .all()
+    )
+
+    debit_total = dc_sum[0][0]
+    credit_total = dc_sum[0][1]
+    assert debit_total == credit_total
 
 
 def test_interest_reversal_interest_already_settled(session: Session) -> None:
@@ -3371,3 +3383,99 @@ def test_get_product_class() -> None:
 
     zeta_klass = get_product_class(card_type="zeta_card")
     assert zeta_klass is ZetaCard
+
+
+def test_readjust_future_payment_with_new_swipe(session: Session) -> None:
+    test_generate_bill_1(session)
+
+    user_loan = get_user_product(session, 99)
+    payment_date = parse_date("2020-05-03")
+    amount = Decimal(228)
+
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id="s3234",
+    )
+    emis = user_loan.get_loan_schedule()
+    assert emis[0].payment_status == "Paid"
+    assert emis[1].payment_status == "Paid"
+    assert emis[2].payment_status == "UnPaid"
+
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-05-08 19:23:11"),
+        amount=Decimal(2000),
+        description="BigBasket.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
+    )
+
+    bill_generate(user_loan=user_loan)
+
+    emis = user_loan.get_loan_schedule()
+    assert emis[0].payment_status == "Paid"
+    assert emis[1].payment_status == "UnPaid"
+    assert emis[1].payment_received == Decimal("114.00")
+    assert emis[1].total_due_amount == Decimal("341.00")
+
+
+def test_readjust_future_payment_with_extension(session: Session) -> None:
+    test_lenders(session)
+    card_db_updates(session)
+    a = User(
+        id=99,
+        performed_by=123,
+    )
+    session.add(a)
+    session.flush()
+
+    # assign card
+    user_loan = create_user_product(
+        session=session,
+        user_id=a.id,
+        card_activation_date=parse_date("2020-10-01").date(),
+        card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
+        lender_id=62311,
+    )
+
+    swipe = create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-10-02 19:23:11"),
+        amount=Decimal(1000),
+        description="BigB.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
+    )
+    assert swipe["result"] == "success"
+
+    bill_generate(user_loan=user_loan)
+
+    payment_date = parse_date("2020-10-03")
+    amount = Decimal(228)
+
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id="s3234",
+    )
+
+    emis = user_loan.get_loan_schedule()
+    assert emis[0].payment_status == "Paid"
+    assert emis[1].payment_status == "Paid"
+    assert emis[2].payment_status == "UnPaid"
+
+    extend_schedule(user_loan=user_loan, new_tenure=15, from_date=parse_date("2020-10-04"))
+
+    emis = user_loan.get_loan_schedule()
+    assert emis[0].payment_status == "Paid"
+    assert emis[1].payment_status == "Paid"
+    assert emis[2].payment_status == "UnPaid"
+    assert emis[2].payment_received == Decimal("34.00")

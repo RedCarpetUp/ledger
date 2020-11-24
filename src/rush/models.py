@@ -663,3 +663,22 @@ class UserUPI(UserInstrument):
     @hybridproperty
     def upi_merchant(self):
         return self.name
+
+
+class JournalEntry(AuditMixin):
+    __tablename__ = "journal_entries"
+
+    voucher_type = Column(String(length=50), default="", nullable=False)
+    date_ledger = Column(TIMESTAMP, nullable=False)
+    ledger = Column(String(length=50), nullable=False)
+    alias = Column(String(length=50), nullable=True)
+    group_name = Column(String(length=50), nullable=False)
+    debit = Column(Numeric, nullable=False)
+    credit = Column(Numeric, nullable=True)
+    narration = Column(String(length=50), nullable=True)
+    instrument_date = Column(TIMESTAMP, nullable=False)
+    sort_order = Column(Integer, nullable=False)
+    ptype = Column(String(length=50), nullable=True)
+    row_status = Column(String(length=10), default="active", nullable=False)
+    event_id = Column(Integer, ForeignKey(LedgerTriggerEvent.id), nullable=False)
+    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)

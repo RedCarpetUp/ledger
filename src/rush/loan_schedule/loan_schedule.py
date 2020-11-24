@@ -183,20 +183,10 @@ def readjust_future_payment(user_loan: BaseLoan, date_to_check_after: date):
     date needs to be readjusted.
     """
     session = user_loan.session
-    future_adjusted_emis = (
-        session.query(LoanSchedule)
-        .filter(
-            LoanSchedule.loan_id == user_loan.loan_id,
-            LoanSchedule.bill_id.is_(None),
-            LoanSchedule.due_date >= date_to_check_after,
-            LoanSchedule.payment_received > 0,  # Only if there's amount adjust in future emis.
-        )
-        .all()
-    )
+    future_emis = user_loan.get_loan_schedule(only_emis_after_date=date_to_check_after)
+    future_adjusted_emis = [emi for emi in future_emis if emi.payment_received > 0]
 
-    # There should be at least 2 emis for the readjustment. If there's only one then
-    # it doesn't matter because the amount will still be staying at that emi.
-    if len(future_adjusted_emis) < 2:
+    if len(future_adjusted_emis) == 0:
         return
 
     emi_ids = []
@@ -212,12 +202,13 @@ def readjust_future_payment(user_loan: BaseLoan, date_to_check_after: date):
     )
 
     new_mappings = defaultdict(dict)
+
     for payment_mapping in payment_mapping_data:
         payment_mapping.row_status = "inactive"
         amount_to_readjust = payment_mapping.amount_settled
         payment_request_id = payment_mapping.payment_request_id
-        for emi in future_adjusted_emis:
-            if emi.payment_status == "Paid":  # skip is already paid from previous mapping
+        for emi in future_emis:
+            if emi.remaining_amount == 0:  # skip is already paid from previous mapping
                 continue
             if amount_to_readjust <= 0:
                 break  # this mapping's amount is done. Move to next one.

@@ -9,7 +9,10 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
-from rush.create_emi import update_event_with_dpd
+from rush.create_emi import (
+    update_event_with_dpd,
+    update_journal_entry,
+)
 from rush.ledger_events import (
     add_max_amount_event,
     bill_generate_event,
@@ -105,16 +108,18 @@ def bill_generate(
     if not skip_bill_schedule_creation:
         create_bill_schedule(session, user_loan, bill)
 
-    atm_transactions_sum = bill.sum_of_atm_transactions()
-    if atm_transactions_sum > 0:
-        add_atm_fee(
-            session=session,
-            bill=bill,
-            post_date=bill.table.bill_close_date,
-            atm_transactions_amount=atm_transactions_sum,
-            user_loan=user_loan,
-            skip_schedule_grouping=skip_bill_schedule_creation,
-        )
+        atm_transactions_sum = bill.sum_of_atm_transactions()
+        if atm_transactions_sum > 0:
+            add_atm_fee(
+                session=session,
+                bill=bill,
+                post_date=bill.table.bill_close_date,
+                atm_transactions_amount=atm_transactions_sum,
+                user_loan=user_loan,
+            )
+
+    # Update Journal Entry
+    update_journal_entry(user_loan=user_loan, event=lt)
 
     return bill
 
@@ -125,7 +130,6 @@ def add_atm_fee(
     post_date: DateTime,
     atm_transactions_amount: Decimal,
     user_loan: BaseLoan,
-    skip_schedule_grouping: bool = False,
 ) -> None:
     atm_fee_perc = Decimal(2)
     atm_fee_without_gst = mul(atm_transactions_amount / 100, atm_fee_perc)
@@ -145,3 +149,4 @@ def add_atm_fee(
     event.amount = fee.gross_amount
 
     update_event_with_dpd(user_loan=user_loan, event=event)
+    update_journal_entry(user_loan=user_loan, event=event)
