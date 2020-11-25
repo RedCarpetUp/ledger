@@ -16,7 +16,7 @@ DEV_REQUIRES = [
 
 setup(
     name="rush",
-    version="0.1",
+    version="0.1.10",
     author="Sandeep Srinivasa",
     author_email="sss@redcarpetup.com",
     license="MIT",
