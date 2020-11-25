@@ -107,7 +107,7 @@ def is_late_fee_valid(session: Session, user_loan: BaseLoan) -> bool:
     # First check if there is even late fee accrued in the latest bill.
     _, late_fee_accrued = get_account_balance_from_str(session, f"{latest_bill.id}/bill/late_fine/r")
     if late_fee_accrued == 0:
-        return False  # Nothing to remove.
+        return True  # Nothing to remove.
 
     remaining_min = latest_bill.get_remaining_min()
     remaining_min_after_late_fee_removal = remaining_min - late_fee_accrued

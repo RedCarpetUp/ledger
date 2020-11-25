@@ -236,13 +236,15 @@ def transaction_refund_event(session: Session, user_loan: BaseLoan, event: Ledge
 
     for bill_data in bills_data:
         adjust_for_min_max_accounts(bill_data["bill"], bill_data["amount_to_adjust"], event.id)
-        refund_amount = _adjust_bill(
+        remaining_amount = _adjust_bill(
             session,
             bill_data["bill"],
             bill_data["amount_to_adjust"],
             event.id,
             debit_acc_str=m2p_pool_account,
         )
+        assert remaining_amount == 0
+        refund_amount -= bill_data["amount_to_adjust"]
     if refund_amount > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
             session=session,
