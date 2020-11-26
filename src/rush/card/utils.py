@@ -303,3 +303,15 @@ def get_daily_total_transactions(
         .scalar()
     )
     return daily_txns or 0
+
+def add_instrument(session: Session, **kwargs) -> UserCard:
+    kwargs["card_name"] = kwargs.get("card_name", "ruby")  # TODO: change this later.
+    kwargs["activation_type"] = kwargs.get("activation_type", "V")  # TODO: change this later.
+    kwargs["kit_number"] = kwargs.get("kit_number", "00000")  # TODO: change this later.
+
+    user_card = UserCard(**kwargs)
+    session.add(user_card)
+    session.flush()
+    return user_card
+
+    

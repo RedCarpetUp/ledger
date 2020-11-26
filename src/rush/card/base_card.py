@@ -239,16 +239,6 @@ class BaseLoan(Loan):
         session.add(loan)
         session.flush()
 
-        kwargs["loan_id"] = loan.id
-
-        kwargs["card_name"] = kwargs.get("card_name", "ruby")  # TODO: change this later.
-        kwargs["activation_type"] = kwargs.get("activation_type", "V")  # TODO: change this later.
-        kwargs["kit_number"] = kwargs.get("kit_number", "00000")  # TODO: change this later.
-
-        user_card = UserCard(**kwargs)
-        session.add(user_card)
-        session.flush()
-
         return loan
 
     def reinstate_limit_on_payment(self, event: LedgerTriggerEvent, amount: Decimal) -> None:
