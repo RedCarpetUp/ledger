@@ -1,6 +1,7 @@
 import contextlib
 from decimal import Decimal
 from io import StringIO
+from operator import add
 
 import alembic
 from _pytest.monkeypatch import MonkeyPatch
@@ -26,6 +27,7 @@ from rush.card.base_card import (
     BaseLoan,
 )
 from rush.card.utils import (
+    add_instrument,
     get_daily_spend,
     get_daily_total_transactions,
     get_weekly_spend,
@@ -3480,3 +3482,18 @@ def test_readjust_future_payment_with_extension(session: Session) -> None:
     assert emis[1].payment_status == "Paid"
     assert emis[2].payment_status == "UnPaid"
     assert emis[2].payment_received == Decimal("34.00")
+
+
+def test_add_instrument(session: Session) -> None:
+
+    a = User(
+        id=9999,
+        performed_by=321,
+    )
+
+    session.add(a)
+    session.flush()
+
+    instrument = add_instrument(session=session, user_id=9999, performed_by=321)
+
+    assert instrument.kit_number == "00000"
