@@ -633,7 +633,7 @@ class UserInstrument(AuditMixin):
 
     user_id = Column(Integer, ForeignKey(User.id), nullable=False)
     type = Column(String(), nullable=False)
-    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
+    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=True)
     details = Column(JSON, default=lambda: {})
     kyc_status = Column(String(length=20), default="PENDING", nullable=True)
     no_of_txn_per_day = Column(Integer, nullable=True)

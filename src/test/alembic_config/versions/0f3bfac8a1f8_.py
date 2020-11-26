@@ -24,7 +24,7 @@ def upgrade() -> None:
         sa.Column("performed_by", sa.Integer(), nullable=True),
         sa.Column("type", sa.String(), nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=False),
-        sa.Column("loan_id", sa.Integer(), nullable=False),
+        sa.Column("loan_id", sa.Integer(), nullable=True),
         sa.Column("details", sa.JSON(), server_default="{}", nullable=True),
         sa.Column("kyc_status", sa.String(length=20), server_default="PENDING", nullable=True),
         sa.Column("name", sa.String(), nullable=False),

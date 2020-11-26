@@ -304,6 +304,7 @@ def get_daily_total_transactions(
     )
     return daily_txns or 0
 
+
 def add_instrument(session: Session, **kwargs) -> UserCard:
     kwargs["card_name"] = kwargs.get("card_name", "ruby")  # TODO: change this later.
     kwargs["activation_type"] = kwargs.get("activation_type", "V")  # TODO: change this later.
@@ -313,5 +314,3 @@ def add_instrument(session: Session, **kwargs) -> UserCard:
     session.add(user_card)
     session.flush()
     return user_card
-
-    
