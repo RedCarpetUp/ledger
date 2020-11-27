@@ -306,6 +306,16 @@ def get_daily_total_transactions(
 
 
 def add_instrument(session: Session, **kwargs) -> UserCard:
+    event = LedgerTriggerEvent(
+        name="add_card",
+        amount=Decimal("0"),
+        post_date=get_current_ist_time().date(),
+        extra_details={"user_id": kwargs.get("user_id")},
+    )
+
+    session.add(event)
+    session.flush()
+
     kwargs["card_name"] = kwargs.get("card_name", "ruby")  # TODO: change this later.
     kwargs["activation_type"] = kwargs.get("activation_type", "V")  # TODO: change this later.
     kwargs["kit_number"] = kwargs.get("kit_number", "00000")  # TODO: change this later.

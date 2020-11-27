@@ -211,32 +211,53 @@ class BaseLoan(Loan):
         self.session = session
 
     @classmethod
-    def create(cls, session: Session, **kwargs) -> Loan:
-        user_product_id = kwargs.pop("user_product_id", None)
-        card_type = kwargs.pop("card_type")
+    def create(cls, session: Session, loan_id: Optional[int] = None, **kwargs) -> Loan:
+        user_product_id = kwargs.get("user_product_id", None)
+        card_type = kwargs.get("card_type")
         if not user_product_id:
             user_product_id = create_user_product_mapping(
                 session=session, user_id=kwargs["user_id"], product_type=card_type
             ).id
 
-        loan = cls(
-            session=session,
-            user_id=kwargs["user_id"],
-            user_product_id=user_product_id,
-            lender_id=kwargs.pop("lender_id"),
-            rc_rate_of_interest_monthly=kwargs.pop("rc_rate_of_interest_monthly"),
-            lender_rate_of_interest_annual=Decimal(18),  # this is hardcoded for one lender.
-            amortization_date=kwargs.get("card_activation_date"),  # TODO: change this later.
-            min_tenure=kwargs.pop("min_tenure", None),
-            min_multiplier=kwargs.pop("min_multiplier", None),
-            interest_type=kwargs.pop("interest_type", "flat"),
-        )
+        if loan_id:
+            loan = session.query(Loan).filter(Loan.id == loan_id).one()
+            if not loan:
+                return
 
-        # Don't want to overwrite default value in case of None.
-        if kwargs.get("interest_free_period_in_days"):
-            loan.interest_free_period_in_days = kwargs.pop("interest_free_period_in_days")
+            #update ledger details
+            loan.user_id=kwargs["user_id"],
+            loan.user_product_id=user_product_id,
+            loan.rc_rate_of_interest_monthly=kwargs.get("rc_rate_of_interest_monthly")
+            loan.lender_rate_of_interest_annual=Decimal(18)
+            loan.amortization_date=kwargs.get("card_activation_date")
+            loan.min_tenure=kwargs.get("min_tenure", None)
+            loan.min_multiplier=kwargs.get("min_multiplier", None)
+            loan.interest_type=kwargs.get("interest_type", "flat")
 
-        session.add(loan)
+            # Don't want to overwrite default value in case of None.
+            if kwargs.get("interest_free_period_in_days"):
+                loan.interest_free_period_in_days = kwargs.get("interest_free_period_in_days")
+                
+        else:
+            loan = cls(
+                session=session,
+                user_id=kwargs["user_id"],
+                user_product_id=user_product_id,
+                lender_id=kwargs.get("lender_id"),
+                rc_rate_of_interest_monthly=kwargs.get("rc_rate_of_interest_monthly"),
+                lender_rate_of_interest_annual=Decimal(18),  # this is hardcoded for one lender.
+                amortization_date=kwargs.get("card_activation_date"),  # TODO: change this later.
+                min_tenure=kwargs.get("min_tenure", None),
+                min_multiplier=kwargs.get("min_multiplier", None),
+                interest_type=kwargs.get("interest_type", "flat"),
+            )
+
+            # Don't want to overwrite default value in case of None.
+            if kwargs.get("interest_free_period_in_days"):
+                loan.interest_free_period_in_days = kwargs.get("interest_free_period_in_days")
+
+            session.add(loan)
+        
         session.flush()
 
         return loan
