@@ -224,20 +224,20 @@ class BaseLoan(Loan):
             if not loan:
                 return
 
-            #update ledger details
-            loan.user_id=kwargs["user_id"],
-            loan.user_product_id=user_product_id,
-            loan.rc_rate_of_interest_monthly=kwargs.get("rc_rate_of_interest_monthly")
-            loan.lender_rate_of_interest_annual=Decimal(18)
-            loan.amortization_date=kwargs.get("card_activation_date")
-            loan.min_tenure=kwargs.get("min_tenure", None)
-            loan.min_multiplier=kwargs.get("min_multiplier", None)
-            loan.interest_type=kwargs.get("interest_type", "flat")
+            # update ledger details
+            loan.user_id = (kwargs["user_id"],)
+            loan.user_product_id = (user_product_id,)
+            loan.rc_rate_of_interest_monthly = kwargs.get("rc_rate_of_interest_monthly")
+            loan.lender_rate_of_interest_annual = Decimal(18)
+            loan.amortization_date = kwargs.get("card_activation_date")
+            loan.min_tenure = kwargs.get("min_tenure", None)
+            loan.min_multiplier = kwargs.get("min_multiplier", None)
+            loan.interest_type = kwargs.get("interest_type", "flat")
 
             # Don't want to overwrite default value in case of None.
             if kwargs.get("interest_free_period_in_days"):
                 loan.interest_free_period_in_days = kwargs.get("interest_free_period_in_days")
-                
+
         else:
             loan = cls(
                 session=session,
@@ -257,7 +257,7 @@ class BaseLoan(Loan):
                 loan.interest_free_period_in_days = kwargs.get("interest_free_period_in_days")
 
             session.add(loan)
-        
+
         session.flush()
 
         return loan
