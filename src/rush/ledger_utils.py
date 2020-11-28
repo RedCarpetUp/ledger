@@ -46,8 +46,8 @@ def create_ledger_entry_from_str(
     credit_book_str: str,
     amount: Decimal,
 ) -> LedgerEntry:
-    debit_account = get_book_account_by_string(session, book_string=debit_book_str)
-    credit_account = get_book_account_by_string(session, book_string=credit_book_str)
+    debit_account = get_book_account_by_string(session, book_string=debit_book_str, amount=amount)
+    credit_account = get_book_account_by_string(session, book_string=credit_book_str, amount=amount)
     return create_ledger_entry(session, event_id, debit_account.id, credit_account.id, amount)
 
 
@@ -114,16 +114,27 @@ def breakdown_account_variables_from_str(book_string: str) -> dict:
     }
 
 
-def get_book_account_by_string(session: Session, book_string: str) -> BookAccount:
+def get_book_account_by_string(session: Session, book_string: str, amount: Optional[Decimal]) -> BookAccount:
     book_variables = breakdown_account_variables_from_str(book_string)
-    book_account = get_or_create(
-        session=session,
-        model=BookAccount,
-        identifier=book_variables["identifier"],
-        identifier_type=book_variables["identifier_type"],
-        book_name=book_variables["name"],
-        account_type=book_variables["account_type"],
-    )
+    if amount:
+        book_account = get_or_create(
+            session=session,
+            model=BookAccount,
+            identifier=book_variables["identifier"],
+            identifier_type=book_variables["identifier_type"],
+            book_name=book_variables["name"],
+            account_type=book_variables["account_type"],
+            amount=amount
+        )
+    else:
+        book_account = get_or_create(
+            session=session,
+            model=BookAccount,
+            identifier=book_variables["identifier"],
+            identifier_type=book_variables["identifier_type"],
+            book_name=book_variables["name"],
+            account_type=book_variables["account_type"],
+        )
     return book_account
 
 
