@@ -24,7 +24,6 @@ from rush.models import (
     BillFee,
     CardKitNumbers,
     CardNames,
-    EmiPaymentMapping,
     EventDpd,
     Fee,
     LedgerTriggerEvent,
