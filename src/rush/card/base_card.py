@@ -34,6 +34,7 @@ from rush.models import (
     LoanData,
     LoanMoratorium,
     LoanSchedule,
+    User,
     UserCard,
 )
 
@@ -211,7 +212,9 @@ class BaseLoan(Loan):
         self.session = session
 
     @classmethod
-    def create(cls, session: Session, loan_id: Optional[int] = None, **kwargs) -> Loan:
+    def create(
+        cls, session: Session, loan_id: Optional[int] = None, instrument_id: str = None, **kwargs
+    ) -> Loan:
         user_product_id = kwargs.get("user_product_id", None)
         card_type = kwargs.get("card_type")
         if not user_product_id:
@@ -238,6 +241,14 @@ class BaseLoan(Loan):
             if kwargs.get("interest_free_period_in_days"):
                 loan.interest_free_period_in_days = kwargs.get("interest_free_period_in_days")
 
+            # updating instrument
+            if instrument_id:
+                instrument = (
+                    session.query(UserCard).filter(UserCard.instrument_id == instrument_id).one()
+                )
+                if instrument:
+                    instrument.loan_id = loan_id
+
         else:
             loan = cls(
                 session=session,
@@ -255,6 +266,14 @@ class BaseLoan(Loan):
             # Don't want to overwrite default value in case of None.
             if kwargs.get("interest_free_period_in_days"):
                 loan.interest_free_period_in_days = kwargs.get("interest_free_period_in_days")
+
+            # updating instrument
+            if instrument_id:
+                instrument = (
+                    session.query(UserCard).filter(UserCard.instrument_id == instrument_id).one()
+                )
+                if instrument:
+                    instrument.loan_id = loan.id
 
             session.add(loan)
 

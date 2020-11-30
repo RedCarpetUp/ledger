@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from rush.card import (
     HealthCard,
-    create_user_product,
+    create_user_loan,
     get_user_product,
 )
 from rush.card.utils import (
@@ -64,7 +64,7 @@ def create_user(session: Session) -> None:
 
 
 def create_test_user_loan(session: Session) -> HealthCard:
-    uc = create_user_product(
+    uc = create_user_loan(
         session=session,
         user_id=5,
         card_activation_date=parse_date("2020-07-01").date(),

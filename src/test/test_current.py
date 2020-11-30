@@ -18,7 +18,7 @@ from rush.accrue_financial_charges import (
 from rush.card import (
     RubyCard,
     ZetaCard,
-    create_user_product,
+    create_user_loan,
     get_product_class,
     get_user_product,
 )
@@ -180,7 +180,7 @@ def test_m2p_transfer(session: Session) -> None:
 def test_card_swipe_and_reversal(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
-    uc = create_user_product(
+    uc = create_user_loan(
         session=session,
         user_id=2,
         card_activation_date=parse_date("2020-05-01").date(),
@@ -260,7 +260,7 @@ def test_closing_bill(session: Session) -> None:
     session.flush()
 
     # assign card
-    user_loan = create_user_product(
+    user_loan = create_user_loan(
         session=session,
         user_id=a.id,
         card_activation_date=parse_date("2019-01-02").date(),
@@ -394,7 +394,7 @@ def test_generate_bill_1(session: Session) -> None:
     session.flush()
 
     # assign card
-    uc = create_user_product(
+    uc = create_user_loan(
         session=session,
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
@@ -467,7 +467,7 @@ def test_generate_bill_reducing_interest_1(session: Session) -> None:
     session.flush()
 
     # assign card
-    uc = create_user_product(
+    uc = create_user_loan(
         session=session,
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
@@ -571,7 +571,7 @@ def test_min_multiplier(session: Session) -> None:
     session.flush()
 
     # assign card
-    user_loan = create_user_product(
+    user_loan = create_user_loan(
         session=session,
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
@@ -635,7 +635,7 @@ def test_min_tenure(session: Session) -> None:
     session.flush()
 
     # assign card
-    user_loan = create_user_product(
+    user_loan = create_user_loan(
         session=session,
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
@@ -1114,7 +1114,7 @@ def test_generate_bill_3(session: Session) -> None:
     session.flush()
 
     # assign card
-    uc = create_user_product(
+    uc = create_user_loan(
         session=session,
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
@@ -1171,7 +1171,7 @@ def test_emi_creation(session: Session) -> None:
     session.flush()
 
     # assign card
-    uc = create_user_product(
+    uc = create_user_loan(
         session=session,
         card_type="ruby",
         rc_rate_of_interest_monthly=Decimal(3),
@@ -1222,7 +1222,7 @@ def test_subsequent_emi_creation(session: Session) -> None:
     session.flush()
 
     # assign card
-    uc = create_user_product(
+    uc = create_user_loan(
         session=session,
         card_type="ruby",
         rc_rate_of_interest_monthly=Decimal(3),
@@ -1302,7 +1302,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
     session.flush()
 
     # assign card
-    uc = create_user_product(
+    uc = create_user_loan(
         session=session,
         card_type="ruby",
         rc_rate_of_interest_monthly=Decimal(3),
@@ -1431,7 +1431,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     session.flush()
 
     # assign card
-    uc = create_user_product(
+    uc = create_user_loan(
         session=session,
         card_type="ruby",
         rc_rate_of_interest_monthly=Decimal(3),
@@ -2244,7 +2244,7 @@ def test_lender_incur(session: Session) -> None:
     session.flush()
 
     # assign card
-    uc = create_user_product(
+    uc = create_user_loan(
         session=session,
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
@@ -2335,7 +2335,7 @@ def test_lender_incur_two(session: Session) -> None:
     session.flush()
 
     # assign card
-    uc = create_user_product(
+    uc = create_user_loan(
         session=session,
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
@@ -2470,7 +2470,7 @@ def test_prepayment(session: Session) -> None:
 #     session.flush()
 #
 #     # assign card
-#     uc = create_user_product(
+#     uc = create_user_loan(
 #         session=session, user_id=a.id, card_activation_date=parse_date("2020-03-02"), card_type="ruby", rc_rate_of_interest_monthly=Decimal(3), lender_id = 62311,
 #     )
 #
@@ -2594,7 +2594,7 @@ def test_moratorium(session: Session) -> None:
 
     # assign card
     # 25 days to enforce 15th june as first due date
-    uc = create_user_product(
+    uc = create_user_loan(
         session=session,
         card_type="ruby",
         rc_rate_of_interest_monthly=Decimal(3),
@@ -2671,7 +2671,7 @@ def test_moratorium_schedule(session: Session) -> None:
     session.flush()
 
     # assign card
-    uc = create_user_product(
+    uc = create_user_loan(
         session=session,
         card_type="ruby",
         rc_rate_of_interest_monthly=Decimal(3),
@@ -2799,7 +2799,7 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
     session.add(a)
     session.flush()
 
-    user_loan = create_user_product(
+    user_loan = create_user_loan(
         session,
         user_id=a.id,
         card_type="ruby",
@@ -2884,7 +2884,7 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
     session.flush()
 
     # assign card
-    user_loan = create_user_product(
+    user_loan = create_user_loan(
         session=session,
         card_type="ruby",
         rc_rate_of_interest_monthly=Decimal(3),
@@ -2998,7 +2998,7 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
     session.flush()
 
     # assign card
-    user_loan = create_user_product(
+    user_loan = create_user_loan(
         session=session,
         card_type="ruby",
         rc_rate_of_interest_monthly=Decimal(3),
@@ -3093,7 +3093,7 @@ def test_reducing_interest_with_extension(session: Session) -> None:
     session.flush()
 
     # assign card
-    user_loan = create_user_product(
+    user_loan = create_user_loan(
         session=session,
         card_type="ruby",
         rc_rate_of_interest_monthly=Decimal(3),
@@ -3241,7 +3241,7 @@ def test_transaction_before_activation(session: Session) -> None:
     session.flush()
 
     # assign card
-    user_loan = create_user_product(
+    user_loan = create_user_loan(
         session=session,
         card_type="ruby",
         rc_rate_of_interest_monthly=Decimal(3),
@@ -3437,7 +3437,7 @@ def test_readjust_future_payment_with_extension(session: Session) -> None:
     session.flush()
 
     # assign card
-    user_loan = create_user_product(
+    user_loan = create_user_loan(
         session=session,
         user_id=a.id,
         card_activation_date=parse_date("2020-10-01").date(),

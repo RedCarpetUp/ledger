@@ -57,7 +57,7 @@ def get_user_product(
     return user_product
 
 
-def create_user_product(session: Session, **kwargs) -> Loan:
+def create_user_loan(session: Session, **kwargs) -> Loan:
     loan_cls = get_product_class(card_type=kwargs["card_type"])
     loan = loan_cls.create(session=session, **kwargs)
     return loan

@@ -5,7 +5,7 @@ from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
 from rush.card import (
-    create_user_product,
+    create_user_loan,
     get_product_class,
     get_user_product,
 )
@@ -50,7 +50,7 @@ def create_user(session: Session) -> None:
 def create_test_term_loan(session: Session, **kwargs) -> TermLoan2:  # type: ignore
     date_str = kwargs["date_str"]
     user_product_id = kwargs["user_product_id"]
-    loan = create_user_product(
+    loan = create_user_loan(
         session=session,
         user_id=4,
         card_type="term_loan_2",

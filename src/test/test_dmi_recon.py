@@ -5,7 +5,7 @@ from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
 from rush.accrue_financial_charges import accrue_interest_on_all_bills
-from rush.card import create_user_product
+from rush.card import create_user_loan
 from rush.card.base_card import BaseLoan
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
@@ -66,7 +66,7 @@ def _create_user_raghav_and_do_swipes(session: Session) -> BaseLoan:
     session.flush()
 
     # Create user's card
-    user_loan_raghav = create_user_product(
+    user_loan_raghav = create_user_loan(
         session=session,
         user_id=user_raghav.id,
         card_activation_date=parse_date("2020-01-01").date(),
@@ -135,7 +135,7 @@ def _create_user_ananth_and_do_swipes(session: Session) -> BaseLoan:
     session.flush()
 
     # Create user's card
-    user_loan_ananth = create_user_product(
+    user_loan_ananth = create_user_loan(
         session=session,
         user_id=user_ananth.id,
         card_activation_date=parse_date("2020-01-01").date(),

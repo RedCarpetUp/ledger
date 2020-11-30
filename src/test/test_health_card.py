@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from rush.accrue_financial_charges import accrue_interest_on_all_bills
 from rush.card import (
-    create_user_product,
+    create_user_loan,
     get_user_product,
 )
 from rush.card.base_card import BaseBill
@@ -65,7 +65,7 @@ def create_user(session: Session) -> None:
 
 
 def create_test_user_loan(session: Session) -> HealthCard:
-    uc = create_user_product(
+    uc = create_user_loan(
         session=session,
         user_id=3,
         card_activation_date=parse_date("2020-07-01").date(),

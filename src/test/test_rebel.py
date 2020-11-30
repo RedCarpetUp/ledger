@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from rush.card import (
     RebelCard,
-    create_user_product,
+    create_user_loan,
     get_product_class,
     get_user_product,
 )
@@ -66,7 +66,7 @@ def test_rubpro_user(session: Session) -> None:
     create_user(session=session)
 
     user_product = create_user_product_mapping(session=session, user_id=4369, product_type="rebel")
-    user_card = create_user_product(
+    user_card = create_user_loan(
         session=session,
         card_type="rebel",
         rc_rate_of_interest_monthly=Decimal(3),
