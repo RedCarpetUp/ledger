@@ -26,7 +26,14 @@ from rush.ledger_utils import (
     get_account_balance_from_str,
 )
 from rush.loan_schedule.loan_schedule import slide_payment_to_emis
-from rush.models import BookAccount, LedgerEntry, LedgerTriggerEvent, PaymentSplit, Fee
+from rush.models import (
+    BookAccount,
+    LedgerEntry,
+    LedgerTriggerEvent,
+    PaymentRequestsData,
+    PaymentSplit,
+    Fee,
+)
 from rush.utils import mul
 from rush.writeoff_and_recovery import recovery_event
 
@@ -416,17 +423,34 @@ def customer_refund(
     payment_request_id: str,
 ) -> None:
 
+    payment_request_data = (
+        session.query(PaymentRequestsData)
+        .filter(
+            PaymentRequestsData.user_id == user_loan.user_id,
+            PaymentRequestsData.payment_request_id == payment_request_id,
+            PaymentRequestsData.payment_request_status == "Paid",
+            PaymentRequestsData.row_status == "active",
+        )
+        .one()
+    )
+
     fee = (
         session.query(Fee)
         .filter(
-            Fee.user_id == user_loan.user_id,
-            Fee.fee_status == "PAID",
-            Fee.gross_amount_paid == payment_amount,
+            Fee.name == payment_request_data.type,
+            Fee.net_amount == payment_request_data.payment_request_amount,
         )
+        .order_by(Fee.updated_at.desc())
         .first()
     )
 
-    if fee:
+    if fee.name in (
+        "late_fee",
+        "atm_fee",
+        "card_activation_fees",
+        "reset_joining_fees",
+        "card_reload_fees",
+    ):
         fee_refund(
             session=session,
             user_loan=user_loan,
@@ -480,15 +504,8 @@ def fee_refund(
 
     adjust_revenue_for_fee_refund(
         session=session,
-        credit_book_str=f"{user_loan.loan_id}/loan/lender_payable/l",
+        credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
         fee=fee,
-    )
-
-    customer_refund_event(
-        session=session,
-        loan_id=user_loan.loan_id,
-        lender_id=user_loan.lender_id,
-        event=lt,
     )
 
     update_journal_entry(user_loan=user_loan, event=lt)
