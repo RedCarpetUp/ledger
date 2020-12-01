@@ -18,7 +18,7 @@ from rush.ledger_events import (
     _adjust_for_downpayment,
     _adjust_for_prepayment,
     adjust_non_bill_payments,
-    adjust_revenue_for_fee_refund,
+    reduce_revenue_for_fee_refund,
     customer_refund_event,
 )
 from rush.ledger_utils import (
@@ -438,48 +438,44 @@ def customer_refund(
         session.query(Fee)
         .filter(
             Fee.name == payment_request_data.type,
-            Fee.net_amount == payment_request_data.payment_request_amount,
+            Fee.gross_amount == payment_request_data.payment_request_amount,
         )
         .order_by(Fee.updated_at.desc())
-        .first()
+        .one_or_none()
     )
 
-    if fee.name in (
-        "late_fee",
-        "atm_fee",
-        "card_activation_fees",
-        "reset_joining_fees",
-        "card_reload_fees",
-    ):
-        fee_refund(
-            session=session,
-            user_loan=user_loan,
-            payment_amount=payment_amount,
-            payment_date=payment_date,
-            payment_request_id=payment_request_id,
-            fee=fee,
-        )
-    else:
-        lt = LedgerTriggerEvent(
-            name="customer_refund",
-            loan_id=user_loan.loan_id,
-            amount=payment_amount,
-            post_date=payment_date,
-            extra_details={
-                "payment_request_id": payment_request_id,
-            },
-        )
-        session.add(lt)
-        session.flush()
+    if fee is None:
+        raise Exception("no fee found to refund")
 
-        customer_refund_event(
-            session=session,
-            loan_id=user_loan.loan_id,
-            lender_id=user_loan.lender_id,
-            event=lt,
-        )
+    fee_refund(
+        session=session,
+        user_loan=user_loan,
+        payment_amount=payment_amount,
+        payment_date=payment_date,
+        payment_request_id=payment_request_id,
+        fee=fee,
+    )
 
-        update_journal_entry(user_loan=user_loan, event=lt)
+    lt = LedgerTriggerEvent(
+        name="customer_refund",
+        loan_id=user_loan.loan_id,
+        amount=payment_amount,
+        post_date=payment_date,
+        extra_details={
+            "payment_request_id": payment_request_id,
+        },
+    )
+    session.add(lt)
+    session.flush()
+
+    customer_refund_event(
+        session=session,
+        loan_id=user_loan.loan_id,
+        lender_id=user_loan.lender_id,
+        event=lt,
+    )
+
+    update_journal_entry(user_loan=user_loan, event=lt)
 
 
 def fee_refund(
@@ -496,13 +492,14 @@ def fee_refund(
         amount=payment_amount,
         post_date=payment_date,
         extra_details={
+            "fee_id": fee.id,
             "payment_request_id": payment_request_id,
         },
     )
     session.add(lt)
     session.flush()
 
-    adjust_revenue_for_fee_refund(
+    reduce_revenue_for_fee_refund(
         session=session,
         credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
         fee=fee,

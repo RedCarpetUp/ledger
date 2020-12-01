@@ -376,21 +376,26 @@ def limit_unlock_event(
     )
 
 
+def get_revenue_book_str(fee: Fee) -> str:
+    if fee.name == "late_fee":
+        return f"{fee.identifier_id}/bill/late_fine/r"
+    elif fee.name == "atm_fee":
+        return f"{fee.identifier_id}/bill/atm_fee/r"
+    elif fee.name == "card_activation_fees":
+        return f"{fee.identifier_id}/product/card_activation_fees/r"
+    elif fee.name == "reset_joining_fees":
+        return f"{fee.identifier_id}/product/reset_joining_fees/r"
+    elif fee.name == "card_reload_fees":
+        return f"{fee.identifier_id}/loan/card_reload_fees/r"
+    else:
+        raise Exception("InvalidCreditBookStringError")
+
+
 def adjust_for_revenue(
     session: Session, event_id: int, payment_to_adjust_from: Decimal, debit_str: str, fee: Fee
 ) -> Decimal:
-    if fee.name == "late_fee":
-        credit_book_str = f"{fee.identifier_id}/bill/late_fine/r"
-    elif fee.name == "atm_fee":
-        credit_book_str = f"{fee.identifier_id}/bill/atm_fee/r"
-    elif fee.name == "card_activation_fees":
-        credit_book_str = f"{fee.identifier_id}/product/card_activation_fees/r"
-    elif fee.name == "reset_joining_fees":
-        credit_book_str = f"{fee.identifier_id}/product/reset_joining_fees/r"
-    elif fee.name == "card_reload_fees":
-        credit_book_str = f"{fee.identifier_id}/loan/card_reload_fees/r"
-    else:
-        raise Exception("InvalidCreditBookStringError")
+
+    credit_book_str = get_revenue_book_str(fee=fee)
 
     fee_to_adjust = min(payment_to_adjust_from, fee.gross_amount)
     gst_split = get_gst_split_from_amount(
@@ -478,23 +483,13 @@ def adjust_non_bill_payments(
         )
 
 
-def adjust_revenue_for_fee_refund(
+def reduce_revenue_for_fee_refund(
     session: Session,
     credit_book_str: str,
     fee: Fee,
 ) -> None:
-    if fee.name == "late_fee":
-        debit_book_str = f"{fee.identifier_id}/bill/late_fine/r"
-    elif fee.name == "atm_fee":
-        debit_book_str = f"{fee.identifier_id}/bill/atm_fee/r"
-    elif fee.name == "card_activation_fees":
-        debit_book_str = f"{fee.identifier_id}/product/card_activation_fees/r"
-    elif fee.name == "reset_joining_fees":
-        debit_book_str = f"{fee.identifier_id}/product/reset_joining_fees/r"
-    elif fee.name == "card_reload_fees":
-        debit_book_str = f"{fee.identifier_id}/loan/card_reload_fees/r"
-    else:
-        raise Exception("InvalidDebitBookStringError")
+
+    debit_book_str = get_revenue_book_str(fee=fee)
 
     create_ledger_entry_from_str(
         session,
