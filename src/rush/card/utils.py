@@ -174,6 +174,7 @@ def add_reload_fee(
     )
     f.net_amount = d["net_amount"]
     f.gross_amount = d["gross_amount"]
+    event.amount = d["gross_amount"]
     session.add(f)
     session.flush()
 
