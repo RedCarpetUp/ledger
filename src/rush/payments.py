@@ -63,10 +63,6 @@ def payment_received(
     session.add(lt)
     session.flush()
 
-    # TODO: check if this code is needed for downpayment, since there is no user loan at that point of time.
-    if payment_type in ("downpayment", "card_activation_fee", "reset_joining_fees"):
-        return
-
     payment_received_event(
         session=session,
         user_loan=user_loan,
@@ -75,6 +71,10 @@ def payment_received(
         skip_closing=skip_closing,
         user_product_id=user_product_id if user_product_id else user_loan.user_product_id,
     )
+
+    # TODO: check if this code is needed for downpayment, since there is no user loan at that point of time.
+    if payment_type in ("downpayment", "card_activation_fee", "reset_joining_fees"):
+        return
 
     run_anomaly(session=session, user_loan=user_loan, event_date=payment_date)
     gateway_charges = Decimal("0.5")
@@ -133,7 +133,7 @@ def payment_received_event(
     payment_received_amt = Decimal(event.amount)
 
     payment_type = event.payment_type
-    if not user_loan or payment_type == "card_reload_fee":
+    if not user_loan or payment_type in ("card_reload_fee", "card_activation_fee"):
         assert user_product_id is not None
 
         if payment_type == "downpayment":
