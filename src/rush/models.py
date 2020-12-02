@@ -440,53 +440,6 @@ class CardTransaction(AuditMixin):
     status = Column(String(15), nullable=False)
 
 
-class CardEmis(AuditMixin):
-    __tablename__ = "card_emis"
-    loan_id = Column(Integer, ForeignKey(Loan.id))
-    bill_id = Column(Integer, ForeignKey(LoanData.id), nullable=True)
-    due_date = Column(TIMESTAMP, nullable=False)
-    due_amount = Column(Numeric, nullable=False, default=Decimal(0))
-    total_due_amount = Column(Numeric, nullable=False, default=Decimal(0))
-    interest_current_month = Column(Numeric, nullable=False, default=Decimal(0))
-    interest_next_month = Column(Numeric, nullable=False, default=Decimal(0))
-    interest = Column(Numeric, nullable=False, default=Decimal(0))
-    emi_number = Column(Integer, nullable=False)
-    late_fee = Column(Numeric, nullable=False, default=Decimal(0))
-    atm_fee = Column(Numeric, nullable=False, default=Decimal(0))
-    row_status = Column(String(length=10), nullable=False, default="active")
-    dpd = Column(Integer, nullable=True, default=0)
-    last_payment_date = Column(TIMESTAMP, nullable=True)
-    total_closing_balance = Column(Numeric, nullable=False, default=Decimal(0))
-    total_closing_balance_post_due_date = Column(Numeric, nullable=False, default=Decimal(0))
-    late_fee_received = Column(Numeric, nullable=False, default=Decimal(0))
-    atm_fee_received = Column(Numeric, nullable=False, default=Decimal(0))
-    interest_received = Column(Numeric, nullable=False, default=Decimal(0))
-    payment_received = Column(Numeric, nullable=False, default=Decimal(0))
-    payment_status = Column(String(length=10), nullable=False, default="UnPaid")
-    extra_details = Column(JSON, default=lambda: {})
-
-    def get_payment_received_on_emi(self):
-        return (
-            self.atm_fee_received
-            + self.late_fee_received
-            + self.interest_received
-            + self.payment_received
-        )
-
-
-class EmiPaymentMapping(AuditMixin):
-    __tablename__ = "emi_payment_mapping"
-    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
-    emi_number = Column(Integer, nullable=False)
-    payment_date = Column(TIMESTAMP, nullable=False)
-    payment_request_id = Column(String(), nullable=False)
-    interest_received = Column(Numeric, nullable=True, default=Decimal(0))
-    late_fee_received = Column(Numeric, nullable=True, default=Decimal(0))
-    atm_fee_received = Column(Numeric, nullable=True, default=Decimal(0))
-    principal_received = Column(Numeric, nullable=True, default=Decimal(0))
-    row_status = Column(String(length=10), nullable=False, default="active")
-
-
 class LoanSchedule(AuditMixin):
     __tablename__ = "loan_schedule"
     loan_id = Column(Integer, ForeignKey(Loan.id))

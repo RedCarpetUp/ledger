@@ -211,14 +211,15 @@ class BaseLoan(Loan):
         self.session = session
 
     @classmethod
-    def create(cls, session: Session, **kwargs) -> Loan:
+    def create(cls, session: Session, loan_id: Optional[int] = None, **kwargs) -> Loan:
         user_product_id = kwargs.pop("user_product_id", None)
         card_type = kwargs.pop("card_type")
         if not user_product_id:
             user_product_id = create_user_product_mapping(
                 session=session, user_id=kwargs["user_id"], product_type=card_type
             ).id
-
+        if loan_id:  # loan id is already created so just update with ledger columns
+            session.query(cls).update(**kwargs)
         loan = cls(
             session=session,
             user_id=kwargs["user_id"],

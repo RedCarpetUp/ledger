@@ -383,21 +383,19 @@ def adjust_for_revenue(
         credit_book_str = f"{fee.identifier_id}/bill/late_fine/r"
     elif fee.name == "atm_fee":
         credit_book_str = f"{fee.identifier_id}/bill/atm_fee/r"
-    elif fee.name == "card_activation_fees":
-        credit_book_str = f"{fee.identifier_id}/product/card_activation_fees/r"
+    elif fee.name == "card_activation_fee":
+        credit_book_str = f"{fee.identifier_id}/product/card_activation_fee/r"
     elif fee.name == "reset_joining_fees":
         credit_book_str = f"{fee.identifier_id}/product/reset_joining_fees/r"
-    elif fee.name == "card_reload_fees":
-        credit_book_str = f"{fee.identifier_id}/loan/card_reload_fees/r"
+    elif fee.name == "card_reload_fee":
+        credit_book_str = f"{fee.identifier_id}/loan/card_reload_fee/r"
     else:
         raise Exception("InvalidCreditBookStringError")
 
     fee_to_adjust = min(payment_to_adjust_from, fee.gross_amount)
     gst_split = get_gst_split_from_amount(
         amount=fee_to_adjust,
-        sgst_rate=fee.sgst_rate,
-        cgst_rate=fee.cgst_rate,
-        igst_rate=fee.igst_rate,
+        total_gst_rate=fee.igst_rate,
     )
     assert gst_split["gross_amount"] == fee_to_adjust
     # Settle for net fee

@@ -53,27 +53,31 @@ def round_up_to_ten(val: Decimal) -> Decimal:
     return Decimal(math.ceil(val / 10) * 10)
 
 
-def get_gst_split_from_amount(
-    amount: Decimal, sgst_rate: Decimal, cgst_rate: Decimal, igst_rate: Decimal
-) -> Dict[str, Any]:
-    sgst_multiplier = sgst_rate / 100
-    cgst_multiplier = cgst_rate / 100
-    igst_multiplier = igst_rate / 100
+def get_gst_split_from_amount(amount: Decimal, total_gst_rate: Decimal) -> Dict[str, Any]:
+    gst_multiplier = total_gst_rate / 100
 
-    net_amount = amount / (sgst_multiplier + cgst_multiplier + igst_multiplier + Decimal(1))
-    return add_gst_split_to_amount(net_amount, sgst_rate, cgst_rate, igst_rate)
+    net_amount = amount / (gst_multiplier + Decimal(1))
+    gst_split_data = add_gst_split_to_amount(net_amount, total_gst_rate)
+    # there could be 0.1 extra in gst. So we reduce the 0.1 from net amount in this case.
+    # to make sure net_amount + gst = gross amount.
+    diff = gst_split_data["gross_amount"] - amount
+    gst_split_data["net_amount"] -= diff
+    gst_split_data["gross_amount"] = (
+        gst_split_data["net_amount"]
+        + gst_split_data["sgst"]
+        + gst_split_data["cgst"]
+        + gst_split_data["igst"]
+    )
+    return gst_split_data
 
 
-def add_gst_split_to_amount(
-    net_amount: Decimal, sgst_rate: Decimal, cgst_rate: Decimal, igst_rate: Decimal
-) -> Dict[str, Any]:
-    sgst_multiplier = sgst_rate / 100
-    cgst_multiplier = cgst_rate / 100
-    igst_multiplier = igst_rate / 100
+def add_gst_split_to_amount(net_amount: Decimal, total_gst_rate: Decimal) -> Dict[str, Any]:
 
-    sgst = mul(net_amount, sgst_multiplier)
-    cgst = mul(net_amount, cgst_multiplier)
-    igst = mul(net_amount, igst_multiplier)
-    d = {"net_amount": net_amount.quantize(Decimal(".01")), "sgst": sgst, "cgst": cgst, "igst": igst}
+    gst_multiplier = total_gst_rate / 100
+
+    total_gst = mul(net_amount, gst_multiplier)
+    split_gst = div(total_gst, 2)
+
+    d = {"net_amount": round(net_amount, 2), "sgst": split_gst, "cgst": split_gst, "igst": 0}
     d["gross_amount"] = d["net_amount"] + d["sgst"] + d["cgst"] + d["igst"]
     return d

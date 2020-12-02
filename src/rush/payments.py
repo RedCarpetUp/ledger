@@ -73,7 +73,7 @@ def payment_received(
     )
 
     # TODO: check if this code is needed for downpayment, since there is no user loan at that point of time.
-    if payment_type in ("downpayment", "card_activation_fees", "reset_joining_fees"):
+    if payment_type in ("downpayment", "card_activation_fee", "reset_joining_fees"):
         return
 
     run_anomaly(session=session, user_loan=user_loan, event_date=payment_date)
@@ -133,7 +133,7 @@ def payment_received_event(
     payment_received_amt = Decimal(event.amount)
 
     payment_type = event.payment_type
-    if not user_loan or payment_type == "card_reload_fees":
+    if not user_loan or payment_type == "card_reload_fee":
         assert user_product_id is not None
 
         if payment_type == "downpayment":
@@ -142,11 +142,11 @@ def payment_received_event(
             if not user_loan:
                 identifier = "product"
                 identifier_id = user_product_id
-                assert payment_type != "card_reload_fees"
+                assert payment_type != "card_reload_fee"
             else:
                 identifier = "loan"
                 identifier_id = user_loan.id
-                assert payment_type == "card_reload_fees"
+                assert payment_type == "card_reload_fee"
 
             adjust_non_bill_payments(
                 session=session,
@@ -367,8 +367,8 @@ def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
         "principal_receivable",
         "unbilled",
         "atm_fee",
-        "card_activation_fees",
-        "card_reload_fees",
+        "card_activation_fee",
+        "card_reload_fee",
         "downpayment",
         "reset_joining_fees",
     )
@@ -376,6 +376,7 @@ def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
     updated_component_names = {
         "principal_receivable": "principal",
         "unbilled": "principal",
+        "downpayment": "principal",
         "interest_receivable": "interest",
         "igst_payable": "igst",
         "cgst_payable": "cgst",

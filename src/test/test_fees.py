@@ -86,7 +86,7 @@ def test_add_pre_product_fees(session: Session) -> None:
         session=session,
         user_id=5,
         product_type="health_card",
-        fee_name="card_activation_fees",
+        fee_name="card_activation_fee",
         fee_amount=Decimal(1000),
     )
 
