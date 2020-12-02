@@ -4,7 +4,7 @@ from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
 from rush.card import (
-    RubyProCard,
+    RebelCard,
     create_user_product,
     get_product_class,
     get_user_product,
@@ -45,7 +45,7 @@ def create_lenders(session: Session) -> None:
 
 
 def create_products(session: Session) -> None:
-    hc_product = Product(product_name="rubypro")
+    hc_product = Product(product_name="rebel")
     session.add(hc_product)
     session.flush()
 
@@ -64,10 +64,10 @@ def test_rubpro_user(session: Session) -> None:
     create_products(session=session)
     create_user(session=session)
 
-    user_product = create_user_product_mapping(session=session, user_id=4369, product_type="rubypro")
+    user_product = create_user_product_mapping(session=session, user_id=4369, product_type="rebel")
     user_card = create_user_product(
         session=session,
-        card_type="rubypro",
+        card_type="rebel",
         rc_rate_of_interest_monthly=Decimal(3),
         lender_id=1756833,
         interest_free_period_in_days=45,
@@ -77,7 +77,7 @@ def test_rubpro_user(session: Session) -> None:
         interest_type="reducing",
     )
 
-    assert user_card.product_type == "rubypro"
+    assert user_card.product_type == "rebel"
     assert user_card.amortization_date == parse_date("2020-11-01").date()
 
     swipe = create_card_swipe(
@@ -93,7 +93,7 @@ def test_rubpro_user(session: Session) -> None:
     bill_id = swipe["data"].loan_id
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 1200
-    user_loan = get_user_product(session, 4369, card_type="rubypro")
+    user_loan = get_user_product(session, 4369, card_type="rebel")
     bill_date = parse_date("2020-12-01 00:00:00")
     bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
     latest_bill = user_loan.get_latest_bill()
