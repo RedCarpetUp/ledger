@@ -24,7 +24,7 @@ from rush.models import (
     UserUPI,
 )
 from rush.utils import (
-    add_gst_split_to_amount,
+    get_gst_split_from_amount,
     get_current_ist_time,
 )
 
@@ -117,15 +117,18 @@ def add_pre_product_fee(
         identifier_id=user_product_id,
         name=fee_name,
         fee_status="UNPAID",
-        net_amount=fee_amount,
         sgst_rate=Decimal(0),  # TODO: check what should be the value.
         cgst_rate=Decimal(0),  # TODO: check what should be the value.
         igst_rate=Decimal(18),  # TODO: check what should be the value.
     )
 
-    d = add_gst_split_to_amount(
-        fee_amount, sgst_rate=f.sgst_rate, cgst_rate=f.cgst_rate, igst_rate=f.igst_rate
+    d = get_gst_split_from_amount(
+        fee_amount,
+        sgst_rate=f.sgst_rate,
+        cgst_rate=f.cgst_rate,
+        igst_rate=f.igst_rate,
     )
+    f.net_amount = d["net_amount"]
     f.gross_amount = d["gross_amount"]
     session.add(f)
     session.flush()
@@ -158,18 +161,21 @@ def add_reload_fee(
         event_id=event.id,
         name="card_reload_fees",
         fee_status="UNPAID",
-        net_amount=fee_amount,
         sgst_rate=Decimal(0),  # TODO: check what should be the value.
         cgst_rate=Decimal(0),  # TODO: check what should be the value.
         igst_rate=Decimal(18),  # TODO: check what should be the value.
     )
 
-    d = add_gst_split_to_amount(
-        fee_amount, sgst_rate=f.sgst_rate, cgst_rate=f.cgst_rate, igst_rate=f.igst_rate
+    d = get_gst_split_from_amount(
+        fee_amount,
+        sgst_rate=f.sgst_rate,
+        cgst_rate=f.cgst_rate,
+        igst_rate=f.igst_rate,
     )
+    f.net_amount = d["net_amount"]
     f.gross_amount = d["gross_amount"]
-    event.amount = d["gross_amount"]
     session.add(f)
+    session.flush()
 
     # Update DPD and Journal Entries
     from rush.create_emi import (
