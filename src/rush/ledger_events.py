@@ -376,7 +376,7 @@ def limit_unlock_event(
     )
 
 
-def get_revenue_book_str(fee: Fee) -> str:
+def get_revenue_book_str_for_fee(fee: Fee) -> str:
     if fee.name == "late_fee":
         return f"{fee.identifier_id}/bill/late_fine/r"
     elif fee.name == "atm_fee":
@@ -395,7 +395,7 @@ def adjust_for_revenue(
     session: Session, event_id: int, payment_to_adjust_from: Decimal, debit_str: str, fee: Fee
 ) -> Decimal:
 
-    credit_book_str = get_revenue_book_str(fee=fee)
+    credit_book_str = get_revenue_book_str_for_fee(fee=fee)
 
     fee_to_adjust = min(payment_to_adjust_from, fee.gross_amount)
     gst_split = get_gst_split_from_amount(
@@ -489,7 +489,7 @@ def reduce_revenue_for_fee_refund(
     fee: Fee,
 ) -> None:
 
-    debit_book_str = get_revenue_book_str(fee=fee)
+    debit_book_str = get_revenue_book_str_for_fee(fee=fee)
 
     create_ledger_entry_from_str(
         session,

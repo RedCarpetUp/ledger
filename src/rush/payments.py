@@ -421,7 +421,7 @@ def customer_refund(
     payment_amount: Decimal,
     payment_date: DateTime,
     payment_request_id: str,
-) -> None:
+):
 
     payment_request_data = (
         session.query(PaymentRequestsData)
@@ -441,11 +441,11 @@ def customer_refund(
             Fee.gross_amount == payment_request_data.payment_request_amount,
         )
         .order_by(Fee.updated_at.desc())
-        .one_or_none()
+        .first()
     )
 
     if fee is None:
-        raise Exception("no fee found to refund")
+        return {"result": "error", "message": "No fee found"}
 
     fee_refund(
         session=session,
@@ -476,6 +476,8 @@ def customer_refund(
     )
 
     update_journal_entry(user_loan=user_loan, event=lt)
+
+    return {"result": "success", "message": "Customer Refund successfull"}
 
 
 def fee_refund(
