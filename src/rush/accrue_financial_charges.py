@@ -136,13 +136,9 @@ def create_bill_fee_entry(
         igst_rate=Decimal(18),
     )
     if include_gst_from_gross_amount:
-        d = get_gst_split_from_amount(
-            gross_fee_amount, sgst_rate=f.sgst_rate, cgst_rate=f.cgst_rate, igst_rate=f.igst_rate
-        )
+        d = get_gst_split_from_amount(gross_fee_amount, total_gst_rate=Decimal(18))
     else:
-        d = add_gst_split_to_amount(
-            gross_fee_amount, sgst_rate=f.sgst_rate, cgst_rate=f.cgst_rate, igst_rate=f.igst_rate
-        )
+        d = add_gst_split_to_amount(gross_fee_amount, total_gst_rate=Decimal(18))
     f.net_amount = d["net_amount"]
     f.gross_amount = d["gross_amount"]
     session.add(f)

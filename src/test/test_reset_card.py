@@ -95,9 +95,7 @@ def test_create_term_loan(session: Session) -> None:
 
     gst_split = add_gst_split_to_amount(
         net_amount=Decimal("100"),
-        sgst_rate=Decimal("0"),
-        cgst_rate=Decimal("0"),
-        igst_rate=Decimal("18"),
+        total_gst_rate=Decimal("18"),
     )
 
     assert gst_split["gross_amount"] == Decimal("118")
@@ -205,9 +203,7 @@ def test_reset_loan_limit_unlock_success(session: Session) -> None:
 
     gst_split = add_gst_split_to_amount(
         net_amount=Decimal("100"),
-        sgst_rate=Decimal("0"),
-        cgst_rate=Decimal("0"),
-        igst_rate=Decimal("18"),
+        total_gst_rate=Decimal("18"),
     )
 
     assert gst_split["gross_amount"] == Decimal("118")
@@ -278,9 +274,7 @@ def test_reset_loan_limit_unlock_error(session: Session) -> None:
 
     gst_split = add_gst_split_to_amount(
         net_amount=Decimal("100"),
-        sgst_rate=Decimal("0"),
-        cgst_rate=Decimal("0"),
-        igst_rate=Decimal("18"),
+        total_gst_rate=Decimal("18"),
     )
 
     assert gst_split["gross_amount"] == Decimal("118")

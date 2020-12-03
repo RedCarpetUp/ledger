@@ -24,8 +24,8 @@ from rush.models import (
     UserUPI,
 )
 from rush.utils import (
-    add_gst_split_to_amount,
     get_current_ist_time,
+    get_gst_split_from_amount,
 )
 
 
@@ -123,9 +123,7 @@ def add_pre_product_fee(
         igst_rate=Decimal(18),  # TODO: check what should be the value.
     )
 
-    d = add_gst_split_to_amount(
-        fee_amount, sgst_rate=f.sgst_rate, cgst_rate=f.cgst_rate, igst_rate=f.igst_rate
-    )
+    d = get_gst_split_from_amount(fee_amount, total_gst_rate=Decimal(18))
     f.gross_amount = d["gross_amount"]
     session.add(f)
     session.flush()
@@ -156,7 +154,7 @@ def add_reload_fee(
         user_id=user_loan.user_id,
         identifier_id=user_loan.id,
         event_id=event.id,
-        name="card_reload_fees",
+        name="card_reload_fee",
         fee_status="UNPAID",
         net_amount=fee_amount,
         sgst_rate=Decimal(0),  # TODO: check what should be the value.
@@ -164,9 +162,7 @@ def add_reload_fee(
         igst_rate=Decimal(18),  # TODO: check what should be the value.
     )
 
-    d = add_gst_split_to_amount(
-        fee_amount, sgst_rate=f.sgst_rate, cgst_rate=f.cgst_rate, igst_rate=f.igst_rate
-    )
+    d = get_gst_split_from_amount(fee_amount, total_gst_rate=Decimal(18))
     f.gross_amount = d["gross_amount"]
     event.amount = d["gross_amount"]
     session.add(f)
