@@ -137,7 +137,7 @@ def payment_received_event(
     payment_received_amt = Decimal(event.amount)
 
     payment_type = event.payment_type
-    if not user_loan or payment_type == "card_reload_fee":
+    if not user_loan or payment_type in ("card_reload_fee", "card_activation_fee"):
         assert user_product_id is not None
 
         if payment_type == "downpayment":
