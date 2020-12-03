@@ -18,6 +18,8 @@ from rush.ledger_events import (
     _adjust_for_downpayment,
     _adjust_for_prepayment,
     adjust_non_bill_payments,
+    reduce_revenue_for_fee_refund,
+    customer_refund_event,
 )
 from rush.ledger_utils import (
     create_ledger_entry_from_str,
@@ -28,7 +30,9 @@ from rush.models import (
     BookAccount,
     LedgerEntry,
     LedgerTriggerEvent,
+    PaymentRequestsData,
     PaymentSplit,
+    Fee,
 )
 from rush.utils import mul
 from rush.writeoff_and_recovery import recovery_event
@@ -410,3 +414,98 @@ def create_payment_split(session: Session, event: LedgerTriggerEvent):
         )
 
     session.bulk_insert_mappings(PaymentSplit, new_ps_objects)
+
+
+def customer_refund(
+    session: Session,
+    user_loan: BaseLoan,
+    payment_amount: Decimal,
+    payment_date: DateTime,
+    payment_request_id: str,
+):
+
+    payment_request_data = (
+        session.query(PaymentRequestsData)
+        .filter(
+            PaymentRequestsData.user_id == user_loan.user_id,
+            PaymentRequestsData.payment_request_id == payment_request_id,
+            PaymentRequestsData.payment_request_status == "Paid",
+            PaymentRequestsData.row_status == "active",
+        )
+        .one()
+    )
+
+    fee = (
+        session.query(Fee)
+        .filter(
+            Fee.name == payment_request_data.type,
+            Fee.gross_amount == payment_request_data.payment_request_amount,
+        )
+        .order_by(Fee.updated_at.desc())
+        .first()
+    )
+
+    if fee is None:
+        return {"result": "error", "message": "No fee found"}
+
+    fee_refund(
+        session=session,
+        user_loan=user_loan,
+        payment_amount=payment_amount,
+        payment_date=payment_date,
+        payment_request_id=payment_request_id,
+        fee=fee,
+    )
+
+    lt = LedgerTriggerEvent(
+        name="customer_refund",
+        loan_id=user_loan.loan_id,
+        amount=payment_amount,
+        post_date=payment_date,
+        extra_details={
+            "payment_request_id": payment_request_id,
+        },
+    )
+    session.add(lt)
+    session.flush()
+
+    customer_refund_event(
+        session=session,
+        loan_id=user_loan.loan_id,
+        lender_id=user_loan.lender_id,
+        event=lt,
+    )
+
+    update_journal_entry(user_loan=user_loan, event=lt)
+
+    return {"result": "success", "message": "Customer Refund successfull"}
+
+
+def fee_refund(
+    session: Session,
+    user_loan: BaseLoan,
+    payment_amount: Decimal,
+    payment_date: DateTime,
+    payment_request_id: str,
+    fee: Fee,
+):
+    lt = LedgerTriggerEvent(
+        name="fee_refund",
+        loan_id=user_loan.loan_id,
+        amount=payment_amount,
+        post_date=payment_date,
+        extra_details={
+            "fee_id": fee.id,
+            "payment_request_id": payment_request_id,
+        },
+    )
+    session.add(lt)
+    session.flush()
+
+    reduce_revenue_for_fee_refund(
+        session=session,
+        credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
+        fee=fee,
+    )
+
+    update_journal_entry(user_loan=user_loan, event=lt)

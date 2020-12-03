@@ -376,12 +376,19 @@ def limit_unlock_event(
     )
 
 
-def adjust_for_revenue(
-    session: Session, event_id: int, payment_to_adjust_from: Decimal, debit_str: str, fee: Fee
-) -> Decimal:
+def get_revenue_book_str_for_fee(fee: Fee) -> str:
     if fee.name == "late_fee":
-        credit_book_str = f"{fee.identifier_id}/bill/late_fine/r"
+        return f"{fee.identifier_id}/bill/late_fine/r"
     elif fee.name == "atm_fee":
+<<<<<<< HEAD
+        return f"{fee.identifier_id}/bill/atm_fee/r"
+    elif fee.name == "card_activation_fees":
+        return f"{fee.identifier_id}/product/card_activation_fees/r"
+    elif fee.name == "reset_joining_fees":
+        return f"{fee.identifier_id}/product/reset_joining_fees/r"
+    elif fee.name == "card_reload_fees":
+        return f"{fee.identifier_id}/loan/card_reload_fees/r"
+=======
         credit_book_str = f"{fee.identifier_id}/bill/atm_fee/r"
     elif fee.name == "card_activation_fee":
         credit_book_str = f"{fee.identifier_id}/product/card_activation_fee/r"
@@ -389,8 +396,16 @@ def adjust_for_revenue(
         credit_book_str = f"{fee.identifier_id}/product/reset_joining_fees/r"
     elif fee.name == "card_reload_fee":
         credit_book_str = f"{fee.identifier_id}/loan/card_reload_fee/r"
+>>>>>>> master
     else:
         raise Exception("InvalidCreditBookStringError")
+
+
+def adjust_for_revenue(
+    session: Session, event_id: int, payment_to_adjust_from: Decimal, debit_str: str, fee: Fee
+) -> Decimal:
+
+    credit_book_str = get_revenue_book_str_for_fee(fee=fee)
 
     fee_to_adjust = min(payment_to_adjust_from, fee.gross_amount)
     gst_split = get_gst_split_from_amount(
@@ -474,3 +489,46 @@ def adjust_non_bill_payments(
             debit_str=debit_book_str,
             fee=fee,
         )
+
+
+def reduce_revenue_for_fee_refund(
+    session: Session,
+    credit_book_str: str,
+    fee: Fee,
+) -> None:
+
+    debit_book_str = get_revenue_book_str_for_fee(fee=fee)
+
+    create_ledger_entry_from_str(
+        session,
+        event_id=fee.event_id,
+        debit_book_str=debit_book_str,
+        credit_book_str=credit_book_str,
+        amount=Decimal(fee.net_amount_paid),
+    )
+
+    create_ledger_entry_from_str(
+        session,
+        event_id=fee.event_id,
+        debit_book_str="12345/redcarpet/cgst_payable/l",
+        credit_book_str=credit_book_str,
+        amount=Decimal(fee.cgst_paid),
+    )
+
+    create_ledger_entry_from_str(
+        session,
+        event_id=fee.event_id,
+        debit_book_str="12345/redcarpet/sgst_payable/l",
+        credit_book_str=credit_book_str,
+        amount=Decimal(fee.sgst_paid),
+    )
+
+    create_ledger_entry_from_str(
+        session,
+        event_id=fee.event_id,
+        debit_book_str="12345/redcarpet/igst_payable/l",
+        credit_book_str=credit_book_str,
+        amount=Decimal(fee.igst_paid),
+    )
+
+    fee.fee_status = "REFUND"
