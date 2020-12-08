@@ -69,6 +69,8 @@ from rush.models import (
     UserPy,
 )
 from rush.payments import (
+    customer_refund,
+    fee_refund,
     payment_received,
     refund_payment,
 )
@@ -3484,3 +3486,152 @@ def test_readjust_future_payment_with_extension(session: Session) -> None:
     assert emis[1].payment_status == "Paid"
     assert emis[2].payment_status == "UnPaid"
     assert emis[2].payment_received == Decimal("34.00")
+
+
+def test_customer_fee_refund(session: Session) -> None:
+    test_lenders(session)
+    card_db_updates(session)
+    user = User(
+        id=99,
+        performed_by=123,
+    )
+    session.add(user)
+    session.flush()
+
+    user_loan = create_user_product(
+        session=session,
+        user_id=user.id,
+        card_activation_date=parse_date("2020-11-02").date(),
+        card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
+        lender_id=62311,
+    )
+
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-11-04 19:23:11"),
+        amount=Decimal(1000),
+        description="BigB.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
+    )
+
+    bill = bill_generate(user_loan=user_loan)
+
+    latest_bill = user_loan.get_latest_bill()
+    assert latest_bill is not None
+
+    bill = accrue_late_charges(session, user_loan, parse_date("2020-11-15"), Decimal(118))
+
+    fee_due = (
+        session.query(BillFee)
+        .filter(BillFee.identifier_id == bill.id, BillFee.name == "late_fee")
+        .one_or_none()
+    )
+    assert fee_due.net_amount == Decimal(100)
+    assert fee_due.gross_amount == Decimal(118)
+
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_amount=Decimal(1100),
+        payment_date=parse_date("2020-11-15"),
+        payment_request_id="s33234",
+    )
+
+    bill_fee = session.query(Fee).filter_by(id=fee_due.id).one_or_none()
+
+    assert bill_fee.fee_status == "PAID"
+    assert bill_fee.net_amount_paid == Decimal(100)
+    assert bill_fee.igst_paid == Decimal(18)
+    assert bill_fee.gross_amount_paid == Decimal(118)
+
+    status = fee_refund(
+        session=session,
+        user_loan=user_loan,
+        payment_amount=Decimal("100"),
+        payment_date=parse_date("2020-11-16"),
+        payment_request_id="s33234",
+        fee=bill_fee,
+    )
+    assert status["result"] == "success"
+
+    fee = session.query(Fee).filter_by(id=fee_due.id).one_or_none()
+
+    assert fee.fee_status == "REFUND"
+
+
+def test_customer_prepayment_refund(session: Session) -> None:
+    test_lenders(session)
+    card_db_updates(session)
+    user = User(
+        id=99,
+        performed_by=123,
+    )
+    session.add(user)
+    session.flush()
+
+    user_loan = create_user_product(
+        session=session,
+        user_id=user.id,
+        card_activation_date=parse_date("2020-11-02").date(),
+        card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
+        lender_id=62311,
+    )
+
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-11-04 19:23:11"),
+        amount=Decimal(1000),
+        description="BigB.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
+    )
+
+    bill_generate(user_loan=user_loan)
+
+    latest_bill = user_loan.get_latest_bill()
+    assert latest_bill is not None
+
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_amount=Decimal(5000),
+        payment_date=parse_date("2020-11-13"),
+        payment_request_id="a12318",
+    )
+
+    _, prepayment_amount = get_account_balance_from_str(
+        session, book_string=f"{user_loan.loan_id}/loan/pre_payment/l"
+    )
+
+    assert prepayment_amount == Decimal(4000)
+
+    customer_refund(
+        session=session,
+        user_loan=user_loan,
+        payment_amount=Decimal(3000),
+        payment_date=parse_date("2020-11-16"),
+        payment_request_id="a12318",
+    )
+
+    _, prepayment_amount = get_account_balance_from_str(
+        session, book_string=f"{user_loan.loan_id}/loan/pre_payment/l"
+    )
+    assert prepayment_amount == Decimal(1000)
+
+    customer_refund(
+        session=session,
+        user_loan=user_loan,
+        payment_amount=Decimal(1000),
+        payment_date=parse_date("2020-11-22"),
+        payment_request_id="a12318",
+    )
+
+    _, prepayment_amount = get_account_balance_from_str(
+        session, book_string=f"{user_loan.loan_id}/loan/pre_payment/l"
+    )
+    assert prepayment_amount == Decimal(0)

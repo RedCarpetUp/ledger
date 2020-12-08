@@ -424,39 +424,6 @@ def customer_refund(
     payment_request_id: str,
 ):
 
-    payment_request_data = (
-        session.query(PaymentRequestsData)
-        .filter(
-            PaymentRequestsData.user_id == user_loan.user_id,
-            PaymentRequestsData.payment_request_id == payment_request_id,
-            PaymentRequestsData.payment_request_status == "Paid",
-            PaymentRequestsData.row_status == "active",
-        )
-        .one()
-    )
-
-    fee = (
-        session.query(Fee)
-        .filter(
-            Fee.name == payment_request_data.type,
-            Fee.gross_amount == payment_request_data.payment_request_amount,
-        )
-        .order_by(Fee.updated_at.desc())
-        .first()
-    )
-
-    if fee is None:
-        return {"result": "error", "message": "No fee found"}
-
-    fee_refund(
-        session=session,
-        user_loan=user_loan,
-        payment_amount=payment_amount,
-        payment_date=payment_date,
-        payment_request_id=payment_request_id,
-        fee=fee,
-    )
-
     lt = LedgerTriggerEvent(
         name="customer_refund",
         loan_id=user_loan.loan_id,
@@ -469,16 +436,17 @@ def customer_refund(
     session.add(lt)
     session.flush()
 
-    customer_refund_event(
+    create_ledger_entry_from_str(
         session=session,
-        loan_id=user_loan.loan_id,
-        lender_id=user_loan.lender_id,
-        event=lt,
+        event_id=lt.id,
+        debit_book_str=f"{user_loan.loan_id}/loan/pre_payment/l",
+        credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
+        amount=payment_amount,
     )
 
     update_journal_entry(user_loan=user_loan, event=lt)
 
-    return {"result": "success", "message": "Customer Refund successfull"}
+    return {"result": "success", "message": "Prepayment Refund successfull"}
 
 
 def fee_refund(
@@ -509,3 +477,5 @@ def fee_refund(
     )
 
     update_journal_entry(user_loan=user_loan, event=lt)
+
+    return {"result": "success", "message": "Fee Refund successfull"}
