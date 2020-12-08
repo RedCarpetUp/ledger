@@ -3531,7 +3531,7 @@ def test_customer_fee_refund(session: Session) -> None:
     payment_received(
         session=session,
         user_loan=user_loan,
-        payment_amount=Decimal(1100),
+        payment_amount=Decimal(1118),
         payment_date=parse_date("2020-11-15"),
         payment_request_id="s33234",
     )
@@ -3545,7 +3545,7 @@ def test_customer_fee_refund(session: Session) -> None:
     status = fee_refund(
         session=session,
         user_loan=user_loan,
-        payment_amount=Decimal("100"),
+        payment_amount=Decimal("118"),
         payment_date=parse_date("2020-11-16"),
         payment_request_id="s33234",
         fee=bill_fee,
