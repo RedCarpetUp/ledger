@@ -3540,7 +3540,6 @@ def test_customer_fee_refund(session: Session) -> None:
 
     assert bill_fee.fee_status == "PAID"
     assert bill_fee.net_amount_paid == Decimal(100)
-    assert bill_fee.igst_paid == Decimal(18)
     assert bill_fee.gross_amount_paid == Decimal(118)
 
     status = fee_refund(
