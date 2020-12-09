@@ -614,15 +614,18 @@ class UserCard(UserInstrument):
     activation_type = Column(String(length=12), nullable=True)
 
     def __init__(self, **kwargs):
-        assert kwargs.get("kit_number") is not None
         assert kwargs.get("activation_type") is not None
-        assert kwargs.get("card_name") is not None
 
-        kwargs["instrument_id"] = kwargs.pop("kit_number")
-        kwargs["name"] = kwargs.pop("card_name")
+        if not kwargs.get("instrument_id"):
+            assert kwargs.get("kit_number") is not None
+            kwargs["instrument_id"] = kwargs.pop("kit_number")
+        if not kwargs.get("name"):
+            assert kwargs.get("card_name") is not None
+            kwargs["name"] = kwargs.pop("card_name")
+        if not kwargs.get("activation_date"):
+            kwargs["activation_date"] = kwargs.get("card_activation_date")
 
         kwargs["status"] = kwargs.get("status", "INACTIVE")
-        kwargs["activation_date"] = kwargs.get("card_activation_date")
 
         super().__init__(**kwargs)
 
