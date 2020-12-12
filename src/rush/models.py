@@ -716,3 +716,19 @@ class PaymentRequestsData(AuditMixin):
     coupon_data = Column(JSON, default=lambda: {})
     gross_request_amount = Column(Integer, nullable=True)
     extra_details = Column(JSON, default=lambda: {})
+
+
+class LoanMoratoriumData(AuditMixin):
+    __tablename__ = "loan_moratorium_data"
+
+    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
+    start_emi_number = Column(Integer, nullable=False)
+    end_emi_number = Column(Integer, nullable=False)
+
+
+class MoratoriumInterest(AuditMixin):
+    __tablename__ = "moratorium_interest"
+
+    moratorium_id = Column(Integer, ForeignKey(LoanMoratoriumData.id), nullable=False)
+    emi_number = Column(Integer, nullable=False)
+    interest = Column(Numeric, nullable=False)

@@ -28,7 +28,10 @@ from rush.models import (
     LedgerEntry,
     LedgerTriggerEvent,
     LoanData,
+    LoanMoratorium,
+    LoanMoratoriumData,
     LoanSchedule,
+    MoratoriumInterest,
 )
 from rush.utils import (
     add_gst_split_to_amount,
@@ -84,6 +87,54 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loa
             .limit(1)
             .scalar()
         )
+
+        emi_number = (
+            session.query(LoanSchedule.emi_number)
+            .filter(
+                LoanSchedule.loan_id == user_loan.loan_id,
+                LoanSchedule.bill_id.is_(None),
+                LoanSchedule.due_date == post_date - relativedelta(days=1),
+            )
+            .order_by(LoanSchedule.emi_number)
+            .one()
+        )
+        if LoanMoratorium.is_in_moratorium(
+            session=session,
+            loan_id=user_loan.loan_id,
+            date_to_check_against=post_date,
+        ):
+            moratorium_interest = (
+                session.query(MoratoriumInterest)
+                .join(
+                    LoanMoratoriumData,
+                    MoratoriumInterest.moratorium_id == LoanMoratoriumData.id,
+                )
+                .filter(
+                    LoanMoratoriumData.loan_id == user_loan.loan_id,
+                    MoratoriumInterest.emi_number == emi_number,
+                )
+                .first()
+            )
+            accrue_event.amount += moratorium_interest
+
+        moratorium_interest_data = (
+            session.query(MoratoriumInterest)
+            .join(
+                LoanMoratoriumData,
+                MoratoriumInterest.moratorium_id == LoanMoratoriumData.id,
+            )
+            .filter(
+                LoanMoratoriumData.loan_id == user_loan.loan_id,
+            )
+            .order_by(MoratoriumInterest.emi_number)
+            .all()
+        )
+
+        if moratorium_interest_data:
+            moratorium_emi_numbers = [emi.emi_number for emi in moratorium_interest_data]
+            if emi_number == moratorium_emi_numbers[-1] + 1:
+                total_moratorium_interest = sum([emi.interest for emi in moratorium_interest_data])
+                accrue_event.amount -= total_moratorium_interest
 
         if interest_to_accrue:
             accrue_event.amount += interest_to_accrue

@@ -16,6 +16,7 @@ from rush.card.base_card import (
 from rush.loan_schedule.calculations import get_interest_to_charge
 from rush.models import (
     LedgerTriggerEvent,
+    LoanMoratorium,
     LoanSchedule,
     PaymentMapping,
 )
@@ -77,15 +78,30 @@ def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
             emi_number=emi_number, amortization_date=user_loan.amortization_date
         )
         due_date += relativedelta(**due_date_deltas)
-        bill_schedule = LoanSchedule(
-            loan_id=bill.table.loan_id,
-            bill_id=bill.table.id,
-            emi_number=emi_number,
-            due_date=due_date,
-            interest_due=round(interest_due, 2),
-            principal_due=round(principal_due, 2),
-            total_closing_balance=round(opening_principal, 2),
-        )
+        if LoanMoratorium.is_in_moratorium(
+            session=session,
+            loan_id=user_loan.loan_id,
+            date_to_check_against=due_date,
+        ):
+            bill_schedule = LoanSchedule(
+                loan_id=bill.table.loan_id,
+                bill_id=bill.table.id,
+                emi_number=emi_number,
+                due_date=due_date,
+                interest_due=0,
+                principal_due=0,
+                total_closing_balance=round(opening_principal, 2),
+            )
+        else:
+            bill_schedule = LoanSchedule(
+                loan_id=bill.table.loan_id,
+                bill_id=bill.table.id,
+                emi_number=emi_number,
+                due_date=due_date,
+                interest_due=round(interest_due, 2),
+                principal_due=round(principal_due, 2),
+                total_closing_balance=round(opening_principal, 2),
+            )
         opening_principal -= principal_due
         if emi_number == 1 and downpayment:  # add downpayment in first emi
             bill_schedule.principal_due = downpayment - bill_schedule.interest_due
