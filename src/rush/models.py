@@ -707,7 +707,7 @@ class PaymentRequestsData(AuditMixin):
     payment_execution_charges = Column(Numeric, nullable=True)
     payment_gateway_id = Column(Integer, nullable=True)
     gateway_response = Column(JSONB, default=lambda: {})
-    collection_by = Column(String(length=20), default="customer")
+    collection_by = Column(String(length=20), server_default="customer")
     collection_request_id = Column(String(length=50), nullable=True)
     payment_request_comments = Column(String(), nullable=True)
     prepayment_amount = Column(Numeric, nullable=True)
