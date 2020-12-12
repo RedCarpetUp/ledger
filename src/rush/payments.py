@@ -18,8 +18,8 @@ from rush.ledger_events import (
     _adjust_for_downpayment,
     _adjust_for_prepayment,
     adjust_non_bill_payments,
-    reduce_revenue_for_fee_refund,
     customer_refund_event,
+    reduce_revenue_for_fee_refund,
 )
 from rush.ledger_utils import (
     create_ledger_entry_from_str,
@@ -28,11 +28,11 @@ from rush.ledger_utils import (
 from rush.loan_schedule.loan_schedule import slide_payment_to_emis
 from rush.models import (
     BookAccount,
+    Fee,
     LedgerEntry,
     LedgerTriggerEvent,
     PaymentRequestsData,
     PaymentSplit,
-    Fee,
 )
 from rush.utils import mul
 from rush.writeoff_and_recovery import recovery_event
