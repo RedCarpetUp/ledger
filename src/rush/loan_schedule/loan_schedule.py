@@ -84,7 +84,6 @@ def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
                 emi_number=new_emi_number, amortization_date=user_loan.amortization_date
             )
             due_date += relativedelta(**due_date_deltas)
-            print("new_emi_number", new_emi_number, due_date)
             bill_schedule = LoanSchedule(
                 loan_id=bill.table.loan_id,
                 bill_id=bill.table.id,
@@ -108,7 +107,6 @@ def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
             emi_number=emi_number, amortization_date=user_loan.amortization_date
         )
         due_date += relativedelta(**due_date_deltas)
-        print("emi_number", emi_number, due_date)
         bill_schedule = LoanSchedule(
             loan_id=bill.table.loan_id,
             bill_id=bill.table.id,
