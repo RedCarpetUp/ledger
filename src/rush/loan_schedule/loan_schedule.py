@@ -68,7 +68,37 @@ def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
     instalment = bill.get_instalment_amount()
     opening_principal = bill.table.principal
     downpayment = bill.get_down_payment()
-    for emi_number in range(1, bill.table.bill_tenure + 1):
+    new_emi_number = 1
+
+    if LoanMoratorium.is_in_moratorium(
+        session, loan_id=user_loan.loan_id, date_to_check_against=due_date
+    ):
+        while True:
+            if not (
+                LoanMoratorium.is_in_moratorium(
+                    session, loan_id=user_loan.loan_id, date_to_check_against=due_date
+                )
+            ):
+                break
+            due_date_deltas = bill.get_relative_delta_for_emi(
+                emi_number=new_emi_number, amortization_date=user_loan.amortization_date
+            )
+            due_date += relativedelta(**due_date_deltas)
+            print("new_emi_number", new_emi_number, due_date)
+            bill_schedule = LoanSchedule(
+                loan_id=bill.table.loan_id,
+                bill_id=bill.table.id,
+                emi_number=new_emi_number,
+                due_date=due_date,
+                interest_due=0,
+                principal_due=0,
+                total_closing_balance=round(opening_principal, 2),
+            )
+            new_emi_number += 1
+            emi_objects.append(bill_schedule)
+        bill.table.bill_tenure += new_emi_number
+
+    for emi_number in range(new_emi_number, bill.table.bill_tenure + 1):
         if user_loan.interest_type == "reducing":
             interest_due = bill.get_interest_to_charge(principal=opening_principal)
         else:
@@ -78,32 +108,18 @@ def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
             emi_number=emi_number, amortization_date=user_loan.amortization_date
         )
         due_date += relativedelta(**due_date_deltas)
-        if LoanMoratorium.is_in_moratorium(
-            session=session,
-            loan_id=user_loan.loan_id,
-            date_to_check_against=due_date,
-        ):
-            bill_schedule = LoanSchedule(
-                loan_id=bill.table.loan_id,
-                bill_id=bill.table.id,
-                emi_number=emi_number,
-                due_date=due_date,
-                interest_due=0,
-                principal_due=0,
-                total_closing_balance=round(opening_principal, 2),
-            )
-        else:
-            bill_schedule = LoanSchedule(
-                loan_id=bill.table.loan_id,
-                bill_id=bill.table.id,
-                emi_number=emi_number,
-                due_date=due_date,
-                interest_due=round(interest_due, 2),
-                principal_due=round(principal_due, 2),
-                total_closing_balance=round(opening_principal, 2),
-            )
+        print("emi_number", emi_number, due_date)
+        bill_schedule = LoanSchedule(
+            loan_id=bill.table.loan_id,
+            bill_id=bill.table.id,
+            emi_number=emi_number,
+            due_date=due_date,
+            interest_due=round(interest_due, 2),
+            principal_due=round(principal_due, 2),
+            total_closing_balance=round(opening_principal, 2),
+        )
         opening_principal -= principal_due
-        if emi_number == 1 and downpayment:  # add downpayment in first emi
+        if emi_number == new_emi_number and downpayment:  # add downpayment in first emi
             bill_schedule.principal_due = downpayment - bill_schedule.interest_due
         emi_objects.append(bill_schedule)
     session.bulk_save_objects(emi_objects)

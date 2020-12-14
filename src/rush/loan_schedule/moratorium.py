@@ -21,50 +21,6 @@ def provide_moratorium(user_loan: BaseLoan, start_date: date, end_date: date):
         extra_details={"start_date": start_date.isoformat(), "end_date": end_date.isoformat()},
     )
 
-    LoanMoratorium.new(
-        session=user_loan.session,
-        loan_id=user_loan.loan_id,
-        start_date=start_date,
-        end_date=end_date,
-    )
-
-    moratorium_emi_numbers = (
-        user_loan.session.query(LoanSchedule.emi_number)
-        .filter(
-            LoanSchedule.loan_id == user_loan.loan_id,
-            LoanSchedule.bill_id.is_(None),
-            LoanSchedule.due_date >= start_date,
-            LoanSchedule.due_date <= end_date,
-        )
-        .order_by(LoanSchedule.emi_number)
-        .all()
-    )
-
-    loan_moratorium_data = LoanMoratoriumData.new(
-        session=user_loan.session,
-        loan_id=user_loan.loan_id,
-        start_emi_number=moratorium_emi_numbers[0],
-        end_emi_number=moratorium_emi_numbers[-1],
-    )
-
-    interest_before_moratorium = (
-        user_loan.session.query(LoanSchedule.interest_due)
-        .filter(
-            LoanSchedule.loan_id == user_loan.loan_id,
-            LoanSchedule.bill_id.is_(None),
-            LoanSchedule.emi_number == moratorium_emi_numbers[0] - 1,
-        )
-        .first()
-    )
-
-    for emi_number in moratorium_emi_numbers:
-        _ = MoratoriumInterest.new(
-            session=user_loan.session,
-            moratorium_id=loan_moratorium_data.id,
-            emi_number=emi_number,
-            interest=interest_before_moratorium,
-        )
-
     # Get future emis of all the bills whose emis are falling under moratorium period.
     bill_emis = (
         user_loan.session.query(LoanSchedule)
