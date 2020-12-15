@@ -1,14 +1,14 @@
 from dateutil.relativedelta import relativedelta
 from pendulum import date
+from sqlalchemy.orm import Session
 
 from rush.card import BaseLoan
-from rush.loan_schedule.loan_schedule import group_bills
+from rush.card.base_card import BaseBill
+
 from rush.models import (
     LedgerTriggerEvent,
     LoanMoratorium,
-    LoanMoratoriumData,
     LoanSchedule,
-    MoratoriumInterest,
 )
 
 
@@ -69,4 +69,41 @@ def provide_moratorium(user_loan: BaseLoan, start_date: date, end_date: date):
             emi.due_date = new_emi_due_date
             new_emi_due_date += relativedelta(months=1)
     user_loan.session.bulk_save_objects(newly_added_moratorium_emis)
+
+    from rush.loan_schedule.loan_schedule import group_bills
+
     group_bills(user_loan)
+
+
+def add_moratorium_bills(session: Session, user_loan: BaseLoan, bill: BaseBill, bill_due_date: date):
+
+    emi_number = 1
+    due_date = bill.table.bill_start_date
+    opening_principal = bill.table.principal
+    moratorium_emi_objects = []
+
+    while LoanMoratorium.is_in_moratorium(
+        session, loan_id=user_loan.loan_id, date_to_check_against=bill_due_date
+    ):
+        due_date_deltas = bill.get_relative_delta_for_emi(
+            emi_number=emi_number, amortization_date=user_loan.amortization_date
+        )
+        due_date += relativedelta(**due_date_deltas)
+        bill_schedule = LoanSchedule(
+            loan_id=bill.table.loan_id,
+            bill_id=bill.table.id,
+            emi_number=emi_number,
+            due_date=due_date,
+            interest_due=0,
+            principal_due=0,
+            total_closing_balance=round(opening_principal, 2),
+        )
+        emi_number += 1
+        bill_due_date += relativedelta(months=1)
+        moratorium_emi_objects.append(bill_schedule)
+
+    return {
+        "moratorium_emi_objects": moratorium_emi_objects,
+        "emi_number": emi_number,
+        "due_date": due_date,
+    }

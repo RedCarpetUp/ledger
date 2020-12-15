@@ -14,6 +14,7 @@ from rush.card.base_card import (
     BaseLoan,
 )
 from rush.loan_schedule.calculations import get_interest_to_charge
+from rush.loan_schedule.moratorium import add_moratorium_bills
 from rush.models import (
     LedgerTriggerEvent,
     LoanMoratorium,
@@ -69,32 +70,20 @@ def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
     opening_principal = bill.table.principal
     downpayment = bill.get_down_payment()
     new_emi_number = 1
+    due_date_deltas = bill.get_relative_delta_for_emi(
+        emi_number=new_emi_number, amortization_date=user_loan.amortization_date
+    )
+    bill_due_date = bill.table.bill_start_date + relativedelta(**due_date_deltas)
 
     if LoanMoratorium.is_in_moratorium(
-        session, loan_id=user_loan.loan_id, date_to_check_against=due_date
+        session, loan_id=user_loan.loan_id, date_to_check_against=bill_due_date
     ):
-        while True:
-            if not (
-                LoanMoratorium.is_in_moratorium(
-                    session, loan_id=user_loan.loan_id, date_to_check_against=due_date
-                )
-            ):
-                break
-            due_date_deltas = bill.get_relative_delta_for_emi(
-                emi_number=new_emi_number, amortization_date=user_loan.amortization_date
-            )
-            due_date += relativedelta(**due_date_deltas)
-            bill_schedule = LoanSchedule(
-                loan_id=bill.table.loan_id,
-                bill_id=bill.table.id,
-                emi_number=new_emi_number,
-                due_date=due_date,
-                interest_due=0,
-                principal_due=0,
-                total_closing_balance=round(opening_principal, 2),
-            )
-            new_emi_number += 1
-            emi_objects.append(bill_schedule)
+        data_after_moratorium = add_moratorium_bills(session, user_loan, bill, bill_due_date)
+
+        new_emi_number = data_after_moratorium["emi_number"]
+        due_date = data_after_moratorium["due_date"]
+
+        emi_objects.extend(data_after_moratorium["moratorium_emi_objects"])
         bill.table.bill_tenure += new_emi_number
 
     for emi_number in range(new_emi_number, bill.table.bill_tenure + 1):
