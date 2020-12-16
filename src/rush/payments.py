@@ -29,6 +29,7 @@ from rush.models import (
     LedgerEntry,
     LedgerTriggerEvent,
     PaymentSplit,
+    UserProduct,
 )
 from rush.utils import mul
 from rush.writeoff_and_recovery import recovery_event
@@ -47,7 +48,7 @@ def payment_received(
 ) -> None:
     assert user_loan is not None or lender_id is not None
     assert user_loan is not None or user_product_id is not None
-
+    user_product = session.query(UserProduct).filter_by(id=user_product_id).scalar()
     lt = LedgerTriggerEvent(
         name="payment_received",
         loan_id=user_loan.loan_id if user_loan else None,
@@ -63,10 +64,13 @@ def payment_received(
     session.add(lt)
     session.flush()
 
+    lender_id = user_loan.lender_id if user_loan else lender_id
+    user_id = user_loan.user_id if user_loan else user_product.user_id
+    f"{user_loan.user_id}{lender_id}/user-lender/pg_account/a"
     payment_received_event(
         session=session,
         user_loan=user_loan,
-        debit_book_str=f"{user_loan.lender_id if user_loan else lender_id}/lender/pg_account/a",
+        debit_book_str=f"{user_id}{user_loan.lender_id}/user-lender/pg_account/a",
         event=lt,
         skip_closing=skip_closing,
         user_product_id=user_product_id if user_product_id else user_loan.user_product_id,
@@ -295,8 +299,8 @@ def payment_settlement_event(
         create_ledger_entry_from_str(
             session=session,
             event_id=event.id,
-            debit_book_str="12345/redcarpet/gateway_expenses/e",
-            credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
+            debit_book_str=f"{user_loan.user_id}{user_loan.lender_id}/user-lender/gateway_expenses/e",
+            credit_book_str=f"{user_loan.user_id}{user_loan.lender_id}/user-lender/pg_account/a",
             amount=gateway_expenses,
         )
     _, writeoff_balance = get_account_balance_from_str(
@@ -317,7 +321,7 @@ def payment_settlement_event(
         session=session,
         event_id=event.id,
         debit_book_str=f"{user_loan.loan_id}/loan/lender_payable/l",
-        credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
+        credit_book_str=f"{user_loan.user_id}{user_loan.lender_id}/user-lender/pg_account/a",
         amount=event.amount,
     )
 

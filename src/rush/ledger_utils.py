@@ -105,6 +105,8 @@ def breakdown_account_variables_from_str(book_string: str) -> dict:
         "card",
         "loan",
         "product",
+        "user",
+        "user-lender",
     )
     return {
         "identifier": int(identifier),

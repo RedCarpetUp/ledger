@@ -413,7 +413,7 @@ def adjust_for_revenue(
         session,
         event_id=event_id,
         debit_book_str=debit_str,
-        credit_book_str="12345/redcarpet/cgst_payable/l",
+        credit_book_str=f"{fee.user_id}/user/cgst_payable/l",
         amount=gst_split["cgst"],
     )
     fee.cgst_paid = gst_split["cgst"]
@@ -423,7 +423,7 @@ def adjust_for_revenue(
         session,
         event_id=event_id,
         debit_book_str=debit_str,
-        credit_book_str="12345/redcarpet/sgst_payable/l",
+        credit_book_str=f"{fee.user_id}/user/sgst_payable/l",
         amount=gst_split["sgst"],
     )
     fee.sgst_paid = gst_split["sgst"]
@@ -433,7 +433,7 @@ def adjust_for_revenue(
         session,
         event_id=event_id,
         debit_book_str=debit_str,
-        credit_book_str="12345/redcarpet/igst_payable/l",
+        credit_book_str=f"{fee.user_id}/user/igst_payable/l",
         amount=gst_split["igst"],
     )
     fee.igst_paid = gst_split["igst"]

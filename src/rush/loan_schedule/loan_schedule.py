@@ -13,7 +13,6 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
-from rush.loan_schedule.calculations import get_interest_to_charge
 from rush.models import (
     LedgerTriggerEvent,
     LoanSchedule,
