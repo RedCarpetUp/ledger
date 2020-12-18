@@ -28,7 +28,9 @@ from rush.models import (
     LedgerEntry,
     LedgerTriggerEvent,
     LoanData,
+    LoanMoratorium,
     LoanSchedule,
+    MoratoriumInterest,
 )
 from rush.utils import (
     add_gst_split_to_amount,
@@ -73,8 +75,8 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loa
     session.add(accrue_event)
     session.flush()
     for bill in unpaid_bills:
-        interest_to_accrue = (
-            session.query(LoanSchedule.interest_due)
+        loan_schedule = (
+            session.query(LoanSchedule)
             .filter(
                 LoanSchedule.bill_id == bill.id,
                 LoanSchedule.due_date < post_date,
@@ -84,6 +86,45 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loa
             .limit(1)
             .scalar()
         )
+        interest_to_accrue = loan_schedule.interest_due
+        emi_number = loan_schedule.emi_number
+        if LoanMoratorium.is_in_moratorium(
+            session, loan_id=user_loan.loan_id, date_to_check_against=post_date - relativedelta(days=1)
+        ):
+            moratorium_interest = (
+                session.query(MoratoriumInterest.interest)
+                .filter(
+                    MoratoriumInterest.bill_id == bill.table.id,
+                    MoratoriumInterest.due_date < post_date,
+                    MoratoriumInterest.due_date > post_date - relativedelta(months=1),
+                )
+                .order_by(MoratoriumInterest.due_date.desc())
+                .limit(1)
+                .scalar()
+            )
+            if moratorium_interest:
+                interest_to_accrue += moratorium_interest
+
+        moratorium = (
+            session.query(LoanMoratorium)
+            .filter(LoanMoratorium.loan_id == user_loan.loan_id)
+            .order_by(LoanMoratorium.start_date.desc())
+            .first()
+        )
+        if moratorium and emi_number == moratorium.end_emi_number + 1:
+            moratorium_interest = (
+                session.query(MoratoriumInterest)
+                .join(
+                    LoanMoratorium,
+                    MoratoriumInterest.moratorium_id == LoanMoratorium.id,
+                )
+                .filter(
+                    LoanMoratorium.loan_id == user_loan.loan_id, MoratoriumInterest.bill_id.is_(None)
+                )
+                .order_by(MoratoriumInterest.emi_number.desc())
+                .first()
+            )
+            interest_to_accrue -= moratorium_interest.interest
 
         if interest_to_accrue:
             accrue_event.amount += interest_to_accrue

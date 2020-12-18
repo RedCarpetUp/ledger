@@ -70,21 +70,18 @@ def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
     opening_principal = bill.table.principal
     downpayment = bill.get_down_payment()
     new_emi_number = 1
-    due_date_deltas = bill.get_relative_delta_for_emi(
-        emi_number=new_emi_number, amortization_date=user_loan.amortization_date
-    )
-    bill_due_date = bill.table.bill_start_date + relativedelta(**due_date_deltas)
+    interest_to_be_added = 0
 
     if LoanMoratorium.is_in_moratorium(
-        session, loan_id=user_loan.loan_id, date_to_check_against=bill_due_date
+        session, loan_id=user_loan.loan_id, date_to_check_against=bill.table.bill_due_date
     ):
-        data_after_moratorium = add_moratorium_bills(session, user_loan, bill, bill_due_date)
-
-        new_emi_number = data_after_moratorium["emi_number"]
+        data_after_moratorium = add_moratorium_bills(session, user_loan, bill)
+        number_of_months_added = data_after_moratorium["number_of_months_added"]
         due_date = data_after_moratorium["due_date"]
-
+        interest_to_be_added = data_after_moratorium["interest_to_be_added"]
         emi_objects.extend(data_after_moratorium["moratorium_emi_objects"])
-        bill.table.bill_tenure += new_emi_number
+        new_emi_number = number_of_months_added + 1
+        bill.table.bill_tenure += number_of_months_added
 
     for emi_number in range(new_emi_number, bill.table.bill_tenure + 1):
         if user_loan.interest_type == "reducing":
@@ -101,12 +98,13 @@ def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
             bill_id=bill.table.id,
             emi_number=emi_number,
             due_date=due_date,
-            interest_due=round(interest_due, 2),
+            interest_due=round(interest_due + interest_to_be_added, 2),
             principal_due=round(principal_due, 2),
             total_closing_balance=round(opening_principal, 2),
         )
+        interest_to_be_added = 0
         opening_principal -= principal_due
-        if emi_number == new_emi_number and downpayment:  # add downpayment in first emi
+        if emi_number == 1 and downpayment:  # add downpayment in first emi
             bill_schedule.principal_due = downpayment - bill_schedule.interest_due
         emi_objects.append(bill_schedule)
     session.bulk_save_objects(emi_objects)

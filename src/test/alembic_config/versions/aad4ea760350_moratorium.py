@@ -17,34 +17,28 @@ depends_on = None
 
 def upgrade() -> None:
     op.create_table(
-        "loan_moratorium_data",
-        sa.Column("id", sa.Integer, primary_key=True, nullable=False),
-        sa.Column("loan_id", sa.Integer, nullable=False),
-        sa.Column("start_emi_number", sa.Integer, nullable=False),
-        sa.Column("end_emi_number", sa.Integer, nullable=False),
-        sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
-        sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
-        sa.Column("performed_by", sa.Integer(), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["loan_id"],
-            ["v3_loans.id"],
-        ),
-    )
-
-    op.create_table(
         "moratorium_interest",
         sa.Column("id", sa.Integer, primary_key=True, nullable=False),
         sa.Column("moratorium_id", sa.Integer, nullable=False),
         sa.Column("emi_number", sa.Integer, nullable=False),
         sa.Column("interest", sa.Numeric, nullable=False),
+        sa.Column("bill_id", sa.Integer, nullable=True),
+        sa.Column("due_date", sa.Date(), nullable=False),
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("performed_by", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
             ["moratorium_id"],
-            ["loan_moratorium_data.id"],
+            ["loan_moratorium.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["bill_id"],
+            ["loan_data.id"],
         ),
     )
+
+    op.add_column("loan_moratorium", sa.Column("start_emi_number", sa.Integer, nullable=False))
+    op.add_column("loan_moratorium", sa.Column("end_emi_number", sa.Integer, nullable=False))
 
 
 def downgrade() -> None:

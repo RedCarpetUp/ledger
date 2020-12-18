@@ -2633,16 +2633,10 @@ def test_moratorium(session: Session) -> None:
         session, bill_may.table.bill_due_date + relativedelta(days=1), user_loan
     )
 
-    # Give moratorium
-    m = LoanMoratorium.new(
-        session,
-        loan_id=user_loan.loan_id,
-        start_date=parse_date("2020-03-15"),
-        end_date=parse_date("2020-05-15"),
-    )
-
-    # Apply moratorium\
-    provide_moratorium(user_loan, m.start_date.date(), m.end_date.date())
+    start_date = parse_date("2020-03-15").date()
+    end_date = parse_date("2020-05-15").date()
+    # Apply moratorium
+    provide_moratorium(user_loan, start_date, end_date)
 
     # Check if scehdule has been updated according to moratorium
     emis = user_loan.get_loan_schedule()
@@ -2754,16 +2748,10 @@ def test_moratorium_schedule(session: Session) -> None:
         session, bill_may.table.bill_due_date + relativedelta(days=1), user_loan
     )
 
-    # Give moratorium to user
-    m = LoanMoratorium.new(
-        session,
-        loan_id=uc.loan_id,
-        start_date=parse_date("2020-09-15"),
-        end_date=parse_date("2020-11-15"),
-    )
-
+    start_date = parse_date("2020-09-15").date()
+    end_date = parse_date("2020-11-15").date()
     # Apply moratorium
-    provide_moratorium(user_loan, m.start_date.date(), m.end_date.date())
+    provide_moratorium(user_loan, start_date, end_date)
 
     # Get list post refresh
     emis = uc.get_loan_schedule()
@@ -2844,13 +2832,10 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
 
     assert user_loan.get_remaining_min(parse_date("2020-02-01").date()) == 284
 
-    # Give moratorium
-    m = LoanMoratorium.new(
-        session,
-        loan_id=user_loan.loan_id,
-        start_date=parse_date("2020-01-15"),
-        end_date=parse_date("2020-03-15"),
-    )
+    start_date = parse_date("2020-01-15").date()
+    end_date = parse_date("2020-03-15").date()
+    # Apply moratorium
+    provide_moratorium(user_loan, start_date, end_date)
 
     assert (
         LoanMoratorium.is_in_moratorium(
@@ -2959,16 +2944,10 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(session, bill_april.table.bill_due_date + relativedelta(days=1), uc)
 
-    # Give moratorium
-    m = LoanMoratorium.new(
-        session,
-        loan_id=user_loan.loan_id,
-        start_date=parse_date("2020-04-15"),
-        end_date=parse_date("2020-05-15"),
-    )
-
+    start_date = parse_date("2020-04-15").date()
+    end_date = parse_date("2020-05-15").date()
     # Apply moratorium
-    provide_moratorium(user_loan, m.start_date.date(), m.end_date.date())
+    provide_moratorium(user_loan, start_date, end_date)
 
     # Get emi list post few bill creations
     emis = uc.get_loan_schedule()
@@ -3664,7 +3643,7 @@ def test_moratorium_bill_schedule(session: Session) -> None:
         txn_ref_no="dummy_txn_ref_no",
         trace_no="123456",
     )
-    bill_date = parse_date("2019-09-01 00:00:00")
+    bill_date = parse_date("2019-09-01").date()
     bill_sep = bill_generate(user_loan=user_loan, creation_time=bill_date)
 
     # check latest bill method
@@ -3677,19 +3656,33 @@ def test_moratorium_bill_schedule(session: Session) -> None:
         session, bill_sep.table.bill_due_date + relativedelta(days=1), user_loan
     )
 
-    # Give moratorium to user
-    m = LoanMoratorium.new(
-        session,
-        loan_id=user_loan.loan_id,
-        start_date=parse_date("2020-09-15"),
-        end_date=parse_date("2020-11-15"),
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_sep.id}/bill/interest_receivable/a"
     )
+    assert interest_due == Decimal("75.67")
 
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_sep.id}/bill/interest_accrued/r"
+    )
+    assert interest_due == Decimal("75.67")
+
+    interest_event = (
+        session.query(LedgerTriggerEvent)
+        .filter_by(loan_id=user_loan.loan_id, name="accrue_interest")
+        .order_by(LedgerTriggerEvent.post_date.desc())
+        .first()
+    )
+    assert interest_event is not None
+    assert interest_event.amount == Decimal("75.67")
+
+    start_date = parse_date("2020-09-15").date()
+    end_date = parse_date("2020-11-15").date()
     # Apply moratorium
-    provide_moratorium(user_loan, m.start_date.date(), m.end_date.date())
+    provide_moratorium(user_loan, start_date, end_date)
 
     # Get list post refresh
     emis = user_loan.get_loan_schedule()
+
     assert len(emis) == 15
     assert emis[0].emi_number == 1
     assert emis[0].total_due_amount == 0
@@ -3737,8 +3730,38 @@ def test_moratorium_bill_schedule(session: Session) -> None:
         session, bill_oct.table.bill_due_date + relativedelta(days=1), user_loan
     )
 
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_sep.id}/bill/interest_receivable/a"
+    )
+    assert interest_due == Decimal("151.34")
+
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_sep.id}/bill/interest_accrued/r"
+    )
+    assert interest_due == Decimal("151.34")
+
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_oct.id}/bill/interest_receivable/a"
+    )
+    assert interest_due == Decimal("75.67")
+
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_oct.id}/bill/interest_accrued/r"
+    )
+    assert interest_due == Decimal("75.67")
+
+    interest_event = (
+        session.query(LedgerTriggerEvent)
+        .filter_by(loan_id=user_loan.loan_id, name="accrue_interest")
+        .order_by(LedgerTriggerEvent.post_date.desc())
+        .first()
+    )
+    assert interest_event is not None
+    assert interest_event.amount == Decimal("151.34")
+
     emis = user_loan.get_loan_schedule()
-    assert len(emis) == 16
+
+    assert len(emis) == 15
     assert emis[0].emi_number == 1
     assert emis[0].total_due_amount == 0
     assert emis[0].due_date == parse_date("2020-09-15").date()
@@ -3752,16 +3775,16 @@ def test_moratorium_bill_schedule(session: Session) -> None:
     assert emis[2].due_date == parse_date("2020-11-15").date()
     assert emis[2].total_closing_balance == Decimal("5000.00")
     assert emis[3].emi_number == 4
-    assert emis[3].principal_due == Decimal("417.00")
-    assert emis[3].interest_due == Decimal("378.01")
-    assert emis[3].total_due_amount == Decimal("795.01")
+    assert emis[3].principal_due == Decimal("416.90")
+    assert emis[3].interest_due == Decimal("529.44")
+    assert emis[3].total_due_amount == Decimal("946.34")
     assert emis[3].due_date == parse_date("2020-12-15").date()
     assert emis[3].total_closing_balance == Decimal("5000.00")
     assert emis[4].emi_number == 5
-    assert emis[4].principal_due == Decimal("417.00")
-    assert emis[4].interest_due == Decimal("151.00")
+    assert emis[4].principal_due == Decimal("416.90")
+    assert emis[4].interest_due == Decimal("151.10")
     assert emis[4].due_date == parse_date("2021-01-15").date()
-    assert emis[4].total_closing_balance == Decimal("4583.00")
+    assert emis[4].total_closing_balance == Decimal("4583.10")
 
     create_card_swipe(
         session=session,
@@ -3774,7 +3797,7 @@ def test_moratorium_bill_schedule(session: Session) -> None:
     )
 
     bill_date = parse_date("2020-11-01").date()
-    bill_oct = bill_generate(user_loan=user_loan, creation_time=bill_date)
+    bill_nov = bill_generate(user_loan=user_loan, creation_time=bill_date)
     # check latest bill method
     latest_bill = user_loan.get_latest_bill()
     assert latest_bill is not None
@@ -3782,11 +3805,29 @@ def test_moratorium_bill_schedule(session: Session) -> None:
 
     # Interest event to be fired separately now
     accrue_interest_on_all_bills(
-        session, bill_oct.table.bill_due_date + relativedelta(days=1), user_loan
+        session, bill_nov.table.bill_due_date + relativedelta(days=1), user_loan
     )
 
-    emis = user_loan.get_loan_schedule()
-    assert len(emis) == 16
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_nov.id}/bill/interest_receivable/a"
+    )
+    assert interest_due == Decimal("75.67")
+
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_nov.id}/bill/interest_accrued/r"
+    )
+    assert interest_due == Decimal("75.67")
+
+    interest_event = (
+        session.query(LedgerTriggerEvent)
+        .filter_by(loan_id=user_loan.loan_id, name="accrue_interest")
+        .order_by(LedgerTriggerEvent.post_date.desc())
+        .first()
+    )
+    assert interest_event is not None
+    assert interest_event.amount == Decimal("227.01")
+
+    assert len(emis) == 15
     assert emis[0].emi_number == 1
     assert emis[0].total_due_amount == 0
     assert emis[0].due_date == parse_date("2020-09-15").date()
@@ -3800,13 +3841,79 @@ def test_moratorium_bill_schedule(session: Session) -> None:
     assert emis[2].due_date == parse_date("2020-11-15").date()
     assert emis[2].total_closing_balance == Decimal("7500.00")
     assert emis[3].emi_number == 4
-    assert emis[3].principal_due == Decimal("625.57")
-    assert emis[3].interest_due == Decimal("453.44")
-    assert emis[3].total_due_amount == Decimal("1079.01")
+    assert emis[3].principal_due == Decimal("625.21")
+    assert emis[3].interest_due == Decimal("680.80")
+    assert emis[3].total_due_amount == Decimal("1306.01")
     assert emis[3].due_date == parse_date("2020-12-15").date()
     assert emis[3].total_closing_balance == Decimal("7500.00")
     assert emis[4].emi_number == 5
-    assert emis[4].principal_due == Decimal("625.57")
-    assert emis[4].interest_due == Decimal("226.43")
+    assert emis[4].principal_due == Decimal("625.21")
+    assert emis[4].interest_due == Decimal("226.79")
     assert emis[4].due_date == parse_date("2021-01-15").date()
-    assert emis[4].total_closing_balance == Decimal("6874.43")
+    assert emis[4].total_closing_balance == Decimal("6874.79")
+
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-11-04 19:23:11"),
+        amount=Decimal(2500),
+        description="BigB.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
+    )
+
+    bill_date = parse_date("2020-12-01").date()
+    bill_dec = bill_generate(user_loan=user_loan, creation_time=bill_date)
+    # check latest bill method
+    latest_bill = user_loan.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_dec.table.bill_due_date + relativedelta(days=1), user_loan
+    )
+
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_dec.id}/bill/interest_receivable/a"
+    )
+    assert interest_due == Decimal("75.67")
+
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_dec.id}/bill/interest_accrued/r"
+    )
+    assert interest_due == Decimal("75.67")
+
+    interest_event = (
+        session.query(LedgerTriggerEvent)
+        .filter_by(loan_id=user_loan.loan_id, name="accrue_interest")
+        .order_by(LedgerTriggerEvent.post_date.desc())
+        .first()
+    )
+    assert interest_event is not None
+    assert interest_event.amount == Decimal("529.46")
+
+    assert len(emis) == 15
+    assert emis[0].emi_number == 1
+    assert emis[0].total_due_amount == 0
+    assert emis[0].due_date == parse_date("2020-09-15").date()
+    assert emis[0].total_closing_balance == Decimal("2500.00")
+    assert emis[1].emi_number == 2
+    assert emis[1].total_due_amount == 0
+    assert emis[1].due_date == parse_date("2020-10-15").date()
+    assert emis[1].total_closing_balance == Decimal("5000.00")
+    assert emis[2].emi_number == 3
+    assert emis[2].total_due_amount == 0
+    assert emis[2].due_date == parse_date("2020-11-15").date()
+    assert emis[2].total_closing_balance == Decimal("7500.00")
+    assert emis[3].emi_number == 4
+    assert emis[3].principal_due == Decimal("833.54")
+    assert emis[3].interest_due == Decimal("756.47")
+    assert emis[3].total_due_amount == Decimal("1590.01")
+    assert emis[3].due_date == parse_date("2020-12-15").date()
+    assert emis[3].total_closing_balance == Decimal("10000.00")
+    assert emis[4].emi_number == 5
+    assert emis[4].principal_due == Decimal("833.54")
+    assert emis[4].interest_due == Decimal("302.46")
+    assert emis[4].due_date == parse_date("2021-01-15").date()
+    assert emis[4].total_closing_balance == Decimal("9166.46")

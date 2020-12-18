@@ -57,10 +57,7 @@ def update_event_with_dpd(
             moratorium = (
                 session.query(LoanMoratorium).filter(LoanMoratorium.loan_id == user_loan.loan_id).first()
             )
-            if isinstance(moratorium.start_date, datetime):
-                event_post_date = moratorium.start_date.date()
-            else:
-                event_post_date = moratorium.start_date
+            event_post_date = moratorium.start_date
 
         # We need to get the bill because we have to check if min is paid
         bill = user_loan.convert_to_bill_class(

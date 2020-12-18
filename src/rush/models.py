@@ -507,6 +507,8 @@ class LoanMoratorium(AuditMixin):
     loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
+    start_emi_number = Column(Integer, nullable=False)
+    end_emi_number = Column(Integer, nullable=False)
 
     @classmethod
     def is_in_moratorium(cls, session: Session, loan_id: int, date_to_check_against: PythonDate) -> bool:
@@ -721,17 +723,11 @@ class PaymentRequestsData(AuditMixin):
     extra_details = Column(JSONB, default=lambda: {})
 
 
-class LoanMoratoriumData(AuditMixin):
-    __tablename__ = "loan_moratorium_data"
-
-    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
-    start_emi_number = Column(Integer, nullable=False)
-    end_emi_number = Column(Integer, nullable=False)
-
-
 class MoratoriumInterest(AuditMixin):
     __tablename__ = "moratorium_interest"
 
-    moratorium_id = Column(Integer, ForeignKey(LoanMoratoriumData.id), nullable=False)
+    moratorium_id = Column(Integer, ForeignKey(LoanMoratorium.id), nullable=False)
     emi_number = Column(Integer, nullable=False)
     interest = Column(Numeric, nullable=False)
+    bill_id = Column(Integer, ForeignKey(LoanData.id), nullable=True)
+    due_date = Column(Date, nullable=False)
