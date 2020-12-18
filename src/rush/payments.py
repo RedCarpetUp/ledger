@@ -79,6 +79,7 @@ def payment_received(
         user_product_id=user_product_id if user_product_id else user_loan.user_product_id,
     )
 
+    update_journal_entry(user_loan=user_loan, event=lt, user_id=user_id, session=session)
     # TODO: check if this code is needed for downpayment, since there is no user loan at that point of time.
     if payment_type in ("downpayment", "card_activation_fee", "reset_joining_fees"):
         return
@@ -96,8 +97,6 @@ def payment_received(
 
     # Update dpd
     update_event_with_dpd(user_loan=user_loan, event=lt)
-    # Update Journal Entry
-    update_journal_entry(user_loan=user_loan, event=lt, user_id=user_id, session=session)
 
 
 def refund_payment(
