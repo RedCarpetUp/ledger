@@ -1,5 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
+from typing import Optional
 
 from pendulum import DateTime
 from sqlalchemy.orm import (
@@ -302,14 +303,22 @@ def get_ledger_for_fee(fee_acc) -> String:
 def update_journal_entry(
     user_loan: BaseLoan,
     event: LedgerTriggerEvent,
+    user_id: Optional[int] = None,
+    session: Optional[Session] = None,
 ) -> None:
-    # TODO Think about alias accounts. Also what is processing and reload event?
-    session = user_loan.session
+    if not session:
+        session = user_loan.session
+    if not user_id:
+        user_id = user_loan.user_id
+    loan_id = None
+    if user_loan:
+        loan_id = user_loan.id
+
     if not event.amount:  # Don't need 0 amount bills entries.
         return
     user_name = (
         session.query(UserData.first_name)
-        .filter(UserData.row_status == "active", UserData.user_id == user_loan.user_id)
+        .filter(UserData.row_status == "active", UserData.user_id == user_id)
         .scalar()
     ) or "John Doe"
 
@@ -328,7 +337,7 @@ def update_journal_entry(
             1,
             "Disbursal Card",
             event.id,
-            user_loan.id,
+            loan_id,
         )
         create_journal_entry(
             session,
@@ -344,7 +353,7 @@ def update_journal_entry(
             2,
             "Disbursal Card",
             event.id,
-            user_loan.id,
+            loan_id,
         )
     elif event.name == "payment_received" or event.name == "transaction_refund":
         create_journal_entry(
@@ -361,7 +370,7 @@ def update_journal_entry(
             1,
             get_journal_entry_ptype(event.name),
             event.id,
-            user_loan.id,
+            loan_id,
         )
         create_journal_entry(
             session,
@@ -377,7 +386,7 @@ def update_journal_entry(
             2,
             get_journal_entry_ptype(event.name),
             event.id,
-            user_loan.id,
+            loan_id,
         )
         from rush.payments import get_payment_split_from_event
 
@@ -407,7 +416,7 @@ def update_journal_entry(
                     sort_order,
                     p_type,
                     event.id,
-                    user_loan.id,
+                    loan_id,
                 )
             create_journal_entry(
                 session,
@@ -423,7 +432,7 @@ def update_journal_entry(
                 1,
                 p_type,
                 event.id,
-                user_loan.id,
+                loan_id,
             )
     elif event.name == "bill_generate":
         create_journal_entry(
@@ -440,7 +449,7 @@ def update_journal_entry(
             1,
             "CF To TL",
             event.id,
-            user_loan.id,
+            loan_id,
         )
         create_journal_entry(
             session,
@@ -456,5 +465,5 @@ def update_journal_entry(
             2,
             "CF To TL",
             event.id,
-            user_loan.id,
+            loan_id,
         )

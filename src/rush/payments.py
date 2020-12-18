@@ -33,6 +33,7 @@ from rush.models import (
     LedgerTriggerEvent,
     PaymentRequestsData,
     PaymentSplit,
+    UserProduct,
 )
 from rush.utils import mul
 from rush.writeoff_and_recovery import recovery_event
@@ -51,6 +52,8 @@ def payment_received(
 ) -> None:
     assert user_loan is not None or lender_id is not None
     assert user_loan is not None or user_product_id is not None
+    user_product = session.query(UserProduct).filter_by(id=user_product_id).scalar()
+    user_id = user_loan.user_id if user_loan else user_product.user_id
 
     lt = LedgerTriggerEvent(
         name="payment_received",
@@ -94,7 +97,7 @@ def payment_received(
     # Update dpd
     update_event_with_dpd(user_loan=user_loan, event=lt)
     # Update Journal Entry
-    update_journal_entry(user_loan=user_loan, event=lt)
+    update_journal_entry(user_loan=user_loan, event=lt, user_id=user_id, session=session)
 
 
 def refund_payment(

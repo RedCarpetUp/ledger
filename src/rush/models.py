@@ -684,7 +684,7 @@ class JournalEntry(AuditMixin):
     ptype = Column(String(length=50), nullable=True)
     row_status = Column(String(length=10), default="active", nullable=False)
     event_id = Column(Integer, ForeignKey(LedgerTriggerEvent.id), nullable=False)
-    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
+    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=True)
 
 
 class PaymentRequestsData(AuditMixin):
