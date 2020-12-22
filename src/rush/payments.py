@@ -66,11 +66,10 @@ def payment_received(
 
     lender_id = user_loan.lender_id if user_loan else lender_id
     user_id = user_loan.user_id if user_loan else user_product.user_id
-    f"{user_loan.user_id}{lender_id}/user-lender/pg_account/a"
     payment_received_event(
         session=session,
         user_loan=user_loan,
-        debit_book_str=f"{user_id}{user_loan.lender_id}/user-lender/pg_account/a",
+        debit_book_str=f"{user_id}{lender_id}/user-lender/pg_account/a",
         event=lt,
         skip_closing=skip_closing,
         user_product_id=user_product_id if user_product_id else user_loan.user_product_id,
