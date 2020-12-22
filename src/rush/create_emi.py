@@ -387,10 +387,12 @@ def update_journal_entry(
         if split_data and event.amount != principal_and_interest:
             sales_import_amount = event.amount - principal_and_interest
             narration_name = ""
-            for settled_acc, amount in split_data.items():
+            for settled_acc, _ in split_data.items():  # First loop to get narration name.
                 # So if there are more than one fee, it becomes "Late fee Reload fee".
                 if settled_acc not in ("sgst", "cgst", "igst"):
-                    narration_name += f" {settled_acc}"
+                    narration_name += f" {get_ledger_for_fee(settled_acc)}"
+            p_type = f"{narration_name} -Card TL-Customer"
+            for sort_order, (settled_acc, amount) in enumerate(split_data.items(), 2):
                 create_journal_entry(
                     session,
                     "",
@@ -402,12 +404,11 @@ def update_journal_entry(
                     amount,
                     "",
                     event.post_date,
-                    2,
-                    get_journal_entry_ptype(event.name),
+                    sort_order,
+                    p_type,
                     event.id,
                     user_loan.id,
                 )
-            narration_name = narration_name.strip()
             create_journal_entry(
                 session,
                 "Sales-Import",
@@ -420,7 +421,7 @@ def update_journal_entry(
                 narration_name,
                 event.post_date,
                 1,
-                get_journal_entry_ptype(event.name),
+                p_type,
                 event.id,
                 user_loan.id,
             )

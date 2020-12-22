@@ -20,7 +20,10 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy.dialects.postgresql import (
+    JSON,
+    JSONB,
+)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.ext.indexable import index_property
@@ -187,7 +190,7 @@ class UserData(AuditMixin):
     signup_otp_created_at = Column(TIMESTAMP, nullable=True)
     gcm_id = Column(String(200), nullable=True)
     pusher_channel = Column(String(50), nullable=True)
-    view_tags = Column(JSON, server_default="{}", nullable=True)
+    view_tags = Column(JSONB, server_default="{}", nullable=True)
 
     # Aggregate columns
     total_credit_used = Column(Numeric, server_default="0", nullable=False)
@@ -249,10 +252,10 @@ class Loan(AuditMixin):
     amortization_date = Column(TIMESTAMP, nullable=True)
     loan_status = Column(String(), nullable=True)
     interest_type = Column(String(), nullable=True)
-    product_type = Column(String(), ForeignKey(Product.product_name), nullable=False)
-    lender_id = Column(Integer, ForeignKey(Lenders.id), nullable=False)
-    rc_rate_of_interest_monthly = Column(Numeric, nullable=False)
-    lender_rate_of_interest_annual = Column(Numeric, nullable=False)
+    product_type = Column(String(), ForeignKey(Product.product_name), nullable=True)
+    lender_id = Column(Integer, ForeignKey(Lenders.id), nullable=True)
+    rc_rate_of_interest_monthly = Column(Numeric, nullable=True)
+    lender_rate_of_interest_annual = Column(Numeric, nullable=True)
     interest_free_period_in_days = Column(Integer, default=45, nullable=True)
     min_tenure = Column(Integer, nullable=True)
     min_multiplier = Column(Numeric, nullable=True)
@@ -299,7 +302,7 @@ class Role(AuditMixin):
     __tablename__ = "v3_roles"
 
     name = Column(String(length=50), nullable=False)
-    data = Column(JSON, server_default="{}", nullable=True)
+    data = Column(JSONB, server_default="{}", nullable=True)
     comments = Column(Text)
 
     __table_args__ = (Index("index_on_name_and_id_v3_roles", name, "id"),)
@@ -310,7 +313,7 @@ class UserRoles(AuditMixin):
 
     user_id = Column(Integer, ForeignKey(User.id), nullable=False)
     role_id = Column(Integer, ForeignKey(Role.id), nullable=False)
-    data = Column(JSON, server_default="{}", nullable=True)
+    data = Column(JSONB, server_default="{}", nullable=True)
     row_status = Column(String(20), default="active", nullable=False)
 
     __table_args__ = (
@@ -379,7 +382,7 @@ class CardKitNumbers(AuditMixin):
     card_type = Column(String(12), nullable=True)
     last_5_digits = Column(String(5), nullable=False)
     status = Column(String(15), nullable=False)
-    extra_details = Column(JSON, nullable=False, default={})
+    extra_details = Column(JSONB, nullable=False, default={})
 
 
 class LedgerTriggerEvent(AuditMixin):
@@ -682,3 +685,37 @@ class JournalEntry(AuditMixin):
     row_status = Column(String(length=10), default="active", nullable=False)
     event_id = Column(Integer, ForeignKey(LedgerTriggerEvent.id), nullable=False)
     loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
+
+
+class PaymentRequestsData(AuditMixin):
+    __tablename__ = "v3_payment_requests_data"
+
+    type = Column(String(length=20), nullable=False)
+    payment_request_amount = Column(Numeric, nullable=False)
+    payment_request_status = Column(String(length=20), nullable=False)
+    source_account_id = Column(Integer, nullable=False)
+    destination_account_id = Column(Integer, nullable=False)
+    user_id = Column(Integer, nullable=False)
+    payment_request_id = Column(String(length=50), nullable=False)
+    row_status = Column(String(length=20), nullable=False)
+    payment_reference_id = Column(String(length=120), nullable=True)
+    created_at = Column(TIMESTAMP, nullable=False)
+    updated_at = Column(TIMESTAMP, nullable=False)
+    intermediary_payment_date = Column(TIMESTAMP, nullable=True)
+    payment_received_in_bank_date = Column(TIMESTAMP, nullable=True)
+    payment_request_mode = Column(String(length=20), nullable=True)
+    payment_execution_charges = Column(Numeric, nullable=True)
+    payment_gateway_id = Column(Integer, nullable=True)
+    gateway_response = Column(JSONB, default=lambda: {})
+    collection_by = Column(String(length=20), server_default="customer")
+    collection_request_id = Column(String(length=50), nullable=True)
+    payment_request_comments = Column(String(), nullable=True)
+    prepayment_amount = Column(Numeric, nullable=True)
+    net_payment_amount = Column(Numeric, nullable=True)
+    fee_amount = Column(Numeric, nullable=True)
+    expire_date = Column(TIMESTAMP, nullable=True)
+    performed_by = Column(Integer, nullable=True)
+    coupon_code = Column(String(length=25), nullable=True)
+    coupon_data = Column(JSONB, default=lambda: {})
+    gross_request_amount = Column(Integer, nullable=True)
+    extra_details = Column(JSONB, default=lambda: {})
