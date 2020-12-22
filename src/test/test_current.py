@@ -839,10 +839,10 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
     _, late_fine_earned = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine/r")
     assert late_fine_earned == Decimal(100)
 
-    _, sgst_balance = get_account_balance_from_str(session, "12345/redcarpet/sgst_payable/l")
+    _, sgst_balance = get_account_balance_from_str(session, f"{user_loan.user_id}/user/sgst_payable/l")
     assert sgst_balance == Decimal(9)
 
-    _, cgst_balance = get_account_balance_from_str(session, "12345/redcarpet/cgst_payable/l")
+    _, cgst_balance = get_account_balance_from_str(session, f"{user_loan.user_id}/user/cgst_payable/l")
     assert cgst_balance == Decimal(9)
 
     _, interest_due = get_account_balance_from_str(

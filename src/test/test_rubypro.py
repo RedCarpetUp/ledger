@@ -4,7 +4,7 @@ from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
 from rush.card import (
-    RubyProCard,
+    # RubyProCard,
     create_user_product,
     get_product_class,
     get_user_product,
