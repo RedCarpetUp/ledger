@@ -7,6 +7,7 @@ Create Date: 2020-12-23 10:06:41.777669
 """
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = "a7997149d740"
@@ -37,8 +38,8 @@ def upgrade() -> None:
         sa.Column("payment_gateway_id", sa.INTEGER(), nullable=True),
         sa.Column(
             "gateway_response",
-            sa.JSON(),
-            server_default="{}",
+            postgresql.JSONB(),
+            server_default=sa.text("'{}'::jsonb"),
             nullable=True,
         ),
         sa.Column(
@@ -55,16 +56,16 @@ def upgrade() -> None:
         sa.Column("expire_date", sa.TIMESTAMP(), nullable=True),
         sa.Column(
             "coupon_data",
-            sa.JSON(),
-            server_default="{}",
+            postgresql.JSONB(),
+            server_default=sa.text("'{}'::jsonb"),
             nullable=True,
         ),
         sa.Column("gross_request_amount", sa.NUMERIC(), nullable=True),
         sa.Column("coupon_code", sa.VARCHAR(length=25), nullable=True),
         sa.Column(
             "extra_details",
-            sa.JSON(),
-            server_default="{}",
+            postgresql.JSONB(),
+            server_default=sa.text("'{}'::jsonb"),
             nullable=True,
         ),
         sa.Column("performed_by", sa.Integer(), nullable=False),
