@@ -1,6 +1,11 @@
 import contextlib
+from datetime import date
 from decimal import Decimal
 from io import StringIO
+from typing import (
+    Any,
+    Dict,
+)
 
 import alembic
 from _pytest.monkeypatch import MonkeyPatch
@@ -63,6 +68,7 @@ from rush.models import (
     LoanData,
     LoanMoratorium,
     PaymentMapping,
+    PaymentRequestsData,
     PaymentSplit,
     Product,
     User,
@@ -246,22 +252,84 @@ def test_card_swipe_and_reversal(session: Session) -> None:
     swipe3 = swipe3["data"]
 
 
+def payment_request_data(
+    session: Session,
+    type: str,
+    payment_request_amount: int,
+    payment_request_status: str,
+    source_account_id: int,
+    destination_account_id: int,
+    user_id: int,
+    payment_request_id: str,
+    row_status: str,
+    **kwargs: str,
+) -> PaymentRequestsData:
+    """
+    populate v3_payment_requests_data table
+    """
+    data = PaymentRequestsData.new(
+        session=session,
+        type=type,
+        payment_request_amount=payment_request_amount,
+        payment_request_status=payment_request_status,
+        source_account_id=source_account_id,
+        destination_account_id=destination_account_id,
+        user_id=user_id,
+        payment_request_id=payment_request_id,
+        row_status=row_status,
+        created_at=kwargs.get("created_at"),
+        updated_at=kwargs.get("updated_at"),
+        payment_reference_id=kwargs.get("payment_reference_id"),
+        intermediary_payment_date=kwargs.get("intermediary_payment_date"),
+        payment_received_in_bank_date=kwargs.get("payment_received_in_bank_date"),
+        payment_request_mode=kwargs.get("payment_request_mode"),
+        payment_execution_charges=kwargs.get("payment_execution_charges"),
+        payment_gateway_id=kwargs.get("payment_gateway_id"),
+        gateway_response=kwargs.get("gateway_response"),
+        collection_by=kwargs.get("collection_by"),
+        collection_request_id=kwargs.get("collection_request_id"),
+        payment_request_comments=kwargs.get("payment_request_comments"),
+        prepayment_amount=kwargs.get("prepayment_amount"),
+        net_payment_amount=kwargs.get("net_payment_amount"),
+        fee_amount=kwargs.get("fee_amount"),
+        expire_date=kwargs.get("expire_date"),
+        coupon_data=kwargs.get("coupon_data"),
+        gross_request_amount=kwargs.get("gross_request_amount"),
+        coupon_code=kwargs.get("coupon_code"),
+        extra_details=kwargs.get("extra_details", {}),
+    )
+
+    return data
+
+
+def payment_request(session: Session, amount: int, payment_request_id: str) -> Dict[str, Any]:
+    gateway_charges = 0.5
+    return {
+        "status": "success",
+        "id": "sdfsadf",
+        "gateway_charges": gateway_charges,
+        "amount": amount,
+        "payment_gateway_id": 23,
+        "payment_request_id": payment_request_id,
+    }
+
+
 def test_closing_bill(session: Session) -> None:
     # Replicating nishant's case upto June
     test_lenders(session)
     card_db_updates(session)
 
-    a = User(
+    user = User(
         id=230,
         performed_by=123,
     )
-    session.add(a)
+    session.add(user)
     session.flush()
 
     # assign card
     user_loan = create_user_product(
         session=session,
-        user_id=a.id,
+        user_id=user.id,
         card_activation_date=parse_date("2019-01-02").date(),
         card_type="ruby",
         rc_rate_of_interest_monthly=Decimal(3),
@@ -311,14 +379,43 @@ def test_closing_bill(session: Session) -> None:
     event_date = parse_date("2019-03-16 00:00:00")
     bill = accrue_late_charges(session, user_loan, event_date, Decimal(100))
 
+    payment_data = payment_request_data(
+        session=session,
+        type="customer",
+        payment_request_amount=463,
+        payment_request_status="UNPAID",
+        source_account_id=user_loan.loan_id,
+        destination_account_id=3791,
+        user_id=user.id,
+        payment_request_id="a1234",
+        row_status="active",
+        created_at=parse_date("2019-03-16 10:02:10"),
+        updated_at=parse_date("2019-03-16 10:02:10"),
+    )
+
     payment_date = parse_date("2019-03-27")
+
+    response = payment_request(
+        session=session,
+        amount=payment_data.payment_request_amount,
+        payment_request_id=payment_data.payment_request_id,
+    )
+    assert response["status"] == "success"
+
+    # payment_data.intermediary_payment_date = response["payment_date"]
+    payment_data.payment_execution_charges = response["gateway_charges"]
+    payment_data.payment_gateway_id = response["payment_gateway_id"]
+    payment_data.payment_request_status = "PAID"
+    payment_data.extra_details.update(response)
+
+    print(payment_data.as_dict())
 
     payment_received(
         session=session,
         user_loan=user_loan,
         payment_amount=Decimal(463),
         payment_date=payment_date,
-        payment_request_id="a1234",
+        payment_request_id=payment_data.payment_request_id,
     )
 
     bill_date = parse_date("2019-04-01 00:00:00")
