@@ -74,6 +74,7 @@ def payment_received(
         event=lt,
         skip_closing=skip_closing,
         user_product_id=user_product_id if user_product_id else user_loan.user_product_id,
+        lender_id=lender_id if lender_id else user_loan.lender_id,
     )
 
     # TODO: check if this code is needed for downpayment, since there is no user loan at that point of time.
@@ -133,6 +134,7 @@ def payment_received_event(
     event: LedgerTriggerEvent,
     skip_closing: bool = False,
     user_product_id: Optional[int] = None,
+    lender_id: Optional[int] = None,
 ) -> None:
     payment_received_amt = Decimal(event.amount)
 
@@ -205,7 +207,7 @@ def payment_received_event(
         session=session,
         event_id=event.id,
         debit_book_str="12345/redcarpet/gateway_expenses/e",
-        credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
+        credit_book_str=f"{lender_id}/lender/pg_account/a",
         amount=gateway_expenses,
     )
 
