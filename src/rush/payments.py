@@ -200,6 +200,15 @@ def payment_received_event(
         # We will either slide or close bills
         slide_payment_to_emis(user_loan, event)
 
+    gateway_expenses = Decimal("0.5")
+    create_ledger_entry_from_str(
+        session=session,
+        event_id=event.id,
+        debit_book_str="12345/redcarpet/gateway_expenses/e",
+        credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
+        amount=gateway_expenses,
+    )
+
     create_payment_split(session, event)
 
 
@@ -287,22 +296,10 @@ def settle_payment_in_bank(
     session.add(event)
     session.flush()
 
-    payment_settlement_event(
-        session=session, gateway_expenses=gateway_expenses, user_loan=user_loan, event=event
-    )
+    payment_settlement_event(session=session, user_loan=user_loan, event=event)
 
 
-def payment_settlement_event(
-    session: Session, gateway_expenses: Decimal, user_loan: BaseLoan, event: LedgerTriggerEvent
-) -> None:
-    if gateway_expenses > 0:  # Adjust for gateway expenses.
-        create_ledger_entry_from_str(
-            session=session,
-            event_id=event.id,
-            debit_book_str="12345/redcarpet/gateway_expenses/e",
-            credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
-            amount=gateway_expenses,
-        )
+def payment_settlement_event(session: Session, user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
     _, writeoff_balance = get_account_balance_from_str(
         session=session, book_string=f"{user_loan.loan_id}/loan/writeoff_expenses/e"
     )
@@ -375,6 +372,7 @@ def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
         "card_reload_fee",
         "downpayment",
         "reset_joining_fees",
+        "gateway_expenses",
     )
     # unbilled and principal belong to same component.
     updated_component_names = {
