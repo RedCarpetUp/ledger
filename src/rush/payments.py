@@ -69,11 +69,10 @@ def payment_received(
     session.flush()
 
     lender_id = user_loan.lender_id if user_loan else lender_id
-    user_id = user_loan.user_id if user_loan else user_product.user_id
     payment_received_event(
         session=session,
         user_loan=user_loan,
-        debit_book_str=f"{user_id}{lender_id}/user-lender/pg_account/a",
+        debit_book_str=f"{lender_id}/lender/pg_account/a",
         event=lt,
         skip_closing=skip_closing,
         user_product_id=user_product_id if user_product_id else user_loan.user_product_id,
@@ -302,8 +301,8 @@ def payment_settlement_event(
         create_ledger_entry_from_str(
             session=session,
             event_id=event.id,
-            debit_book_str=f"{user_loan.user_id}{user_loan.lender_id}/user-lender/gateway_expenses/e",
-            credit_book_str=f"{user_loan.user_id}{user_loan.lender_id}/user-lender/pg_account/a",
+            debit_book_str=f"{user_loan.lender_id}/lender/gateway_expenses/e",
+            credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
             amount=gateway_expenses,
         )
     _, writeoff_balance = get_account_balance_from_str(
@@ -324,7 +323,7 @@ def payment_settlement_event(
         session=session,
         event_id=event.id,
         debit_book_str=f"{user_loan.loan_id}/loan/lender_payable/l",
-        credit_book_str=f"{user_loan.user_id}{user_loan.lender_id}/user-lender/pg_account/a",
+        credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
         amount=event.amount,
     )
 
