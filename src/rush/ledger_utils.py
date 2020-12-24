@@ -59,7 +59,11 @@ def get_account_balance_from_str(
 ) -> Tuple[int, Decimal]:
     book_variables = breakdown_account_variables_from_str(book_string)
     func_call = None
+    is_lender_account = book_variables["identifier_type"] == "lender"
     if from_date and to_date:
+        if is_lender_account:
+            raise Exception("Not implemented")
+
         func_call = func.get_account_balance_between_periods(
             cast(book_variables["identifier"], sqlalchemy.Integer),
             cast(book_variables["identifier_type"], sqlalchemy.String),
@@ -68,14 +72,29 @@ def get_account_balance_from_str(
             cast(from_date, sqlalchemy.TIMESTAMP),
             cast(to_date, sqlalchemy.TIMESTAMP),
         )
+
     elif to_date:
-        func_call = func.get_account_balance(
+        if is_lender_account:
+            func_call = func.get_lender_account_balance(
+                cast(book_variables["identifier"], sqlalchemy.Integer),
+                cast(book_variables["name"], sqlalchemy.String),
+                cast(to_date, sqlalchemy.TIMESTAMP),
+            )
+        else:
+            func_call = func.get_account_balance(
+                cast(book_variables["identifier"], sqlalchemy.Integer),
+                cast(book_variables["identifier_type"], sqlalchemy.String),
+                cast(book_variables["name"], sqlalchemy.String),
+                cast(book_variables["account_type"], sqlalchemy.String),
+                cast(to_date, sqlalchemy.TIMESTAMP),
+            )
+
+    elif is_lender_account:
+        func_call = func.get_lender_account_balance(
             cast(book_variables["identifier"], sqlalchemy.Integer),
-            cast(book_variables["identifier_type"], sqlalchemy.String),
             cast(book_variables["name"], sqlalchemy.String),
-            cast(book_variables["account_type"], sqlalchemy.String),
-            cast(to_date, sqlalchemy.TIMESTAMP),
         )
+
     # If to_date isn't provided then fetch latest balance from book_account rather than ledger_event.
     if func_call is None:
         account_balance = (
@@ -91,6 +110,7 @@ def get_account_balance_from_str(
         )
     else:
         account_balance = session.query(func_call).scalar() or 0
+
     return 0, Decimal(account_balance)
 
 
@@ -106,7 +126,6 @@ def breakdown_account_variables_from_str(book_string: str) -> dict:
         "loan",
         "product",
         "user",
-        "user-lender",
     )
     return {
         "identifier": int(identifier),
