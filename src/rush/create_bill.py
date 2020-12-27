@@ -76,7 +76,7 @@ def bill_generate(
         TermLoan.product_type == "transaction_loan", TermLoan.user_id == user_loan.user_id
     )
 
-    #add card txn for emi of txn loan
+    # add card txn for emi of txn loan
     if transaction_loan:
         pass
 
