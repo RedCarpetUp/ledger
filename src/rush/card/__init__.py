@@ -18,11 +18,14 @@ from rush.card.term_loan import TermLoan
 from rush.card.term_loan2 import TermLoan2
 from rush.card.term_loan_pro import TermLoanPro
 from rush.card.term_loan_pro2 import TermLoanPro2
+from rush.card.utils import create_user_product_mapping
 from rush.card.zeta_card import ZetaCard
 from rush.ledger_events import limit_assignment_event
 from rush.models import (
+    CardTransaction,
     LedgerTriggerEvent,
     Loan,
+    LoanData,
     UserCard,
 )
 from rush.utils import get_current_ist_time
@@ -126,3 +129,44 @@ def disburse_card(
     session.flush()
 
     limit_assignment_event(session=session, loan_id=user_loan.loan_id, event=event, amount=amount)
+
+
+def transaction_to_loan(session: Session, txn_ref_no: str, user_id: int) -> TermLoan:
+    txn = session.query(CardTransaction).filter(CardTransaction.txn_ref_no == txn_ref_no).scalar()
+
+    if not txn:
+        return {"result": "error", "message": "Invalid transaction ref no."}
+
+    # making txn ineligible for billing
+    txn.loan_id = None
+
+    user_loan = (
+        session.query(Loan)
+        .select_from(CardTransaction)
+        .join(LoanData, CardTransaction.loan_id == LoanData.id)
+        .join(Loan, LoanData.loan_id == Loan.id)
+        .scalar()
+    )
+
+    user_product = create_user_product_mapping(
+        session=session, user_id=user_id, product_type="transaction_loan"
+    )
+
+    # loan for txn amount
+    txn_loan = create_user_product(
+        session=session,
+        user_id=user_id,
+        card_type="term_loan",
+        product_type="transaction_loan",
+        lender_id=user_loan.lender_id,
+        interest_free_period_in_days=15,
+        tenure=12,
+        amount=txn.amount,
+        product_order_date=get_current_ist_time().date(),
+        user_product_id=user_product.id,
+        downpayment_percent=Decimal("0"),
+    )
+
+    session.flush()
+
+    return txn_loan
