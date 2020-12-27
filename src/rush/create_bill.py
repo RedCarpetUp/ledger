@@ -9,6 +9,7 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
+from rush.card.term_loan import TermLoan
 from rush.create_emi import (
     update_event_with_dpd,
     update_journal_entry,
@@ -70,6 +71,15 @@ def bill_generate(
     skip_bill_schedule_creation: bool = False,
 ) -> BaseBill:
     session = user_loan.session
+
+    transaction_loan = session.query(TermLoan).filter(
+        TermLoan.product_type == "transaction_loan", TermLoan.user_id == user_loan.user_id
+    )
+
+    #add card txn for emi of txn loan
+    if transaction_loan:
+        pass
+
     bill = user_loan.get_latest_bill_to_generate()  # Get the first bill which is not generated.
     if not bill:
         bill = get_or_create_bill_for_card_swipe(

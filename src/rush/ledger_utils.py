@@ -11,14 +11,21 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.orm import Session
+from rush.card import create_user_product, get_user_product
+from rush.card.term_loan import TermLoan
+from rush.card.utils import create_user_product_mapping
+from rush.loan_schedule.calculations import get_down_payment
 
 from rush.models import (
     BookAccount,
+    CardTransaction,
     LedgerEntry,
     LedgerTriggerEvent,
+    Loan,
     LoanData,
     get_or_create,
 )
+from rush.utils import get_current_ist_time
 
 
 def create_ledger_entry(
@@ -147,3 +154,44 @@ def reverse_event(session: Session, event_to_reverse: LedgerTriggerEvent, event:
             credit_book_id=entry.debit_account,
             amount=entry.amount,
         )
+
+
+def transaction_to_loan(session: Session, txn_ref_no: str, user_id: int) -> TermLoan:
+    txn = session.query(CardTransaction).filter(CardTransaction.txn_ref_no == txn_ref_no).scalar()
+
+    if not txn:
+        return {"result": "error", "message": "Invalid transaction ref no."}
+
+    txn.loan_id = None
+
+    # loan_id of txn
+    user_loan = (
+        session.query(Loan)
+        .select_from(CardTransaction)
+        .join(LoanData, CardTransaction.loan_id == LoanData.id)
+        .join(Loan, LoanData.loan_id == Loan.id)
+        .scalar()
+    )
+
+    user_product = create_user_product_mapping(
+        session=session, user_id=user_id, product_type="transaction_loan"
+    )
+
+    # loan for txn amount
+    txn_loan = create_user_product(
+        session=session,
+        user_id=user_id,
+        card_type="term_loan",
+        product_type="transaction_loan",
+        lender_id=user_loan.lender_id,
+        interest_free_period_in_days=15,
+        tenure=12,
+        amount=txn.amount,
+        product_order_date=get_current_ist_time().date(),
+        user_product_id=user_product.id,
+        downpayment_percent=Decimal("0"),
+    )
+
+    session.flush()
+
+    return txn_loan
