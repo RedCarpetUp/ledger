@@ -162,9 +162,9 @@ def transaction_to_loan(session: Session, txn_ref_no: str, user_id: int) -> Term
     if not txn:
         return {"result": "error", "message": "Invalid transaction ref no."}
 
+    # making txn ineligible for billing
     txn.loan_id = None
 
-    # loan_id of txn
     user_loan = (
         session.query(Loan)
         .select_from(CardTransaction)
