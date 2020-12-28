@@ -16,6 +16,9 @@ depends_on = None
 
 
 def upgrade() -> None:
+    op.alter_column("ledger_entry", "debit_account_balance", nullable=True)
+    op.alter_column("ledger_entry", "credit_account_balance", nullable=True)
+
     op.execute(
         """
        create or replace function get_lender_account_balance(
