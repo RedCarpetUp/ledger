@@ -135,10 +135,7 @@ def transaction_to_loan(session: Session, txn_id: int, user_id: int) -> TermLoan
     txn = session.query(CardTransaction).filter(CardTransaction.id == txn_id).scalar()
 
     if not txn:
-        return {"result": "error", "message": "Invalid transaction ID"}
-
-    # making txn ineligible for billing
-    txn.loan_id = None
+        return None
 
     user_loan = (
         session.query(BaseLoan)
@@ -147,6 +144,9 @@ def transaction_to_loan(session: Session, txn_id: int, user_id: int) -> TermLoan
         .filter(CardTransaction.id == txn_id)
         .scalar()
     )
+
+    # making txn ineligible for billing
+    txn.loan_id = None
 
     user_product = create_user_product_mapping(
         session=session, user_id=user_id, product_type="transaction_loan"

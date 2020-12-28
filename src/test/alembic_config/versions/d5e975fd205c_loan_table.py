@@ -209,7 +209,7 @@ def upgrade() -> None:
     op.create_table(
         "card_transaction",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("loan_id", sa.Integer(), nullable=False),
+        sa.Column("loan_id", sa.Integer(), nullable=True),
         sa.Column("txn_time", sa.TIMESTAMP(), nullable=False),
         sa.Column("amount", sa.Numeric(), nullable=False),
         sa.Column("mcc", sa.String(10), nullable=True),

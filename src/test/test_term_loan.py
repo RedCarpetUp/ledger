@@ -340,7 +340,7 @@ def test_create_term_loan_2(session: Session) -> None:
     assert all_emis[-1].total_due_amount % 10 == 0
 
 
-def test_txn_term_loan(session: Session):
+def test_txn_term_loan(session: Session) -> None:
     create_lenders(session=session)
     create_products(session=session)
     create_user(session=session)
@@ -369,10 +369,6 @@ def test_txn_term_loan(session: Session):
         trace_no="123456",
     )
     session.flush()
-
-    user_product = create_user_product_mapping(
-        session=session, user_id=4, product_type="transaction_loan"
-    )
 
     txn_loan = transaction_to_loan(session=session, txn_id=swipe["data"].id, user_id=4)
 
