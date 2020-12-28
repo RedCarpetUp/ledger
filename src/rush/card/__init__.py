@@ -153,7 +153,7 @@ def transaction_to_loan(session: Session, txn_id: int, user_id: int) -> TermLoan
         session=session, user_id=user_id, product_type="transaction_loan"
     )
 
-    #making 0 amount downpayment
+    # making 0 amount downpayment
     payment_received(
         session=session,
         user_loan=None,
