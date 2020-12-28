@@ -19,6 +19,8 @@ from rush.models import (
     LedgerTriggerEvent,
     LoanData,
     LoanMoratorium,
+    PaymentRequestsData,
+    PaymentSplit,
     UserData,
 )
 
@@ -125,7 +127,12 @@ def update_event_with_dpd(
         events_list = events_list.filter(LedgerTriggerEvent.id == event.id)
     events_list = events_list.order_by(LedgerTriggerEvent.post_date.asc()).all()
 
-    for ledger_trigger_event, ledger_entry, debit_account, credit_account in events_list:
+    for (
+        ledger_trigger_event,
+        ledger_entry,
+        debit_account,
+        credit_account,
+    ) in events_list:
         if (
             ledger_trigger_event.name
             in [
@@ -261,7 +268,7 @@ def get_journal_entry_narration(event_name) -> String:
         return "Reload Fee"
     elif event_name == "pre_product_fee_added":
         return "Processing Fee"
-    elif event_name == "payment_received":
+    elif event_name in ("payment_received", "pre_payment", "unbilled"):
         return "Receipt-Import"
     elif event_name == "transaction_refund":
         return "Payment Received From Merchant"
@@ -277,13 +284,15 @@ def get_journal_entry_ptype(event_name) -> String:
     elif event_name == "pre_product_fee_added":
         return "CF Processing Fee-Customer"
     elif event_name == "payment_received":
+        return "Card TL-Customer"
+    elif event_name in ("unbilled", "pre_payment"):
         return "CF-Customer"
     elif event_name == "transaction_refund":
         return "CF-Merchant"
 
 
 def get_journal_entry_ledger_for_payment(event_name) -> String:
-    if event_name == "payment_received":
+    if event_name in ("payment_received", "pre_payment", "unbilled"):
         return "Axis Bank Ltd-Collections A/c"
     elif event_name == "transaction_refund":
         return "Cards Upload A/c"
@@ -356,52 +365,107 @@ def update_journal_entry(
             loan_id,
         )
     elif event.name == "payment_received" or event.name == "transaction_refund":
-        create_journal_entry(
-            session,
-            "Receipt-Import",
-            event.post_date,
-            get_journal_entry_ledger_for_payment(event.name),
-            "",
-            "RedCarpet",
-            event.amount,
-            0,
-            get_journal_entry_narration(event.name),
-            event.post_date,
-            1,
-            get_journal_entry_ptype(event.name),
-            event.id,
-            loan_id,
+        gateway_expenses = (
+            session.query(PaymentRequestsData.payment_execution_charges)
+            .filter(
+                PaymentRequestsData.payment_request_id == event.extra_details["payment_request_id"],
+            )
+            .first()[0]
+            or 0
         )
-        create_journal_entry(
-            session,
-            "",
-            event.post_date,
-            user_name,
-            "",
-            "RedCarpet",
-            0,
-            event.amount,
-            "",
-            event.post_date,
-            2,
-            get_journal_entry_ptype(event.name),
-            event.id,
-            loan_id,
+        payment_split_data = (
+            session.query(PaymentSplit.component, PaymentSplit.amount_settled)
+            .filter(
+                PaymentSplit.payment_request_id == event.extra_details["payment_request_id"],
+                PaymentSplit.component.in_(["pre_payment", "unbilled"]),
+            )
+            .all()
         )
+        prepayment_amount = 0
+        for split_data in payment_split_data:
+            if split_data[0] == "pre_payment":
+                prepayment_amount = split_data[1]
+        event_amount = event.amount
+        event_name = event.name
+        for count in range(len(payment_split_data) + 1):
+            if count == len(payment_split_data):
+                event.name = event_name
+                event.amount = event_amount - prepayment_amount
+            else:
+                event.name = payment_split_data[count][0]
+                event.amount = payment_split_data[count][1]
+                gateway_expenses = 0
+            create_journal_entry(
+                session,
+                "Receipt-Import",
+                event.post_date,
+                get_journal_entry_ledger_for_payment(event.name),
+                "",
+                "RedCarpet",
+                event.amount - gateway_expenses,
+                0,
+                get_journal_entry_narration(event.name),
+                event.post_date,
+                1,
+                get_journal_entry_ptype(event.name),
+                event.id,
+                user_loan.id,
+            )
+            create_journal_entry(
+                session,
+                "",
+                event.post_date,
+                "Bank Charges (RC)",
+                "",
+                "RedCarpet",
+                gateway_expenses,
+                0,
+                "",
+                event.post_date,
+                2,
+                get_journal_entry_ptype(event.name),
+                event.id,
+                user_loan.id,
+            )
+            create_journal_entry(
+                session,
+                "",
+                event.post_date,
+                user_name,
+                "",
+                "RedCarpet",
+                0,
+                event.amount,
+                "",
+                event.post_date,
+                3,
+                get_journal_entry_ptype(event.name),
+                event.id,
+                loan_id,
+            )
         from rush.payments import get_payment_split_from_event
 
         split_data = get_payment_split_from_event(session, event)
-        principal_and_interest = split_data.pop("principal", 0) + split_data.pop("interest", 0)
+        filtered_split_data = {}
+        for key, value in split_data.items():
+            if key != "pre_payment":
+                filtered_split_data[key] = value
+        principal_and_interest = filtered_split_data.pop("principal", 0) + filtered_split_data.pop(
+            "interest", 0
+        )
         # if there is something else apart from principal and interest.
-        if split_data and event.amount != principal_and_interest:
+        if filtered_split_data and event.amount != principal_and_interest:
             sales_import_amount = event.amount - principal_and_interest
             narration_name = ""
-            for settled_acc, _ in split_data.items():  # First loop to get narration name.
+            for (
+                settled_acc,
+                _,
+            ) in filtered_split_data.items():  # First loop to get narration name.
                 # So if there are more than one fee, it becomes "Late fee Reload fee".
                 if settled_acc not in ("sgst", "cgst", "igst"):
                     narration_name += f" {get_ledger_for_fee(settled_acc)}"
             p_type = f"{narration_name} -Card TL-Customer"
-            for sort_order, (settled_acc, amount) in enumerate(split_data.items(), 2):
+            for sort_order, (settled_acc, amount) in enumerate(filtered_split_data.items(), 2):
                 create_journal_entry(
                     session,
                     "",

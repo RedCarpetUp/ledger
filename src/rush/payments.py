@@ -377,11 +377,11 @@ def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
         "card_reload_fee",
         "downpayment",
         "reset_joining_fees",
+        "pre_payment",
     )
     # unbilled and principal belong to same component.
     updated_component_names = {
         "principal_receivable": "principal",
-        "unbilled": "principal",
         "downpayment": "principal",
         "interest_receivable": "interest",
         "igst_payable": "igst",
