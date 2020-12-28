@@ -131,20 +131,20 @@ def disburse_card(
     limit_assignment_event(session=session, loan_id=user_loan.loan_id, event=event, amount=amount)
 
 
-def transaction_to_loan(session: Session, txn_ref_no: str, user_id: int) -> TermLoan:
-    txn = session.query(CardTransaction).filter(CardTransaction.txn_ref_no == txn_ref_no).scalar()
+def transaction_to_loan(session: Session, txn_id: int, user_id: int) -> TermLoan:
+    txn = session.query(CardTransaction).filter(CardTransaction.id == txn_id).scalar()
 
     if not txn:
-        return {"result": "error", "message": "Invalid transaction ref no."}
+        return {"result": "error", "message": "Invalid transaction ID"}
 
     # making txn ineligible for billing
     txn.loan_id = None
 
     user_loan = (
-        session.query(Loan)
-        .select_from(CardTransaction)
-        .join(LoanData, CardTransaction.loan_id == LoanData.id)
-        .join(Loan, LoanData.loan_id == Loan.id)
+        session.query(BaseLoan)
+        .join(LoanData, LoanData.loan_id == BaseLoan.id)
+        .join(CardTransaction, CardTransaction.loan_id == LoanData.id)
+        .filter(CardTransaction.id == txn_id)
         .scalar()
     )
 
