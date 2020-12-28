@@ -7,9 +7,11 @@ from sqlalchemy.orm import Session
 from rush.card import (
     create_user_product,
     get_user_product,
+    transaction_to_loan,
 )
 from rush.card.term_loan import TermLoan
 from rush.card.utils import create_user_product_mapping
+from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import get_account_balance_from_str
 from rush.loan_schedule.calculations import get_down_payment
 from rush.models import (
@@ -34,6 +36,10 @@ def create_lenders(session: Session) -> None:
 def create_products(session: Session) -> None:
     hc_product = Product(product_name="term_loan")
     session.add(hc_product)
+    txn_loan_product = Product(product_name="transaction_loan")
+    session.add(txn_loan_product)
+    rebel_product = Product(product_name="rebel")
+    session.add(rebel_product)
     session.flush()
 
 
@@ -332,3 +338,43 @@ def test_create_term_loan_2(session: Session) -> None:
     assert all_emis[-1].emi_number == 12
     assert all_emis[-1].interest_due == Decimal("243.33")
     assert all_emis[-1].total_due_amount % 10 == 0
+
+
+def test_txn_term_loan(session: Session):
+    create_lenders(session=session)
+    create_products(session=session)
+    create_user(session=session)
+
+    user_product = create_user_product_mapping(session=session, user_id=4, product_type="rebel")
+
+    user_card = create_user_product(
+        session=session,
+        card_type="rebel",
+        rc_rate_of_interest_monthly=Decimal(3),
+        lender_id=1756833,
+        interest_free_period_in_days=45,
+        user_id=4,
+        user_product_id=user_product.id,
+        card_activation_date=parse_date("2020-12-01").date(),
+        interest_type="reducing",
+    )
+
+    swipe = create_card_swipe(
+        session=session,
+        user_loan=user_card,
+        txn_time=parse_date("2020-12-03 19:23:11"),
+        amount=Decimal(1200),
+        description="thor.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
+    )
+    session.flush()
+
+    user_product = create_user_product_mapping(
+        session=session, user_id=4, product_type="transaction_loan"
+    )
+
+    txn_loan = transaction_to_loan(session=session, txn_id=swipe["data"].id, user_id=4)
+
+    assert txn_loan.product_type == "transaction_loan"
+    assert txn_loan.amount == 1200
