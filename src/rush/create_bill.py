@@ -72,9 +72,11 @@ def bill_generate(
 ) -> BaseBill:
     session = user_loan.session
 
-    transaction_loan = session.query(TermLoan).filter(
-        TermLoan.product_type == "transaction_loan", TermLoan.user_id == user_loan.user_id
-    ).scalar()
+    transaction_loan = (
+        session.query(TermLoan)
+        .filter(TermLoan.product_type == "transaction_loan", TermLoan.user_id == user_loan.user_id)
+        .scalar()
+    )
 
     # add card txn for emi of txn loan
     if transaction_loan:
