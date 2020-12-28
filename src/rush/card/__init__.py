@@ -28,6 +28,7 @@ from rush.models import (
     LoanData,
     UserCard,
 )
+from rush.payments import payment_received
 from rush.utils import get_current_ist_time
 
 
@@ -150,6 +151,18 @@ def transaction_to_loan(session: Session, txn_id: int, user_id: int) -> TermLoan
 
     user_product = create_user_product_mapping(
         session=session, user_id=user_id, product_type="transaction_loan"
+    )
+
+    #making 0 amount downpayment
+    payment_received(
+        session=session,
+        user_loan=None,
+        payment_amount=0,
+        payment_date=get_current_ist_time().date(),
+        payment_request_id="dummy_downpayment",
+        payment_type="downpayment",
+        user_product_id=user_product.id,
+        lender_id=user_loan.lender_id,
     )
 
     # loan for txn amount
