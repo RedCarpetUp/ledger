@@ -139,15 +139,37 @@ def close_loan(user_loan: BaseLoan, last_payment_date: datetime):
     if not future_emis:  # Loan has closed naturally.
         return
 
-    # Only interested in IDs of EMIs other than the first
-    emi_ids = [emi.id for emi in future_emis[1:]]
+    emi_ids = [emi.id for emi in future_emis]
 
-    # Fetching payment mappings of future EMIs that need to be be marked inactive
     payment_mapping_data = (
         user_loan.session.query(PaymentMapping)
         .filter(PaymentMapping.emi_id.in_(emi_ids), PaymentMapping.row_status == "active")
         .all()
     )
+
+    new_mappings = defaultdict(int)
+
+    # Mark old payment mappings inactive and aggregate their
+    # amount settled to generate new entries
+    for payment_mapping in payment_mapping_data:
+        payment_mapping.row_status = "inactive"
+        payment_request_id = payment_mapping.payment_request_id
+
+        if new_mappings.get(payment_request_id):
+            new_mappings[payment_request_id] += payment_mapping.amount_settled
+        else:
+            new_mappings[payment_request_id] = payment_mapping.amount_settled
+
+    closing_emi_id = emi_ids[0]
+
+    # Create new entries
+    for payment_request_id, amount_settled in new_mappings.items():
+        _ = PaymentMapping.new(
+            user_loan.session,
+            payment_request_id=payment_request_id,
+            emi_id=closing_emi_id,
+            amount_settled=amount_settled,
+        )
 
     next_emi_due_date = future_emis[0].due_date
     for emi in future_emis:
@@ -160,9 +182,6 @@ def close_loan(user_loan: BaseLoan, last_payment_date: datetime):
             emi.payment_received = 0  # set principal to 0 of remaining future emis.
             emi.payment_status = "UnPaid"
             emi.last_payment_date = None
-
-    for payment_mapping in payment_mapping_data:
-        payment_mapping.row_status = "inactive"
 
     # Do what we did above but for bill emis and for due amount.
     all_future_bill_emis = (
