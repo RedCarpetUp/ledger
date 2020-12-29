@@ -18,6 +18,7 @@ from rush.card.term_loan import TermLoan
 from rush.card.term_loan2 import TermLoan2
 from rush.card.term_loan_pro import TermLoanPro
 from rush.card.term_loan_pro2 import TermLoanPro2
+from rush.card.transaction_loan import TransactionLoan
 from rush.card.utils import create_user_product_mapping
 from rush.card.zeta_card import ZetaCard
 from rush.ledger_events import limit_assignment_event
@@ -169,8 +170,7 @@ def transaction_to_loan(session: Session, txn_id: int, user_id: int) -> TermLoan
     txn_loan = create_user_product(
         session=session,
         user_id=user_id,
-        card_type="term_loan",
-        product_type="transaction_loan",
+        card_type="transaction_loan",
         lender_id=user_loan.lender_id,
         interest_free_period_in_days=15,
         tenure=12,

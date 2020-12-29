@@ -372,4 +372,4 @@ def test_txn_term_loan(session: Session) -> None:
 
     txn_loan = transaction_to_loan(session=session, txn_id=swipe["data"].id, user_id=4)
 
-    assert txn_loan.product_type == "term_loan"
+    assert txn_loan.product_type == "transaction_loan"
