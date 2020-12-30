@@ -141,29 +141,27 @@ def close_loan(user_loan: BaseLoan, last_payment_date: datetime):
 
     emi_ids = [emi.id for emi in future_emis]
 
-    payment_mapping_data = (
-        user_loan.session.query(PaymentMapping)
+    # Aggregate old payment mappings to generate new ones
+    new_mappings = (
+        user_loan.session.query(
+            PaymentMapping.payment_request_id, func.sum(PaymentMapping.amount_settled)
+        )
         .filter(PaymentMapping.emi_id.in_(emi_ids), PaymentMapping.row_status == "active")
+        .group_by(PaymentMapping.payment_request_id)
         .all()
     )
 
-    new_mappings = defaultdict(int)
-
-    # Mark old payment mappings inactive and aggregate their
-    # amount settled to generate new entries
-    for payment_mapping in payment_mapping_data:
-        payment_mapping.row_status = "inactive"
-        payment_request_id = payment_mapping.payment_request_id
-
-        if new_mappings.get(payment_request_id):
-            new_mappings[payment_request_id] += payment_mapping.amount_settled
-        else:
-            new_mappings[payment_request_id] = payment_mapping.amount_settled
+    # Mark old payment mappings inactive
+    (
+        user_loan.session.query(PaymentMapping)
+        .filter(PaymentMapping.emi_id.in_(emi_ids), PaymentMapping.row_status == "active")
+        .update({PaymentMapping.row_status: "inactive"}, synchronize_session=False)
+    )
 
     closing_emi_id = emi_ids[0]
 
-    # Create new entries
-    for payment_request_id, amount_settled in new_mappings.items():
+    # Create new payment mappings
+    for payment_request_id, amount_settled in new_mappings:
         _ = PaymentMapping.new(
             user_loan.session,
             payment_request_id=payment_request_id,
