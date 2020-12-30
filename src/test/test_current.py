@@ -3637,7 +3637,7 @@ def test_customer_prepayment_refund(session: Session) -> None:
     assert prepayment_amount == Decimal(0)
 
 
-def test_slide_close_payment(session: Session) -> None:
+def test_updated_emi_payment_mapping_after_early_loan_close(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
     user = User(
