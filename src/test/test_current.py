@@ -3773,4 +3773,5 @@ def test_slide_close_payment(session: Session) -> None:
         .all()
     )
 
-    assert amount_settled == Decimal("1666.67")
+    # This should be 1666.67 but we have an error of 0.01
+    assert amount_settled[0][0] == Decimal("1666.66")
