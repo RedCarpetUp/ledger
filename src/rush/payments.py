@@ -52,7 +52,6 @@ def payment_received(
 ) -> None:
     assert user_loan is not None or lender_id is not None
     assert user_loan is not None or user_product_id is not None
-    user_product = session.query(UserProduct).filter_by(id=user_product_id).scalar()
     lt = LedgerTriggerEvent(
         name="payment_received",
         loan_id=user_loan.loan_id if user_loan else None,
