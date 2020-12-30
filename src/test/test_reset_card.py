@@ -1,4 +1,8 @@
 from decimal import Decimal
+from test.utils import (
+    pay_payment_request,
+    payment_request_data,
+)
 
 import pytest
 from pendulum import parse as parse_date  # type: ignore
@@ -18,6 +22,7 @@ from rush.limit_unlock import limit_unlock
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
     Lenders,
+    Loan,
     LoanData,
     Product,
     User,
@@ -101,12 +106,27 @@ def test_create_term_loan(session: Session) -> None:
     assert gst_split["gross_amount"] == Decimal("118")
     assert gst_split["net_amount"] == Decimal("100")
 
+    payment_date = parse_date("2020-08-01")
+    amount = gst_split["gross_amount"]
+    payment_request_id = "dummy_reset_fee"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=user_product.user_id,
+        payment_request_id=payment_request_id,
+    )
+    pay_payment_request(
+        session=session,
+        amount=amount,
+        payment_request_id=payment_request_id,
+    )
     payment_received(
         session=session,
         user_loan=None,
-        payment_amount=gst_split["gross_amount"],
-        payment_date=parse_date("2020-08-01"),
-        payment_request_id="dummy_reset_fee",
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id=payment_request_id,
         payment_type="reset_joining_fees",
         user_product_id=user_product.id,
         lender_id=1756833,
@@ -209,12 +229,27 @@ def test_reset_loan_limit_unlock_success(session: Session) -> None:
     assert gst_split["gross_amount"] == Decimal("118")
     assert gst_split["net_amount"] == Decimal("100")
 
+    payment_date = parse_date("2020-08-01")
+    amount = gst_split["gross_amount"]
+    payment_request_id = "dummy_reset_fee"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=user_product.user_id,
+        payment_request_id=payment_request_id,
+    )
+    pay_payment_request(
+        session=session,
+        amount=amount,
+        payment_request_id=payment_request_id,
+    )
     payment_received(
         session=session,
         user_loan=None,
-        payment_amount=gst_split["gross_amount"],
-        payment_date=parse_date("2020-08-01"),
-        payment_request_id="dummy_reset_fee",
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id=payment_request_id,
         payment_type="reset_joining_fees",
         user_product_id=user_product.id,
         lender_id=1756833,
@@ -280,12 +315,27 @@ def test_reset_loan_limit_unlock_error(session: Session) -> None:
     assert gst_split["gross_amount"] == Decimal("118")
     assert gst_split["net_amount"] == Decimal("100")
 
+    payment_date = parse_date("2020-08-01")
+    amount = gst_split["gross_amount"]
+    payment_request_id = "dummy_reset_fee"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=user_product.user_id,
+        payment_request_id=payment_request_id,
+    )
+    pay_payment_request(
+        session=session,
+        amount=amount,
+        payment_request_id=payment_request_id,
+    )
     payment_received(
         session=session,
         user_loan=None,
-        payment_amount=gst_split["gross_amount"],
-        payment_date=parse_date("2020-08-01"),
-        payment_request_id="dummy_reset_fee",
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id=payment_request_id,
         payment_type="reset_joining_fees",
         user_product_id=user_product.id,
         lender_id=1756833,

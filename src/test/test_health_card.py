@@ -1,4 +1,8 @@
 from decimal import Decimal
+from test.utils import (
+    pay_payment_request,
+    payment_request_data,
+)
 
 from dateutil.relativedelta import relativedelta
 from pendulum import parse as parse_date  # type: ignore
@@ -446,13 +450,25 @@ def test_mixed_payment_received(session: Session) -> None:
 
     payment_date = parse_date("2020-08-03")
     amount = Decimal(2000)
-
+    payment_request_id = "mixed_payment"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=uc.id,
+        payment_request_id=payment_request_id,
+    )
+    pay_payment_request(
+        session=session,
+        amount=amount,
+        payment_request_id=payment_request_id,
+    )
     payment_received(
         session=session,
         user_loan=uc,
         payment_amount=amount,
         payment_date=payment_date,
-        payment_request_id="mixed_payment",
+        payment_request_id=payment_request_id,
     )
 
     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")
@@ -528,12 +544,27 @@ def test_medical_payment_received(session: Session) -> None:
     )
     assert non_medical_limit_balance == Decimal(0)
 
+    payment_date = parse_date("2020-08-03")
+    amount = Decimal(700)
+    payment_request_id = "medical_payment"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=uc.id,
+        payment_request_id=payment_request_id,
+    )
+    pay_payment_request(
+        session=session,
+        amount=amount,
+        payment_request_id=payment_request_id,
+    )
     payment_received(
         session=session,
         user_loan=uc,
-        payment_amount=Decimal(700),
-        payment_date=parse_date("2020-08-03"),
-        payment_request_id="medical_payment",
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id=payment_request_id,
     )
 
     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")
@@ -610,13 +641,25 @@ def test_non_medical_payment_received(session: Session) -> None:
 
     payment_date = parse_date("2020-08-03")
     amount = Decimal(1200)
-
+    payment_request_id = "non_medical_payment"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=uc.id,
+        payment_request_id=payment_request_id,
+    )
+    pay_payment_request(
+        session=session,
+        amount=amount,
+        payment_request_id=payment_request_id,
+    )
     payment_received(
         session=session,
         user_loan=uc,
         payment_amount=amount,
         payment_date=payment_date,
-        payment_request_id="non_medical_payment",
+        payment_request_id=payment_request_id,
     )
 
     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")

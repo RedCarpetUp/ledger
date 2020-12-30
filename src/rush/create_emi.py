@@ -268,9 +268,17 @@ def get_journal_entry_narration(event_name) -> String:
         return "Reload Fee"
     elif event_name == "pre_product_fee_added":
         return "Processing Fee"
-    elif event_name in ("payment_received", "pre_payment", "unbilled"):
+    elif event_name in (
+        "payment_received",
+        "payment_received-unbilled",
+        "payment_received-pre_payment",
+    ):
         return "Receipt-Import"
-    elif event_name == "transaction_refund":
+    elif event_name in (
+        "transaction_refund",
+        "transaction_refund-unbilled",
+        "transaction_refund-pre_payment",
+    ):
         return "Payment Received From Merchant"
 
 
@@ -285,16 +293,29 @@ def get_journal_entry_ptype(event_name) -> String:
         return "CF Processing Fee-Customer"
     elif event_name == "payment_received":
         return "Card TL-Customer"
-    elif event_name in ("unbilled", "pre_payment"):
+    elif event_name in ("payment_received-unbilled", "payment_received-pre_payment"):
         return "CF-Customer"
     elif event_name == "transaction_refund":
+        return "Card TL-Merchant"
+    elif event_name in (
+        "transaction_refund-unbilled",
+        "transaction_refund-pre_payment",
+    ):
         return "CF-Merchant"
 
 
 def get_journal_entry_ledger_for_payment(event_name) -> String:
-    if event_name in ("payment_received", "pre_payment", "unbilled"):
+    if event_name in (
+        "payment_received",
+        "payment_received-unbilled",
+        "payment_received-pre_payment",
+    ):
         return "Axis Bank Ltd-Collections A/c"
-    elif event_name == "transaction_refund":
+    elif event_name in (
+        "transaction_refund",
+        "transaction_refund-unbilled",
+        "transaction_refund-pre_payment",
+    ):
         return "Cards Upload A/c"
 
 
@@ -365,14 +386,19 @@ def update_journal_entry(
             loan_id,
         )
     elif event.name == "payment_received" or event.name == "transaction_refund":
-        gateway_expenses = (
-            session.query(PaymentRequestsData.payment_execution_charges)
+        payment_requests_data = (
+            session.query(
+                PaymentRequestsData.payment_execution_charges,
+                PaymentRequestsData.payment_received_in_bank_date,
+            )
             .filter(
                 PaymentRequestsData.payment_request_id == event.extra_details["payment_request_id"],
+                PaymentRequestsData.row_status == "active",
             )
-            .first()[0]
-            or 0
+            .first()
         )
+        gateway_expenses = payment_requests_data[0]
+        settlement_date = payment_requests_data[1]
         payment_split_data = (
             session.query(PaymentSplit.component, PaymentSplit.amount_settled)
             .filter(
@@ -391,53 +417,55 @@ def update_journal_entry(
             if count == len(payment_split_data):
                 event.name = event_name
                 event.amount = event_amount - prepayment_amount
+                gateway_expenses = gateway_expenses if gateway_expenses else 0
             else:
-                event.name = payment_split_data[count][0]
+                event.name = f"{event_name}-{payment_split_data[count][0]}"
                 event.amount = payment_split_data[count][1]
-                gateway_expenses = 0
+            if event.amount == 0:
+                continue
             create_journal_entry(
                 session,
                 "Receipt-Import",
-                event.post_date,
+                settlement_date,
                 get_journal_entry_ledger_for_payment(event.name),
                 "",
                 "RedCarpet",
-                event.amount - gateway_expenses,
+                event.amount - (gateway_expenses if gateway_expenses else 0),
                 0,
                 get_journal_entry_narration(event.name),
-                event.post_date,
+                settlement_date,
                 1,
                 get_journal_entry_ptype(event.name),
                 event.id,
-                user_loan.id,
+                loan_id,
             )
             create_journal_entry(
                 session,
                 "",
-                event.post_date,
+                settlement_date,
                 "Bank Charges (RC)",
                 "",
                 "RedCarpet",
                 gateway_expenses,
                 0,
                 "",
-                event.post_date,
+                settlement_date,
                 2,
                 get_journal_entry_ptype(event.name),
                 event.id,
-                user_loan.id,
+                loan_id,
             )
             create_journal_entry(
                 session,
                 "",
-                event.post_date,
+                settlement_date,
                 user_name,
                 "",
                 "RedCarpet",
                 0,
                 event.amount,
                 "",
-                event.post_date,
+                settlement_date,
                 3,
                 get_journal_entry_ptype(event.name),
                 event.id,
@@ -463,20 +491,20 @@ def update_journal_entry(
             ) in filtered_split_data.items():  # First loop to get narration name.
                 # So if there are more than one fee, it becomes "Late fee Reload fee".
                 if settled_acc not in ("sgst", "cgst", "igst"):
-                    narration_name += f" {get_ledger_for_fee(settled_acc)}"
+                    narration_name += f"{get_ledger_for_fee(settled_acc)}"
             p_type = f"{narration_name} -Card TL-Customer"
             for sort_order, (settled_acc, amount) in enumerate(filtered_split_data.items(), 2):
                 create_journal_entry(
                     session,
                     "",
-                    event.post_date,
+                    settlement_date,
                     get_ledger_for_fee(settled_acc),
                     "",
                     "RedCarpet",
                     0,
                     amount,
                     "",
-                    event.post_date,
+                    settlement_date,
                     sort_order,
                     p_type,
                     event.id,
@@ -485,14 +513,14 @@ def update_journal_entry(
             create_journal_entry(
                 session,
                 "Sales-Import",
-                event.post_date,
+                settlement_date,
                 user_name,
                 "",
                 "RedCarpet",
                 sales_import_amount,
                 0,
                 narration_name,
-                event.post_date,
+                settlement_date,
                 1,
                 p_type,
                 event.id,

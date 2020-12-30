@@ -1,4 +1,8 @@
 from decimal import Decimal
+from test.test_current import (
+    pay_payment_request,
+    payment_request_data,
+)
 
 from dateutil.relativedelta import relativedelta
 from pendulum import parse as parse_date  # type: ignore
@@ -231,19 +235,50 @@ def test_dmi_recon_process_1(session: Session) -> None:
     assert revenue_earned == 0
 
     # Some payment comes
+    payment_date = parse_date("2020-02-10 15:23:20")
+    payment_request_id = "r23gs23"
+    amount = Decimal(200)
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=user_loan_raghav.user_id,
+        payment_request_id=payment_request_id,
+    )
+    pay_payment_request(
+        session=session,
+        amount=amount,
+        payment_request_id=payment_request_id,
+    )
     payment_received(
         session=session,
         user_loan=user_loan_raghav,
-        payment_amount=200,
-        payment_date=parse_date("2020-02-10 15:23:20"),
-        payment_request_id="r23gs23",
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id=payment_request_id,
+    )
+
+    payment_date = parse_date("2020-02-13 15:23:20")
+    payment_request_id = "r23gs24"
+    amount = Decimal(500)
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=user_loan_ananth.user_id,
+        payment_request_id=payment_request_id,
+    )
+    pay_payment_request(
+        session=session,
+        amount=amount,
+        payment_request_id=payment_request_id,
     )
     payment_received(
         session=session,
         user_loan=user_loan_ananth,
-        payment_amount=500,
-        payment_date=parse_date("2020-02-13 15:33:20"),
-        payment_request_id="r23gs24",
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id=payment_request_id,
     )
 
     # Got adjusted in principal because interest is not accrued yet.
@@ -274,19 +309,50 @@ def test_dmi_recon_process_1(session: Session) -> None:
     assert interest_due_ananth == Decimal("195.27")
 
     # Payment came after interest has been accrued.
+    payment_date = parse_date("2020-02-26 15:23:20")
+    payment_request_id = "r23gs25"
+    amount = Decimal(100)
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=user_loan_raghav.user_id,
+        payment_request_id=payment_request_id,
+    )
+    pay_payment_request(
+        session=session,
+        amount=amount,
+        payment_request_id=payment_request_id,
+    )
     payment_received(
         session=session,
         user_loan=user_loan_raghav,
-        payment_amount=100,
-        payment_date=parse_date("2020-02-26 15:23:20"),
-        payment_request_id="r23gs25",
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id=payment_request_id,
+    )
+
+    payment_date = parse_date("2020-02-25 15:23:20")
+    payment_request_id = "r23gs26"
+    amount = Decimal(50)
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=user_loan_ananth.user_id,
+        payment_request_id=payment_request_id,
+    )
+    pay_payment_request(
+        session=session,
+        amount=amount,
+        payment_request_id=payment_request_id,
     )
     payment_received(
         session=session,
         user_loan=user_loan_ananth,
-        payment_amount=50,
-        payment_date=parse_date("2020-02-25 15:33:20"),
-        payment_request_id="r23gs26",
+        payment_amount=amount,
+        payment_date=payment_date,
+        payment_request_id=payment_request_id,
     )
 
     _, interest_due_raghav = get_account_balance_from_str(

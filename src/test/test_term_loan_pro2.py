@@ -1,4 +1,8 @@
 from decimal import Decimal
+from test.utils import (
+    pay_payment_request,
+    payment_request_data,
+)
 
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
@@ -125,12 +129,26 @@ def test_create_term_loan(session: Session) -> None:
     )
 
     # downpayment
+    payment_date = parse_date("2020-08-01")
+    payment_request_id = "dummy_downpayment"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=_downpayment_amount,
+        user_id=user_product.user_id,
+        payment_request_id=payment_request_id,
+    )
+    pay_payment_request(
+        session=session,
+        amount=_downpayment_amount,
+        payment_request_id=payment_request_id,
+    )
     payment_received(
         session=session,
         user_loan=None,
         payment_amount=_downpayment_amount,
-        payment_date=parse_date("2020-08-01"),
-        payment_request_id="dummy_downpayment",
+        payment_date=payment_date,
+        payment_request_id=payment_request_id,
         payment_type="downpayment",
         user_product_id=user_product.id,
         lender_id=62311,
@@ -226,12 +244,26 @@ def test_create_term_loan_2(session: Session) -> None:
     )
 
     # downpayment
+    payment_date = parse_date("2018-12-31")
+    payment_request_id = "dummy_downpayment"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=_downpayment_amount,
+        user_id=user_product.user_id,
+        payment_request_id=payment_request_id,
+    )
+    pay_payment_request(
+        session=session,
+        amount=_downpayment_amount,
+        payment_request_id=payment_request_id,
+    )
     payment_received(
         session=session,
         user_loan=None,
         payment_amount=_downpayment_amount,
-        payment_date=parse_date("2018-12-31"),
-        payment_request_id="dummy_downpayment",
+        payment_date=payment_date,
+        payment_request_id=payment_request_id,
         payment_type="downpayment",
         user_product_id=user_product.id,
         lender_id=62311,

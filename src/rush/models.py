@@ -676,7 +676,7 @@ class JournalEntry(AuditMixin):
     ledger = Column(String(length=50), nullable=False)
     alias = Column(String(length=50), nullable=True)
     group_name = Column(String(length=50), nullable=False)
-    debit = Column(Numeric, nullable=False)
+    debit = Column(Numeric, nullable=True)
     credit = Column(Numeric, nullable=True)
     narration = Column(String(length=50), nullable=True)
     instrument_date = Column(TIMESTAMP, nullable=False)

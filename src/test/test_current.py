@@ -2,9 +2,9 @@ import contextlib
 from datetime import date
 from decimal import Decimal
 from io import StringIO
-from typing import (
-    Any,
-    Dict,
+from test.utils import (
+    pay_payment_request,
+    payment_request_data,
 )
 
 import alembic
@@ -250,84 +250,6 @@ def test_card_swipe_and_reversal(session: Session) -> None:
         trace_no="123452",
     )
     swipe3 = swipe3["data"]
-
-
-def payment_request_data(
-    session: Session,
-    type: str,
-    payment_request_amount: Decimal,
-    user_id: int,
-    payment_request_id: str,
-    **kwargs: str,
-) -> PaymentRequestsData:
-    """
-    populate v3_payment_requests_data table
-    """
-    data = PaymentRequestsData.new(
-        session=session,
-        type=type,
-        payment_request_amount=payment_request_amount,
-        payment_request_status="UNPAID",
-        source_account_id=0,
-        destination_account_id=0,
-        user_id=user_id,
-        payment_request_id=payment_request_id,
-        row_status="active",
-        created_at=kwargs.get("created_at"),
-        updated_at=kwargs.get("updated_at"),
-        payment_reference_id=kwargs.get("payment_reference_id"),
-        intermediary_payment_date=kwargs.get("intermediary_payment_date"),
-        payment_received_in_bank_date=kwargs.get("payment_received_in_bank_date"),
-        payment_request_mode=kwargs.get("payment_request_mode"),
-        payment_execution_charges=kwargs.get("payment_execution_charges"),
-        payment_gateway_id=kwargs.get("payment_gateway_id"),
-        gateway_response=kwargs.get("gateway_response", {}),
-        collection_by=kwargs.get("collection_by"),
-        collection_request_id=kwargs.get("collection_request_id"),
-        payment_request_comments=kwargs.get("payment_request_comments"),
-        prepayment_amount=kwargs.get("prepayment_amount"),
-        net_payment_amount=kwargs.get("net_payment_amount"),
-        fee_amount=kwargs.get("fee_amount"),
-        expire_date=kwargs.get("expire_date"),
-        coupon_data=kwargs.get("coupon_data", {}),
-        gross_request_amount=kwargs.get("gross_request_amount"),
-        coupon_code=kwargs.get("coupon_code"),
-        extra_details=kwargs.get("extra_details", {}),
-    )
-
-    return data
-
-
-def pay_payment_request(session: Session, amount: Decimal, payment_request_id: str) -> Dict[str, Any]:
-    gateway_charges = 0.5
-    payment_gateway_id = 23
-
-    payment_data = (
-        session.query(PaymentRequestsData)
-        .filter(PaymentRequestsData.payment_request_id == payment_request_id)
-        .first()
-    )
-    payment_data.payment_execution_charges = gateway_charges
-    payment_data.payment_gateway_id = payment_gateway_id
-    payment_data.payment_request_status = "PAID"
-    payment_data.extra_details.update(
-        {
-            "pay_id": "sdfsadf",
-            "gateway_charges": gateway_charges,
-            "amount": amount,
-            "payment_gateway_id": payment_gateway_id,
-            "payment_request_id": payment_request_id,
-        }
-    )
-
-    return {
-        "status": "success",
-        "id": "sdfsadf",
-        "gateway_charges": gateway_charges,
-        "amount": amount,
-        "payment_gateway_id": payment_gateway_id,
-        "payment_request_id": payment_request_id,
-    }
 
 
 def test_closing_bill(session: Session) -> None:
@@ -1714,7 +1636,20 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     # Merchant Refund
     refund_date = parse_date("2020-05-23 21:20:07")
     amount = Decimal(2)
-    refund_payment(session, uc, amount, refund_date, "A3d223g2")
+    payment_request_id = "A3d223g2"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=uc.id,
+        payment_request_id=payment_request_id,
+    )
+    pay_payment_request(
+        session=session,
+        amount=amount,
+        payment_request_id=payment_request_id,
+    )
+    refund_payment(session, uc, amount, refund_date, payment_request_id)
 
     create_card_swipe(
         session=session,
@@ -2047,27 +1982,105 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     # Merchant Refund
     refund_date = parse_date("2020-06-16 01:48:05")
     amount = Decimal(160)
-    refund_payment(session, uc, amount, refund_date, "A3d223g3")
+    payment_request_id = "A3d223g3"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=uc.id,
+        payment_request_id=payment_request_id,
+    )
+    pay_payment_request(
+        session=session,
+        amount=amount,
+        payment_request_id=payment_request_id,
+    )
+    refund_payment(session, uc, amount, refund_date, payment_request_id)
     # Merchant Refund
     refund_date = parse_date("2020-06-17 00:21:23")
     amount = Decimal(160)
-    refund_payment(session, uc, amount, refund_date, "A3d223g4")
+    payment_request_id = "A3d223g4"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=uc.id,
+        payment_request_id=payment_request_id,
+    )
+    pay_payment_request(
+        session=session,
+        amount=amount,
+        payment_request_id=payment_request_id,
+    )
+    refund_payment(session, uc, amount, refund_date, payment_request_id)
     # Merchant Refund
     refund_date = parse_date("2020-06-18 06:54:58")
     amount = Decimal(1)
-    refund_payment(session, uc, amount, refund_date, "A3d223g5")
+    payment_request_id = "A3d223g5"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=uc.id,
+        payment_request_id=payment_request_id,
+    )
+    pay_payment_request(
+        session=session,
+        amount=amount,
+        payment_request_id=payment_request_id,
+    )
+    refund_payment(session, uc, amount, refund_date, payment_request_id)
     # Merchant Refund
     refund_date = parse_date("2020-06-18 06:54:59")
     amount = Decimal(1)
-    refund_payment(session, uc, amount, refund_date, "A3d223g6")
+    payment_request_id = "A3d223g6"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=uc.id,
+        payment_request_id=payment_request_id,
+    )
+    pay_payment_request(
+        session=session,
+        amount=amount,
+        payment_request_id=payment_request_id,
+    )
+    refund_payment(session, uc, amount, refund_date, payment_request_id)
     # Merchant Refund
     refund_date = parse_date("2020-06-18 06:54:59")
     amount = Decimal(1)
-    refund_payment(session, uc, amount, refund_date, "A3d223g7")
+    payment_request_id = "A3d223g7"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=uc.id,
+        payment_request_id=payment_request_id,
+    )
+    pay_payment_request(
+        session=session,
+        amount=amount,
+        payment_request_id=payment_request_id,
+    )
+    refund_payment(session, uc, amount, refund_date, payment_request_id)
     # Merchant Refund
     refund_date = parse_date("2020-06-18 06:55:00")
     amount = Decimal(1)
-    refund_payment(session, uc, amount, refund_date, "A3d223g8")
+    payment_request_id = "A3d223g8"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=uc.id,
+        payment_request_id=payment_request_id,
+    )
+    pay_payment_request(
+        session=session,
+        amount=amount,
+        payment_request_id=payment_request_id,
+    )
+    refund_payment(session, uc, amount, refund_date, payment_request_id)
 
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{uc.loan_id}/loan/lender_payable/l"
@@ -2498,7 +2511,23 @@ def test_refund_1(session: Session) -> None:
     _accrue_interest_on_bill_1(session)
     user_loan = get_user_product(session, 99)
 
-    refund_payment(session, user_loan, 100, parse_date("2020-05-05 15:24:34"), "asd23g2")
+    refund_date = parse_date("2020-05-05 15:24:34")
+    payment_request_id = "asd23g2"
+    amount = Decimal(100)
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=user_loan.user_id,
+        payment_request_id=payment_request_id,
+    )
+    pay_payment_request(
+        session=session,
+        amount=amount,
+        payment_request_id=payment_request_id,
+    )
+
+    refund_payment(session, user_loan, amount, refund_date, payment_request_id)
 
     _, merchant_refund_off_balance = get_account_balance_from_str(
         session, book_string=f"{user_loan.loan_id}/loan/refund_off_balance/l"
@@ -2515,7 +2544,23 @@ def test_refund_1(session: Session) -> None:
         txn_ref_no="dummy_txn_ref_no",
         trace_no="123456",
     )
-    refund_payment(session, user_loan, 1500, parse_date("2020-05-15 15:24:34"), "af423g2")
+    refund_date = parse_date("2020-05-15 15:24:34")
+    payment_request_id = "af423g2"
+    amount = Decimal(1500)
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=user_loan.user_id,
+        payment_request_id=payment_request_id,
+    )
+    pay_payment_request(
+        session=session,
+        amount=amount,
+        payment_request_id=payment_request_id,
+    )
+
+    refund_payment(session, user_loan, amount, refund_date, payment_request_id)
 
     _, merchant_refund_off_balance = get_account_balance_from_str(
         session, book_string=f"{user_loan.loan_id}/loan/refund_off_balance/l"
