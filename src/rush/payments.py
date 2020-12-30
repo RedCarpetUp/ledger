@@ -77,6 +77,7 @@ def payment_received(
         event=lt,
         skip_closing=skip_closing,
         user_product_id=user_product_id if user_product_id else user_loan.user_product_id,
+        lender_id=lender_id if lender_id else user_loan.lender_id,
     )
 
     update_journal_entry(user_loan=user_loan, event=lt, user_id=user_id, session=session)
@@ -135,6 +136,7 @@ def payment_received_event(
     event: LedgerTriggerEvent,
     skip_closing: bool = False,
     user_product_id: Optional[int] = None,
+    lender_id: Optional[int] = None,
 ) -> None:
     payment_received_amt = Decimal(event.amount)
 
@@ -201,6 +203,15 @@ def payment_received_event(
 
         # We will either slide or close bills
         slide_payment_to_emis(user_loan, event)
+
+    gateway_expenses = Decimal("0.5")
+    create_ledger_entry_from_str(
+        session=session,
+        event_id=event.id,
+        debit_book_str="12345/redcarpet/gateway_expenses/e",
+        credit_book_str=f"{lender_id}/lender/pg_account/a",
+        amount=gateway_expenses,
+    )
 
     create_payment_split(session, event)
 
@@ -289,22 +300,10 @@ def settle_payment_in_bank(
     session.add(event)
     session.flush()
 
-    payment_settlement_event(
-        session=session, gateway_expenses=gateway_expenses, user_loan=user_loan, event=event
-    )
+    payment_settlement_event(session=session, user_loan=user_loan, event=event)
 
 
-def payment_settlement_event(
-    session: Session, gateway_expenses: Decimal, user_loan: BaseLoan, event: LedgerTriggerEvent
-) -> None:
-    if gateway_expenses > 0:  # Adjust for gateway expenses.
-        create_ledger_entry_from_str(
-            session=session,
-            event_id=event.id,
-            debit_book_str="12345/redcarpet/gateway_expenses/e",
-            credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
-            amount=gateway_expenses,
-        )
+def payment_settlement_event(session: Session, user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
     _, writeoff_balance = get_account_balance_from_str(
         session=session, book_string=f"{user_loan.loan_id}/loan/writeoff_expenses/e"
     )
