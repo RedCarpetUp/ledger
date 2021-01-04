@@ -18,8 +18,6 @@ from rush.card.term_loan import TermLoan
 from rush.card.term_loan2 import TermLoan2
 from rush.card.term_loan_pro import TermLoanPro
 from rush.card.term_loan_pro2 import TermLoanPro2
-from rush.card.transaction_loan import TransactionLoan
-from rush.card.utils import create_user_product_mapping
 from rush.card.zeta_card import ZetaCard
 from rush.ledger_events import limit_assignment_event
 from rush.models import (

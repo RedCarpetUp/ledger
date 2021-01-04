@@ -18,7 +18,6 @@ class TransactionLoanBill(TermLoanBill):
 class TransactionLoan(TermLoan):
     bill_class: Type[B] = TermLoanBill
 
-    @classmethod
     def get_txn_to_add_in_bill(self, date: DateTime):
         return (
             self.session.query(LoanSchedule.total_due_amount)
