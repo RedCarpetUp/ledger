@@ -178,29 +178,15 @@ def _adjust_bill(
 
     remaining_amount = amount_to_adjust_in_this_bill
 
-    fees = (
-        session.query(BillFee)
-        .filter(BillFee.identifier_id == bill.id, BillFee.fee_status == "UNPAID")
-        .all()
-    )
-    for fee in fees:
-        remaining_amount = adjust_for_revenue(
-            session=session,
-            event_id=event_id,
-            payment_to_adjust_from=remaining_amount,
-            debit_str=debit_acc_str,
-            fee=fee,
-        )
-
-    remaining_amount = adjust_for_receivable(
-        remaining_amount,
-        to_acc=debit_acc_str,
-        from_acc=f"{bill.id}/bill/unbilled/a",
-    )
     remaining_amount = adjust_for_receivable(
         remaining_amount,
         to_acc=debit_acc_str,
         from_acc=f"{bill.id}/bill/interest_receivable/a",
+    )
+    remaining_amount = adjust_for_receivable(
+        remaining_amount,
+        to_acc=debit_acc_str,
+        from_acc=f"{bill.id}/bill/unbilled/a",
     )
     remaining_amount = adjust_for_receivable(
         remaining_amount,
