@@ -9,7 +9,7 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
-from rush.card.term_loan import TermLoan
+from rush.card.transaction_loan import TransactionLoan
 from rush.create_emi import (
     update_event_with_dpd,
     update_journal_entry,
@@ -22,7 +22,7 @@ from rush.ledger_events import (
 from rush.ledger_utils import get_account_balance_from_str
 from rush.loan_schedule.loan_schedule import create_bill_schedule
 from rush.min_payment import add_min_to_all_bills
-from rush.models import LedgerTriggerEvent, LoanSchedule
+from rush.models import Base, LedgerTriggerEvent, LoanSchedule
 from rush.utils import (
     get_current_ist_time,
     mul,
@@ -73,45 +73,18 @@ def bill_generate(
 ) -> BaseBill:
     session = user_loan.session
 
-    transaction_loan: TermLoan = (
-        session.query(TermLoan)
-        .filter(TermLoan.product_type == "transaction_loan", TermLoan.user_id == user_loan.user_id)
+    transaction_loan: TransactionLoan = (
+        session.query(BaseLoan)
+        .filter(BaseLoan.product_type == "transaction_loan", BaseLoan.user_id == user_loan.user_id)
         .scalar()
     )
 
     # calculating accrued interest for transaction loan
     if transaction_loan:
-        unpaid_bills = transaction_loan.get_unpaid_generated_bills()
-
-        accrue_event = LedgerTriggerEvent(
-            name="accrue_interest",
-            loan_id=transaction_loan.loan_id,
-            post_date=get_current_ist_time().date(),
-            amount=0,
-        )
-        session.add(accrue_event)
-        session.flush()
-
-        for unpaid_bill in unpaid_bills:
-            interest_to_accrue = (
-                session.query(LoanSchedule.interest_due)
-                .filter(
-                    LoanSchedule.bill_id == unpaid_bill.id,
-                    LoanSchedule.due_date < creation_time.date(),
-                    LoanSchedule.due_date > creation_time.date() - relativedelta(months=1),
-                )
-                .order_by(LoanSchedule.due_date.desc())
-                .limit(1)
-                .scalar()
-            )
-
-            if interest_to_accrue:
-                accrue_event.amount += interest_to_accrue
-                accrue_interest_event(session, unpaid_bill, accrue_event, interest_to_accrue)
-                add_max_amount_event(session, unpaid_bill, accrue_event, interest_to_accrue)
+        amount = transaction_loan.get_txn_to_add_in_bill()
 
         # adding card transaction for accrued interest
-        if accrue_event.amount:
+        if amount:
             pass
 
     bill = user_loan.get_latest_bill_to_generate()  # Get the first bill which is not generated.
