@@ -4,10 +4,9 @@ import pytest
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
-from rush.card import (
+from rush.card import (  # transaction_to_loan,
     create_user_product,
     get_user_product,
-    transaction_to_loan,
 )
 from rush.card.term_loan import TermLoan
 from rush.card.utils import create_user_product_mapping
@@ -22,6 +21,7 @@ from rush.models import (
     User,
 )
 from rush.payments import payment_received
+from rush.txn_loan import transaction_to_loan
 
 
 def create_lenders(session: Session) -> None:

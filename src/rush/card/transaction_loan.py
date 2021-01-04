@@ -1,12 +1,12 @@
 from typing import Type
-from dateutil.relativedelta import relativedelta
 
+from dateutil.relativedelta import relativedelta
 from sqlalchemy.sql.sqltypes import DateTime
 
 from rush.card.term_loan import (
+    B,
     TermLoan,
     TermLoanBill,
-    B,
 )
 from rush.models import LoanSchedule
 

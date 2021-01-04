@@ -22,7 +22,11 @@ from rush.ledger_events import (
 from rush.ledger_utils import get_account_balance_from_str
 from rush.loan_schedule.loan_schedule import create_bill_schedule
 from rush.min_payment import add_min_to_all_bills
-from rush.models import Base, LedgerTriggerEvent, LoanSchedule
+from rush.models import (
+    Base,
+    LedgerTriggerEvent,
+    LoanSchedule,
+)
 from rush.utils import (
     get_current_ist_time,
     mul,
