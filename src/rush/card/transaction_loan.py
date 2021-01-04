@@ -24,6 +24,7 @@ class TransactionLoan(TermLoan):
             self.session.query(LoanSchedule.total_due_amount)
             .filter(
                 LoanSchedule.bill_id == None,
+                LoanSchedule.loan_id == self.id,
                 LoanSchedule.due_date < date.date(),
                 LoanSchedule.due_date > date.date() - relativedelta(months=1),
             )
