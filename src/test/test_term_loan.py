@@ -4,7 +4,7 @@ import pytest
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
-from rush.card import (  # transaction_to_loan,
+from rush.card import (
     create_user_product,
     get_user_product,
 )
