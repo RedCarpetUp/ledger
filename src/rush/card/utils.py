@@ -179,6 +179,53 @@ def add_reload_fee(
     return f
 
 
+def add_upgrade_fee(
+    session: Session,
+    user_loan: Loan,
+    fee_amount: Decimal,
+    post_date: Optional[Date] = None,
+) -> Fee:
+    assert user_loan.amortization_date is not None
+
+    if post_date is None:
+        post_date = get_current_ist_time().date()
+
+    event = LedgerTriggerEvent(
+        name="upgrade_fee_added",
+        post_date=get_current_ist_time().date(),
+    )
+    session.add(event)
+    session.flush()
+
+    f = LoanFee(
+        user_id=user_loan.user_id,
+        identifier_id=user_loan.id,
+        event_id=event.id,
+        name="card_upgrade_fee",
+        fee_status="UNPAID",
+        sgst_rate=Decimal(0),
+        cgst_rate=Decimal(0),
+        igst_rate=Decimal(18),
+    )
+
+    d = get_gst_split_from_amount(fee_amount, total_gst_rate=Decimal(18))
+    f.net_amount = d["net_amount"]
+    f.gross_amount = d["gross_amount"]
+    event.amount = d["gross_amount"]
+    session.add(f)
+
+    # Update DPD and Journal Entries
+    from rush.create_emi import (
+        update_event_with_dpd,
+        update_journal_entry,
+    )
+
+    update_event_with_dpd(user_loan=user_loan, event=event)
+    update_journal_entry(user_loan=user_loan, event=event)
+
+    return f
+
+
 def add_card_to_loan(session: Session, loan: Loan, card_info: Dict[str, Any]) -> UserCard:
     event = LedgerTriggerEvent(
         name="add_card",

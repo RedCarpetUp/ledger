@@ -141,7 +141,7 @@ def payment_received_event(
     payment_received_amt = Decimal(event.amount)
 
     payment_type = event.payment_type
-    if not user_loan or payment_type in ("card_reload_fee", "card_activation_fee"):
+    if not user_loan or payment_type in ("card_reload_fee", "card_activation_fee", "card_upgrade_fee"):
         assert user_product_id is not None
 
         if payment_type == "downpayment":
@@ -150,7 +150,7 @@ def payment_received_event(
             if not user_loan or payment_type in ("card_activation_fee"):
                 identifier = "product"
                 identifier_id = user_product_id
-            elif payment_type in ("card_reload_fee"):
+            elif payment_type in ("card_reload_fee", "card_upgrade_fee"):
                 identifier = "loan"
                 identifier_id = user_loan.id
 
@@ -462,6 +462,7 @@ def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
         "downpayment",
         "reset_joining_fees",
         "pre_payment",
+        "card_upgrade_fee",
     )
     # unbilled and principal belong to same component.
     updated_component_names = {

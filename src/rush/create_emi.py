@@ -1,6 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
+from dateutil.relativedelta import relativedelta
 
 from pendulum import DateTime
 from sqlalchemy.orm import (
@@ -266,7 +267,7 @@ def get_journal_entry_narration(event_name) -> String:
         return "Late Fee"
     elif event_name == "atm_fee":
         return "ATM Fee"
-    elif event_name == "card_reload_fee":
+    elif event_name in ("card_reload_fee", "card_upgrade_fee"):
         return "Reload Fee"
     elif event_name == "card_activation_fee":
         return "Processing Fee"
@@ -289,7 +290,7 @@ def get_journal_entry_ptype(event_name) -> String:
         return "Late Fee-Card TL-Customer"
     elif event_name in ("atm_fee_added", "atm_fee"):
         return "CF ATM Fee-Customer"
-    elif event_name in ("reload_fee_added", "card_reload_fee"):
+    elif event_name in ("reload_fee_added", "card_reload_fee", "upgrade_fee_added", "card_upgrade_fee"):
         return "CF Reload Fee-Customer"
     elif event_name in ("pre_product_fee_added", "card_activation_fee", "reset_joining_fees"):
         return "CF Processing Fee-Customer"
@@ -326,7 +327,7 @@ def get_ledger_for_fee(fee_acc) -> String:
         return "Late Fee"
     elif fee_acc in ("atm_fee", "reset_joining_fees", "card_activation_fee"):
         return "Processing Fee"
-    elif fee_acc == "card_reload_fee":
+    elif fee_acc in ("card_reload_fee", "card_upgrade_fee"):
         return "Reload Fee"
     else:
         return fee_acc.upper()  # sgst, cgst.
@@ -402,7 +403,7 @@ def update_journal_entry(
             .first()
         )
         gateway_expenses = payment_requests_data[0]
-        settlement_date = payment_requests_data[1]
+        settlement_date = payment_requests_data[1] or event.post_date + relativedelta(days=1)
         payment_split_data = (
             session.query(PaymentSplit.component, PaymentSplit.amount_settled)
             .filter(

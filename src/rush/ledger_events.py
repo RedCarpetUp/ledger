@@ -368,11 +368,13 @@ def get_revenue_book_str_for_fee(fee: Fee) -> str:
     elif fee.name == "atm_fee":
         return f"{fee.identifier_id}/bill/atm_fee/r"
     elif fee.name == "card_activation_fee":
-        return f"{fee.identifier_id}/product/card_activation_fees/r"
+        return f"{fee.identifier_id}/product/card_activation_fee/r"
     elif fee.name == "reset_joining_fees":
         return f"{fee.identifier_id}/product/reset_joining_fees/r"
     elif fee.name == "card_reload_fee":
         return f"{fee.identifier_id}/loan/card_reload_fee/r"
+    elif fee.name == "card_upgrade_fee":
+        return f"{fee.identifier_id}/loan/card_upgrade_fee/r"
     else:
         raise Exception("InvalidCreditBookStringError")
 
