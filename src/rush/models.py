@@ -402,9 +402,9 @@ class LedgerEntry(Base):
     id = Column(Integer, primary_key=True)
     event_id = Column(Integer, ForeignKey(LedgerTriggerEvent.id), nullable=False)
     debit_account = Column(Integer, ForeignKey(BookAccount.id), nullable=False)
-    debit_account_balance = Column(DECIMAL, nullable=False)
+    debit_account_balance = Column(DECIMAL)
     credit_account = Column(Integer, ForeignKey(BookAccount.id), nullable=False)
-    credit_account_balance = Column(DECIMAL, nullable=False)
+    credit_account_balance = Column(DECIMAL)
     amount = Column(DECIMAL, nullable=False)
     created_at = Column(TIMESTAMP, default=get_current_ist_time(), nullable=False)
 

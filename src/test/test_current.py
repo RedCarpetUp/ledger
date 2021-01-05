@@ -705,7 +705,8 @@ def _partial_payment_bill_1(session: Session) -> None:
 
     bill = unpaid_bills[0]
     _, gateway_expenses = get_account_balance_from_str(
-        session, book_string="12345/redcarpet/gateway_expenses/e"
+        session,
+        book_string=f"{user_loan.lender_id}/lender/gateway_expenses/e",
     )
     assert gateway_expenses == 0.5
 
@@ -840,10 +841,10 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
     _, late_fine_earned = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine/r")
     assert late_fine_earned == Decimal(100)
 
-    _, sgst_balance = get_account_balance_from_str(session, "12345/redcarpet/sgst_payable/l")
+    _, sgst_balance = get_account_balance_from_str(session, f"{user_loan.user_id}/user/sgst_payable/l")
     assert sgst_balance == Decimal(9)
 
-    _, cgst_balance = get_account_balance_from_str(session, "12345/redcarpet/cgst_payable/l")
+    _, cgst_balance = get_account_balance_from_str(session, f"{user_loan.user_id}/user/cgst_payable/l")
     assert cgst_balance == Decimal(9)
 
     _, interest_due = get_account_balance_from_str(
@@ -3634,3 +3635,143 @@ def test_customer_prepayment_refund(session: Session) -> None:
         session, book_string=f"{user_loan.loan_id}/loan/pre_payment/l"
     )
     assert prepayment_amount == Decimal(0)
+
+
+def test_updated_emi_payment_mapping_after_early_loan_close(session: Session) -> None:
+    test_lenders(session)
+    card_db_updates(session)
+    user = User(
+        id=99,
+        performed_by=123,
+    )
+    session.add(user)
+    session.flush()
+
+    user_loan = create_user_product(
+        session=session,
+        user_id=user.id,
+        card_activation_date=parse_date("2020-11-02").date(),
+        card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
+        lender_id=62311,
+    )
+
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-11-04 19:23:11"),
+        amount=Decimal(2000),
+        description="BigB.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
+    )
+
+    bill_generate(user_loan=user_loan)
+
+    dec_bill = user_loan.get_latest_bill()
+    assert dec_bill.bill_due_date == parse_date("2020-12-15").date()
+
+    _, billed_amount = get_account_balance_from_str(
+        session, book_string=f"{dec_bill.id}/bill/principal_receivable/a"
+    )
+    assert billed_amount == 2000
+
+    _, min_amount = get_account_balance_from_str(session, book_string=f"{dec_bill.id}/bill/min/a")
+    assert min_amount == 227
+
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_amount=Decimal(227),
+        payment_date=parse_date("2020-12-13"),
+        payment_request_id="a12318",
+    )
+
+    accrue_interest_on_all_bills(
+        session=session,
+        post_date=dec_bill.table.bill_due_date + relativedelta(days=1),
+        user_loan=user_loan,
+    )
+
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{dec_bill.id}/bill/interest_receivable/a"
+    )
+    assert interest_due == Decimal("60.33")
+
+    pm = (
+        session.query(PaymentMapping)
+        .filter(PaymentMapping.payment_request_id == "a12318", PaymentMapping.row_status == "active")
+        .one_or_none()
+    )
+
+    assert pm.amount_settled == Decimal("227.00")
+
+    jan_bill = bill_generate(user_loan=user_loan, creation_time=parse_date("2021-01-01"))
+    assert jan_bill.bill_due_date == parse_date("2021-01-15").date()
+
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_amount=Decimal(500),
+        payment_date=parse_date("2021-01-13"),
+        payment_request_id="a12319",
+    )
+
+    accrue_interest_on_all_bills(
+        session=session,
+        post_date=jan_bill.table.bill_due_date + relativedelta(days=1),
+        user_loan=user_loan,
+    )
+
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{dec_bill.id}/bill/interest_receivable/a"
+    )
+    assert interest_due == Decimal("60.33")
+
+    pm = (
+        session.query(PaymentMapping)
+        .filter(PaymentMapping.payment_request_id == "a12319", PaymentMapping.row_status == "active")
+        .all()
+    )
+
+    assert pm[0].amount_settled == Decimal("227.00")
+    assert pm[1].amount_settled == Decimal("227.00")
+    assert pm[2].amount_settled == Decimal("46.00")
+
+    feb_bill = bill_generate(user_loan=user_loan, creation_time=parse_date("2021-02-01"))
+    assert feb_bill.bill_due_date == parse_date("2021-02-15").date()
+
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_amount=Decimal(1500),
+        payment_date=parse_date("2021-02-13"),
+        payment_request_id="a12320",
+    )
+
+    accrue_interest_on_all_bills(
+        session=session,
+        post_date=feb_bill.table.bill_due_date + relativedelta(days=1),
+        user_loan=user_loan,
+    )
+
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{dec_bill.id}/bill/interest_receivable/a"
+    )
+    assert interest_due == Decimal(0)
+
+    emis = user_loan.get_loan_schedule()
+    closing_bill = emis[2]  # loan  should close in third EMI
+
+    amount_settled = (
+        session.query(func.sum(PaymentMapping.amount_settled))
+        .filter(
+            PaymentMapping.payment_request_id.in_(("a12319", "a12320")),
+            PaymentMapping.emi_id == closing_bill.id,
+            PaymentMapping.row_status == "active",
+        )
+        .all()
+    )
+
+    # This should be 1666.67 but we have an error of 0.01
+    assert amount_settled[0][0] == Decimal("1666.66")
