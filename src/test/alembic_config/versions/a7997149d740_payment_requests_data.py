@@ -72,6 +72,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.execute(""" ALTER TABLE journal_entries ALTER COLUMN debit DROP NOT NULL; """)
+    op.add_column("journal_entries", sa.Column("user_id", sa.Integer, nullable=False))
 
 
 def downgrade() -> None:

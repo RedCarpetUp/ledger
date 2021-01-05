@@ -112,9 +112,7 @@ def refund_payment(
         loan_id=user_loan.loan_id,
         amount=payment_amount,
         post_date=payment_date,
-        extra_details={
-            "payment_request_id": payment_request_id,
-        },
+        extra_details={"payment_request_id": payment_request_id, "payment_type": None},
     )
     session.add(lt)
     session.flush()
@@ -147,14 +145,12 @@ def payment_received_event(
         if payment_type == "downpayment":
             _adjust_for_downpayment(session=session, event=event, amount=payment_received_amt)
         else:
-            if not user_loan:
+            if not user_loan or payment_type in ("card_activation_fee"):
                 identifier = "product"
                 identifier_id = user_product_id
-                assert payment_type != "card_reload_fee"
-            else:
+            elif payment_type in ("card_reload_fee"):
                 identifier = "loan"
                 identifier_id = user_loan.id
-                assert payment_type == "card_reload_fee"
 
             adjust_non_bill_payments(
                 session=session,
@@ -235,10 +231,13 @@ def find_amount_to_slide_in_bills(user_loan: BaseLoan, total_amount_to_slide: De
             amount_to_slide_based_on_ratio = total_amount_to_slide
         else:
             amount_to_slide_based_on_ratio = mul(
-                bill_data["total_outstanding"] / total_loan_outstanding, total_amount_before_sliding
+                bill_data["total_outstanding"] / total_loan_outstanding,
+                total_amount_before_sliding,
             )
         amount_to_adjust = min(
-            amount_to_slide_based_on_ratio, total_amount_to_slide, bill_data["total_outstanding"]
+            amount_to_slide_based_on_ratio,
+            total_amount_to_slide,
+            bill_data["total_outstanding"],
         )
         bill_data["amount_to_adjust"] += amount_to_adjust
         bill_data["total_outstanding"] -= amount_to_adjust

@@ -238,6 +238,7 @@ def create_journal_entry(
     ptype,
     event_id,
     loan_id,
+    user_id,
 ):
     entry = JournalEntry(
         voucher_type=voucher_type,
@@ -253,6 +254,7 @@ def create_journal_entry(
         ptype=ptype,
         event_id=event_id,
         loan_id=loan_id,
+        user_id=user_id,
     )
     session.add(entry)
     session.flush()
@@ -260,13 +262,13 @@ def create_journal_entry(
 
 
 def get_journal_entry_narration(event_name) -> String:
-    if event_name == "charge_late_fine":
+    if event_name == "late_fine":
         return "Late Fee"
-    elif event_name == "atm_fee_added":
+    elif event_name == "atm_fee":
         return "ATM Fee"
-    elif event_name == "reload_fee_added":
+    elif event_name == "card_reload_fee":
         return "Reload Fee"
-    elif event_name == "pre_product_fee_added":
+    elif event_name == "card_activation_fee":
         return "Processing Fee"
     elif event_name in (
         "payment_received",
@@ -283,13 +285,13 @@ def get_journal_entry_narration(event_name) -> String:
 
 
 def get_journal_entry_ptype(event_name) -> String:
-    if event_name == "charge_late_fine":
+    if event_name in ("charge_late_fine", "late_fine"):
         return "Late Fee-Card TL-Customer"
-    elif event_name == "atm_fee_added":
+    elif event_name in ("atm_fee_added", "atm_fee"):
         return "CF ATM Fee-Customer"
-    elif event_name == "reload_fee_added":
+    elif event_name in ("reload_fee_added", "card_reload_fee"):
         return "CF Reload Fee-Customer"
-    elif event_name == "pre_product_fee_added":
+    elif event_name in ("pre_product_fee_added", "card_activation_fee", "reset_joining_fees"):
         return "CF Processing Fee-Customer"
     elif event_name == "payment_received":
         return "Card TL-Customer"
@@ -368,6 +370,7 @@ def update_journal_entry(
             "Disbursal Card",
             event.id,
             loan_id,
+            user_id,
         )
         create_journal_entry(
             session,
@@ -384,6 +387,7 @@ def update_journal_entry(
             "Disbursal Card",
             event.id,
             loan_id,
+            user_id,
         )
     elif event.name == "payment_received" or event.name == "transaction_refund":
         payment_requests_data = (
@@ -418,11 +422,16 @@ def update_journal_entry(
                 event.name = event_name
                 event.amount = event_amount - prepayment_amount
                 gateway_expenses = gateway_expenses if gateway_expenses else 0
+                p_type = get_journal_entry_ptype(event.name)
             else:
                 event.name = f"{event_name}-{payment_split_data[count][0]}"
                 event.amount = payment_split_data[count][1]
+                p_type = get_journal_entry_ptype(event.name)
             if event.amount == 0:
                 continue
+            if event.extra_details["payment_type"]:
+                loan_id = None
+                p_type = "CF-Customer"
             create_journal_entry(
                 session,
                 "Receipt-Import",
@@ -435,9 +444,10 @@ def update_journal_entry(
                 get_journal_entry_narration(event.name),
                 settlement_date,
                 1,
-                get_journal_entry_ptype(event.name),
+                p_type,
                 event.id,
                 loan_id,
+                user_id,
             )
             create_journal_entry(
                 session,
@@ -451,9 +461,10 @@ def update_journal_entry(
                 "",
                 settlement_date,
                 2,
-                get_journal_entry_ptype(event.name),
+                p_type,
                 event.id,
                 loan_id,
+                user_id,
             )
             create_journal_entry(
                 session,
@@ -467,9 +478,10 @@ def update_journal_entry(
                 "",
                 settlement_date,
                 3,
-                get_journal_entry_ptype(event.name),
+                p_type,
                 event.id,
                 loan_id,
+                user_id,
             )
         from rush.payments import get_payment_split_from_event
 
@@ -485,14 +497,22 @@ def update_journal_entry(
         if filtered_split_data and event.amount != principal_and_interest:
             sales_import_amount = event.amount - principal_and_interest
             narration_name = ""
+            fee_count = 0
+            event_name = ""
             for (
                 settled_acc,
                 _,
             ) in filtered_split_data.items():  # First loop to get narration name.
                 # So if there are more than one fee, it becomes "Late fee Reload fee".
                 if settled_acc not in ("sgst", "cgst", "igst"):
-                    narration_name += f"{get_ledger_for_fee(settled_acc)}"
-            p_type = f"{narration_name} -Card TL-Customer"
+                    fee_count += 1
+                    event_name = settled_acc
+                    narration_name += f"{get_ledger_for_fee(settled_acc)} "
+            narration_name = narration_name.strip()
+            if fee_count == 1:
+                p_type = get_journal_entry_ptype(event_name)
+            else:
+                p_type = f"{narration_name} -Card TL-Customer"
             for sort_order, (settled_acc, amount) in enumerate(filtered_split_data.items(), 2):
                 create_journal_entry(
                     session,
@@ -509,6 +529,7 @@ def update_journal_entry(
                     p_type,
                     event.id,
                     loan_id,
+                    user_id,
                 )
             create_journal_entry(
                 session,
@@ -525,6 +546,7 @@ def update_journal_entry(
                 p_type,
                 event.id,
                 loan_id,
+                user_id,
             )
     elif event.name == "bill_generate":
         create_journal_entry(
@@ -542,6 +564,7 @@ def update_journal_entry(
             "CF To TL",
             event.id,
             loan_id,
+            user_id,
         )
         create_journal_entry(
             session,
@@ -558,4 +581,5 @@ def update_journal_entry(
             "CF To TL",
             event.id,
             loan_id,
+            user_id,
         )
