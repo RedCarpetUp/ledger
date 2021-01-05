@@ -9,7 +9,6 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
-from rush.card.transaction_loan import TransactionLoan
 from rush.create_emi import (
     update_event_with_dpd,
     update_journal_entry,
