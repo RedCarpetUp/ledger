@@ -77,6 +77,7 @@ from rush.models import (
 from rush.payments import (
     customer_refund,
     fee_refund,
+    find_split_to_slide_in_loan,
     payment_received,
     refund_payment,
 )
@@ -2176,8 +2177,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     last_entry_first_bill = dpd_events[-2]
     last_entry_second_bill = dpd_events[-1]
 
-    assert last_entry_first_bill.balance == Decimal("12720.99")
-    assert last_entry_second_bill.balance == Decimal("7888.20")
+    assert last_entry_first_bill.balance == Decimal("8082.03")
+    assert last_entry_second_bill.balance == Decimal("7933.12")
 
     _, bill_may_principal_due = get_account_balance_from_str(
         session, book_string=f"{bill_may.id}/bill/principal_receivable/a"
@@ -2185,8 +2186,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     _, bill_june_principal_due = get_account_balance_from_str(
         session, book_string=f"{bill_june.id}/bill/principal_receivable/a"
     )
-    assert bill_may_principal_due == Decimal("12720.99")
-    assert bill_june_principal_due == Decimal("7888.20")
+    assert bill_may_principal_due == Decimal("12676.07")
+    assert bill_june_principal_due == Decimal("7933.12")
 
     daily_date = parse_date("2020-08-28 00:05:00")
     daily_dpd_update(session, uc, daily_date)
@@ -4086,3 +4087,72 @@ def test_customer_prepayment_refund(session: Session) -> None:
         session, book_string=f"{user_loan.loan_id}/loan/pre_payment/l"
     )
     assert prepayment_amount == Decimal(0)
+
+
+def test_find_split_to_slide_in_loan(session: Session) -> None:
+    test_lenders(session)
+    card_db_updates(session)
+    user = User(
+        id=99,
+        performed_by=123,
+    )
+    session.add(user)
+    session.flush()
+
+    user_loan = create_user_product(
+        session=session,
+        user_id=user.id,
+        card_activation_date=parse_date("2020-11-02").date(),
+        card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
+        lender_id=62311,
+    )
+
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-11-04 19:23:11"),
+        amount=Decimal(1000),
+        description="BigB.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
+    )
+    bill = bill_generate(user_loan=user_loan)
+
+    accrue_interest_on_all_bills(
+        session=session, post_date=bill.table.bill_due_date + relativedelta(days=1), user_loan=user_loan
+    )
+    accrue_late_charges(session, user_loan, parse_date("2020-11-16"), Decimal(118))
+
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-12-04 19:23:11"),
+        amount=Decimal(1200),
+        description="BigB.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="1234567",
+    )
+    bill = bill_generate(user_loan=user_loan)
+
+    accrue_interest_on_all_bills(
+        session=session, post_date=bill.table.bill_due_date + relativedelta(days=1), user_loan=user_loan
+    )
+    accrue_late_charges(session, user_loan, parse_date("2020-12-16"), Decimal(118))
+
+    payment_splt_info = find_split_to_slide_in_loan(session, user_loan, Decimal(150))
+    assert len(payment_splt_info) == 2
+    assert payment_splt_info[0]["type"] == "fee"
+    assert payment_splt_info[0]["amount_to_adjust"] == Decimal(75)
+
+    payment_splt_info = find_split_to_slide_in_loan(session, user_loan, Decimal(336))
+    assert len(payment_splt_info) == 6
+    assert payment_splt_info[0]["type"] == "fee"
+    assert payment_splt_info[0]["amount_to_adjust"] == Decimal(118)
+    assert payment_splt_info[2]["type"] == "interest"
+    assert payment_splt_info[2]["amount_to_adjust"] == Decimal("61.34")
+    assert payment_splt_info[3]["amount_to_adjust"] == Decimal("36")
+    assert payment_splt_info[4]["type"] == "principal"
+    assert payment_splt_info[4]["amount_to_adjust"] == Decimal("1.21")
+    assert payment_splt_info[5]["type"] == "principal"
+    assert payment_splt_info[5]["amount_to_adjust"] == Decimal("1.45")

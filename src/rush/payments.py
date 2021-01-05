@@ -17,6 +17,7 @@ from rush.ledger_events import (
     _adjust_bill,
     _adjust_for_downpayment,
     _adjust_for_prepayment,
+    adjust_for_revenue,
     adjust_non_bill_payments,
     customer_refund_event,
     reduce_revenue_for_fee_refund,
@@ -27,6 +28,7 @@ from rush.ledger_utils import (
 )
 from rush.loan_schedule.loan_schedule import slide_payment_to_emis
 from rush.models import (
+    BillFee,
     BookAccount,
     Fee,
     LedgerEntry,
@@ -164,19 +166,28 @@ def payment_received_event(
 
     else:
         actual_payment = payment_received_amt
-        bills_data = find_amount_to_slide_in_bills(user_loan, payment_received_amt)
-        for bill_data in bills_data:
-            adjust_for_min_max_accounts(bill_data["bill"], bill_data["amount_to_adjust"], event.id)
-            remaining_amount = _adjust_bill(
-                session,
-                bill_data["bill"],
-                bill_data["amount_to_adjust"],
-                event.id,
-                debit_acc_str=debit_book_str,
-            )
-            # The amount to adjust is computed for this bill. It should all settle.
-            assert remaining_amount == 0
-            payment_received_amt -= bill_data["amount_to_adjust"]
+        split_data = find_split_to_slide_in_loan(session, user_loan, payment_received_amt)
+        for d in split_data:
+            adjust_for_min_max_accounts(d["bill"], d["amount_to_adjust"], event.id)
+            if d["type"] == "fee":
+                adjust_for_revenue(
+                    session=session,
+                    event_id=event.id,
+                    payment_to_adjust_from=d["amount_to_adjust"],
+                    debit_str=debit_book_str,
+                    fee=d["fee"],
+                )
+            if d["type"] in ("interest", "principal"):
+                remaining_amount = _adjust_bill(
+                    session,
+                    d["bill"],
+                    d["amount_to_adjust"],
+                    event.id,
+                    debit_acc_str=debit_book_str,
+                )
+                # The amount to adjust is computed for this bill. It should all settle.
+                assert remaining_amount == 0
+            payment_received_amt -= d["amount_to_adjust"]
         if user_loan.should_reinstate_limit_on_payment:
             user_loan.reinstate_limit_on_payment(event=event, amount=actual_payment)
 
@@ -212,55 +223,130 @@ def payment_received_event(
     create_payment_split(session, event)
 
 
-def find_amount_to_slide_in_bills(user_loan: BaseLoan, total_amount_to_slide: Decimal) -> list:
+def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amount_to_slide: Decimal):
+    # slide late fee.
     unpaid_bills = user_loan.get_unpaid_bills()
-    bills_dict = [
-        {
-            "bill": bill,
-            "total_outstanding": bill.get_outstanding_amount(),
-            "amount_to_adjust": 0,
-        }
-        for bill in unpaid_bills
-    ]
-    total_amount_before_sliding = total_amount_to_slide
-    total_loan_outstanding = sum(bill["total_outstanding"] for bill in bills_dict)
-    # Either nothing is left to slide or loan is completely settled and there is excess payment.
-    for bill_data in bills_dict:
-        # If bill isn't generated there's no minimum amount scheduled. So can slide entire amount.
-        if not bill_data["bill"].table.is_generated:
-            amount_to_slide_based_on_ratio = total_amount_to_slide
-        else:
-            amount_to_slide_based_on_ratio = mul(
-                bill_data["total_outstanding"] / total_loan_outstanding,
-                total_amount_before_sliding,
-            )
-        amount_to_adjust = min(
-            amount_to_slide_based_on_ratio,
-            total_amount_to_slide,
-            bill_data["total_outstanding"],
+    unpaid_bill_ids = [unpaid_bill.table.id for unpaid_bill in unpaid_bills]
+    split_info = []
+    late_fees = (
+        session.query(BillFee)
+        .filter(
+            BillFee.user_id == user_loan.user_id,
+            BillFee.name == "late_fee",
+            BillFee.identifier_id.in_(unpaid_bill_ids),
+            BillFee.fee_status == "UNPAID",
         )
-        bill_data["amount_to_adjust"] += amount_to_adjust
-        bill_data["total_outstanding"] -= amount_to_adjust
-    filtered_bills_dict = filter(lambda x: x["amount_to_adjust"] > 0, bills_dict)
-    return filtered_bills_dict
+        .all()
+    )
+    if late_fees:
+        total_late_fee_amount = sum(late_fee.remaining_fee_amount for late_fee in late_fees)
+        total_amount_to_be_adjusted_in_late_fee = min(total_late_fee_amount, total_amount_to_slide)
+        for late_fee in late_fees:
+            bill = next(bill for bill in unpaid_bills if bill.table.id == late_fee.identifier_id)
+            amount_to_slide_based_on_ratio = mul(
+                late_fee.remaining_fee_amount / total_late_fee_amount,
+                total_amount_to_be_adjusted_in_late_fee,
+            )
+            x = {
+                "type": "fee",
+                "bill": bill,
+                "fee": late_fee,
+                "amount_to_adjust": amount_to_slide_based_on_ratio,
+            }
+            split_info.append(x)
+        total_amount_to_slide -= total_amount_to_be_adjusted_in_late_fee
+
+    # slide atm fee.
+    atm_fees = (
+        session.query(BillFee)
+        .filter(
+            BillFee.user_id == user_loan.user_id,
+            BillFee.name == "atm_fee",
+            BillFee.identifier_id.in_(unpaid_bill_ids),
+            BillFee.fee_status == "UNPAID",
+        )
+        .all()
+    )
+    if total_amount_to_slide and atm_fees:
+        total_atm_fee_amount = sum(atm_fee.remaining_fee_amount for atm_fee in atm_fees)
+        total_amount_to_be_adjusted_in_atm_fee = min(total_atm_fee_amount, total_amount_to_slide)
+        for atm_fee in atm_fees:
+            bill = next(bill for bill in unpaid_bills if bill.table.id == atm_fee.identifier_id)
+            amount_to_slide_based_on_ratio = mul(
+                atm_fee.remaining_fee_amount / total_atm_fee_amount,
+                total_amount_to_be_adjusted_in_atm_fee,
+            )
+            x = {
+                "type": "fee",
+                "bill": bill,
+                "fee": atm_fee,
+                "amount_to_adjust": amount_to_slide_based_on_ratio,
+            }
+            split_info.append(x)
+        total_amount_to_slide -= total_amount_to_be_adjusted_in_atm_fee
+
+    # slide interest.
+    total_interest_amount = sum(bill.get_interest_due() for bill in unpaid_bills)
+    if total_amount_to_slide > 0 and total_interest_amount > 0:
+        total_amount_to_be_adjusted_in_interest = min(total_interest_amount, total_amount_to_slide)
+        for bill in unpaid_bills:
+            amount_to_slide_based_on_ratio = mul(
+                bill.get_interest_due() / total_interest_amount, total_amount_to_be_adjusted_in_interest
+            )
+            if amount_to_slide_based_on_ratio > 0:  # will be 0 for 0 bill with late fee.
+                x = {
+                    "type": "interest",
+                    "bill": bill,
+                    "amount_to_adjust": amount_to_slide_based_on_ratio,
+                }
+                split_info.append(x)
+        total_amount_to_slide -= total_amount_to_be_adjusted_in_interest
+
+    # slide principal.
+    total_principal_amount = sum(bill.get_principal_due() for bill in unpaid_bills)
+    if total_amount_to_slide > 0 and total_principal_amount > 0:
+        total_amount_to_be_adjusted_in_principal = min(total_principal_amount, total_amount_to_slide)
+        for bill in unpaid_bills:
+            amount_to_slide_based_on_ratio = mul(
+                bill.get_principal_due() / total_principal_amount,
+                total_amount_to_be_adjusted_in_principal,
+            )
+            if amount_to_slide_based_on_ratio > 0:
+                x = {
+                    "type": "principal",
+                    "bill": bill,
+                    "amount_to_adjust": amount_to_slide_based_on_ratio,
+                }
+                split_info.append(x)
+        total_amount_to_slide -= total_amount_to_be_adjusted_in_principal
+    return split_info
 
 
 def transaction_refund_event(session: Session, user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
     refund_amount = Decimal(event.amount)
     m2p_pool_account = f"{user_loan.lender_id}/lender/pool_balance/a"
-    bills_data = find_amount_to_slide_in_bills(user_loan, refund_amount)
+    split_data = find_split_to_slide_in_loan(session, user_loan, refund_amount)
 
-    for bill_data in bills_data:
-        adjust_for_min_max_accounts(bill_data["bill"], bill_data["amount_to_adjust"], event.id)
-        remaining_amount = _adjust_bill(
-            session,
-            bill_data["bill"],
-            bill_data["amount_to_adjust"],
-            event.id,
-            debit_acc_str=m2p_pool_account,
-        )
-        assert remaining_amount == 0
-        refund_amount -= bill_data["amount_to_adjust"]
+    for d in split_data:
+        adjust_for_min_max_accounts(d["bill"], d["amount_to_adjust"], event.id)
+        if d["type"] == "fee":
+            adjust_for_revenue(
+                session=session,
+                event_id=event.id,
+                payment_to_adjust_from=d["amount_to_adjust"],
+                debit_str=m2p_pool_account,
+                fee=d["fee"],
+            )
+        if d["type"] in ("interest", "principal"):
+            remaining_amount = _adjust_bill(
+                session,
+                d["bill"],
+                d["amount_to_adjust"],
+                event.id,
+                debit_acc_str=m2p_pool_account,
+            )
+            assert remaining_amount == 0
+        refund_amount -= d["amount_to_adjust"]
     if refund_amount > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
             session=session,
@@ -423,7 +509,6 @@ def customer_refund(
     payment_date: DateTime,
     payment_request_id: str,
 ):
-
     lt = LedgerTriggerEvent(
         name="customer_refund",
         loan_id=user_loan.loan_id,
