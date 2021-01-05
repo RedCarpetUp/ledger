@@ -5,6 +5,7 @@ from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.expression import case
 
 from rush.anomaly_detection import run_anomaly
 from rush.card import BaseLoan
@@ -215,66 +216,51 @@ def payment_received_event(
 
 
 def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amount_to_slide: Decimal):
-    # slide late fee.
     unpaid_bills = user_loan.get_unpaid_bills()
     unpaid_bill_ids = [unpaid_bill.table.id for unpaid_bill in unpaid_bills]
     split_info = []
-    late_fees = (
-        session.query(BillFee)
-        .filter(
-            BillFee.user_id == user_loan.user_id,
-            BillFee.name == "late_fee",
-            BillFee.identifier_id.in_(unpaid_bill_ids),
-            BillFee.fee_status == "UNPAID",
-        )
-        .all()
-    )
-    if late_fees:
-        total_late_fee_amount = sum(late_fee.remaining_fee_amount for late_fee in late_fees)
-        total_amount_to_be_adjusted_in_late_fee = min(total_late_fee_amount, total_amount_to_slide)
-        for late_fee in late_fees:
-            bill = next(bill for bill in unpaid_bills if bill.table.id == late_fee.identifier_id)
-            amount_to_slide_based_on_ratio = mul(
-                late_fee.remaining_fee_amount / total_late_fee_amount,
-                total_amount_to_be_adjusted_in_late_fee,
-            )
-            x = {
-                "type": "fee",
-                "bill": bill,
-                "fee": late_fee,
-                "amount_to_adjust": amount_to_slide_based_on_ratio,
-            }
-            split_info.append(x)
-        total_amount_to_slide -= total_amount_to_be_adjusted_in_late_fee
 
-    # slide atm fee.
-    atm_fees = (
+    # higher priority is first
+    fees_priority = ["atm_fee", "late_fee"]
+
+    priority_case_expression = []
+    for index, fee in enumerate(fees_priority):
+        priority_case_expression.append((BillFee.name == fee, index + 1))
+
+    # slide ATM and late fees
+    fees = (
         session.query(BillFee)
         .filter(
             BillFee.user_id == user_loan.user_id,
-            BillFee.name == "atm_fee",
             BillFee.identifier_id.in_(unpaid_bill_ids),
             BillFee.fee_status == "UNPAID",
         )
+        .order_by(case(priority_case_expression, else_=len(fees_priority) + 1))
         .all()
     )
-    if total_amount_to_slide and atm_fees:
-        total_atm_fee_amount = sum(atm_fee.remaining_fee_amount for atm_fee in atm_fees)
-        total_amount_to_be_adjusted_in_atm_fee = min(total_atm_fee_amount, total_amount_to_slide)
-        for atm_fee in atm_fees:
-            bill = next(bill for bill in unpaid_bills if bill.table.id == atm_fee.identifier_id)
+
+    if fees:
+        current_fee_name = ""
+
+        for fee in fees:
+            if fee.name != current_fee_name:
+                current_fee_name = fee.name
+                total_fee_amount = sum(fee.remaining_fee_amount for fee in fees)
+                total_amount_to_be_adjusted_in_fee = min(total_fee_amount, total_amount_to_slide)
+
+            bill = next(bill for bill in unpaid_bills if bill.table.id == fee.identifier_id)
             amount_to_slide_based_on_ratio = mul(
-                atm_fee.remaining_fee_amount / total_atm_fee_amount,
-                total_amount_to_be_adjusted_in_atm_fee,
+                fee.remaining_fee_amount / total_fee_amount,
+                total_amount_to_be_adjusted_in_fee,
             )
             x = {
                 "type": "fee",
                 "bill": bill,
-                "fee": atm_fee,
+                "fee": fee,
                 "amount_to_adjust": amount_to_slide_based_on_ratio,
             }
             split_info.append(x)
-        total_amount_to_slide -= total_amount_to_be_adjusted_in_atm_fee
+        total_amount_to_slide -= total_amount_to_be_adjusted_in_fee
 
     # slide interest.
     total_interest_amount = sum(bill.get_interest_due() for bill in unpaid_bills)
