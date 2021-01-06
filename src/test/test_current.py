@@ -3,6 +3,7 @@ from decimal import Decimal
 from io import StringIO
 
 import alembic
+import pytest
 from _pytest.monkeypatch import MonkeyPatch
 from alembic.command import current as alembic_current
 from dateutil.relativedelta import relativedelta
@@ -3637,6 +3638,7 @@ def test_customer_prepayment_refund(session: Session) -> None:
     assert prepayment_amount == Decimal(0)
 
 
+@pytest.mark.run_these_please
 def test_find_split_to_slide_in_loan(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
