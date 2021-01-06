@@ -232,10 +232,11 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
         session.query(BillFee)
         .filter(
             BillFee.user_id == user_loan.user_id,
+            BillFee.name.in_(fees_priority),
             BillFee.identifier_id.in_(unpaid_bill_ids),
             BillFee.fee_status == "UNPAID",
         )
-        .order_by(case(priority_case_expression, else_=len(fees_priority) + 1))
+        .order_by(case(priority_case_expression))
         .all()
     )
 
