@@ -169,6 +169,11 @@ def payment_received_event(
         actual_payment = payment_received_amt
         payment_received_amt = adjust_payment(session, user_loan, event, debit_book_str)
 
+        # Sometimes payments come in multiple decimal points.
+        # adjust_payment() handles this while sliding, but we do this
+        # for pre_payment
+        payment_received_amt = round(payment_received_amt, 2)
+
         if user_loan.should_reinstate_limit_on_payment:
             user_loan.reinstate_limit_on_payment(event=event, amount=actual_payment)
 
