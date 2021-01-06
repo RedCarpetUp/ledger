@@ -1,21 +1,26 @@
 from decimal import Decimal
 
 from sqlalchemy.orm.session import Session
+from sqlalchemy.sql.sqltypes import DateTime
 
 from rush.card import create_user_product
 from rush.card.base_card import BaseLoan
 from rush.card.transaction_loan import TransactionLoan
 from rush.card.utils import create_user_product_mapping
+from rush.ledger_utils import create_ledger_entry_from_str
 from rush.models import (
     CardTransaction,
+    LedgerTriggerEvent,
     LoanData,
 )
 from rush.payments import payment_received
 from rush.utils import get_current_ist_time
 
 
-def transaction_to_loan(session: Session, txn_id: int, user_id: int) -> TransactionLoan:
-    txn = session.query(CardTransaction).filter(CardTransaction.id == txn_id).scalar()
+def transaction_to_loan(
+    session: Session, txn_id: int, user_id: int, post_date: DateTime
+) -> TransactionLoan:
+    txn: CardTransaction = session.query(CardTransaction).filter(CardTransaction.id == txn_id).scalar()
 
     if not txn:
         return None
@@ -27,9 +32,6 @@ def transaction_to_loan(session: Session, txn_id: int, user_id: int) -> Transact
         .filter(CardTransaction.id == txn_id)
         .scalar()
     )
-
-    # making txn ineligible for billing
-    txn.loan_id = None
 
     user_product = create_user_product_mapping(
         session=session, user_id=user_id, product_type="transaction_loan"
@@ -59,6 +61,7 @@ def transaction_to_loan(session: Session, txn_id: int, user_id: int) -> Transact
         product_order_date=get_current_ist_time().date(),
         user_product_id=user_product.id,
         downpayment_percent=Decimal("0"),
+        credit_book=f"{txn.loan_id}/bill/unbilled/a",
     )
 
     session.flush()

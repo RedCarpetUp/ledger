@@ -291,12 +291,13 @@ def loan_disbursement_event(
     event: LedgerTriggerEvent,
     bill_id: int,
     downpayment_amount: Optional[Decimal] = None,
+    credit_book: Optional[str] = None,
 ) -> None:
     create_ledger_entry_from_str(
         session,
         event_id=event.id,
         debit_book_str=f"{bill_id}/bill/principal_receivable/a",
-        credit_book_str="12345/redcarpet/rc_cash/a",  # TODO: confirm if this right.
+        credit_book_str=credit_book or "12345/redcarpet/rc_cash/a",  # TODO: confirm if this right.
         amount=event.amount,
     )
 

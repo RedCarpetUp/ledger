@@ -158,6 +158,7 @@ class TermLoan(BaseLoan):
             event=event,
             bill_id=loan_data.id,
             downpayment_amount=actual_downpayment_amount,
+            credit_book=kwargs.get("credit_book"),
         )
 
         # create emis for term loan.
