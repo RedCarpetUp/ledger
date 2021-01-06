@@ -1,4 +1,3 @@
-from collections import OrderedDict
 from decimal import Decimal
 from typing import Optional
 
@@ -21,7 +20,6 @@ from rush.ledger_events import (
     _adjust_for_prepayment,
     adjust_for_revenue,
     adjust_non_bill_payments,
-    customer_refund_event,
     reduce_revenue_for_fee_refund,
 )
 from rush.ledger_utils import (
@@ -35,7 +33,6 @@ from rush.models import (
     Fee,
     LedgerEntry,
     LedgerTriggerEvent,
-    PaymentRequestsData,
     PaymentSplit,
 )
 from rush.utils import mul
@@ -226,15 +223,9 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
     )
 
     if all_fees:
-        # Segregate fees based on their type.
-        # Using an OrderedDict so as to maintain the order in which
-        # the fees must be considered during sliding
-        all_fees_by_type = OrderedDict()
+        all_fees_by_type = {}
         for fee in all_fees:
-            if all_fees_by_type.get(fee.name):
-                all_fees_by_type[fee.name].append(fee)
-            else:
-                all_fees_by_type[fee.name] = [fee]
+            all_fees_by_type.setdefault(fee.name, []).append(fee)
 
         # Slide fees type-by-type
         for fee_type, fees in all_fees_by_type.items():
