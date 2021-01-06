@@ -20,7 +20,7 @@ def transaction_to_loan(session: Session, txn_id: int, user_id: int) -> Transact
     if not txn:
         return None
 
-    user_loan = (
+    user_loan: BaseLoan = (
         session.query(BaseLoan)
         .join(LoanData, LoanData.loan_id == BaseLoan.id)
         .join(CardTransaction, CardTransaction.loan_id == LoanData.id)

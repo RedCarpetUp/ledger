@@ -18,18 +18,4 @@ class TransactionLoanBill(TermLoanBill):
 class TransactionLoan(TermLoan):
     bill_class: Type[B] = TermLoanBill
 
-    def get_txn_to_add_in_bill(self, date: DateTime):
-        return (
-            self.session.query(LoanSchedule.total_due_amount)
-            .filter(
-                LoanSchedule.bill_id == None,
-                LoanSchedule.loan_id == self.id,
-                LoanSchedule.due_date < date.date(),
-                LoanSchedule.due_date > date.date() - relativedelta(months=1),
-            )
-            .order_by(LoanSchedule.due_date.desc())
-            .limit(1)
-            .scalar()
-        )
-
     __mapper_args__ = {"polymorphic_identity": "transaction_loan"}
