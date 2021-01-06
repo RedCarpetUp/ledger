@@ -167,28 +167,8 @@ def payment_received_event(
 
     else:
         actual_payment = payment_received_amt
-        split_data = find_split_to_slide_in_loan(session, user_loan, payment_received_amt)
-        for d in split_data:
-            adjust_for_min_max_accounts(d["bill"], d["amount_to_adjust"], event.id)
-            if d["type"] == "fee":
-                adjust_for_revenue(
-                    session=session,
-                    event_id=event.id,
-                    payment_to_adjust_from=d["amount_to_adjust"],
-                    debit_str=debit_book_str,
-                    fee=d["fee"],
-                )
-            if d["type"] in ("interest", "principal"):
-                remaining_amount = _adjust_bill(
-                    session,
-                    d["bill"],
-                    d["amount_to_adjust"],
-                    event.id,
-                    debit_acc_str=debit_book_str,
-                )
-                # The amount to adjust is computed for this bill. It should all settle.
-                assert remaining_amount == 0
-            payment_received_amt -= d["amount_to_adjust"]
+        payment_received_amt = adjust_payment(session, user_loan, event, debit_book_str)
+
         if user_loan.should_reinstate_limit_on_payment:
             user_loan.reinstate_limit_on_payment(event=event, amount=actual_payment)
 
@@ -301,30 +281,9 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
 
 
 def transaction_refund_event(session: Session, user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
-    refund_amount = Decimal(event.amount)
     m2p_pool_account = f"{user_loan.lender_id}/lender/pool_balance/a"
-    split_data = find_split_to_slide_in_loan(session, user_loan, refund_amount)
+    refund_amount = adjust_payment(session, user_loan, event, m2p_pool_account)
 
-    for d in split_data:
-        adjust_for_min_max_accounts(d["bill"], d["amount_to_adjust"], event.id)
-        if d["type"] == "fee":
-            adjust_for_revenue(
-                session=session,
-                event_id=event.id,
-                payment_to_adjust_from=d["amount_to_adjust"],
-                debit_str=m2p_pool_account,
-                fee=d["fee"],
-            )
-        if d["type"] in ("interest", "principal"):
-            remaining_amount = _adjust_bill(
-                session,
-                d["bill"],
-                d["amount_to_adjust"],
-                event.id,
-                debit_acc_str=m2p_pool_account,
-            )
-            assert remaining_amount == 0
-        refund_amount -= d["amount_to_adjust"]
     if refund_amount > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
             session=session,
@@ -343,6 +302,40 @@ def transaction_refund_event(session: Session, user_loan: BaseLoan, event: Ledge
     )
     create_payment_split(session, event)
     slide_payment_to_emis(user_loan, event)
+
+
+def adjust_payment(
+    session: Session,
+    user_loan: BaseLoan,
+    event: LedgerTriggerEvent,
+    debit_book_str: str,
+) -> Decimal:
+    amount_to_adjust = Decimal(event.amount)
+    split_data = find_split_to_slide_in_loan(session, user_loan, amount_to_adjust)
+
+    for data in split_data:
+        adjust_for_min_max_accounts(data["bill"], data["amount_to_adjust"], event.id)
+        if data["type"] == "fee":
+            adjust_for_revenue(
+                session=session,
+                event_id=event.id,
+                payment_to_adjust_from=data["amount_to_adjust"],
+                debit_str=debit_book_str,
+                fee=data["fee"],
+            )
+        if data["type"] in ("interest", "principal"):
+            remaining_amount = _adjust_bill(
+                session,
+                data["bill"],
+                data["amount_to_adjust"],
+                event.id,
+                debit_acc_str=debit_book_str,
+            )
+            # The amount to adjust is computed for this bill. It should all settle.
+            assert remaining_amount == 0
+        amount_to_adjust -= data["amount_to_adjust"]
+
+    return amount_to_adjust
 
 
 def settle_payment_in_bank(
