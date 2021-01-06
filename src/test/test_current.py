@@ -80,6 +80,7 @@ from rush.payments import (
     find_split_to_slide_in_loan,
     payment_received,
     refund_payment,
+    settle_payment_in_bank,
 )
 from rush.recon.revenue_earned import get_revenue_earned_in_a_period
 
@@ -328,17 +329,22 @@ def test_closing_bill(session: Session) -> None:
         user_id=user.id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=user_loan,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
     )
 
     bill_date = parse_date("2019-04-01 00:00:00")
@@ -358,17 +364,22 @@ def test_closing_bill(session: Session) -> None:
         user_id=user.id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=user_loan,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
     )
 
     bill_date = parse_date("2019-05-01 00:00:00")
@@ -388,17 +399,21 @@ def test_closing_bill(session: Session) -> None:
         user_id=user.id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=user_loan,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
     )
 
     create_card_swipe(
@@ -750,17 +765,21 @@ def _partial_payment_bill_1(session: Session) -> None:
         user_id=user_loan.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=user_loan,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
     )
 
     bill = unpaid_bills[0]
@@ -889,17 +908,21 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
         user_id=user_loan.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=user_loan,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
     )
     # assert is_min_paid(session, bill) is True
     min_due = bill.get_remaining_min()
@@ -973,17 +996,21 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
         user_id=user_loan.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=user_loan,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
     )
     bill = unpaid_bills[0]
     # assert is_min_paid(session, bill) is True
@@ -1076,17 +1103,21 @@ def test_is_bill_paid_bill_1(session: Session) -> None:
         user_id=user_loan.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=user_loan,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
     )
     is_it_paid_now = is_bill_closed(session, bill)
     assert is_it_paid_now is True
@@ -1464,17 +1495,21 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
         user_id=user_loan.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=user_loan,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
     )
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
@@ -1645,12 +1680,10 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         user_id=uc.id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=refund_date
     )
-    refund_payment(session, uc, amount, refund_date, payment_request_id)
+    refund_payment(session, uc, payment_requests_data)
 
     create_card_swipe(
         session=session,
@@ -1991,12 +2024,10 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         user_id=uc.id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=refund_date
     )
-    refund_payment(session, uc, amount, refund_date, payment_request_id)
+    refund_payment(session, uc, payment_requests_data)
     # Merchant Refund
     refund_date = parse_date("2020-06-17 00:21:23")
     amount = Decimal(160)
@@ -2008,12 +2039,10 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         user_id=uc.id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=refund_date
     )
-    refund_payment(session, uc, amount, refund_date, payment_request_id)
+    refund_payment(session, uc, payment_requests_data)
     # Merchant Refund
     refund_date = parse_date("2020-06-18 06:54:58")
     amount = Decimal(1)
@@ -2025,12 +2054,10 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         user_id=uc.id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=refund_date
     )
-    refund_payment(session, uc, amount, refund_date, payment_request_id)
+    refund_payment(session, uc, payment_requests_data)
     # Merchant Refund
     refund_date = parse_date("2020-06-18 06:54:59")
     amount = Decimal(1)
@@ -2042,12 +2069,10 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         user_id=uc.id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=refund_date
     )
-    refund_payment(session, uc, amount, refund_date, payment_request_id)
+    refund_payment(session, uc, payment_requests_data)
     # Merchant Refund
     refund_date = parse_date("2020-06-18 06:54:59")
     amount = Decimal(1)
@@ -2059,12 +2084,10 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         user_id=uc.id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=refund_date
     )
-    refund_payment(session, uc, amount, refund_date, payment_request_id)
+    refund_payment(session, uc, payment_requests_data)
     # Merchant Refund
     refund_date = parse_date("2020-06-18 06:55:00")
     amount = Decimal(1)
@@ -2076,12 +2099,10 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         user_id=uc.id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=refund_date
     )
-    refund_payment(session, uc, amount, refund_date, payment_request_id)
+    refund_payment(session, uc, payment_requests_data)
 
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{uc.loan_id}/loan/lender_payable/l"
@@ -2127,17 +2148,21 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         user_id=uc.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=uc,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=uc,
     )
     # Do Partial Payment
     payment_date = parse_date("2020-08-02 14:11:06")
@@ -2150,17 +2175,21 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         user_id=uc.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=uc,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=uc,
     )
 
     # Check if amount is adjusted correctly in schedule
@@ -2219,17 +2248,21 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
         user_id=user_loan.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=user_loan,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
     )
 
     emis = user_loan.get_loan_schedule()
@@ -2277,17 +2310,21 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
         user_id=user_loan.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=user_loan,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
     )
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
@@ -2353,17 +2390,21 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
         user_id=user_loan.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=user_loan,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
     )
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
@@ -2422,17 +2463,21 @@ def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
         user_id=user_loan.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=user_loan,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
     )
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
@@ -2478,17 +2523,21 @@ def _pay_minimum_amount_bill_2(session: Session) -> None:
         user_id=user_loan.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=user_loan,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
     )
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
@@ -2522,13 +2571,10 @@ def test_refund_1(session: Session) -> None:
         user_id=user_loan.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=refund_date
     )
-
-    refund_payment(session, user_loan, amount, refund_date, payment_request_id)
+    refund_payment(session, user_loan, payment_requests_data)
 
     _, merchant_refund_off_balance = get_account_balance_from_str(
         session, book_string=f"{user_loan.loan_id}/loan/refund_off_balance/l"
@@ -2555,13 +2601,10 @@ def test_refund_1(session: Session) -> None:
         user_id=user_loan.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=refund_date
     )
-
-    refund_payment(session, user_loan, amount, refund_date, payment_request_id)
+    refund_payment(session, user_loan, payment_requests_data)
 
     _, merchant_refund_off_balance = get_account_balance_from_str(
         session, book_string=f"{user_loan.loan_id}/loan/refund_off_balance/l"
@@ -2740,17 +2783,21 @@ def test_prepayment(session: Session) -> None:
         user_id=uc.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=uc,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=uc,
     )
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
@@ -3066,17 +3113,21 @@ def test_moratorium_schedule(session: Session) -> None:
         user_id=user_loan.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=user_loan,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
     )
 
     _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
@@ -3642,18 +3693,23 @@ def test_excess_payment_in_future_emis(session: Session) -> None:
         user_id=user_loan.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=user_loan,
-        payment_amount=amount,
-        payment_date=payment_date,
-        payment_request_id=payment_request_id,
+        payment_request_data=payment_requests_data,
     )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
+    )
+
     emis = user_loan.get_loan_schedule()
     assert emis[0].payment_status == "Paid"
     assert emis[1].payment_status == "Paid"
@@ -3715,17 +3771,21 @@ def test_one_rupee_leniency(session: Session) -> None:
         user_id=user_loan.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=user_loan,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
     )
     emis = user_loan.get_loan_schedule()
     assert emis[0].payment_status == "Paid"
@@ -3751,17 +3811,21 @@ def test_one_rupee_leniency(session: Session) -> None:
         user_id=user_loan.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=user_loan,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
     )
 
     emis = user_loan.get_loan_schedule()
@@ -3805,18 +3869,23 @@ def test_readjust_future_payment_with_new_swipe(session: Session) -> None:
         user_id=user_loan.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=user_loan,
-        payment_amount=amount,
-        payment_date=payment_date,
-        payment_request_id=payment_request_id,
+        payment_request_data=payment_requests_data,
     )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
+    )
+
     emis = user_loan.get_loan_schedule()
     assert emis[0].payment_status == "Paid"
     assert emis[1].payment_status == "Paid"
@@ -3884,17 +3953,21 @@ def test_readjust_future_payment_with_extension(session: Session) -> None:
         user_id=user_loan.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=user_loan,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
     )
 
     emis = user_loan.get_loan_schedule()
@@ -3965,17 +4038,21 @@ def test_customer_fee_refund(session: Session) -> None:
         user_id=user_loan.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=user_loan,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
     )
 
     bill_fee = session.query(Fee).filter_by(id=fee_due.id).one_or_none()
@@ -4043,17 +4120,21 @@ def test_customer_prepayment_refund(session: Session) -> None:
         user_id=user_loan.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=user_loan,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
     )
 
     _, prepayment_amount = get_account_balance_from_str(

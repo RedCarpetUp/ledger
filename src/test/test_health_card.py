@@ -29,7 +29,10 @@ from rush.models import (
     Product,
     User,
 )
-from rush.payments import payment_received
+from rush.payments import (
+    payment_received,
+    settle_payment_in_bank,
+)
 
 
 def create_lenders(session: Session) -> None:
@@ -458,17 +461,21 @@ def test_mixed_payment_received(session: Session) -> None:
         user_id=uc.id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=uc,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=uc,
     )
 
     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")
@@ -554,17 +561,21 @@ def test_medical_payment_received(session: Session) -> None:
         user_id=uc.id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=uc,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=uc,
     )
 
     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")
@@ -649,17 +660,21 @@ def test_non_medical_payment_received(session: Session) -> None:
         user_id=uc.id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=uc,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=uc,
     )
 
     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")

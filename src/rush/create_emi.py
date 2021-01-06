@@ -403,7 +403,7 @@ def update_journal_entry(
             .first()
         )
         gateway_expenses = payment_requests_data[0]
-        settlement_date = payment_requests_data[1] or event.post_date + relativedelta(days=1)
+        settlement_date = payment_requests_data[1]
         payment_split_data = (
             session.query(PaymentSplit.component, PaymentSplit.amount_settled)
             .filter(
@@ -430,7 +430,7 @@ def update_journal_entry(
                 p_type = get_journal_entry_ptype(event.name)
             if event.amount == 0:
                 continue
-            if event.extra_details["payment_type"]:
+            if event.extra_details["payment_type"] not in ("collection"):
                 loan_id = None
                 p_type = "CF-Customer"
             create_journal_entry(

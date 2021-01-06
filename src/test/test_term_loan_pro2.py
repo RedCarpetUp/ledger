@@ -133,23 +133,18 @@ def test_create_term_loan(session: Session) -> None:
     payment_request_id = "dummy_downpayment"
     payment_request_data(
         session=session,
-        type="collection",
+        type="downpayment",
         payment_request_amount=_downpayment_amount,
         user_id=user_product.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=_downpayment_amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=None,
-        payment_amount=_downpayment_amount,
-        payment_date=payment_date,
-        payment_request_id=payment_request_id,
-        payment_type="downpayment",
+        payment_request_data=payment_requests_data,
         user_product_id=user_product.id,
         lender_id=62311,
     )
@@ -248,23 +243,18 @@ def test_create_term_loan_2(session: Session) -> None:
     payment_request_id = "dummy_downpayment"
     payment_request_data(
         session=session,
-        type="collection",
+        type="downpayment",
         payment_request_amount=_downpayment_amount,
         user_id=user_product.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=_downpayment_amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=None,
-        payment_amount=_downpayment_amount,
-        payment_date=payment_date,
-        payment_request_id=payment_request_id,
-        payment_type="downpayment",
+        payment_request_data=payment_requests_data,
         user_product_id=user_product.id,
         lender_id=62311,
     )

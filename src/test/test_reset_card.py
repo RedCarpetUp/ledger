@@ -111,23 +111,18 @@ def test_create_term_loan(session: Session) -> None:
     payment_request_id = "dummy_reset_fee"
     payment_request_data(
         session=session,
-        type="collection",
+        type="reset_joining_fees",
         payment_request_amount=amount,
         user_id=user_product.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=None,
-        payment_amount=amount,
-        payment_date=payment_date,
-        payment_request_id=payment_request_id,
-        payment_type="reset_joining_fees",
+        payment_request_data=payment_requests_data,
         user_product_id=user_product.id,
         lender_id=1756833,
     )
@@ -234,23 +229,18 @@ def test_reset_loan_limit_unlock_success(session: Session) -> None:
     payment_request_id = "dummy_reset_fee"
     payment_request_data(
         session=session,
-        type="collection",
+        type="reset_joining_fees",
         payment_request_amount=amount,
         user_id=user_product.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=None,
-        payment_amount=amount,
-        payment_date=payment_date,
-        payment_request_id=payment_request_id,
-        payment_type="reset_joining_fees",
+        payment_request_data=payment_requests_data,
         user_product_id=user_product.id,
         lender_id=1756833,
     )
@@ -320,23 +310,18 @@ def test_reset_loan_limit_unlock_error(session: Session) -> None:
     payment_request_id = "dummy_reset_fee"
     payment_request_data(
         session=session,
-        type="collection",
+        type="reset_joining_fees",
         payment_request_amount=amount,
         user_id=user_product.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=None,
-        payment_amount=amount,
-        payment_date=payment_date,
-        payment_request_id=payment_request_id,
-        payment_type="reset_joining_fees",
+        payment_request_data=payment_requests_data,
         user_product_id=user_product.id,
         lender_id=1756833,
     )

@@ -3,6 +3,7 @@ from typing import Optional
 
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
+from pendulum.parser import parse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -44,27 +45,22 @@ from rush.writeoff_and_recovery import recovery_event
 def payment_received(
     session: Session,
     user_loan: Optional[BaseLoan],
-    payment_amount: Decimal,
-    payment_date: DateTime,
-    payment_request_id: str,
-    payment_type: Optional[str] = None,
+    payment_request_data: PaymentRequestsData,
     user_product_id: Optional[int] = None,
     lender_id: Optional[int] = None,
     skip_closing: bool = False,
 ) -> None:
     assert user_loan is not None or lender_id is not None
     assert user_loan is not None or user_product_id is not None
-    user_product = session.query(UserProduct).filter_by(id=user_product_id).scalar()
-    user_id = user_loan.user_id if user_loan else user_product.user_id
 
     lt = LedgerTriggerEvent(
         name="payment_received",
         loan_id=user_loan.loan_id if user_loan else None,
-        amount=payment_amount,
-        post_date=payment_date,
+        amount=payment_request_data.payment_request_amount,
+        post_date=payment_request_data.intermediary_payment_date,
         extra_details={
-            "payment_request_id": payment_request_id,
-            "payment_type": payment_type,
+            "payment_request_id": payment_request_data.payment_request_id,
+            "payment_type": payment_request_data.type,
             "user_product_id": user_product_id if user_product_id else user_loan.user_product_id,
             "lender_id": user_loan.lender_id if user_loan else lender_id,
         },
@@ -82,20 +78,12 @@ def payment_received(
         lender_id=lender_id if lender_id else user_loan.lender_id,
     )
 
-    update_journal_entry(user_loan=user_loan, event=lt, user_id=user_id, session=session)
     # TODO: check if this code is needed for downpayment, since there is no user loan at that point of time.
-    if payment_type in ("downpayment", "card_activation_fee", "reset_joining_fees"):
+    if payment_request_data.type in ("downpayment", "card_activation_fee", "reset_joining_fees"):
         return
 
-    run_anomaly(session=session, user_loan=user_loan, event_date=payment_date)
-    gateway_charges = Decimal("0.5")
-    settle_payment_in_bank(
-        session=session,
-        payment_request_id=payment_request_id,
-        gateway_expenses=gateway_charges,
-        gross_payment_amount=payment_amount,
-        settlement_date=payment_date + relativedelta(days=2),
-        user_loan=user_loan,
+    run_anomaly(
+        session=session, user_loan=user_loan, event_date=payment_request_data.intermediary_payment_date
     )
 
     # Update dpd
@@ -103,25 +91,26 @@ def payment_received(
 
 
 def refund_payment(
-    session: Session,
-    user_loan: BaseLoan,
-    payment_amount: Decimal,
-    payment_date: DateTime,
-    payment_request_id: str,
+    session: Session, user_loan: BaseLoan, payment_request_data: PaymentRequestsData
 ) -> None:
     lt = LedgerTriggerEvent(
         name="transaction_refund",
         loan_id=user_loan.loan_id,
-        amount=payment_amount,
-        post_date=payment_date,
-        extra_details={"payment_request_id": payment_request_id, "payment_type": None},
+        amount=payment_request_data.payment_request_amount,
+        post_date=payment_request_data.intermediary_payment_date,
+        extra_details={
+            "payment_request_id": payment_request_data.payment_request_id,
+            "payment_type": payment_request_data.type,
+        },
     )
     session.add(lt)
     session.flush()
 
     # Checking if bill is generated or not. if not then reduce from unbilled else treat as payment.
     transaction_refund_event(session=session, user_loan=user_loan, event=lt)
-    run_anomaly(session=session, user_loan=user_loan, event_date=payment_date)
+    run_anomaly(
+        session=session, user_loan=user_loan, event_date=payment_request_data.intermediary_payment_date
+    )
 
     # Update dpd
     update_event_with_dpd(user_loan=user_loan, event=lt)
@@ -386,6 +375,14 @@ def settle_payment_in_bank(
     session.flush()
 
     payment_settlement_event(session=session, user_loan=user_loan, event=event)
+
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].as_string() == payment_request_id)
+        .first()
+    )
+
+    update_journal_entry(user_loan=user_loan, event=payment_ledger_event)
 
 
 def payment_settlement_event(session: Session, user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:

@@ -1,9 +1,11 @@
+from datetime import date
 from decimal import Decimal
 from typing import (
     Any,
     Dict,
 )
 
+from dateutil.relativedelta import relativedelta
 from pendulum import now as current_time
 from sqlalchemy.orm import Session
 
@@ -16,7 +18,7 @@ def payment_request_data(
     payment_request_amount: Decimal,
     user_id: int,
     payment_request_id: str,
-    **kwargs: str,
+    **kwargs,
 ) -> PaymentRequestsData:
     """
     populate v3_payment_requests_data table
@@ -56,8 +58,10 @@ def payment_request_data(
     return data
 
 
-def pay_payment_request(session: Session, amount: Decimal, payment_request_id: str) -> Dict[str, Any]:
-    gateway_charges = 0.5
+def pay_payment_request(
+    session: Session, payment_request_id: str, payment_date: date
+) -> PaymentRequestsData:
+    gateway_charges = Decimal(0.5)
     payment_gateway_id = 23
 
     payment_data = (
@@ -65,25 +69,22 @@ def pay_payment_request(session: Session, amount: Decimal, payment_request_id: s
         .filter(PaymentRequestsData.payment_request_id == payment_request_id)
         .first()
     )
+
+    payment_data.intermediary_payment_date = payment_date
+    if payment_data.type == "merchant_refund":
+        payment_data.payment_received_in_bank_date = payment_date
+    else:
+        payment_data.payment_received_in_bank_date = payment_date + relativedelta(days=2)
     payment_data.payment_execution_charges = gateway_charges
     payment_data.payment_gateway_id = payment_gateway_id
     payment_data.payment_request_status = "PAID"
     payment_data.payment_received_in_bank_date = current_time().replace(tzinfo=None)
-    payment_data.extra_details.update(
+    payment_data.gateway_response.update(
         {
-            "pay_id": "sdfsadf",
-            "gateway_charges": gateway_charges,
-            "amount": amount,
-            "payment_gateway_id": payment_gateway_id,
-            "payment_request_id": payment_request_id,
+            "id": "unique_id",
+            "amount": payment_data.payment_request_amount,
+            "txn_date": payment_date,
         }
     )
 
-    return {
-        "status": "success",
-        "id": "sdfsadf",
-        "gateway_charges": gateway_charges,
-        "amount": amount,
-        "payment_gateway_id": payment_gateway_id,
-        "payment_request_id": payment_request_id,
-    }
+    return payment_data

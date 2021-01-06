@@ -22,7 +22,10 @@ from rush.models import (
     Product,
     User,
 )
-from rush.payments import payment_received
+from rush.payments import (
+    payment_received,
+    settle_payment_in_bank,
+)
 from rush.recon.revenue_earned import get_revenue_earned_in_a_period
 
 
@@ -245,17 +248,21 @@ def test_dmi_recon_process_1(session: Session) -> None:
         user_id=user_loan_raghav.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=user_loan_raghav,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan_raghav,
     )
 
     payment_date = parse_date("2020-02-13 15:23:20")
@@ -268,17 +275,21 @@ def test_dmi_recon_process_1(session: Session) -> None:
         user_id=user_loan_ananth.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=user_loan_ananth,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan_ananth,
     )
 
     # Got adjusted in principal because interest is not accrued yet.
@@ -319,17 +330,21 @@ def test_dmi_recon_process_1(session: Session) -> None:
         user_id=user_loan_raghav.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=user_loan_raghav,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan_raghav,
     )
 
     payment_date = parse_date("2020-02-25 15:23:20")
@@ -342,17 +357,21 @@ def test_dmi_recon_process_1(session: Session) -> None:
         user_id=user_loan_ananth.user_id,
         payment_request_id=payment_request_id,
     )
-    pay_payment_request(
-        session=session,
-        amount=amount,
-        payment_request_id=payment_request_id,
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=user_loan_ananth,
-        payment_amount=amount,
-        payment_date=payment_date,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
         payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan_ananth,
     )
 
     _, interest_due_raghav = get_account_balance_from_str(
