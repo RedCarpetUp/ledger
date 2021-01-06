@@ -227,8 +227,8 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
 
     if all_fees:
         # Segregate fees based on their type.
-        # Using an OrderedDict to maintain the order in which
-        # the fees must be split.
+        # Using an OrderedDict so as to maintain the order in which
+        # the fees must be considered during sliding
         all_fees_by_type = OrderedDict()
         for fee in all_fees:
             if all_fees_by_type.get(fee.name):
