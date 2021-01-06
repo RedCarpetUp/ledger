@@ -1,3 +1,4 @@
+from collections import OrderedDict
 from decimal import Decimal
 from typing import Optional
 
@@ -212,8 +213,7 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
     for index, fee in enumerate(fees_priority):
         priority_case_expression.append((BillFee.name == fee, index + 1))
 
-    # slide ATM and late fees
-    fees = (
+    all_fees = (
         session.query(BillFee)
         .filter(
             BillFee.user_id == user_loan.user_id,
@@ -225,28 +225,36 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
         .all()
     )
 
-    if fees:
-        current_fee_name = ""
+    if all_fees:
+        # Segregate fees based on their type.
+        # Using an OrderedDict to maintain the order in which
+        # the fees must be split.
+        all_fees_by_type = OrderedDict()
+        for fee in all_fees:
+            if all_fees_by_type.get(fee.name):
+                all_fees_by_type[fee.name].append(fee)
+            else:
+                all_fees_by_type[fee.name] = [fee]
 
-        for fee in fees:
-            if fee.name != current_fee_name:
-                current_fee_name = fee.name
-                total_fee_amount = sum(fee.remaining_fee_amount for fee in fees)
-                total_amount_to_be_adjusted_in_fee = min(total_fee_amount, total_amount_to_slide)
+        # Slide fees type-by-type
+        for fee_type, fees in all_fees_by_type.items():
+            total_fee_amount = sum(fee.remaining_fee_amount for fee in fees)
+            total_amount_to_be_adjusted_in_fee = min(total_fee_amount, total_amount_to_slide)
 
-            bill = next(bill for bill in unpaid_bills if bill.table.id == fee.identifier_id)
-            amount_to_slide_based_on_ratio = mul(
-                fee.remaining_fee_amount / total_fee_amount,
-                total_amount_to_be_adjusted_in_fee,
-            )
-            x = {
-                "type": "fee",
-                "bill": bill,
-                "fee": fee,
-                "amount_to_adjust": amount_to_slide_based_on_ratio,
-            }
-            split_info.append(x)
-        total_amount_to_slide -= total_amount_to_be_adjusted_in_fee
+            for fee in fees:
+                bill = next(bill for bill in unpaid_bills if bill.table.id == fee.identifier_id)
+                amount_to_slide_based_on_ratio = mul(
+                    fee.remaining_fee_amount / total_fee_amount,
+                    total_amount_to_be_adjusted_in_fee,
+                )
+                x = {
+                    "type": "fee",
+                    "bill": bill,
+                    "fee": fee,
+                    "amount_to_adjust": amount_to_slide_based_on_ratio,
+                }
+                split_info.append(x)
+            total_amount_to_slide -= total_amount_to_be_adjusted_in_fee
 
     # slide interest.
     total_interest_amount = sum(bill.get_interest_due() for bill in unpaid_bills)
