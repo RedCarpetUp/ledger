@@ -100,7 +100,7 @@ class TermLoan(BaseLoan):
                 LedgerTriggerEvent.extra_details["payment_type"].astext == "downpayment",
             )
             .scalar()
-        )
+        ) or 0
 
         loan = cls(
             session=session,
