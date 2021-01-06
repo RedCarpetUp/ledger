@@ -1,8 +1,5 @@
 from decimal import Decimal
-from typing import (
-    List,
-    Optional,
-)
+from typing import Optional
 
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
@@ -247,46 +244,40 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
         total_amount_to_slide -= total_amount_to_be_adjusted_in_fee
 
     # slide interest.
-    split_info, total_amount_to_slide = slide_principal_or_interest(
-        "interest", unpaid_bills, total_amount_to_slide, split_info
-    )
-
-    # slide principal.
-    split_info, _ = slide_principal_or_interest(
-        "principal", unpaid_bills, total_amount_to_slide, split_info
-    )
-
-    return split_info
-
-
-def slide_principal_or_interest(
-    what: str, unpaid_bills: List[BaseBill], total_amount_to_slide: Decimal, split_info: List
-) -> (List, Decimal):
-    assert what in ["principal", "interest"]
-
-    total_due_amount = sum(
-        bill.get_principal_due() if what == "principal" else bill.get_interest_due()
-        for bill in unpaid_bills
-    )
-
-    if total_amount_to_slide > 0 and total_due_amount > 0:
-        total_amount_to_be_adjusted = min(total_due_amount, total_amount_to_slide)
+    total_interest_amount = sum(bill.get_interest_due() for bill in unpaid_bills)
+    if total_amount_to_slide > 0 and total_interest_amount > 0:
+        total_amount_to_be_adjusted_in_interest = min(total_interest_amount, total_amount_to_slide)
         for bill in unpaid_bills:
             amount_to_slide_based_on_ratio = mul(
-                (bill.get_principal_due() if what == "principal" else bill.get_interest_due())
-                / total_due_amount,
-                total_amount_to_be_adjusted,
+                bill.get_interest_due() / total_interest_amount, total_amount_to_be_adjusted_in_interest
             )
-            if amount_to_slide_based_on_ratio > 0:
+            if amount_to_slide_based_on_ratio > 0:  # will be 0 for 0 bill with late fee.
                 x = {
-                    "type": what,
+                    "type": "interest",
                     "bill": bill,
                     "amount_to_adjust": amount_to_slide_based_on_ratio,
                 }
                 split_info.append(x)
-        total_amount_to_slide -= total_amount_to_be_adjusted
+        total_amount_to_slide -= total_amount_to_be_adjusted_in_interest
 
-    return split_info, total_amount_to_slide
+    # slide principal.
+    total_principal_amount = sum(bill.get_principal_due() for bill in unpaid_bills)
+    if total_amount_to_slide > 0 and total_principal_amount > 0:
+        total_amount_to_be_adjusted_in_principal = min(total_principal_amount, total_amount_to_slide)
+        for bill in unpaid_bills:
+            amount_to_slide_based_on_ratio = mul(
+                bill.get_principal_due() / total_principal_amount,
+                total_amount_to_be_adjusted_in_principal,
+            )
+            if amount_to_slide_based_on_ratio > 0:
+                x = {
+                    "type": "principal",
+                    "bill": bill,
+                    "amount_to_adjust": amount_to_slide_based_on_ratio,
+                }
+                split_info.append(x)
+        total_amount_to_slide -= total_amount_to_be_adjusted_in_principal
+    return split_info
 
 
 def transaction_refund_event(session: Session, user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
