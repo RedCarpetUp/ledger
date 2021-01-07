@@ -8,7 +8,11 @@ from rush.card.term_loan import (
     TermLoan,
     TermLoanBill,
 )
-from rush.models import LoanSchedule
+from rush.ledger_utils import create_ledger_entry_from_str
+from rush.models import (
+    LedgerTriggerEvent,
+    LoanSchedule,
+)
 
 
 class TransactionLoanBill(TermLoanBill):
@@ -17,5 +21,28 @@ class TransactionLoanBill(TermLoanBill):
 
 class TransactionLoan(TermLoan):
     bill_class: Type[B] = TermLoanBill
+
+    def disbursement_event(self, **kwargs):
+        event = LedgerTriggerEvent(
+            performed_by=kwargs["user_id"],
+            name="transaction_to_loan",
+            loan_id=kwargs["loan_id"],
+            post_date=kwargs["product_order_date"],  # what is post_date?
+            amount=kwargs["amount"],
+        )
+
+        self.session.add(event)
+        self.session.flush()
+
+        bill_id = kwargs["loan_data"].id
+        credit_book = kwargs["credit_book"]
+
+        create_ledger_entry_from_str(
+            session=self.session,
+            event_id=event.id,
+            debit_book_str=f"{bill_id}/bill/principal_receivable/a",
+            credit_book_str=credit_book,
+            amount=kwargs["amount"],
+        )
 
     __mapper_args__ = {"polymorphic_identity": "transaction_loan"}

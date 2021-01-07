@@ -251,6 +251,28 @@ class BaseLoan(Loan):
 
         return loan
 
+    def disbursement_event(self, **kwargs):
+        event = LedgerTriggerEvent(
+            performed_by=kwargs["user_id"],
+            name="termloan_disbursal_event",
+            loan_id=kwargs["loan_id"],
+            post_date=kwargs["product_order_date"],  # what is post_date?
+            amount=kwargs["amount"],
+        )
+
+        self.session.add(event)
+        self.session.flush()
+
+        from rush.ledger_events import loan_disbursement_event
+
+        loan_disbursement_event(
+            session=self.session,
+            loan=self,
+            event=event,
+            bill_id=kwargs["loan_data"].id,
+            downpayment_amount=kwargs["actual_downpayment_amount"],
+        )
+
     def reinstate_limit_on_payment(self, event: LedgerTriggerEvent, amount: Decimal) -> None:
         assert self.should_reinstate_limit_on_payment == True
 
