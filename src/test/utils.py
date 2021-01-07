@@ -18,7 +18,7 @@ def payment_request_data(
     payment_request_amount: Decimal,
     user_id: int,
     payment_request_id: str,
-    **kwargs,
+    **kwargs: Dict[str, Any],
 ) -> PaymentRequestsData:
     """
     populate v3_payment_requests_data table

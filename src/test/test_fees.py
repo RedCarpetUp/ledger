@@ -4,10 +4,10 @@ from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
 from rush.card import (
-    HealthCard,
     create_user_product,
     get_user_product,
 )
+from rush.card.health_card import HealthCard
 from rush.card.utils import (
     add_pre_product_fee,
     add_reload_fee,

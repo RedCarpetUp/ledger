@@ -26,6 +26,7 @@ from rush.models import (
     CardNames,
     CardTransaction,
     Lenders,
+    Loan,
     Product,
     User,
 )
@@ -71,7 +72,7 @@ def create_user(session: Session) -> None:
     session.flush()
 
 
-def create_test_user_loan(session: Session) -> HealthCard:
+def create_test_user_loan(session: Session) -> Loan:
     uc = create_user_product(
         session=session,
         user_id=3,

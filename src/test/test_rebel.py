@@ -4,7 +4,6 @@ from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
 from rush.card import (
-    RebelCard,
     create_user_product,
     get_product_class,
     get_user_product,
@@ -94,6 +93,7 @@ def test_rubpro_user(session: Session) -> None:
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 1200
     user_loan = get_user_product(session, 4369, card_type="rebel")
+    assert user_loan is not None
     bill_date = parse_date("2020-12-01 00:00:00")
     bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
     latest_bill = user_loan.get_latest_bill()

@@ -41,6 +41,8 @@ from rush.models import (
 class BaseBill:
     session: Session = None
     table: LoanData = None
+    id = None
+    bill_start_date = None
     user_loan: "BaseLoan"
     round_emi_to = "one"
 
