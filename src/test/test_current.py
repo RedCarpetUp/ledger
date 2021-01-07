@@ -3688,19 +3688,123 @@ def test_find_split_to_slide_in_loan(session: Session) -> None:
     )
     accrue_late_charges(session, user_loan, parse_date("2020-12-16"), Decimal(118))
 
-    payment_splt_info = find_split_to_slide_in_loan(session, user_loan, Decimal(150))
-    assert len(payment_splt_info) == 2
-    assert payment_splt_info[0]["type"] == "fee"
-    assert payment_splt_info[0]["amount_to_adjust"] == Decimal(75)
+    payment_split_info = find_split_to_slide_in_loan(session, user_loan, Decimal(150))
+    assert len(payment_split_info) == 2
+    assert payment_split_info[0]["type"] == "fee"
+    assert payment_split_info[0]["amount_to_adjust"] == Decimal(75)
 
-    payment_splt_info = find_split_to_slide_in_loan(session, user_loan, Decimal(336))
-    assert len(payment_splt_info) == 6
-    assert payment_splt_info[0]["type"] == "fee"
-    assert payment_splt_info[0]["amount_to_adjust"] == Decimal(118)
-    assert payment_splt_info[2]["type"] == "interest"
-    assert payment_splt_info[2]["amount_to_adjust"] == Decimal("61.34")
-    assert payment_splt_info[3]["amount_to_adjust"] == Decimal("36")
-    assert payment_splt_info[4]["type"] == "principal"
-    assert payment_splt_info[4]["amount_to_adjust"] == Decimal("1.21")
-    assert payment_splt_info[5]["type"] == "principal"
-    assert payment_splt_info[5]["amount_to_adjust"] == Decimal("1.45")
+    payment_split_info = find_split_to_slide_in_loan(session, user_loan, Decimal(336))
+    assert len(payment_split_info) == 6
+    assert payment_split_info[0]["type"] == "fee"
+    assert payment_split_info[0]["amount_to_adjust"] == Decimal(118)
+    assert payment_split_info[2]["type"] == "interest"
+    assert payment_split_info[2]["amount_to_adjust"] == Decimal("61.34")
+    assert payment_split_info[3]["amount_to_adjust"] == Decimal("36")
+    assert payment_split_info[4]["type"] == "principal"
+    assert payment_split_info[4]["amount_to_adjust"] == Decimal("1.21")
+    assert payment_split_info[5]["type"] == "principal"
+    assert payment_split_info[5]["amount_to_adjust"] == Decimal("1.45")
+
+
+def test_payment_split_for_multiple_fees_of_multiple_types(session: Session) -> None:
+    test_lenders(session)
+    card_db_updates(session)
+    user = User(
+        id=99,
+        performed_by=123,
+    )
+    session.add(user)
+    session.flush()
+
+    user_loan = create_user_product(
+        session=session,
+        user_id=user.id,
+        card_activation_date=parse_date("2020-10-02").date(),
+        card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
+        lender_id=62311,
+    )
+
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-10-04 19:23:11"),
+        amount=Decimal(1200),
+        description="WWW YESBANK IN         GURGAON       IND",
+        source="ATM",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="1234567",
+    )
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-10-22 20:29:25"),
+        amount=Decimal(2500),
+        description="WWW YESBANK IN         GURGAON       IND",
+        source="ATM",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="1234567",
+    )
+    oct_bill = bill_generate(user_loan=user_loan, creation_time=parse_date("2020-12-01"))
+
+    accrue_interest_on_all_bills(
+        session=session,
+        post_date=oct_bill.table.bill_due_date + relativedelta(days=1),
+        user_loan=user_loan,
+    )
+    accrue_late_charges(session, user_loan, parse_date("2020-11-16"), Decimal(118))
+
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-11-04 19:23:11"),
+        amount=Decimal(500),
+        description="Flipkart.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="1234567",
+    )
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-11-15 19:23:11"),
+        amount=Decimal(800),
+        description="Amazon.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="1234567",
+    )
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-11-24 16:29:25"),
+        amount=Decimal(1400),
+        description="WWW YESBANK IN         GURGAON       IND",
+        source="ATM",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="1234567",
+    )
+    nov_bill = bill_generate(user_loan=user_loan, creation_time=parse_date("2020-12-01"))
+
+    accrue_interest_on_all_bills(
+        session=session,
+        post_date=nov_bill.table.bill_due_date + relativedelta(days=1),
+        user_loan=user_loan,
+    )
+    accrue_late_charges(session, user_loan, parse_date("2020-12-16"), Decimal(118))
+
+    payment_split_info = find_split_to_slide_in_loan(session, user_loan, Decimal(150))
+    assert len(payment_split_info) == 4
+    assert payment_split_info[0]["type"] == "fee"
+    assert payment_split_info[0]["fee"].name == "atm_fee"
+    assert payment_split_info[0]["amount_to_adjust"] == Decimal("87.32")
+
+    assert payment_split_info[1]["type"] == "fee"
+    assert payment_split_info[1]["fee"].name == "atm_fee"
+    assert payment_split_info[1]["amount_to_adjust"] == Decimal("33.04")
+
+    assert payment_split_info[2]["type"] == "fee"
+    assert payment_split_info[2]["fee"].name == "late_fee"
+    assert payment_split_info[2]["amount_to_adjust"] == Decimal("14.82")
+
+    assert payment_split_info[3]["type"] == "fee"
+    assert payment_split_info[3]["fee"].name == "late_fee"
+    assert payment_split_info[3]["amount_to_adjust"] == Decimal("14.82")
