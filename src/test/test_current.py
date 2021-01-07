@@ -3745,7 +3745,7 @@ def test_payment_split_for_multiple_fees_of_multiple_types(session: Session) -> 
         txn_ref_no="dummy_txn_ref_no",
         trace_no="1234567",
     )
-    oct_bill = bill_generate(user_loan=user_loan, creation_time=parse_date("2020-12-01"))
+    oct_bill = bill_generate(user_loan=user_loan, creation_time=parse_date("2020-11-01"))
 
     accrue_interest_on_all_bills(
         session=session,
@@ -3753,6 +3753,22 @@ def test_payment_split_for_multiple_fees_of_multiple_types(session: Session) -> 
         user_loan=user_loan,
     )
     accrue_late_charges(session, user_loan, parse_date("2020-11-16"), Decimal(118))
+
+    oct_late_fee = (
+        session.query(BillFee)
+        .filter(BillFee.identifier_id == oct_bill.id, BillFee.name == "late_fee")
+        .one_or_none()
+    )
+
+    assert oct_late_fee.remaining_fee_amount == Decimal(118)
+
+    oct_atm_fee = (
+        session.query(BillFee)
+        .filter(BillFee.identifier_id == oct_bill.id, BillFee.name == "atm_fee")
+        .one_or_none()
+    )
+
+    assert oct_atm_fee.remaining_fee_amount == Decimal("87.32")
 
     create_card_swipe(
         session=session,
@@ -3790,6 +3806,22 @@ def test_payment_split_for_multiple_fees_of_multiple_types(session: Session) -> 
         user_loan=user_loan,
     )
     accrue_late_charges(session, user_loan, parse_date("2020-12-16"), Decimal(118))
+
+    nov_late_fee = (
+        session.query(BillFee)
+        .filter(BillFee.identifier_id == nov_bill.id, BillFee.name == "late_fee")
+        .one_or_none()
+    )
+
+    assert nov_late_fee.remaining_fee_amount == Decimal(118)
+
+    nov_atm_fee = (
+        session.query(BillFee)
+        .filter(BillFee.identifier_id == nov_bill.id, BillFee.name == "atm_fee")
+        .one_or_none()
+    )
+
+    assert nov_atm_fee.remaining_fee_amount == Decimal("33.04")
 
     payment_split_info = find_split_to_slide_in_loan(session, user_loan, Decimal(150))
     assert len(payment_split_info) == 4
