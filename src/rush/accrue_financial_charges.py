@@ -15,6 +15,7 @@ from rush.ledger_events import (
     accrue_interest_event,
     add_max_amount_event,
     add_min_amount_event,
+    adjust_for_revenue,
 )
 from rush.ledger_utils import (
     create_ledger_entry_from_str,
@@ -194,7 +195,7 @@ def reverse_interest_charges(
 ) -> None:
     from rush.payments import (
         adjust_for_min_max_accounts,
-        find_amount_to_slide_in_bills,
+        find_split_to_slide_in_loan,
     )
 
     """
@@ -250,26 +251,35 @@ def reverse_interest_charges(
         inter_bill_movement_entries.append(d)  # Move amount from this bill to some other bill.
 
     total_amount_to_readjust = sum(d["amount"] for d in inter_bill_movement_entries)
-    bills_data = find_amount_to_slide_in_bills(user_loan, total_amount_to_readjust)
+    split_data = find_split_to_slide_in_loan(session, user_loan, total_amount_to_readjust)
 
-    for bill_data in bills_data:
+    for d in split_data:
         for entry in inter_bill_movement_entries:
-            amount_to_adjust_in_this_bill = min(bill_data["amount_to_adjust"], entry["amount"])
+            amount_to_adjust_in_this_bill = min(d["amount_to_adjust"], entry["amount"])
             if amount_to_adjust_in_this_bill == 0:
                 continue
-            adjust_for_min_max_accounts(bill_data["bill"], amount_to_adjust_in_this_bill, event.id)
-            remaining_amount = _adjust_bill(
-                session,
-                bill_data["bill"],
-                amount_to_adjust_in_this_bill,
-                event.id,
-                debit_acc_str=entry["acc_to_remove_from"],
-            )
-            assert remaining_amount == 0
+            adjust_for_min_max_accounts(d["bill"], amount_to_adjust_in_this_bill, event.id)
+            if d["type"] == "fee":
+                adjust_for_revenue(
+                    session=session,
+                    event_id=event.id,
+                    payment_to_adjust_from=amount_to_adjust_in_this_bill,
+                    debit_str=entry["acc_to_remove_from"],
+                    fee=d["fee"],
+                )
+            if d["type"] in ("interest", "principal"):
+                remaining_amount = _adjust_bill(
+                    session,
+                    d["bill"],
+                    amount_to_adjust_in_this_bill,
+                    event.id,
+                    debit_acc_str=entry["acc_to_remove_from"],
+                )
+                assert remaining_amount == 0
             # if not all of it got adjusted in this bill, move remaining amount to next bill.
             # if got adjusted then this will be 0.
             entry["amount"] -= amount_to_adjust_in_this_bill
-            bill_data["amount_to_adjust"] -= amount_to_adjust_in_this_bill
+            d["amount_to_adjust"] -= amount_to_adjust_in_this_bill
 
     # Check if there's still amount that's left. If yes, then we received extra prepayment.
     is_payment_left = any(e["amount"] > 0 for e in inter_bill_movement_entries)
