@@ -391,19 +391,16 @@ def update_journal_entry(
             user_id,
         )
     elif event.name == "payment_received" or event.name == "transaction_refund":
-        payment_requests_data = (
-            session.query(
-                PaymentRequestsData.payment_execution_charges,
-                PaymentRequestsData.payment_received_in_bank_date,
-            )
+        payment_request_data = (
+            session.query(PaymentRequestsData)
             .filter(
                 PaymentRequestsData.payment_request_id == event.extra_details["payment_request_id"],
                 PaymentRequestsData.row_status == "active",
             )
             .first()
         )
-        gateway_expenses = payment_requests_data[0]
-        settlement_date = payment_requests_data[1]
+        gateway_expenses = payment_request_data.payment_execution_charges
+        settlement_date = payment_request_data.payment_received_in_bank_date
         payment_split_data = (
             session.query(PaymentSplit.component, PaymentSplit.amount_settled)
             .filter(
@@ -430,7 +427,7 @@ def update_journal_entry(
                 p_type = get_journal_entry_ptype(event.name)
             if event.amount == 0:
                 continue
-            if event.extra_details["payment_type"] not in ("collection"):
+            if payment_request_data.type not in ("collection"):
                 loan_id = None
                 p_type = "CF-Customer"
             create_journal_entry(
