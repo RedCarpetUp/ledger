@@ -27,7 +27,10 @@ from rush.models import (
     Product,
     User,
 )
-from rush.payments import payment_received
+from rush.payments import (
+    payment_received,
+    settle_payment_in_bank,
+)
 from rush.utils import add_gst_split_to_amount
 
 
@@ -85,8 +88,12 @@ def test_create_term_loan(session: Session) -> None:
     create_user(session=session)
 
     user_product = create_user_product_mapping(
-        session=session, user_id=6, product_type="term_loan_reset"
+        session=session, user_id=6, product_type="term_loan_reset", lender_id=1756833
     )
+    user_loan = get_user_product(
+        session=session, user_id=user_product.user_id, card_type="term_loan_reset"
+    )
+    assert isinstance(user_loan, ResetCard) == True
 
     fee = add_pre_product_fee(
         session=session,
@@ -121,11 +128,18 @@ def test_create_term_loan(session: Session) -> None:
     )
     payment_received(
         session=session,
-        user_loan=None,
+        user_loan=user_loan,
         payment_request_data=payment_requests_data,
-        user_product_id=user_product.id,
-        lender_id=1756833,
     )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
+    )
+
     session.flush()
 
     loan_creation_data = {"date_str": "2020-08-01", "user_product_id": user_product.id}
@@ -140,11 +154,6 @@ def test_create_term_loan(session: Session) -> None:
 
     assert loan.product_type == "term_loan_reset"
     assert loan.amortization_date == parse_date("2020-08-01").date()
-
-    user_loan = get_user_product(
-        session=session, user_id=loan.user_id, card_type="term_loan_reset", loan_id=loan.id
-    )
-    assert isinstance(user_loan, ResetCard) == True
 
     loan_data = session.query(LoanData).filter(LoanData.loan_id == user_loan.loan_id).one()
 
@@ -203,8 +212,12 @@ def test_reset_loan_limit_unlock_success(session: Session) -> None:
     create_user(session=session)
 
     user_product = create_user_product_mapping(
-        session=session, user_id=6, product_type="term_loan_reset"
+        session=session, user_id=6, product_type="term_loan_reset", lender_id=1756833
     )
+    user_loan = get_user_product(
+        session=session, user_id=user_product.user_id, card_type="term_loan_reset"
+    )
+    assert isinstance(user_loan, ResetCard) == True
 
     add_pre_product_fee(
         session=session,
@@ -239,11 +252,18 @@ def test_reset_loan_limit_unlock_success(session: Session) -> None:
     )
     payment_received(
         session=session,
-        user_loan=None,
+        user_loan=user_loan,
         payment_request_data=payment_requests_data,
-        user_product_id=user_product.id,
-        lender_id=1756833,
     )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
+    )
+
     session.flush()
 
     loan_creation_data = {"date_str": "2020-08-01", "user_product_id": user_product.id}
@@ -284,8 +304,12 @@ def test_reset_loan_limit_unlock_error(session: Session) -> None:
     create_user(session=session)
 
     user_product = create_user_product_mapping(
-        session=session, user_id=6, product_type="term_loan_reset"
+        session=session, user_id=6, product_type="term_loan_reset", lender_id=1756833
     )
+    user_loan = get_user_product(
+        session=session, user_id=user_product.user_id, card_type="term_loan_reset"
+    )
+    assert isinstance(user_loan, ResetCard) == True
 
     fee = add_pre_product_fee(
         session=session,
@@ -320,11 +344,18 @@ def test_reset_loan_limit_unlock_error(session: Session) -> None:
     )
     payment_received(
         session=session,
-        user_loan=None,
+        user_loan=user_loan,
         payment_request_data=payment_requests_data,
-        user_product_id=user_product.id,
-        lender_id=1756833,
     )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
+    )
+
     session.flush()
 
     loan_creation_data = {"date_str": "2020-08-01", "user_product_id": user_product.id}

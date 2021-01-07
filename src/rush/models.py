@@ -393,7 +393,6 @@ class LedgerTriggerEvent(AuditMixin):
     amount = Column(Numeric)
     extra_details = Column(JSON, default={})
 
-    user_product_id = pg_json_property("extra_details", "user_product_id", Integer, default=None)
     payment_type = pg_json_property("extra_details", "payment_type", String, default=None)
 
 

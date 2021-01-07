@@ -39,12 +39,20 @@ def get_product_id_from_card_type(session: Session, card_type: str) -> int:
     )
 
 
-def create_user_product_mapping(session: Session, user_id: int, product_type: str) -> UserProduct:
+def create_user_product_mapping(
+    session: Session, user_id: int, product_type: str, lender_id: int = 62311
+) -> UserProduct:
     user_product = UserProduct.new(session, user_id=user_id, product_type=product_type)
     session.flush()
 
     # Ideally we should've just created a loan object. User product is useless and should be removed.
-    Loan.new(session, user_id=user_id, user_product_id=user_product.id, product_type=product_type)
+    Loan.new(
+        session,
+        user_id=user_id,
+        user_product_id=user_product.id,
+        product_type=product_type,
+        lender_id=lender_id,
+    )
     session.flush()
     return user_product
 

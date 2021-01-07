@@ -234,7 +234,6 @@ class BaseLoan(Loan):
         loan = session.query(cls).filter(cls.user_product_id == user_product_id).one()
         loan.prepare(session=session)
 
-        loan.lender_id = kwargs.get("lender_id")
         loan.rc_rate_of_interest_monthly = kwargs.get("rc_rate_of_interest_monthly")
         loan.lender_rate_of_interest_annual = kwargs.get("lender_rate_of_interest_annual", Decimal(18))
         loan.amortization_date = kwargs.get("card_activation_date")
