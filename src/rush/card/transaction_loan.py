@@ -26,10 +26,10 @@ class TransactionLoan(TermLoan):
         event = LedgerTriggerEvent(
             performed_by=kwargs["user_id"],
             name="transaction_to_loan",
-            loan_id=kwargs["loan_id"],
+            loan_id=kwargs["parent_loan_id"],
             post_date=kwargs["product_order_date"],  # what is post_date?
             amount=kwargs["amount"],
-            extra_details={"parent_loan_id": kwargs["parent_loan_id"]},
+            extra_details={"child_loan_id": kwargs["loan_id"]},
         )
 
         self.session.add(event)

@@ -30,10 +30,10 @@ class RebelCard(BaseLoan):
     def get_transaction_loans(self) -> List[TransactionLoan]:
         return (
             self.session.query(TransactionLoan)
-            .join(LedgerTriggerEvent, LedgerTriggerEvent.loan_id == TransactionLoan.id)
+            .join(LedgerTriggerEvent, LedgerTriggerEvent.extra_details["child_loan_id"].astext.cast(Integer) == TransactionLoan.id)
             .filter(
                 LedgerTriggerEvent.name == "transaction_to_loan",
-                LedgerTriggerEvent.extra_details["parent_loan_id"].astext.cast(Integer) == self.id,
+                LedgerTriggerEvent.loan_id == self.id,
             )
             .all()
         )
