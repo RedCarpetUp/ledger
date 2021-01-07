@@ -1,5 +1,5 @@
 from decimal import Decimal
-from test.test_current import (
+from test.utils import (
     pay_payment_request,
     payment_request_data,
 )

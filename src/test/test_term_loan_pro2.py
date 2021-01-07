@@ -203,6 +203,7 @@ def test_create_term_loan(session: Session) -> None:
     user_loan = get_user_product(
         session=session, user_id=loan.user_id, card_type="term_loan_pro_2", loan_id=loan.id
     )
+    assert user_loan is not None
     assert isinstance(user_loan, TermLoanPro2) == True
 
     loan_data = session.query(LoanData).filter(LoanData.loan_id == user_loan.loan_id).one()
@@ -321,6 +322,7 @@ def test_create_term_loan_2(session: Session) -> None:
     user_loan = get_user_product(
         session=session, user_id=loan.user_id, card_type="term_loan_pro_2", loan_id=loan.id
     )
+    assert user_loan is not None
     assert isinstance(user_loan, TermLoanPro2) == True
 
     loan_data = session.query(LoanData).filter(LoanData.loan_id == user_loan.loan_id).one()
