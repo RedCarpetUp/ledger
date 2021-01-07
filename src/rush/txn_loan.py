@@ -50,6 +50,7 @@ def transaction_to_loan(
         user_product_id=user_product.id,
         downpayment_percent=Decimal("0"),
         credit_book=f"{txn.loan_id}/bill/unbilled/a",
+        parent_loan_id=user_loan.id,
     )
 
     session.flush()

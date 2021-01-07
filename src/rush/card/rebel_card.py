@@ -5,7 +5,8 @@ from typing import (
     Type,
 )
 
-from sqlalchemy.sql.sqltypes import DateTime
+from sqlalchemy.orm import session
+from sqlalchemy.sql.sqltypes import DateTime, Integer
 
 from rush.card.base_card import (
     B,
@@ -13,6 +14,7 @@ from rush.card.base_card import (
     BaseLoan,
 )
 from rush.card.transaction_loan import TransactionLoan
+from rush.models import LedgerTriggerEvent
 
 
 class RebelBill(BaseBill):
@@ -24,8 +26,12 @@ class RebelCard(BaseLoan):
 
     def get_transaction_loans(self) -> List[TransactionLoan]:
         return (
-            self.session.query(BaseLoan)
-            .filter(BaseLoan.product_type == "transaction_loan", BaseLoan.user_id == self.user_id)
+            self.session.query(TransactionLoan)
+            .join(LedgerTriggerEvent, LedgerTriggerEvent.loan_id == TransactionLoan.id)
+            .filter(
+                LedgerTriggerEvent.name == "transaction_to_loan",
+                LedgerTriggerEvent.extra_details["parent_loan_id"].astext.cast(Integer) == self.id,
+            )
             .all()
         )
 

@@ -29,6 +29,7 @@ class TransactionLoan(TermLoan):
             loan_id=kwargs["loan_id"],
             post_date=kwargs["product_order_date"],  # what is post_date?
             amount=kwargs["amount"],
+            extra_details={"parent_loan_id": kwargs["parent_loan_id"]},
         )
 
         self.session.add(event)
