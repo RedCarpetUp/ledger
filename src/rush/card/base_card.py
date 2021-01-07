@@ -1,6 +1,7 @@
 from datetime import date
 from decimal import Decimal
 from typing import (
+    Callable,
     Dict,
     List,
     Optional,
@@ -17,7 +18,6 @@ from sqlalchemy import func
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Session
 
-from rush.card.utils import create_user_product_mapping
 from rush.ledger_utils import (
     get_account_balance_from_str,
     is_bill_closed,
@@ -34,7 +34,6 @@ from rush.models import (
     LoanData,
     LoanMoratorium,
     LoanSchedule,
-    UserCard,
 )
 
 
@@ -197,11 +196,22 @@ class BaseBill:
 B = TypeVar("B", bound=BaseBill)
 
 
+def _convert_to_bill_class_decorator(function: Callable[["BaseLoan"], LoanData]) -> Callable:
+    def f(self):
+        bills = function(self)
+        if not bills:
+            return None
+        if type(bills) is List:
+            return [self.convert_to_bill_class(bill) for bill in bills]
+        return self.convert_to_bill_class(bills)
+
+    return f
+
+
 class BaseLoan(Loan):
     should_reinstate_limit_on_payment: bool = False
     bill_class: Type[B] = BaseBill
     session: Session = None
-    can_generate_bill: bool = True
 
     __mapper_args__ = {"polymorphic_identity": "base_loan"}
 
@@ -229,6 +239,8 @@ class BaseLoan(Loan):
         user_product_id = kwargs.pop("user_product_id", None)
         card_type = kwargs.pop("card_type")
         if not user_product_id:
+            from rush.card.utils import create_user_product_mapping
+
             user_product_id = create_user_product_mapping(
                 session=session, user_id=kwargs["user_id"], product_type=card_type
             ).id
@@ -254,18 +266,7 @@ class BaseLoan(Loan):
 
         limit_assignment_event(session=self.session, loan_id=self.loan_id, event=event, amount=amount)
 
-    def _convert_to_bill_class_decorator(func) -> BaseBill:
-        def f(self):
-            bills = func(self)
-            if not bills:
-                return None
-            if type(bills) is List:
-                return [self.convert_to_bill_class(bill) for bill in bills]
-            return self.convert_to_bill_class(bills)
-
-        return f
-
-    def convert_to_bill_class(self, bill: LoanData):
+    def convert_to_bill_class(self, bill: LoanData) -> BaseBill:
         if not bill:
             return None
         return self.bill_class(session=self.session, user_loan=self, loan_data=bill)
@@ -349,7 +350,7 @@ class BaseLoan(Loan):
         return None
 
     @_convert_to_bill_class_decorator
-    def get_latest_generated_bill(self) -> BaseBill:
+    def get_latest_generated_bill(self) -> LoanData:
         latest_bill = (
             self.session.query(LoanData)
             .filter(LoanData.loan_id == self.loan_id, LoanData.is_generated.is_(True))
@@ -359,7 +360,7 @@ class BaseLoan(Loan):
         return latest_bill
 
     @_convert_to_bill_class_decorator
-    def get_latest_bill_to_generate(self) -> BaseBill:
+    def get_latest_bill_to_generate(self) -> LoanData:
         loan_data = (
             self.session.query(LoanData)
             .filter(LoanData.loan_id == self.loan_id, LoanData.is_generated.is_(False))
@@ -369,7 +370,7 @@ class BaseLoan(Loan):
         return loan_data
 
     @_convert_to_bill_class_decorator
-    def get_latest_bill(self) -> BaseBill:
+    def get_latest_bill(self) -> LoanData:
         loan_data = (
             self.session.query(LoanData)
             .filter(LoanData.loan_id == self.id)

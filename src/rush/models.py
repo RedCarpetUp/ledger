@@ -543,35 +543,9 @@ class Fee(AuditMixin):
     gross_amount_paid = Column(Numeric, nullable=True, default=0)
     fee_status = Column(String(10), nullable=False, default="UNPAID")
 
-    __mapper_args__ = {
-        "polymorphic_identity": "fee",
-        "polymorphic_on": identifier,
-    }
-
     @hybrid_property
     def remaining_fee_amount(self) -> Decimal:
         return self.gross_amount - self.gross_amount_paid
-
-
-class BillFee(Fee):
-
-    __mapper_args__ = {
-        "polymorphic_identity": "bill",
-    }
-
-
-class LoanFee(Fee):
-
-    __mapper_args__ = {
-        "polymorphic_identity": "loan",
-    }
-
-
-class ProductFee(Fee):
-
-    __mapper_args__ = {
-        "polymorphic_identity": "product",
-    }
 
 
 class EventDpd(AuditMixin):

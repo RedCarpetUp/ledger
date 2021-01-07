@@ -4,7 +4,6 @@ from test.utils import (
     payment_request_data,
 )
 
-import pytest
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
@@ -178,7 +177,7 @@ def test_create_term_loan(session: Session) -> None:
         session.query(LedgerTriggerEvent)
         .filter(
             LedgerTriggerEvent.name == "payment_received",
-            LedgerTriggerEvent.loan_id == user_loan.id,
+            LedgerTriggerEvent.loan_id == user_loan.loan_id,
             LedgerTriggerEvent.extra_details["payment_request_id"].astext
             == PaymentRequestsData.payment_request_id,
             PaymentRequestsData.type == "downpayment",

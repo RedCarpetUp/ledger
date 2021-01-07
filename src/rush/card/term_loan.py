@@ -96,7 +96,6 @@ def get_down_payment_for_loan(loan: BaseLoan) -> Decimal:
 class TermLoan(BaseLoan):
     bill_class: Type[B] = TermLoanBill
     session: Session = None
-    can_generate_bill: bool = False
 
     __mapper_args__ = {"polymorphic_identity": "term_loan"}
 
@@ -150,7 +149,7 @@ class TermLoan(BaseLoan):
         event = LedgerTriggerEvent(
             name="disbursal",
             loan_id=loan.id,
-            post_date=kwargs["product_order_date"],  # what is post_date?
+            post_date=kwargs["product_order_date"],
             amount=kwargs["amount"],
         )
 

@@ -13,7 +13,6 @@ from rush.ledger_utils import (
     get_account_balance_from_str,
 )
 from rush.models import (
-    BillFee,
     CardTransaction,
     Fee,
     LedgerTriggerEvent,

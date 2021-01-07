@@ -9,10 +9,7 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
-from rush.create_emi import (
-    update_event_with_dpd,
-    update_journal_entry,
-)
+from rush.create_emi import update_journal_entry
 from rush.ledger_events import (
     add_max_amount_event,
     bill_generate_event,
@@ -140,13 +137,10 @@ def add_atm_fee(
 
     fee = create_bill_fee_entry(
         session=session,
-        user_id=user_loan.user_id,
+        user_loan=user_loan,
         bill=bill,
         event=event,
         fee_name="atm_fee",
         gross_fee_amount=atm_fee_without_gst,
     )
     event.amount = fee.gross_amount
-
-    update_event_with_dpd(user_loan=user_loan, event=event)
-    update_journal_entry(user_loan=user_loan, event=event)

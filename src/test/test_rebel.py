@@ -5,33 +5,15 @@ from sqlalchemy.orm import Session
 
 from rush.card import (
     create_user_product,
-    get_product_class,
     get_user_product,
 )
-from rush.card.base_card import (
-    BaseBill,
-    BaseLoan,
-)
-from rush.card.utils import (
-    add_pre_product_fee,
-    create_user_product_mapping,
-)
+from rush.card.base_card import BaseBill
+from rush.card.utils import create_user_product_mapping
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import get_account_balance_from_str
 from rush.models import (
-    BillFee,
-    CardKitNumbers,
-    CardNames,
-    EventDpd,
-    Fee,
-    LedgerTriggerEvent,
-    LenderPy,
     Lenders,
-    LoanData,
-    LoanMoratorium,
-    PaymentMapping,
-    PaymentSplit,
     Product,
     User,
 )

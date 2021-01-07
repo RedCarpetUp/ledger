@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 
 from rush.card import (
     create_user_product,
-    get_product_class,
     get_user_product,
 )
 from rush.card.term_loan_pro2 import TermLoanPro2
@@ -219,7 +218,7 @@ def test_create_term_loan(session: Session) -> None:
     _, loan_lender_payable = get_account_balance_from_str(
         session=session, book_string=f"{loan.loan_id}/loan/lender_payable/l"
     )
-    assert loan_lender_payable == Decimal("8000")
+    assert loan_lender_payable == Decimal("8000.5")
 
     all_emis = user_loan.get_loan_schedule()
 

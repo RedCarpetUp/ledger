@@ -1,9 +1,7 @@
 from decimal import Decimal
 from typing import Optional
 
-from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
-from pendulum.parser import parse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -19,7 +17,6 @@ from rush.ledger_events import (
     _adjust_for_prepayment,
     adjust_for_revenue,
     adjust_non_bill_payments,
-    customer_refund_event,
     reduce_revenue_for_fee_refund,
 )
 from rush.ledger_utils import (
@@ -28,14 +25,12 @@ from rush.ledger_utils import (
 )
 from rush.loan_schedule.loan_schedule import slide_payment_to_emis
 from rush.models import (
-    BillFee,
     BookAccount,
     Fee,
     LedgerEntry,
     LedgerTriggerEvent,
     PaymentRequestsData,
     PaymentSplit,
-    UserProduct,
 )
 from rush.utils import mul
 from rush.writeoff_and_recovery import recovery_event
@@ -123,7 +118,12 @@ def payment_received_event(
             credit_book_str=f"{user_loan.loan_id}/loan/downpayment/l",
             amount=payment_received_amt,
         )
-    elif payment_type in ("card_reload_fee", "card_activation_fee", "card_upgrade_fee"):
+    elif payment_type in (
+        "card_reload_fee",
+        "reset_joining_fees",
+        "card_activation_fee",
+        "card_upgrade_fee",
+    ):
         adjust_non_bill_payments(
             session=session,
             event=event,
@@ -198,12 +198,13 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
     unpaid_bill_ids = [unpaid_bill.table.id for unpaid_bill in unpaid_bills]
     split_info = []
     late_fees = (
-        session.query(BillFee)
+        session.query(Fee)
         .filter(
-            BillFee.user_id == user_loan.user_id,
-            BillFee.name == "late_fee",
-            BillFee.identifier_id.in_(unpaid_bill_ids),
-            BillFee.fee_status == "UNPAID",
+            Fee.user_id == user_loan.user_id,
+            Fee.name == "late_fee",
+            Fee.identifier_id.in_(unpaid_bill_ids),
+            Fee.identifier == "bill",
+            Fee.fee_status == "UNPAID",
         )
         .all()
     )
@@ -227,12 +228,13 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
 
     # slide atm fee.
     atm_fees = (
-        session.query(BillFee)
+        session.query(Fee)
         .filter(
-            BillFee.user_id == user_loan.user_id,
-            BillFee.name == "atm_fee",
-            BillFee.identifier_id.in_(unpaid_bill_ids),
-            BillFee.fee_status == "UNPAID",
+            Fee.user_id == user_loan.user_id,
+            Fee.name == "atm_fee",
+            Fee.identifier == "bill",
+            Fee.identifier_id.in_(unpaid_bill_ids),
+            Fee.fee_status == "UNPAID",
         )
         .all()
     )

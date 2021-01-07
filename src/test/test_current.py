@@ -1,5 +1,4 @@
 import contextlib
-from datetime import date
 from decimal import Decimal
 from io import StringIO
 from test.utils import (
@@ -24,10 +23,7 @@ from rush.card import (
     get_product_class,
     get_user_product,
 )
-from rush.card.base_card import (
-    BaseBill,
-    BaseLoan,
-)
+from rush.card.base_card import BaseBill
 from rush.card.ruby_card import RubyCard
 from rush.card.utils import (
     get_daily_spend,
@@ -56,7 +52,6 @@ from rush.lender_funds import (
 from rush.loan_schedule.extension import extend_schedule
 from rush.loan_schedule.moratorium import provide_moratorium
 from rush.models import (
-    BillFee,
     CardKitNumbers,
     CardNames,
     EventDpd,
@@ -65,15 +60,12 @@ from rush.models import (
     LedgerTriggerEvent,
     LenderPy,
     Lenders,
-    Loan,
     LoanData,
     LoanMoratorium,
     PaymentMapping,
-    PaymentRequestsData,
     PaymentSplit,
     Product,
     User,
-    UserPy,
 )
 from rush.payments import (
     customer_refund,
@@ -828,8 +820,8 @@ def _accrue_late_fine_bill_1(session: Session) -> None:
     bill = accrue_late_charges(session, user_loan, event_date, Decimal(118))
 
     fee_due = (
-        session.query(BillFee)
-        .filter(BillFee.identifier_id == bill.id, BillFee.name == "late_fee")
+        session.query(Fee)
+        .filter(Fee.identifier_id == bill.id, Fee.identifier == "bill", Fee.name == "late_fee")
         .one_or_none()
     )
     assert fee_due.net_amount == Decimal(100)
@@ -847,9 +839,9 @@ def _accrue_late_fine_bill_2(session: Session) -> None:
     bill = accrue_late_charges(session, user_loan, event_date, Decimal(118))
 
     fee_due = (
-        session.query(BillFee)
-        .filter(BillFee.identifier_id == bill.id, BillFee.name == "late_fee")
-        .order_by(BillFee.id.desc())
+        session.query(Fee)
+        .filter(Fee.identifier_id == bill.id, Fee.identifier == "bill", Fee.name == "late_fee")
+        .order_by(Fee.id.desc())
         .one_or_none()
     )
     assert fee_due.net_amount == Decimal(100)
@@ -880,9 +872,12 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
     bill = unpaid_bills[0]
 
     fee_id = (
-        session.query(BillFee.id)
+        session.query(Fee.id)
         .filter(
-            BillFee.identifier_id == bill.id, BillFee.name == "late_fee", BillFee.fee_status == "UNPAID"
+            Fee.identifier_id == bill.id,
+            Fee.identifier == "bill",
+            Fee.name == "late_fee",
+            Fee.fee_status == "UNPAID",
         )
         .scalar()
     )
@@ -1007,8 +1002,8 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
     assert min_due == Decimal(0)
 
     fee_due = (
-        session.query(BillFee)
-        .filter(BillFee.identifier_id == bill.id, BillFee.name == "late_fee")
+        session.query(Fee)
+        .filter(Fee.identifier_id == bill.id, Fee.identifier == "bill", Fee.name == "late_fee")
         .one_or_none()
     )
     assert fee_due.fee_status == "PAID"
@@ -1835,8 +1830,8 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
 
     # Check for atm fee.
     atm_fee_due = (
-        session.query(BillFee)
-        .filter(BillFee.identifier_id == bill_may.id, BillFee.name == "atm_fee")
+        session.query(Fee)
+        .filter(Fee.identifier_id == bill_may.id, Fee.identifier == "bill", Fee.name == "atm_fee")
         .one_or_none()
     )
     assert atm_fee_due.gross_amount == 59
@@ -2425,9 +2420,9 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
     # second_emi = all_emis_query[1]
     # assert second_emi.interest == 0
 
-    assert is_bill_closed(session, first_bill) is True
+    assert is_bill_closed(session, first_bill.table) is True
     # 90 got settled in new bill.
-    assert is_bill_closed(session, second_bill) is True
+    assert is_bill_closed(session, second_bill.table) is True
 
 
 def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
@@ -2495,8 +2490,8 @@ def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
         session, book_string=f"{second_bill.id}/bill/interest_accrued/r"
     )
     assert interest_earned == Decimal("60.33")
-    assert is_bill_closed(session, first_bill) is False
-    assert is_bill_closed(session, second_bill) is False
+    assert is_bill_closed(session, first_bill.table) is False
+    assert is_bill_closed(session, second_bill.table) is False
 
 
 def _pay_minimum_amount_bill_2(session: Session) -> None:
@@ -4043,8 +4038,8 @@ def test_customer_fee_refund(session: Session) -> None:
     bill = accrue_late_charges(session, user_loan, parse_date("2020-11-15"), Decimal(118))
 
     fee_due = (
-        session.query(BillFee)
-        .filter(BillFee.identifier_id == bill.id, BillFee.name == "late_fee")
+        session.query(Fee)
+        .filter(Fee.identifier_id == bill.id, Fee.identifier == "bill", Fee.name == "late_fee")
         .one_or_none()
     )
     assert fee_due.net_amount == Decimal(100)
