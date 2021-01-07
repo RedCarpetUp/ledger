@@ -90,7 +90,7 @@ class TermLoan(BaseLoan):
     def create(cls, session: Session, **kwargs) -> Loan:
         user_product_id = kwargs["user_product_id"]
 
-        # check if downpayment is done, before loan creation.
+        # check if downpayment is done, before loan creation.  # TODO get from loan.
         total_downpayment = (
             session.query(func.sum(LedgerTriggerEvent.amount))
             .filter(
@@ -102,18 +102,20 @@ class TermLoan(BaseLoan):
             .scalar()
         )
 
-        loan = cls(
-            session=session,
-            user_id=kwargs["user_id"],
-            user_product_id=user_product_id,
-            lender_id=kwargs["lender_id"],
-            rc_rate_of_interest_monthly=Decimal(3),
-            lender_rate_of_interest_annual=Decimal(18),
-            amortization_date=kwargs["product_order_date"],
-            downpayment_percent=kwargs["downpayment_percent"],
-        )
-        session.add(loan)
-        session.flush()
+        loan = session.query(cls).filter(cls.user_product_id == user_product_id).one()
+        loan.prepare(session=session)
+
+        loan.lender_id = kwargs.get("lender_id")
+        loan.rc_rate_of_interest_monthly = kwargs.get("rc_rate_of_interest_monthly", Decimal(3))
+        loan.lender_rate_of_interest_annual = kwargs.get("lender_rate_of_interest_annual", Decimal(18))
+        loan.amortization_date = kwargs.get("product_order_date")
+        loan.min_tenure = kwargs.get("min_tenure")
+        loan.min_multiplier = kwargs.get("min_multiplier")
+        loan.interest_type = kwargs.get("interest_type", "flat")
+        # Don't want to overwrite default value in case of None.
+        if kwargs.get("interest_free_period_in_days"):
+            loan.interest_free_period_in_days = kwargs.get("interest_free_period_in_days")
+        loan.downpayment_percent = kwargs["downpayment_percent"]
 
         kwargs["loan_id"] = loan.id
 
@@ -123,11 +125,11 @@ class TermLoan(BaseLoan):
         )
 
         loan_data = LoanData(
-            user_id=kwargs["user_id"],
-            loan_id=kwargs["loan_id"],
+            user_id=loan.user_id,
+            loan_id=loan.id,
             bill_start_date=bill_start_date,
             bill_close_date=bill_close_date,
-            bill_due_date=bill_start_date + relativedelta(days=kwargs["interest_free_period_in_days"]),
+            bill_due_date=bill_start_date + relativedelta(days=loan.interest_free_period_in_days),
             is_generated=True,
             bill_tenure=kwargs["tenure"],
             principal=kwargs["amount"],
@@ -138,13 +140,11 @@ class TermLoan(BaseLoan):
         bill = loan.convert_to_bill_class(loan_data)
 
         actual_downpayment_amount = bill.get_down_payment()
-
         assert total_downpayment == actual_downpayment_amount
 
         event = LedgerTriggerEvent(
-            performed_by=kwargs["user_id"],
-            name="termloan_disbursal_event",
-            loan_id=kwargs["loan_id"],
+            name="disbursal",
+            loan_id=loan.id,
             post_date=kwargs["product_order_date"],  # what is post_date?
             amount=kwargs["amount"],
         )

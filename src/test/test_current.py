@@ -19,8 +19,6 @@ from rush.accrue_financial_charges import (
     accrue_interest_on_all_bills,
     accrue_late_charges,
 )
-from rush.card.ruby_card import RubyCard
-from rush.card.zeta_card import ZetaCard
 from rush.card import (
     create_user_product,
     get_product_class,
@@ -30,11 +28,13 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
+from rush.card.ruby_card import RubyCard
 from rush.card.utils import (
     get_daily_spend,
     get_daily_total_transactions,
     get_weekly_spend,
 )
+from rush.card.zeta_card import ZetaCard
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import (
     create_card_swipe,

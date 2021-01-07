@@ -231,36 +231,19 @@ class BaseLoan(Loan):
                 session=session, user_id=kwargs["user_id"], product_type=card_type
             ).id
 
-        loan = cls(
-            session=session,
-            user_id=kwargs["user_id"],
-            user_product_id=user_product_id,
-            lender_id=kwargs.pop("lender_id"),
-            rc_rate_of_interest_monthly=kwargs.pop("rc_rate_of_interest_monthly"),
-            lender_rate_of_interest_annual=Decimal(18),  # this is hardcoded for one lender.
-            amortization_date=kwargs.get("card_activation_date"),  # TODO: change this later.
-            min_tenure=kwargs.pop("min_tenure", None),
-            min_multiplier=kwargs.pop("min_multiplier", None),
-            interest_type=kwargs.pop("interest_type", "flat"),
-        )
+        loan = session.query(cls).filter(cls.user_product_id == user_product_id).one()
+        loan.prepare(session=session)
 
+        loan.lender_id = kwargs.get("lender_id")
+        loan.rc_rate_of_interest_monthly = kwargs.get("rc_rate_of_interest_monthly")
+        loan.lender_rate_of_interest_annual = kwargs.get("lender_rate_of_interest_annual", Decimal(18))
+        loan.amortization_date = kwargs.get("card_activation_date")
+        loan.min_tenure = kwargs.get("min_tenure")
+        loan.min_multiplier = kwargs.get("min_multiplier")
+        loan.interest_type = kwargs.get("interest_type", "flat")
         # Don't want to overwrite default value in case of None.
         if kwargs.get("interest_free_period_in_days"):
-            loan.interest_free_period_in_days = kwargs.pop("interest_free_period_in_days")
-
-        session.add(loan)
-        session.flush()
-
-        kwargs["loan_id"] = loan.id
-
-        kwargs["card_name"] = kwargs.get("card_name", "ruby")  # TODO: change this later.
-        kwargs["activation_type"] = kwargs.get("activation_type", "V")  # TODO: change this later.
-        kwargs["kit_number"] = kwargs.get("kit_number", "00000")  # TODO: change this later.
-
-        user_card = UserCard(**kwargs)
-        session.add(user_card)
-        session.flush()
-
+            loan.interest_free_period_in_days = kwargs.get("interest_free_period_in_days")
         return loan
 
     def reinstate_limit_on_payment(self, event: LedgerTriggerEvent, amount: Decimal) -> None:

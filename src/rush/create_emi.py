@@ -1,8 +1,8 @@
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
-from dateutil.relativedelta import relativedelta
 
+from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
 from sqlalchemy.orm import (
     Session,
