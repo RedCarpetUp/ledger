@@ -19,9 +19,9 @@ from rush.accrue_financial_charges import (
     accrue_interest_on_all_bills,
     accrue_late_charges,
 )
+from rush.card.ruby_card import RubyCard
+from rush.card.zeta_card import ZetaCard
 from rush.card import (
-    RubyCard,
-    ZetaCard,
     create_user_product,
     get_product_class,
     get_user_product,
@@ -128,14 +128,6 @@ def test_user2(session: Session) -> None:
     session.add(u)
     session.commit()
     a = session.query(User).first()
-    u = UserPy(
-        id=a.id,
-        performed_by=123,
-        email="sss",
-        name="dfd",
-        fullname="dfdf",
-        nickname="dfdd",
-    )
 
 
 def test_user(session: Session) -> None:
@@ -147,14 +139,6 @@ def test_user(session: Session) -> None:
     session.add(u)
     session.commit()
     a = session.query(User).first()
-    u = UserPy(
-        id=a.id,
-        performed_by=123,
-        email="sss",
-        name="dfd",
-        fullname="dfdf",
-        nickname="dfdd",
-    )
 
 
 def test_lenders(session: Session) -> None:
@@ -169,7 +153,7 @@ def test_lenders(session: Session) -> None:
 
 def test_lender_disbursal(session: Session) -> None:
     test_lenders(session)
-    resp = lender_disbursal(session, 100000, 62311)
+    resp = lender_disbursal(session, Decimal(100000), 62311)
     assert resp["result"] == "success"
     # _, lender_capital_balance = get_account_balance_from_str(session, "62311/lender/lender_capital/l")
     # assert lender_capital_balance == Decimal(100000)
@@ -177,7 +161,7 @@ def test_lender_disbursal(session: Session) -> None:
 
 def test_m2p_transfer(session: Session) -> None:
     test_lenders(session)
-    resp = m2p_transfer(session, 50000, 62311)
+    resp = m2p_transfer(session, Decimal(50000), 62311)
     assert resp["result"] == "success"
 
     # _, lender_pool_balance = get_account_balance_from_str(session, "62311/lender/pool_balance/a")

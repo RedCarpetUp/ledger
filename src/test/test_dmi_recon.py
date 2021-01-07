@@ -393,4 +393,4 @@ def test_dmi_recon_process_1(session: Session) -> None:
     _, lender_payable_raghav = get_account_balance_from_str(
         session, f"{user_loan_raghav.loan_id}/loan/lender_payable/l"
     )
-    assert lender_payable_raghav == Decimal("829.82")
+    assert lender_payable_raghav == Decimal("815.90")

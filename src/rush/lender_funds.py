@@ -15,7 +15,7 @@ from rush.models import (
 from rush.utils import get_current_ist_time
 
 
-def lender_disbursal(session: Session, amount: Decimal, lender_id: int) -> Decimal:
+def lender_disbursal(session: Session, amount: Decimal, lender_id: int) -> dict:
     if verify_lender(session, lender_id):
         lt = LedgerTriggerEvent(
             name="lender_disbursal",
@@ -30,7 +30,7 @@ def lender_disbursal(session: Session, amount: Decimal, lender_id: int) -> Decim
     return {"result": "error", "message": "Invalid lender"}
 
 
-def m2p_transfer(session: Session, amount: Decimal, lender_id: int) -> Decimal:
+def m2p_transfer(session: Session, amount: Decimal, lender_id: int) -> dict:
     if verify_lender(session, lender_id):
         lt = LedgerTriggerEvent(
             name="m2p_transfer",
