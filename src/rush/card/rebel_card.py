@@ -6,7 +6,10 @@ from typing import (
 )
 
 from sqlalchemy.orm import session
-from sqlalchemy.sql.sqltypes import DateTime, Integer
+from sqlalchemy.sql.sqltypes import (
+    DateTime,
+    Integer,
+)
 
 from rush.card.base_card import (
     B,

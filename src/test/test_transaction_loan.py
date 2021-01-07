@@ -131,7 +131,7 @@ def test_transaction_loan(session: Session) -> None:
         txn_id=swipe2emi["data"].id,
         user_id=469,
         post_date=parse_date("2020-12-05 19:23:11"),
-    )
+    )["data"]
 
     assert isinstance(txn_loan, TransactionLoan)
 
