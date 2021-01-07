@@ -35,13 +35,12 @@ class TransactionLoan(TermLoan):
         self.session.flush()
 
         bill_id = kwargs["loan_data"].id
-        credit_book = kwargs["credit_book"]
 
         create_ledger_entry_from_str(
             session=self.session,
             event_id=event.id,
             debit_book_str=f"{bill_id}/bill/principal_receivable/a",
-            credit_book_str=credit_book,
+            credit_book_str=kwargs["credit_book"],
             amount=kwargs["amount"],
         )
 
