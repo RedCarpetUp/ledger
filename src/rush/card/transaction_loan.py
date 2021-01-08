@@ -45,4 +45,6 @@ class TransactionLoan(TermLoan):
             amount=kwargs["amount"],
         )
 
+        return event
+
     __mapper_args__ = {"polymorphic_identity": "transaction_loan"}

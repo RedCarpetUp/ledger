@@ -18,7 +18,11 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
-from rush.ledger_events import loan_disbursement_event
+from rush.ledger_events import (
+    add_max_amount_event,
+    loan_disbursement_event,
+)
+from rush.min_payment import add_min_to_all_bills
 from rush.models import (
     LedgerTriggerEvent,
     Loan,
@@ -143,7 +147,7 @@ class TermLoan(BaseLoan):
 
         assert total_downpayment == actual_downpayment_amount
 
-        loan.disbursement_event(**kwargs)
+        event = loan.disbursement_event(**kwargs)
 
         # create emis for term loan.
         from rush.loan_schedule.loan_schedule import create_bill_schedule
@@ -153,5 +157,9 @@ class TermLoan(BaseLoan):
             user_loan=loan,
             bill=bill,
         )
+
+        add_max_amount_event(session=session, bill=bill, event=event, amount=kwargs["amount"])
+
+        add_min_to_all_bills(session=session, post_date=kwargs["product_order_date"], user_loan=loan)
 
         return loan

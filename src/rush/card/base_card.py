@@ -273,6 +273,8 @@ class BaseLoan(Loan):
             downpayment_amount=kwargs["actual_downpayment_amount"],
         )
 
+        return event
+
     def reinstate_limit_on_payment(self, event: LedgerTriggerEvent, amount: Decimal) -> None:
         assert self.should_reinstate_limit_on_payment == True
 

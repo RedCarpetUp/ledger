@@ -11,6 +11,7 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
+from rush.card.rebel_card import RebelCard
 from rush.card.transaction_loan import TransactionLoan
 from rush.card.utils import create_user_product_mapping
 from rush.create_bill import bill_generate
@@ -81,7 +82,7 @@ def test_transaction_loan(session: Session) -> None:
     bill_id = swipe["data"].loan_id
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 1200
-    user_loan = get_user_product(session, 469, card_type="rebel")
+    user_loan: RebelCard = get_user_product(session, 469, card_type="rebel")
     bill_date = parse_date("2020-12-01 00:00:00")
     bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
     latest_bill = user_loan.get_latest_bill()
@@ -134,6 +135,12 @@ def test_transaction_loan(session: Session) -> None:
     )["data"]
 
     assert isinstance(txn_loan, TransactionLoan)
+
+    assert txn_loan.get_remaining_min() == Decimal("140")
+
+    assert txn_loan.get_remaining_max() == Decimal("1200")
+
+    assert user_loan.get_transaction_loans()[0].id == txn_loan.id
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 1200

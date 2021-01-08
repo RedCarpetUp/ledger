@@ -214,9 +214,9 @@ def test_create_term_loan(session: Session) -> None:
     )
     assert product_lender_payable == Decimal("0")
 
-    # assert loan.get_remaining_min() is not 0
+    assert loan.get_remaining_min() == Decimal("910")
 
-    # assert loan.get_remaining_max() is not 0
+    assert loan.get_remaining_max() == Decimal("10000")
 
     all_emis = user_loan.get_loan_schedule()
 
