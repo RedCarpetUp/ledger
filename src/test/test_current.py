@@ -4472,14 +4472,14 @@ def test_updated_emi_payment_mapping_after_early_loan_close(session: Session) ->
 
     pm = (
         session.query(PaymentMapping)
-        .filter(PaymentMapping.payment_request_id == "a12318", PaymentMapping.row_status == "active")
+        .filter(PaymentMapping.payment_request_id == payment_request_id, PaymentMapping.row_status == "active")
         .one_or_none()
     )
 
     assert pm.amount_settled == Decimal("227.00")
 
     jan_bill = bill_generate(user_loan=user_loan, creation_time=parse_date("2021-01-01"))
-    assert jan_bill.bill_due_date == parse_date("2021-01-15").date()
+    assert jan_bill.table.bill_due_date == parse_date("2021-01-15").date()
 
     payment_request_id = "a12319"
     payment_request_data(
@@ -4528,7 +4528,7 @@ def test_updated_emi_payment_mapping_after_early_loan_close(session: Session) ->
     assert pm[2].amount_settled == Decimal("46.00")
 
     feb_bill = bill_generate(user_loan=user_loan, creation_time=parse_date("2021-02-01"))
-    assert feb_bill.bill_due_date == parse_date("2021-02-15").date()
+    assert feb_bill.table.bill_due_date == parse_date("2021-02-15").date()
 
     payment_request_id = "a12320"
     payment_request_data(
