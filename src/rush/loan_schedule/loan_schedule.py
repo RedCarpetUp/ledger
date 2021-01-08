@@ -13,7 +13,6 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
-from rush.loan_schedule.calculations import get_interest_to_charge
 from rush.models import (
     LedgerTriggerEvent,
     LoanSchedule,
@@ -139,6 +138,36 @@ def close_loan(user_loan: BaseLoan, last_payment_date: datetime):
     future_emis = user_loan.get_loan_schedule(only_emis_after_date=last_payment_date.date())
     if not future_emis:  # Loan has closed naturally.
         return
+
+    emi_ids = [emi.id for emi in future_emis]
+
+    # Aggregate old payment mappings to generate new ones
+    new_mappings = (
+        user_loan.session.query(
+            PaymentMapping.payment_request_id, func.sum(PaymentMapping.amount_settled)
+        )
+        .filter(PaymentMapping.emi_id.in_(emi_ids), PaymentMapping.row_status == "active")
+        .group_by(PaymentMapping.payment_request_id)
+        .all()
+    )
+
+    # Mark old payment mappings inactive
+    (
+        user_loan.session.query(PaymentMapping)
+        .filter(PaymentMapping.emi_id.in_(emi_ids), PaymentMapping.row_status == "active")
+        .update({PaymentMapping.row_status: "inactive"}, synchronize_session=False)
+    )
+
+    closing_emi_id = emi_ids[0]
+
+    # Create new payment mappings
+    for payment_request_id, amount_settled in new_mappings:
+        _ = PaymentMapping.new(
+            user_loan.session,
+            payment_request_id=payment_request_id,
+            emi_id=closing_emi_id,
+            amount_settled=amount_settled,
+        )
 
     next_emi_due_date = future_emis[0].due_date
     for emi in future_emis:

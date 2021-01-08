@@ -11,7 +11,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = "a7997149d740"
-down_revision = "2590045263e5"
+down_revision = "57e039ce4b31"
 branch_labels = None
 depends_on = None
 
@@ -73,6 +73,9 @@ def upgrade() -> None:
     )
     op.execute(""" ALTER TABLE journal_entries ALTER COLUMN debit DROP NOT NULL; """)
     op.add_column("journal_entries", sa.Column("user_id", sa.Integer, nullable=False))
+    op.execute(
+        """create index index_on_extra_details_payment_request_id on ledger_trigger_event((extra_details->>'payment_request_id'))"""
+    )
 
 
 def downgrade() -> None:
