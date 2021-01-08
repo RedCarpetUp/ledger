@@ -4472,7 +4472,10 @@ def test_updated_emi_payment_mapping_after_early_loan_close(session: Session) ->
 
     pm = (
         session.query(PaymentMapping)
-        .filter(PaymentMapping.payment_request_id == payment_request_id, PaymentMapping.row_status == "active")
+        .filter(
+            PaymentMapping.payment_request_id == payment_request_id,
+            PaymentMapping.row_status == "active",
+        )
         .one_or_none()
     )
 
