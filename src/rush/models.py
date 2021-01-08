@@ -177,8 +177,8 @@ class UserData(AuditMixin):
 
     status = Column(String(length=50), nullable=False)
     access_token = Column(String(length=50), nullable=True)  # To authenticate requests coming from app.
-    credit_limit: Decimal  = Column(Numeric, server_default="0", nullable=False)
-    available_credit_limit: Decimal  = Column(Numeric, server_default="0", nullable=False)
+    credit_limit: Decimal = Column(Numeric, server_default="0", nullable=False)
+    available_credit_limit: Decimal = Column(Numeric, server_default="0", nullable=False)
 
     utm_campaign = Column(String(length=50), nullable=True)
     utm_source = Column(String(length=50), nullable=True)
@@ -193,16 +193,16 @@ class UserData(AuditMixin):
     view_tags = Column(JSONB, server_default="{}", nullable=True)
 
     # Aggregate columns
-    total_credit_used: Decimal  = Column(Numeric, server_default="0", nullable=False)
-    rc_cash_balance: Decimal  = Column(Numeric, server_default="0", nullable=False)
-    total_credit_payment_pending: Decimal  = Column(Numeric, server_default="0", nullable=False)
-    total_overdue_payment: Decimal  = Column(Numeric, server_default="0", nullable=False)
-    amount_due_as_of_today: Decimal  = Column(Numeric, server_default="0", nullable=False)
-    amount_paid_as_of_today: Decimal  = Column(Numeric, server_default="0", nullable=False)
-    amount_paid_by_due_date: Decimal  = Column(Numeric, server_default="0", nullable=False)
-    amount_paid_after_due_date: Decimal  = Column(Numeric, server_default="0", nullable=False)
+    total_credit_used: Decimal = Column(Numeric, server_default="0", nullable=False)
+    rc_cash_balance: Decimal = Column(Numeric, server_default="0", nullable=False)
+    total_credit_payment_pending: Decimal = Column(Numeric, server_default="0", nullable=False)
+    total_overdue_payment: Decimal = Column(Numeric, server_default="0", nullable=False)
+    amount_due_as_of_today: Decimal = Column(Numeric, server_default="0", nullable=False)
+    amount_paid_as_of_today: Decimal = Column(Numeric, server_default="0", nullable=False)
+    amount_paid_by_due_date: Decimal = Column(Numeric, server_default="0", nullable=False)
+    amount_paid_after_due_date: Decimal = Column(Numeric, server_default="0", nullable=False)
     # TODO ask diff btwn this and total_credit_payment_pending
-    unpaid_pending_amount: Decimal  = Column(Numeric, server_default="0", nullable=False)
+    unpaid_pending_amount: Decimal = Column(Numeric, server_default="0", nullable=False)
     row_status = Column(String(length=20), nullable=False, default="active")
 
     ecdsa_signing_key = Column(String(length=100), nullable=True)
@@ -254,14 +254,14 @@ class Loan(AuditMixin):
     interest_type = Column(String(), nullable=True)
     product_type = Column(String(), ForeignKey(Product.product_name), nullable=True)
     lender_id = Column(Integer, ForeignKey(Lenders.id), nullable=True)
-    rc_rate_of_interest_monthly: Decimal  = Column(Numeric, nullable=True)
-    lender_rate_of_interest_annual: Decimal  = Column(Numeric, nullable=True)
+    rc_rate_of_interest_monthly: Decimal = Column(Numeric, nullable=True)
+    lender_rate_of_interest_annual: Decimal = Column(Numeric, nullable=True)
     interest_free_period_in_days = Column(Integer, default=45, nullable=True)
     min_tenure = Column(Integer, nullable=True)
-    min_multiplier: Decimal  = Column(Numeric, nullable=True)
+    min_multiplier: Decimal = Column(Numeric, nullable=True)
     dpd = Column(Integer, nullable=True)
     ever_dpd = Column(Integer, nullable=True)
-    downpayment_percent: Decimal  = Column(Numeric, nullable=True, default=Decimal(0))
+    downpayment_percent: Decimal = Column(Numeric, nullable=True, default=Decimal(0))
 
     __mapper_args__ = {
         "polymorphic_identity": "v3_loans",
@@ -390,7 +390,7 @@ class LedgerTriggerEvent(AuditMixin):
     name = Column(String(50))
     loan_id = Column(Integer, ForeignKey(Loan.id))
     post_date = Column(TIMESTAMP)
-    amount: Decimal  = Column(Numeric)
+    amount: Decimal = Column(Numeric)
     extra_details = Column(JSON, default={})
 
     payment_type = pg_json_property("extra_details", "payment_type", String, default=None)
@@ -417,9 +417,9 @@ class LoanData(AuditMixin):
     bill_tenure = Column(Integer, nullable=False, default=12)
     loan_id = Column(Integer, ForeignKey(Loan.id))
     is_generated = Column(Boolean, nullable=False, server_default="false")
-    principal: Decimal  = Column(Numeric, nullable=True)
-    principal_instalment: Decimal  = Column(Numeric, nullable=True)
-    interest_to_charge: Decimal  = Column(Numeric, nullable=True)
+    principal: Decimal = Column(Numeric, nullable=True)
+    principal_instalment: Decimal = Column(Numeric, nullable=True)
+    interest_to_charge: Decimal = Column(Numeric, nullable=True)
 
 
 @py_dataclass
@@ -433,7 +433,7 @@ class CardTransaction(AuditMixin):
     __tablename__ = "card_transaction"
     loan_id = Column(Integer, ForeignKey(LoanData.id))
     txn_time = Column(TIMESTAMP, nullable=False)
-    amount: Decimal  = Column(Numeric, nullable=False)
+    amount: Decimal = Column(Numeric, nullable=False)
     source = Column(String(30), nullable=False)
     description = Column(String(100), nullable=False)
     mcc = Column(String(10), nullable=True)
@@ -448,13 +448,13 @@ class LoanSchedule(AuditMixin):
     bill_id = Column(Integer, ForeignKey(LoanData.id), nullable=True)  # hate this. - Raghav
     emi_number = Column(Integer, nullable=False)
     due_date = Column(Date, nullable=False)
-    principal_due: Decimal  = Column(Numeric, nullable=False)
-    interest_due: Decimal  = Column(Numeric, nullable=False)
+    principal_due: Decimal = Column(Numeric, nullable=False)
+    interest_due: Decimal = Column(Numeric, nullable=False)
     # total_due_amount: Decimal  = Column(Numeric, nullable=False)  # This should be a calculated column.
     dpd = Column(Integer, nullable=False, default=-999)
     last_payment_date = Column(TIMESTAMP, nullable=True)
-    total_closing_balance: Decimal  = Column(Numeric, nullable=False)
-    payment_received: Decimal  = Column(Numeric, nullable=False, default=0)
+    total_closing_balance: Decimal = Column(Numeric, nullable=False)
+    payment_received: Decimal = Column(Numeric, nullable=False, default=0)
     payment_status = Column(String(length=6), nullable=False, default="UnPaid")
 
     @hybrid_property
@@ -478,7 +478,7 @@ class PaymentMapping(AuditMixin):
     __tablename__ = "emi_payment_mapping_new"
     payment_request_id = Column(String(), nullable=False, index=True)
     emi_id = Column(Integer, ForeignKey(LoanSchedule.id), nullable=False, index=True)
-    amount_settled: Decimal  = Column(Numeric, nullable=False)
+    amount_settled: Decimal = Column(Numeric, nullable=False)
     row_status = Column(String(8), nullable=False, default="active")
 
     __table_args__ = (
@@ -496,7 +496,7 @@ class PaymentSplit(AuditMixin):
     __tablename__ = "payment_split"
     payment_request_id = Column(String(), nullable=False, index=True)
     component = Column(String(50), nullable=False)
-    amount_settled: Decimal  = Column(Numeric, nullable=False)
+    amount_settled: Decimal = Column(Numeric, nullable=False)
     loan_id = Column(Integer, ForeignKey(Loan.id), nullable=True)
 
 
@@ -531,16 +531,16 @@ class Fee(AuditMixin):
     identifier = Column(String(), nullable=False)
     identifier_id = Column(Integer, nullable=False)
     name = Column(String(30), nullable=False)
-    net_amount: Decimal  = Column(Numeric, nullable=False)
-    sgst_rate: Decimal  = Column(Numeric, nullable=False)
-    cgst_rate: Decimal  = Column(Numeric, nullable=False)
-    igst_rate: Decimal  = Column(Numeric, nullable=False)
-    gross_amount: Decimal  = Column(Numeric, nullable=False)
-    net_amount_paid: Decimal  = Column(Numeric, nullable=True, default=0)
-    sgst_paid: Decimal  = Column(Numeric, nullable=True, default=0)
-    cgst_paid: Decimal  = Column(Numeric, nullable=True, default=0)
-    igst_paid: Decimal  = Column(Numeric, nullable=True, default=0)
-    gross_amount_paid: Decimal  = Column(Numeric, nullable=True, default=0)
+    net_amount: Decimal = Column(Numeric, nullable=False)
+    sgst_rate: Decimal = Column(Numeric, nullable=False)
+    cgst_rate: Decimal = Column(Numeric, nullable=False)
+    igst_rate: Decimal = Column(Numeric, nullable=False)
+    gross_amount: Decimal = Column(Numeric, nullable=False)
+    net_amount_paid: Decimal = Column(Numeric, nullable=True, default=0)
+    sgst_paid: Decimal = Column(Numeric, nullable=True, default=0)
+    cgst_paid: Decimal = Column(Numeric, nullable=True, default=0)
+    igst_paid: Decimal = Column(Numeric, nullable=True, default=0)
+    gross_amount_paid: Decimal = Column(Numeric, nullable=True, default=0)
     fee_status = Column(String(10), nullable=False, default="UNPAID")
 
     @hybrid_property
@@ -554,9 +554,9 @@ class EventDpd(AuditMixin):
     bill_id = Column(Integer, ForeignKey(LoanData.id), nullable=False)
     loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
     event_id = Column(Integer, ForeignKey(LedgerTriggerEvent.id), nullable=False)
-    debit: Decimal  = Column(Numeric, nullable=True, default=Decimal(0))
-    credit: Decimal  = Column(Numeric, nullable=True, default=Decimal(0))
-    balance: Decimal  = Column(Numeric, nullable=True, default=Decimal(0))
+    debit: Decimal = Column(Numeric, nullable=True, default=Decimal(0))
+    credit: Decimal = Column(Numeric, nullable=True, default=Decimal(0))
+    balance: Decimal = Column(Numeric, nullable=True, default=Decimal(0))
     dpd = Column(Integer, nullable=False)
     row_status = Column(String(length=10), nullable=False, default="active")
 
@@ -573,7 +573,7 @@ class UserInstrument(AuditMixin):
     single_txn_spend_limit = Column(Integer, nullable=True)
     daily_spend_limit = Column(Integer, nullable=True)
     international_usage = Column(Boolean, default=False, nullable=False)
-    credit_limit: Decimal  = Column(Numeric, nullable=True)
+    credit_limit: Decimal = Column(Numeric, nullable=True)
     name = Column(String(), nullable=False)
     activation_date = Column(Date, nullable=True)
     instrument_id = Column(String(), nullable=False)
@@ -653,8 +653,8 @@ class JournalEntry(AuditMixin):
     ledger = Column(String(length=50), nullable=False)
     alias = Column(String(length=50), nullable=True)
     group_name = Column(String(length=50), nullable=False)
-    debit: Decimal  = Column(Numeric, nullable=True)
-    credit: Decimal  = Column(Numeric, nullable=True)
+    debit: Decimal = Column(Numeric, nullable=True)
+    credit: Decimal = Column(Numeric, nullable=True)
     narration = Column(String(length=50), nullable=True)
     instrument_date = Column(TIMESTAMP, nullable=False)
     sort_order = Column(Integer, nullable=False)
@@ -669,7 +669,7 @@ class PaymentRequestsData(AuditMixin):
     __tablename__ = "v3_payment_requests_data"
 
     type = Column(String(length=20), nullable=False)
-    payment_request_amount: Decimal  = Column(Numeric, nullable=False)
+    payment_request_amount: Decimal = Column(Numeric, nullable=False)
     payment_request_status = Column(String(length=20), nullable=False)
     source_account_id = Column(Integer, nullable=False)
     destination_account_id = Column(Integer, nullable=False)
@@ -680,17 +680,17 @@ class PaymentRequestsData(AuditMixin):
     intermediary_payment_date = Column(TIMESTAMP, nullable=True)
     payment_received_in_bank_date = Column(TIMESTAMP, nullable=True)
     payment_request_mode = Column(String(length=20), nullable=True)
-    payment_execution_charges: Decimal  = Column(Numeric, nullable=True)
+    payment_execution_charges: Decimal = Column(Numeric, nullable=True)
     payment_gateway_id = Column(Integer, nullable=True)
     gateway_response = Column(JSONB, default=lambda: {})
     collection_by = Column(String(length=20), server_default="customer")
     collection_request_id = Column(String(length=50), nullable=True)
     payment_request_comments = Column(Text, nullable=True)
-    prepayment_amount: Decimal  = Column(Numeric, nullable=True)
-    net_payment_amount: Decimal  = Column(Numeric, nullable=True)
-    fee_amount: Decimal  = Column(Numeric, nullable=True)
+    prepayment_amount: Decimal = Column(Numeric, nullable=True)
+    net_payment_amount: Decimal = Column(Numeric, nullable=True)
+    fee_amount: Decimal = Column(Numeric, nullable=True)
     expire_date = Column(TIMESTAMP, nullable=True)
     coupon_code = Column(String(length=25), nullable=True)
     coupon_data = Column(JSONB, default=lambda: {})
-    gross_request_amount: Decimal  = Column(Numeric, nullable=True)
+    gross_request_amount: Decimal = Column(Numeric, nullable=True)
     extra_details = Column(JSONB, default=lambda: {})
