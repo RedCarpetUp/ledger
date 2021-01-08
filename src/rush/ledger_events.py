@@ -178,29 +178,15 @@ def _adjust_bill(
 
     remaining_amount = amount_to_adjust_in_this_bill
 
-    fees = (
-        session.query(BillFee)
-        .filter(BillFee.identifier_id == bill.id, BillFee.fee_status == "UNPAID")
-        .all()
-    )
-    for fee in fees:
-        remaining_amount = remaining_amount = adjust_for_revenue(
-            session=session,
-            event_id=event_id,
-            payment_to_adjust_from=remaining_amount,
-            debit_str=debit_acc_str,
-            fee=fee,
-        )
-
-    remaining_amount = adjust_for_receivable(
-        remaining_amount,
-        to_acc=debit_acc_str,
-        from_acc=f"{bill.id}/bill/unbilled/a",
-    )
     remaining_amount = adjust_for_receivable(
         remaining_amount,
         to_acc=debit_acc_str,
         from_acc=f"{bill.id}/bill/interest_receivable/a",
+    )
+    remaining_amount = adjust_for_receivable(
+        remaining_amount,
+        to_acc=debit_acc_str,
+        from_acc=f"{bill.id}/bill/unbilled/a",
     )
     remaining_amount = adjust_for_receivable(
         remaining_amount,
@@ -397,7 +383,7 @@ def adjust_for_revenue(
 
     credit_book_str = get_revenue_book_str_for_fee(fee=fee)
 
-    fee_to_adjust = min(payment_to_adjust_from, fee.gross_amount)
+    fee_to_adjust = min(payment_to_adjust_from, fee.remaining_fee_amount)
     gst_split = get_gst_split_from_amount(
         amount=fee_to_adjust,
         total_gst_rate=fee.igst_rate,
@@ -411,39 +397,39 @@ def adjust_for_revenue(
         credit_book_str=credit_book_str,
         amount=gst_split["net_amount"],
     )
-    fee.net_amount_paid = gst_split["net_amount"]
+    fee.net_amount_paid += gst_split["net_amount"]
 
     # Settle for cgst
     create_ledger_entry_from_str(
         session,
         event_id=event_id,
         debit_book_str=debit_str,
-        credit_book_str="12345/redcarpet/cgst_payable/l",
+        credit_book_str=f"{fee.user_id}/user/cgst_payable/l",
         amount=gst_split["cgst"],
     )
-    fee.cgst_paid = gst_split["cgst"]
+    fee.cgst_paid += gst_split["cgst"]
 
     # Settle for sgst
     create_ledger_entry_from_str(
         session,
         event_id=event_id,
         debit_book_str=debit_str,
-        credit_book_str="12345/redcarpet/sgst_payable/l",
+        credit_book_str=f"{fee.user_id}/user/sgst_payable/l",
         amount=gst_split["sgst"],
     )
-    fee.sgst_paid = gst_split["sgst"]
+    fee.sgst_paid += gst_split["sgst"]
 
     # Settle for igst
     create_ledger_entry_from_str(
         session,
         event_id=event_id,
         debit_book_str=debit_str,
-        credit_book_str="12345/redcarpet/igst_payable/l",
+        credit_book_str=f"{fee.user_id}/user/igst_payable/l",
         amount=gst_split["igst"],
     )
-    fee.igst_paid = gst_split["igst"]
+    fee.igst_paid += gst_split["igst"]
 
-    fee.gross_amount_paid = gst_split["gross_amount"]
+    fee.gross_amount_paid += gst_split["gross_amount"]
     if fee.gross_amount == fee.gross_amount_paid:
         fee.fee_status = "PAID"
 

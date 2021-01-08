@@ -402,9 +402,9 @@ class LedgerEntry(Base):
     id = Column(Integer, primary_key=True)
     event_id = Column(Integer, ForeignKey(LedgerTriggerEvent.id), nullable=False)
     debit_account = Column(Integer, ForeignKey(BookAccount.id), nullable=False)
-    debit_account_balance = Column(DECIMAL, nullable=False)
+    debit_account_balance = Column(DECIMAL)
     credit_account = Column(Integer, ForeignKey(BookAccount.id), nullable=False)
-    credit_account_balance = Column(DECIMAL, nullable=False)
+    credit_account_balance = Column(DECIMAL)
     amount = Column(DECIMAL, nullable=False)
     created_at = Column(TIMESTAMP, default=get_current_ist_time(), nullable=False)
 
@@ -537,17 +537,21 @@ class Fee(AuditMixin):
     cgst_rate = Column(Numeric, nullable=False)
     igst_rate = Column(Numeric, nullable=False)
     gross_amount = Column(Numeric, nullable=False)
-    net_amount_paid = Column(Numeric, nullable=True)
-    sgst_paid = Column(Numeric, nullable=True)
-    cgst_paid = Column(Numeric, nullable=True)
-    igst_paid = Column(Numeric, nullable=True)
-    gross_amount_paid = Column(Numeric, nullable=True)
+    net_amount_paid = Column(Numeric, nullable=True, default=0)
+    sgst_paid = Column(Numeric, nullable=True, default=0)
+    cgst_paid = Column(Numeric, nullable=True, default=0)
+    igst_paid = Column(Numeric, nullable=True, default=0)
+    gross_amount_paid = Column(Numeric, nullable=True, default=0)
     fee_status = Column(String(10), nullable=False, default="UNPAID")
 
     __mapper_args__ = {
         "polymorphic_identity": "fee",
         "polymorphic_on": identifier,
     }
+
+    @hybrid_property
+    def remaining_fee_amount(self) -> Decimal:
+        return self.gross_amount - self.gross_amount_paid
 
 
 class BillFee(Fee):

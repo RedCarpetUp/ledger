@@ -150,6 +150,18 @@ class BaseBill:
         )
         return atm_transactions_sum or 0
 
+    def get_interest_due(self):
+        _, interest_due = get_account_balance_from_str(
+            self.session, book_string=f"{self.id}/bill/interest_receivable/a"
+        )
+        return interest_due
+
+    def get_principal_due(self):
+        _, principal_due = get_account_balance_from_str(
+            self.session, book_string=f"{self.id}/bill/principal_receivable/a"
+        )
+        return principal_due
+
     def get_relative_delta_for_emi(self, emi_number: int, amortization_date: Date) -> Dict[str, int]:
         return {"months": 1, "day": 15}
 
