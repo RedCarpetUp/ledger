@@ -432,7 +432,7 @@ class LoanDataPy(AuditMixinPy):
 
 class CardTransaction(AuditMixin):
     __tablename__ = "card_transaction"
-    loan_id = Column(Integer, ForeignKey(LoanData.id), nullable=True)
+    loan_id = Column(Integer, ForeignKey(LoanData.id), nullable=False)
     txn_time = Column(TIMESTAMP, nullable=False)
     amount = Column(Numeric, nullable=False)
     source = Column(String(30), nullable=False)
