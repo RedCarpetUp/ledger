@@ -47,7 +47,7 @@ def provide_moratorium(user_loan: BaseLoan, start_date: date, end_date: date):
         end_emi_number=moratorium_emis[-1].emi_number,
     )
 
-    # Get future emis of all the bills whose emis are falling under moratorium period.
+    # Get future emis of all the bills
     bill_emis = (
         user_loan.session.query(LoanSchedule)
         .filter(

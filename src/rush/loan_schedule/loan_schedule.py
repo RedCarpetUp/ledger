@@ -19,6 +19,7 @@ from rush.models import (
     LedgerTriggerEvent,
     LoanMoratorium,
     LoanSchedule,
+    MoratoriumInterest,
     PaymentMapping,
 )
 
@@ -179,12 +180,37 @@ def close_loan(user_loan: BaseLoan, last_payment_date: datetime):
         )
         .all()
     )
+    loan_moratorium = (
+        user_loan.session.query(LoanMoratorium)
+        .filter(
+            LoanMoratorium.loan_id == user_loan.loan_id,
+        )
+        .order_by(LoanMoratorium.start_date.desc())
+        .first()
+    )
+    moratorium_interest = (
+        user_loan.session.query(func.sum(MoratoriumInterest.interest).label("total_moratorium_interest"))
+        .join(
+            LoanMoratorium,
+            MoratoriumInterest.moratorium_id == LoanMoratorium.id,
+        )
+        .filter(
+            LoanMoratorium.loan_id == user_loan.loan_id,
+            MoratoriumInterest.bill_id.is_(None),
+        )
+        .group_by(MoratoriumInterest.moratorium_id)
+        .first()
+    )
     for bill_emi in all_future_bill_emis:
         if bill_emi.due_date == next_emi_due_date:
             bill_emi.principal_due = bill_emi.total_closing_balance
         else:
             bill_emi.principal_due = 0
-        bill_emi.interest_due = 0
+        if loan_moratorium and bill_emi.due_date == next_emi_due_date:
+            bill_emi.interest_due = moratorium_interest.total_moratorium_interest
+            loan_moratorium = None
+        else:
+            bill_emi.interest_due = 0
 
     # Refresh the due amounts of loan schedule after altering bill's schedule.
     group_bills(user_loan)
