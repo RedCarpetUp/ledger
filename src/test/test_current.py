@@ -3891,7 +3891,7 @@ def test_moratorium_bill_schedule(session: Session) -> None:
         .first()
     )
     assert interest_event is not None
-    assert interest_event.amount == Decimal("529.46")
+    assert interest_event.amount == Decimal("302.45")
 
     assert len(emis) == 15
     assert emis[0].emi_number == 1
