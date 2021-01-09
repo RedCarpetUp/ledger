@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
+from sqlalchemy.util.langhelpers import only_once
 
 from rush.card import (
     create_user_product,
@@ -18,10 +19,15 @@ from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import get_account_balance_from_str
 from rush.models import (
+    LedgerTriggerEvent,
     Lenders,
     LoanData,
     Product,
     User,
+)
+from rush.payments import (
+    find_split_to_slide_in_loan,
+    payment_received_event,
 )
 from rush.txn_loan import transaction_to_loan
 from rush.utils import get_current_ist_time
@@ -151,6 +157,47 @@ def test_transaction_loan(session: Session) -> None:
         session, book_string=f"{txn_loan_bill.id}/bill/principal_receivable/a"
     )
     assert principal_receivable == 1200
+
+    payment_split_info = find_split_to_slide_in_loan(
+        session=session, user_loan=user_loan, total_amount_to_slide=1340
+    )
+
+    bills = user_loan.get_unpaid_bills()
+
+    assert any(bill.id == txn_loan_bill.id for bill in bills)
+
+    assert len(payment_split_info) == 2
+    assert payment_split_info[0]["type"] == "principal"
+    assert payment_split_info[0]["amount_to_adjust"] == Decimal(670)
+    assert payment_split_info[1]["type"] == "principal"
+    assert payment_split_info[1]["amount_to_adjust"] == Decimal(670)
+
+    lt = LedgerTriggerEvent(
+        name="payment_received",
+        loan_id=user_loan.loan_id if user_loan else None,
+        amount=1340,
+        post_date=parse_date("2021-01-02 19:23:11"),
+        extra_details={
+            "payment_request_id": "dummy_payment",
+            "payment_type": "principal",
+            "user_product_id": user_product.id if user_product.id else user_loan.user_product_id,
+            "lender_id": user_loan.lender_id,
+        },
+    )
+    session.add(lt)
+    session.flush()
+
+    lender_id = user_loan.lender_id
+    payment_received_event(
+        session=session,
+        user_loan=user_loan,
+        debit_book_str=f"{lender_id}/lender/pg_account/a",
+        event=lt,
+        skip_closing=False,
+        user_product_id=user_product.id if user_product.id else user_loan.user_product_id,
+    )
+
+    assert user_loan.get_remaining_min(date_to_check_against=parse_date("2021-01-03 00:00:00")) == 0
 
     bill_date = parse_date("2021-01-01 00:00:00")
     bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
