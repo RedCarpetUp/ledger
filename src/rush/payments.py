@@ -120,10 +120,10 @@ def payment_received_event(
             amount=payment_received_amt,
         )
     elif payment_type in (
-        "card_reload_fee",
+        "card_reload_fees",
         "reset_joining_fees",
-        "card_activation_fee",
-        "card_upgrade_fee",
+        "card_activation_fees",
+        "card_upgrade_fees",
     ):
         adjust_non_bill_payments(
             session=session,
@@ -346,7 +346,7 @@ def settle_payment_in_bank(
 
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].as_string() == payment_request_id)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
         .first()
     )
 
@@ -422,12 +422,12 @@ def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
         "principal_receivable",
         "unbilled",
         "atm_fee",
-        "card_activation_fee",
-        "card_reload_fee",
+        "card_activation_fees",
+        "card_reload_fees",
         "downpayment",
         "reset_joining_fees",
         "pre_payment",
-        "card_upgrade_fee",
+        "card_upgrade_fees",
     )
     # unbilled and principal belong to same component.
     updated_component_names = {

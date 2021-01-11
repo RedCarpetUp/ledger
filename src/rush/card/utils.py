@@ -108,7 +108,7 @@ def create_activation_fee(
         session=session,
         user_loan=user_loan,
         event=event,
-        fee_name="reset_joining_fees",
+        fee_name="card_activation_fees",
         gross_fee_amount=gross_amount,
         include_gst_from_gross_amount=include_gst_from_gross_amount,
     )
@@ -133,7 +133,32 @@ def create_reload_fee(
         session=session,
         user_loan=user_loan,
         event=event,
-        fee_name="card_reload_fee",
+        fee_name="card_reload_fees",
+        gross_fee_amount=gross_fee_amount,
+        include_gst_from_gross_amount=True,
+    )
+    event.amount = fee.gross_amount
+    return fee
+
+
+def create_upgrade_fee(
+    session: Session,
+    user_loan: BaseLoan,
+    post_date: DateTime,
+    gross_fee_amount: Decimal,
+) -> Fee:
+    event = LedgerTriggerEvent(
+        name="upgrade_fee",
+        post_date=post_date,
+    )
+    session.add(event)
+    session.flush()
+
+    fee = create_loan_fee_entry(
+        session=session,
+        user_loan=user_loan,
+        event=event,
+        fee_name="card_upgrade_fees",
         gross_fee_amount=gross_fee_amount,
         include_gst_from_gross_amount=True,
     )

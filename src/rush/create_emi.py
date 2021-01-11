@@ -267,21 +267,13 @@ def get_journal_entry_narration(event_name) -> String:
         return "Late Fee"
     elif event_name == "atm_fee":
         return "ATM Fee"
-    elif event_name in ("card_reload_fee", "card_upgrade_fee"):
+    elif event_name in ("card_reload_fees", "card_upgrade_fees"):
         return "Reload Fee"
-    elif event_name == "card_activation_fee":
+    elif event_name == "card_activation_fees":
         return "Processing Fee"
-    elif event_name in (
-        "payment_received",
-        "payment_received-unbilled",
-        "payment_received-pre_payment",
-    ):
+    elif event_name == "payment_received":
         return "Receipt-Import"
-    elif event_name in (
-        "transaction_refund",
-        "transaction_refund-unbilled",
-        "transaction_refund-pre_payment",
-    ):
+    elif event_name == "transaction_refund":
         return "Payment Received From Merchant"
 
 
@@ -290,9 +282,18 @@ def get_journal_entry_ptype(event_name) -> String:
         return "Late Fee-Card TL-Customer"
     elif event_name in ("atm_fee_added", "atm_fee"):
         return "CF ATM Fee-Customer"
-    elif event_name in ("reload_fee_added", "card_reload_fee", "upgrade_fee_added", "card_upgrade_fee"):
+    elif event_name in (
+        "reload_fee_added",
+        "card_reload_fees",
+        "upgrade_fee_added",
+        "card_upgrade_fees",
+    ):
         return "CF Reload Fee-Customer"
-    elif event_name in ("pre_product_fee_added", "card_activation_fee", "reset_joining_fees"):
+    elif event_name in (
+        "pre_product_fee_added",
+        "card_activation_fees",
+        "reset_joining_fees",
+    ):
         return "CF Processing Fee-Customer"
     elif event_name == "payment_received":
         return "Card TL-Customer"
@@ -308,26 +309,18 @@ def get_journal_entry_ptype(event_name) -> String:
 
 
 def get_journal_entry_ledger_for_payment(event_name) -> String:
-    if event_name in (
-        "payment_received",
-        "payment_received-unbilled",
-        "payment_received-pre_payment",
-    ):
+    if event_name == "payment_received":
         return "Axis Bank Ltd-Collections A/c"
-    elif event_name in (
-        "transaction_refund",
-        "transaction_refund-unbilled",
-        "transaction_refund-pre_payment",
-    ):
+    elif event_name == "transaction_refund":
         return "Cards Upload A/c"
 
 
 def get_ledger_for_fee(fee_acc) -> String:
     if fee_acc == "late_fine":
         return "Late Fee"
-    elif fee_acc in ("atm_fee", "reset_joining_fees", "card_activation_fee"):
+    elif fee_acc in ("atm_fee", "reset_joining_fees", "card_activation_fees"):
         return "Processing Fee"
-    elif fee_acc in ("card_reload_fee", "card_upgrade_fee"):
+    elif fee_acc in ("card_reload_fees", "card_upgrade_fees"):
         return "Reload Fee"
     else:
         return fee_acc.upper()  # sgst, cgst.
@@ -414,17 +407,20 @@ def update_journal_entry(
             if split_data[0] == "pre_payment":
                 prepayment_amount = split_data[1]
         event_amount = event.amount
-        event_name = event.name
         for count in range(len(payment_split_data) + 1):
             if count == len(payment_split_data):
-                event.name = event_name
                 event.amount = event_amount - prepayment_amount
                 gateway_expenses = gateway_expenses if gateway_expenses else 0
                 p_type = get_journal_entry_ptype(event.name)
+                narration_name = get_journal_entry_narration(event.name)
             else:
-                event.name = f"{event_name}-{payment_split_data[count][0]}"
                 event.amount = payment_split_data[count][1]
-                p_type = get_journal_entry_ptype(event.name)
+                if event.name == "payment_received":
+                    narration_name = "Receipt-Import"
+                    p_type = "CF-Customer"
+                elif event.name == "transaction_refund":
+                    narration_name = "Payment Received From Merchant"
+                    p_type = "CF-Merchant"
             if event.amount == 0:
                 continue
             if payment_request_data.type not in ("collection"):
@@ -439,7 +435,7 @@ def update_journal_entry(
                 "RedCarpet",
                 event.amount - (gateway_expenses if gateway_expenses else 0),
                 0,
-                get_journal_entry_narration(event.name),
+                narration_name,
                 settlement_date,
                 1,
                 p_type,
