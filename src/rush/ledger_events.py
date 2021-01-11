@@ -447,7 +447,7 @@ def reduce_revenue_for_fee_refund(
     create_ledger_entry_from_str(
         session,
         event_id=fee.event_id,
-        debit_book_str="12345/redcarpet/cgst_payable/l",
+        debit_book_str=f"{fee.user_id}/user/cgst_payable/l",
         credit_book_str=credit_book_str,
         amount=Decimal(fee.cgst_paid),
     )
@@ -455,7 +455,7 @@ def reduce_revenue_for_fee_refund(
     create_ledger_entry_from_str(
         session,
         event_id=fee.event_id,
-        debit_book_str="12345/redcarpet/sgst_payable/l",
+        debit_book_str=f"{fee.user_id}/user/sgst_payable/l",
         credit_book_str=credit_book_str,
         amount=Decimal(fee.sgst_paid),
     )
@@ -463,7 +463,7 @@ def reduce_revenue_for_fee_refund(
     create_ledger_entry_from_str(
         session,
         event_id=fee.event_id,
-        debit_book_str="12345/redcarpet/igst_payable/l",
+        debit_book_str=f"{fee.user_id}/user/igst_payable/l",
         credit_book_str=credit_book_str,
         amount=Decimal(fee.igst_paid),
     )
