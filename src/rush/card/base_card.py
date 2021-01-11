@@ -242,7 +242,10 @@ class BaseLoan(Loan):
             from rush.card.utils import create_user_product_mapping
 
             user_product_id = create_user_product_mapping(
-                session=session, user_id=kwargs["user_id"], product_type=card_type
+                session=session,
+                user_id=kwargs["user_id"],
+                product_type=card_type,
+                lender_id=kwargs["lender_id"],
             ).id
 
         loan = session.query(cls).filter(cls.user_product_id == user_product_id).one()

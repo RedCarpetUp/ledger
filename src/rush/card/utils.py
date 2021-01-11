@@ -40,7 +40,7 @@ def get_product_id_from_card_type(session: Session, card_type: str) -> int:
 
 
 def create_user_product_mapping(
-    session: Session, user_id: int, product_type: str, lender_id: int = 62311
+    session: Session, user_id: int, product_type: str, lender_id: Optional[int] = None
 ) -> UserProduct:
     user_product = UserProduct.new(session, user_id=user_id, product_type=product_type)
     session.flush()

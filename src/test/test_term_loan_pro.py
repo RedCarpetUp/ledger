@@ -128,7 +128,9 @@ def test_create_term_loan(session: Session) -> None:
     create_products(session=session)
     create_user(session=session)
 
-    user_product = create_user_product_mapping(session=session, user_id=4, product_type="term_loan_pro")
+    user_product = create_user_product_mapping(
+        session=session, user_id=4, product_type="term_loan_pro", lender_id=62311
+    )
     user_loan = get_user_product(
         session=session, user_id=user_product.user_id, card_type="term_loan_pro"
     )
@@ -238,7 +240,9 @@ def test_create_term_loan_2(session: Session) -> None:
     create_products(session=session)
     create_user(session=session)
 
-    user_product = create_user_product_mapping(session=session, user_id=4, product_type="term_loan_pro")
+    user_product = create_user_product_mapping(
+        session=session, user_id=4, product_type="term_loan_pro", lender_id=62311
+    )
     user_loan = get_user_product(
         session=session, user_id=user_product.user_id, card_type="term_loan_pro"
     )
