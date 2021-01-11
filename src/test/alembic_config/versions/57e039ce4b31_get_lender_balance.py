@@ -81,13 +81,16 @@ def upgrade() -> None:
     debit_account book_account%ROWTYPE;
     credit_account book_account%ROWTYPE;
     BEGIN
-        select * INTO STRICT debit_account from book_account where id = NEW.debit_account;
-        select * into strict credit_account from book_account where id = NEW.credit_account;
-
-        NEW.debit_account_balance = (select case when debit_account.account_type in ('a', 'e') then debit_account.balance + NEW.amount else debit_account.balance - NEW.amount end);
-        NEW.credit_account_balance = (select case when credit_account.account_type in ('a', 'e') then credit_account.balance - NEW.amount else credit_account.balance + NEW.amount end);
-        UPDATE book_account set balance = NEW.debit_account_balance where id = NEW.debit_account;
-        UPDATE book_account set balance = NEW.credit_account_balance where id = NEW.credit_account;
+        select * INTO debit_account from book_account where id = NEW.debit_account;
+        select * INTO credit_account from book_account where id = NEW.credit_account;
+        if debit_account.identifier_type != 'lender' then 
+            NEW.debit_account_balance = (select case when debit_account.account_type in ('a', 'e') then debit_account.balance + NEW.amount else debit_account.balance - NEW.amount end);
+            UPDATE book_account set balance = NEW.debit_account_balance where id = NEW.debit_account;
+        end if;
+        if credit_account.identifier_type != 'lender' then
+            NEW.credit_account_balance = (select case when credit_account.account_type in ('a', 'e') then credit_account.balance - NEW.amount else credit_account.balance + NEW.amount end);
+            UPDATE book_account set balance = NEW.credit_account_balance where id = NEW.credit_account;
+        end if;
         RETURN NEW;
     END;
     $$;

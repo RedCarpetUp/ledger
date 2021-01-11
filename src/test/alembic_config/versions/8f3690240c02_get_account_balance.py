@@ -1,167 +1,78 @@
-"""get_account_balance
+"""get_lender_balance
 
-Revision ID: 8f3690240c02
-Revises: d5e975fd205c
-Create Date: 2020-07-17 08:27:52.206387
+Revision ID: 57e039ce4b31
+Revises: 2590045263e5
+Create Date: 2020-12-24 12:33:12.628613
 
 """
 import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "8f3690240c02"
-down_revision = "d5e975fd205c"
+revision = "57e039ce4b31"
+down_revision = "2590045263e5"
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
-    op.execute(
-        """
-    create function get_account_balance_by_book_id(
-      book_account integer, till_date timestamp DEFAULT now() at time zone 'Asia/Kolkata'
-    ) RETURNS numeric as $$
-    select 
-      case when le.debit_account = $1 then debit_account_balance else credit_account_balance end as account_balance 
-    from 
-      ledger_entry le, 
-      ledger_trigger_event lte 
-    where 
-      (
-        le.debit_account = $1 
-        or le.credit_account = $1
-      ) 
-      and lte.id = le.event_id 
-      and post_date <= $2 
-    order by 
-      le.id desc limit 1;
-    $$ language SQL;
-    """
-    )
+    op.alter_column("ledger_entry", "debit_account_balance", nullable=True)
+    op.alter_column("ledger_entry", "credit_account_balance", nullable=True)
 
     op.execute(
         """
-    create function get_account_balance_between_periods_by_book_id(
-      book_account integer, from_date timestamp, till_date timestamp DEFAULT now() at time zone 'Asia/Kolkata' 
-    ) RETURNS numeric as $$ with balances as (
-      select 
-        $1 as id, 
-        sum(
-          case when debit_account = $1 then l.amount else 0 end
-        ) as debit_balance, 
-        sum(
-          case when credit_account = $1 then l.amount else 0 end
-        ) as credit_balance 
-      from 
-        ledger_entry l,
-        ledger_trigger_event lte
-      where 
-        (debit_account = $1 
-        or credit_account = $1) and lte.id = l.event_id
-        and lte.post_date >= $2 and lte.post_date <= $3 
-      group by 
-        1
-    ) 
-    select 
-      case when book.account_type in ('a', 'e') then debit_balance - credit_balance else credit_balance - debit_balance end as account_balance 
-    from 
-      balances 
-      join book_account book on book.id = balances.id;
-    $$ language SQL;
-    """
-    )
+       create or replace function get_lender_account_balance(
+            book_identifier integer,
+            book_name varchar(50),
+            till_date timestamp DEFAULT now() at time zone 'Asia/Kolkata'
+        )
+        returns numeric
+        language plpgsql
+        as
+        $$
+        DECLARE
+        book_id integer;
+        account_balance numeric;
+        BEGIN
+            SELECT id INTO book_id
+            FROM book_account AS ba
+            WHERE ba.identifier = $1 AND ba.book_name = $2;
 
-    op.execute(
-        """
-    create function get_account_balance(
-      identifier integer, identifier_type varchar, 
-      book_name varchar, account_type varchar, till_date timestamp DEFAULT now() at time zone 'Asia/Kolkata'
-    ) RETURNS numeric as $$ with book as (
-      select 
-        * 
-      from 
-        book_account 
-      where 
-        identifier = $1 
-        and identifier_type = $2 
-        and book_name = $3 
-        and account_type = $4
-    ) 
-    select 
-      get_account_balance_by_book_id(id, $5) as account_balance 
-    from book
-    $$ language SQL;
-    """
-    )
+            with balances as (
+              select 
+                book_id as id, 
+                sum(
+                  case when debit_account = book_id then l.amount else 0 end
+                ) as debit_balance, 
+                sum(
+                  case when credit_account = book_id then l.amount else 0 end
+                ) as credit_balance 
+              from 
+                ledger_entry l,
+                ledger_trigger_event lte
+              where 
+                (debit_account = book_id 
+                or credit_account = book_id) and lte.id = l.event_id
+                and lte.post_date <= $3 
+              group by 
+                1
+            )
 
-    op.execute(
-        """
-    create function get_account_balance_between_periods(
-      identifier integer, identifier_type varchar, 
-      book_name varchar, account_type varchar, from_date timestamp, till_date timestamp DEFAULT now() at time zone 'Asia/Kolkata'
-    ) RETURNS numeric as $$ with book as (
-      select 
-        * 
-      from 
-        book_account 
-      where 
-        identifier = $1 
-        and identifier_type = $2 
-        and book_name = $3 
-        and account_type = $4
-    ) 
-    select 
-      get_account_balance_between_periods_by_book_id(id, $5, $6) as account_balance 
-    from book
-    $$ language SQL;
-    """
-    )
-
-    # To optimize, add a filter to get only unpaid bills.
-    op.execute(
-        """
-        create view loan_min_view as 
-        select 
-          loan_id, 
-          sum(bill_min_balance) as min_balance 
-        from 
-          (
             select 
-              loan_id, 
-              get_account_balance(id, 'bill', 'min', 'a') as bill_min_balance 
+              case when book.account_type in ('a', 'e') then debit_balance - credit_balance else credit_balance - debit_balance end INTO account_balance 
             from 
-              loan_data 
-            where 
-              is_generated = true
-          ) bills 
-        group by 
-          loan_id;
-        """
-    )
+              balances 
+              join book_account book on book.id = balances.id;
 
-    # To optimize, add a filter to get only unpaid bills.
-    op.execute(
-        """
-        create view loan_max_view as 
-        select 
-          loan_id, 
-          sum(bill_max_balance) as max_balance 
-        from 
-          (
-            select 
-              loan_id, 
-              get_account_balance(id, 'bill', 'max', 'a') as bill_max_balance 
-            from 
-              loan_data 
-          ) bills 
-        group by 
-          loan_id;
-        """
+             RETURN account_balance;
+        END;
+        $$;
+    """
     )
 
     op.execute(
         """
-    CREATE FUNCTION calculate_book_account_balance()
+    CREATE OR REPLACE FUNCTION calculate_book_account_balance()
         RETURNS trigger
         LANGUAGE plpgsql
     AS
@@ -170,35 +81,22 @@ def upgrade() -> None:
     debit_account book_account%ROWTYPE;
     credit_account book_account%ROWTYPE;
     BEGIN
-        select * INTO STRICT debit_account from book_account where id = NEW.debit_account;
-        select * into strict credit_account from book_account where id = NEW.credit_account;
-        
-        NEW.debit_account_balance = (select case when debit_account.account_type in ('a', 'e') then debit_account.balance + NEW.amount else debit_account.balance - NEW.amount end);
-        NEW.credit_account_balance = (select case when credit_account.account_type in ('a', 'e') then credit_account.balance - NEW.amount else credit_account.balance + NEW.amount end);
-        UPDATE book_account set balance = NEW.debit_account_balance where id = NEW.debit_account;
-        UPDATE book_account set balance = NEW.credit_account_balance where id = NEW.credit_account;
+        select * INTO debit_account from book_account where id = NEW.debit_account;
+        select * INTO credit_account from book_account where id = NEW.credit_account;
+        if debit_account.identifier_type != 'lender' then 
+            NEW.debit_account_balance = (select case when debit_account.account_type in ('a', 'e') then debit_account.balance + NEW.amount else debit_account.balance - NEW.amount end);
+            UPDATE book_account set balance = NEW.debit_account_balance where id = NEW.debit_account;
+        end if;
+        if credit_account.identifier_type != 'lender' then
+            NEW.credit_account_balance = (select case when credit_account.account_type in ('a', 'e') then credit_account.balance - NEW.amount else credit_account.balance + NEW.amount end);
+            UPDATE book_account set balance = NEW.credit_account_balance where id = NEW.credit_account;
+        end if;
         RETURN NEW;
     END;
     $$;
         """
     )
-    op.execute(
-        """
-    CREATE TRIGGER balance_insert_trigger
-    BEFORE INSERT
-    ON ledger_entry
-    FOR EACH ROW
-    EXECUTE PROCEDURE calculate_book_account_balance();
-    """
-    )
 
 
 def downgrade() -> None:
-    op.execute("DROP TRIGGER balance_insert_trigger on ledger_entry")
-    op.execute("DROP FUNCTION calculate_book_account_balance")
-    op.execute("DROP VIEW loan_max_view")
-    op.execute("DROP VIEW loan_min_view")
-    op.execute("DROP FUNCTION get_account_balance_by_book_id")
-    op.execute("DROP FUNCTION get_account_balance_between_periods_by_book_id")
-    op.execute("DROP FUNCTION get_account_balance")
-    op.execute("DROP FUNCTION get_account_balance_between_periods")
+    pass
