@@ -96,6 +96,7 @@ def create_activation_fee(
     post_date: DateTime,
     gross_amount: Decimal,
     include_gst_from_gross_amount: bool,
+    fee_name: str,
 ) -> Fee:
     event = LedgerTriggerEvent(
         name="activation_fee",
@@ -108,7 +109,7 @@ def create_activation_fee(
         session=session,
         user_loan=user_loan,
         event=event,
-        fee_name="card_activation_fees",
+        fee_name=fee_name,
         gross_fee_amount=gross_amount,
         include_gst_from_gross_amount=include_gst_from_gross_amount,
     )

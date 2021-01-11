@@ -123,6 +123,7 @@ def test_reset_joining_fees(session: Session) -> None:
         post_date=parse_date("2019-02-01 00:00:00"),
         gross_amount=Decimal(1000),
         include_gst_from_gross_amount=False,
+        fee_name="reset_joining_fees",
     )
 
     assert card_activation_fee.fee_status == "UNPAID"

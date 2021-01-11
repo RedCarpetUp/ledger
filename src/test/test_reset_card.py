@@ -99,6 +99,7 @@ def test_create_term_loan(session: Session) -> None:
         post_date=parse_date("2020-08-01 00:00:00"),
         gross_amount=Decimal("100"),
         include_gst_from_gross_amount=False,
+        fee_name="reset_joining_fees",
     )
 
     payment_date = parse_date("2020-08-01")
@@ -213,6 +214,7 @@ def test_reset_loan_limit_unlock_success(session: Session) -> None:
         post_date=parse_date("2020-08-01 00:00:00"),
         gross_amount=Decimal("100"),
         include_gst_from_gross_amount=False,
+        fee_name="reset_joining_fees",
     )
 
     payment_date = parse_date("2020-08-01")
@@ -295,6 +297,7 @@ def test_reset_loan_limit_unlock_error(session: Session) -> None:
         post_date=parse_date("2020-08-01 00:00:00"),
         gross_amount=Decimal("100"),
         include_gst_from_gross_amount=False,
+        fee_name="reset_joining_fees",
     )
 
     payment_date = parse_date("2020-08-01")
