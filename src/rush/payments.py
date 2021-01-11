@@ -166,13 +166,12 @@ def payment_received_event(
         # We will either slide or close bills
         slide_payment_to_emis(user_loan, event)
 
-    gateway_expenses = Decimal("0.5")
     create_ledger_entry_from_str(
         session=session,
         event_id=event.id,
-        debit_book_str="12345/redcarpet/gateway_expenses/e",
+        debit_book_str=f"{user_loan.lender_id}/lender/gateway_expenses/e",
         credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
-        amount=gateway_expenses,
+        amount=payment_request_data.payment_execution_charges,
     )
 
     create_payment_split(session, event)
