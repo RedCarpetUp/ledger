@@ -1,6 +1,8 @@
 from datetime import datetime
 from decimal import Decimal
+from typing import Optional
 
+from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
 from sqlalchemy.orm import (
     Session,
@@ -18,6 +20,8 @@ from rush.models import (
     LedgerTriggerEvent,
     LoanData,
     LoanMoratorium,
+    PaymentRequestsData,
+    PaymentSplit,
     UserData,
 )
 
@@ -124,7 +128,12 @@ def update_event_with_dpd(
         events_list = events_list.filter(LedgerTriggerEvent.id == event.id)
     events_list = events_list.order_by(LedgerTriggerEvent.post_date.asc()).all()
 
-    for ledger_trigger_event, ledger_entry, debit_account, credit_account in events_list:
+    for (
+        ledger_trigger_event,
+        ledger_entry,
+        debit_account,
+        credit_account,
+    ) in events_list:
         if (
             ledger_trigger_event.name
             in [
@@ -230,6 +239,7 @@ def create_journal_entry(
     ptype,
     event_id,
     loan_id,
+    user_id,
 ):
     entry = JournalEntry(
         voucher_type=voucher_type,
@@ -245,6 +255,7 @@ def create_journal_entry(
         ptype=ptype,
         event_id=event_id,
         loan_id=loan_id,
+        user_id=user_id,
     )
     session.add(entry)
     session.flush()
@@ -252,13 +263,13 @@ def create_journal_entry(
 
 
 def get_journal_entry_narration(event_name) -> String:
-    if event_name == "charge_late_fine":
+    if event_name == "late_fine":
         return "Late Fee"
-    elif event_name == "atm_fee_added":
+    elif event_name == "atm_fee":
         return "ATM Fee"
-    elif event_name == "reload_fee_added":
+    elif event_name in ("card_reload_fees", "card_upgrade_fees"):
         return "Reload Fee"
-    elif event_name == "pre_product_fee_added":
+    elif event_name == "card_activation_fees":
         return "Processing Fee"
     elif event_name == "payment_received":
         return "Receipt-Import"
@@ -267,17 +278,33 @@ def get_journal_entry_narration(event_name) -> String:
 
 
 def get_journal_entry_ptype(event_name) -> String:
-    if event_name == "charge_late_fine":
+    if event_name in ("charge_late_fine", "late_fine"):
         return "Late Fee-Card TL-Customer"
-    elif event_name == "atm_fee_added":
+    elif event_name in ("atm_fee_added", "atm_fee"):
         return "CF ATM Fee-Customer"
-    elif event_name == "reload_fee_added":
+    elif event_name in (
+        "reload_fee_added",
+        "card_reload_fees",
+        "upgrade_fee_added",
+        "card_upgrade_fees",
+    ):
         return "CF Reload Fee-Customer"
-    elif event_name == "pre_product_fee_added":
+    elif event_name in (
+        "pre_product_fee_added",
+        "card_activation_fees",
+        "reset_joining_fees",
+    ):
         return "CF Processing Fee-Customer"
     elif event_name == "payment_received":
+        return "Card TL-Customer"
+    elif event_name in ("payment_received-unbilled", "payment_received-pre_payment"):
         return "CF-Customer"
     elif event_name == "transaction_refund":
+        return "Card TL-Merchant"
+    elif event_name in (
+        "transaction_refund-unbilled",
+        "transaction_refund-pre_payment",
+    ):
         return "CF-Merchant"
 
 
@@ -291,9 +318,9 @@ def get_journal_entry_ledger_for_payment(event_name) -> String:
 def get_ledger_for_fee(fee_acc) -> String:
     if fee_acc == "late_fine":
         return "Late Fee"
-    elif fee_acc in ("atm_fee", "reset_joining_fees", "card_activation_fee"):
+    elif fee_acc in ("atm_fee", "reset_joining_fees", "card_activation_fees"):
         return "Processing Fee"
-    elif fee_acc == "card_reload_fee":
+    elif fee_acc in ("card_reload_fees", "card_upgrade_fees"):
         return "Reload Fee"
     else:
         return fee_acc.upper()  # sgst, cgst.
@@ -302,14 +329,22 @@ def get_ledger_for_fee(fee_acc) -> String:
 def update_journal_entry(
     user_loan: BaseLoan,
     event: LedgerTriggerEvent,
+    user_id: Optional[int] = None,
+    session: Optional[Session] = None,
 ) -> None:
-    # TODO Think about alias accounts. Also what is processing and reload event?
-    session = user_loan.session
+    if not session:
+        session = user_loan.session
+    if not user_id:
+        user_id = user_loan.user_id
+    loan_id = None
+    if user_loan:
+        loan_id = user_loan.id
+
     if not event.amount:  # Don't need 0 amount bills entries.
         return
     user_name = (
         session.query(UserData.first_name)
-        .filter(UserData.row_status == "active", UserData.user_id == user_loan.user_id)
+        .filter(UserData.row_status == "active", UserData.user_id == user_id)
         .scalar()
     ) or "John Doe"
 
@@ -328,7 +363,8 @@ def update_journal_entry(
             1,
             "Disbursal Card",
             event.id,
-            user_loan.id,
+            loan_id,
+            user_id,
         )
         create_journal_entry(
             session,
@@ -344,86 +380,167 @@ def update_journal_entry(
             2,
             "Disbursal Card",
             event.id,
-            user_loan.id,
+            loan_id,
+            user_id,
         )
     elif event.name == "payment_received" or event.name == "transaction_refund":
-        create_journal_entry(
-            session,
-            "Receipt-Import",
-            event.post_date,
-            get_journal_entry_ledger_for_payment(event.name),
-            "",
-            "RedCarpet",
-            event.amount,
-            0,
-            get_journal_entry_narration(event.name),
-            event.post_date,
-            1,
-            get_journal_entry_ptype(event.name),
-            event.id,
-            user_loan.id,
+        payment_request_data = (
+            session.query(PaymentRequestsData)
+            .filter(
+                PaymentRequestsData.payment_request_id == event.extra_details["payment_request_id"],
+                PaymentRequestsData.row_status == "active",
+            )
+            .first()
         )
-        create_journal_entry(
-            session,
-            "",
-            event.post_date,
-            user_name,
-            "",
-            "RedCarpet",
-            0,
-            event.amount,
-            "",
-            event.post_date,
-            2,
-            get_journal_entry_ptype(event.name),
-            event.id,
-            user_loan.id,
+        gateway_expenses = payment_request_data.payment_execution_charges
+        settlement_date = payment_request_data.payment_received_in_bank_date
+        payment_split_data = (
+            session.query(PaymentSplit.component, PaymentSplit.amount_settled)
+            .filter(
+                PaymentSplit.payment_request_id == event.extra_details["payment_request_id"],
+                PaymentSplit.component.in_(["pre_payment", "unbilled"]),
+            )
+            .all()
         )
+        prepayment_amount = 0
+        for split_data in payment_split_data:
+            if split_data[0] == "pre_payment":
+                prepayment_amount = split_data[1]
+        event_amount = event.amount
+        for count in range(len(payment_split_data) + 1):
+            if count == len(payment_split_data):
+                event.amount = event_amount - prepayment_amount
+                gateway_expenses = gateway_expenses if gateway_expenses else 0
+                p_type = get_journal_entry_ptype(event.name)
+                narration_name = get_journal_entry_narration(event.name)
+            else:
+                event.amount = payment_split_data[count][1]
+                if event.name == "payment_received":
+                    narration_name = "Receipt-Import"
+                    p_type = "CF-Customer"
+                elif event.name == "transaction_refund":
+                    narration_name = "Payment Received From Merchant"
+                    p_type = "CF-Merchant"
+            if event.amount == 0:
+                continue
+            if payment_request_data.type not in ("collection"):
+                loan_id = None
+                p_type = "CF-Customer"
+            create_journal_entry(
+                session,
+                "Receipt-Import",
+                settlement_date,
+                get_journal_entry_ledger_for_payment(event.name),
+                "",
+                "RedCarpet",
+                event.amount - (gateway_expenses if gateway_expenses else 0),
+                0,
+                narration_name,
+                settlement_date,
+                1,
+                p_type,
+                event.id,
+                loan_id,
+                user_id,
+            )
+            create_journal_entry(
+                session,
+                "",
+                settlement_date,
+                "Bank Charges (RC)",
+                "",
+                "RedCarpet",
+                gateway_expenses,
+                0,
+                "",
+                settlement_date,
+                2,
+                p_type,
+                event.id,
+                loan_id,
+                user_id,
+            )
+            create_journal_entry(
+                session,
+                "",
+                settlement_date,
+                user_name,
+                "",
+                "RedCarpet",
+                0,
+                event.amount,
+                "",
+                settlement_date,
+                3,
+                p_type,
+                event.id,
+                loan_id,
+                user_id,
+            )
         from rush.payments import get_payment_split_from_event
 
         split_data = get_payment_split_from_event(session, event)
-        principal_and_interest = split_data.pop("principal", 0) + split_data.pop("interest", 0)
+        filtered_split_data = {}
+        for key, value in split_data.items():
+            if key != "pre_payment":
+                filtered_split_data[key] = value
+        principal_and_interest = filtered_split_data.pop("principal", 0) + filtered_split_data.pop(
+            "interest", 0
+        )
         # if there is something else apart from principal and interest.
-        if split_data and event.amount != principal_and_interest:
+        if filtered_split_data and event.amount != principal_and_interest:
             sales_import_amount = event.amount - principal_and_interest
             narration_name = ""
-            for settled_acc, _ in split_data.items():  # First loop to get narration name.
+            fee_count = 0
+            event_name = ""
+            for (
+                settled_acc,
+                _,
+            ) in filtered_split_data.items():  # First loop to get narration name.
                 # So if there are more than one fee, it becomes "Late fee Reload fee".
                 if settled_acc not in ("sgst", "cgst", "igst"):
-                    narration_name += f" {get_ledger_for_fee(settled_acc)}"
-            p_type = f"{narration_name} -Card TL-Customer"
-            for sort_order, (settled_acc, amount) in enumerate(split_data.items(), 2):
+                    fee_count += 1
+                    event_name = settled_acc
+                    narration_name += f"{get_ledger_for_fee(settled_acc)} "
+            narration_name = narration_name.strip()
+            if fee_count == 1:
+                p_type = get_journal_entry_ptype(event_name)
+            else:
+                p_type = f"{narration_name} -Card TL-Customer"
+            for sort_order, (settled_acc, amount) in enumerate(filtered_split_data.items(), 2):
                 create_journal_entry(
                     session,
                     "",
-                    event.post_date,
+                    settlement_date,
                     get_ledger_for_fee(settled_acc),
                     "",
                     "RedCarpet",
                     0,
                     amount,
                     "",
-                    event.post_date,
+                    settlement_date,
                     sort_order,
                     p_type,
                     event.id,
-                    user_loan.id,
+                    loan_id,
+                    user_id,
                 )
             create_journal_entry(
                 session,
                 "Sales-Import",
-                event.post_date,
+                settlement_date,
                 user_name,
                 "",
                 "RedCarpet",
                 sales_import_amount,
                 0,
                 narration_name,
-                event.post_date,
+                settlement_date,
                 1,
                 p_type,
                 event.id,
-                user_loan.id,
+                loan_id,
+                user_id,
             )
     elif event.name == "bill_generate":
         create_journal_entry(
@@ -440,7 +557,8 @@ def update_journal_entry(
             1,
             "CF To TL",
             event.id,
-            user_loan.id,
+            loan_id,
+            user_id,
         )
         create_journal_entry(
             session,
@@ -456,5 +574,6 @@ def update_journal_entry(
             2,
             "CF To TL",
             event.id,
-            user_loan.id,
+            loan_id,
+            user_id,
         )

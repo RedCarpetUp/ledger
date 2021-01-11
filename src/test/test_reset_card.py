@@ -1,4 +1,8 @@
 from decimal import Decimal
+from test.utils import (
+    pay_payment_request,
+    payment_request_data,
+)
 
 import pytest
 from pendulum import parse as parse_date  # type: ignore
@@ -10,7 +14,7 @@ from rush.card import (
 )
 from rush.card.reset_card import ResetCard
 from rush.card.utils import (
-    add_pre_product_fee,
+    create_activation_fee,
     create_user_product_mapping,
 )
 from rush.ledger_utils import get_account_balance_from_str
@@ -22,8 +26,10 @@ from rush.models import (
     Product,
     User,
 )
-from rush.payments import payment_received
-from rush.utils import add_gst_split_to_amount
+from rush.payments import (
+    payment_received,
+    settle_payment_in_bank,
+)
 
 
 def create_lenders(session: Session) -> None:
@@ -61,7 +67,7 @@ def create_test_term_loan(session: Session, **kwargs) -> ResetCard:  # type: ign
         product_order_date=parse_date(date_str).date(),
         user_product_id=user_product_id,
         downpayment_percent=Decimal("0"),
-        interest_rate=3,
+        interest_rate=Decimal(3),
     )
 
     return loan
@@ -80,37 +86,49 @@ def test_create_term_loan(session: Session) -> None:
     create_user(session=session)
 
     user_product = create_user_product_mapping(
-        session=session, user_id=6, product_type="term_loan_reset"
+        session=session, user_id=6, product_type="term_loan_reset", lender_id=1756833
     )
+    user_loan = get_user_product(
+        session=session, user_id=user_product.user_id, card_type="term_loan_reset"
+    )
+    assert isinstance(user_loan, ResetCard) == True
 
-    fee = add_pre_product_fee(
+    fee = create_activation_fee(
         session=session,
-        user_id=6,
-        product_type="term_loan_reset",
+        user_loan=user_loan,
+        post_date=parse_date("2020-08-01 00:00:00"),
+        gross_amount=Decimal("100"),
+        include_gst_from_gross_amount=False,
         fee_name="reset_joining_fees",
-        user_product_id=user_product.id,
-        fee_amount=Decimal("100"),
-    )
-    session.flush()
-
-    gst_split = add_gst_split_to_amount(
-        net_amount=Decimal("100"),
-        total_gst_rate=Decimal("18"),
     )
 
-    assert gst_split["gross_amount"] == Decimal("118")
-    assert gst_split["net_amount"] == Decimal("100")
-
+    payment_date = parse_date("2020-08-01")
+    amount = fee.gross_amount
+    payment_request_id = "dummy_reset_fee_1"
+    payment_request_data(
+        session=session,
+        type="reset_joining_fees",
+        payment_request_amount=amount,
+        user_id=user_product.user_id,
+        payment_request_id=payment_request_id,
+    )
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
     payment_received(
         session=session,
-        user_loan=None,
-        payment_amount=gst_split["gross_amount"],
-        payment_date=parse_date("2020-08-01"),
-        payment_request_id="dummy_reset_fee",
-        payment_type="reset_joining_fees",
-        user_product_id=user_product.id,
-        lender_id=1756833,
+        user_loan=user_loan,
+        payment_request_data=payment_requests_data,
     )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
+    )
+
     session.flush()
 
     loan_creation_data = {"date_str": "2020-08-01", "user_product_id": user_product.id}
@@ -126,11 +144,6 @@ def test_create_term_loan(session: Session) -> None:
     assert loan.product_type == "term_loan_reset"
     assert loan.amortization_date == parse_date("2020-08-01").date()
 
-    user_loan = get_user_product(
-        session=session, user_id=loan.user_id, card_type="term_loan_reset", loan_id=loan.id
-    )
-    assert isinstance(user_loan, ResetCard) == True
-
     loan_data = session.query(LoanData).filter(LoanData.loan_id == user_loan.loan_id).one()
 
     assert loan_data.bill_start_date == parse_date("2020-09-01").date()
@@ -144,7 +157,7 @@ def test_create_term_loan(session: Session) -> None:
     _, loan_lender_payable = get_account_balance_from_str(
         session=session, book_string=f"{loan.loan_id}/loan/lender_payable/l"
     )
-    assert loan_lender_payable == Decimal("10000")
+    assert loan_lender_payable == Decimal("9882.50")
 
     all_emis = user_loan.get_loan_schedule()
 
@@ -188,37 +201,49 @@ def test_reset_loan_limit_unlock_success(session: Session) -> None:
     create_user(session=session)
 
     user_product = create_user_product_mapping(
-        session=session, user_id=6, product_type="term_loan_reset"
+        session=session, user_id=6, product_type="term_loan_reset", lender_id=1756833
     )
+    user_loan = get_user_product(
+        session=session, user_id=user_product.user_id, card_type="term_loan_reset"
+    )
+    assert isinstance(user_loan, ResetCard) == True
 
-    add_pre_product_fee(
+    fee = create_activation_fee(
         session=session,
-        user_id=6,
-        product_type="term_loan_reset",
+        user_loan=user_loan,
+        post_date=parse_date("2020-08-01 00:00:00"),
+        gross_amount=Decimal("100"),
+        include_gst_from_gross_amount=False,
         fee_name="reset_joining_fees",
-        user_product_id=user_product.id,
-        fee_amount=Decimal("100"),
-    )
-    session.flush()
-
-    gst_split = add_gst_split_to_amount(
-        net_amount=Decimal("100"),
-        total_gst_rate=Decimal("18"),
     )
 
-    assert gst_split["gross_amount"] == Decimal("118")
-    assert gst_split["net_amount"] == Decimal("100")
-
+    payment_date = parse_date("2020-08-01")
+    amount = fee.gross_amount
+    payment_request_id = "dummy_reset_fee_2"
+    payment_request_data(
+        session=session,
+        type="reset_joining_fees",
+        payment_request_amount=amount,
+        user_id=user_product.user_id,
+        payment_request_id=payment_request_id,
+    )
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
     payment_received(
         session=session,
-        user_loan=None,
-        payment_amount=gst_split["gross_amount"],
-        payment_date=parse_date("2020-08-01"),
-        payment_request_id="dummy_reset_fee",
-        payment_type="reset_joining_fees",
-        user_product_id=user_product.id,
-        lender_id=1756833,
+        user_loan=user_loan,
+        payment_request_data=payment_requests_data,
     )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
+    )
+
     session.flush()
 
     loan_creation_data = {"date_str": "2020-08-01", "user_product_id": user_product.id}
@@ -259,37 +284,49 @@ def test_reset_loan_limit_unlock_error(session: Session) -> None:
     create_user(session=session)
 
     user_product = create_user_product_mapping(
-        session=session, user_id=6, product_type="term_loan_reset"
+        session=session, user_id=6, product_type="term_loan_reset", lender_id=1756833
     )
+    user_loan = get_user_product(
+        session=session, user_id=user_product.user_id, card_type="term_loan_reset"
+    )
+    assert isinstance(user_loan, ResetCard) == True
 
-    fee = add_pre_product_fee(
+    fee = create_activation_fee(
         session=session,
-        user_id=6,
-        product_type="term_loan_reset",
+        user_loan=user_loan,
+        post_date=parse_date("2020-08-01 00:00:00"),
+        gross_amount=Decimal("100"),
+        include_gst_from_gross_amount=False,
         fee_name="reset_joining_fees",
-        user_product_id=user_product.id,
-        fee_amount=Decimal("100"),
-    )
-    session.flush()
-
-    gst_split = add_gst_split_to_amount(
-        net_amount=Decimal("100"),
-        total_gst_rate=Decimal("18"),
     )
 
-    assert gst_split["gross_amount"] == Decimal("118")
-    assert gst_split["net_amount"] == Decimal("100")
-
+    payment_date = parse_date("2020-08-01")
+    amount = fee.gross_amount
+    payment_request_id = "dummy_reset_fee"
+    payment_request_data(
+        session=session,
+        type="reset_joining_fees",
+        payment_request_amount=amount,
+        user_id=user_product.user_id,
+        payment_request_id=payment_request_id,
+    )
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
     payment_received(
         session=session,
-        user_loan=None,
-        payment_amount=gst_split["gross_amount"],
-        payment_date=parse_date("2020-08-01"),
-        payment_request_id="dummy_reset_fee",
-        payment_type="reset_joining_fees",
-        user_product_id=user_product.id,
-        lender_id=1756833,
+        user_loan=user_loan,
+        payment_request_data=payment_requests_data,
     )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
+    )
+
     session.flush()
 
     loan_creation_data = {"date_str": "2020-08-01", "user_product_id": user_product.id}

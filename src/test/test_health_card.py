@@ -1,4 +1,8 @@
 from decimal import Decimal
+from test.utils import (
+    pay_payment_request,
+    payment_request_data,
+)
 
 from dateutil.relativedelta import relativedelta
 from pendulum import parse as parse_date  # type: ignore
@@ -22,10 +26,14 @@ from rush.models import (
     CardNames,
     CardTransaction,
     Lenders,
+    Loan,
     Product,
     User,
 )
-from rush.payments import payment_received
+from rush.payments import (
+    payment_received,
+    settle_payment_in_bank,
+)
 
 
 def create_lenders(session: Session) -> None:
@@ -64,7 +72,7 @@ def create_user(session: Session) -> None:
     session.flush()
 
 
-def create_test_user_loan(session: Session) -> HealthCard:
+def create_test_user_loan(session: Session) -> Loan:
     uc = create_user_product(
         session=session,
         user_id=3,
@@ -446,13 +454,29 @@ def test_mixed_payment_received(session: Session) -> None:
 
     payment_date = parse_date("2020-08-03")
     amount = Decimal(2000)
-
+    payment_request_id = "mixed_payment"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=uc.id,
+        payment_request_id=payment_request_id,
+    )
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
     payment_received(
         session=session,
         user_loan=uc,
-        payment_amount=amount,
-        payment_date=payment_date,
-        payment_request_id="mixed_payment",
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=uc,
     )
 
     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")
@@ -528,12 +552,31 @@ def test_medical_payment_received(session: Session) -> None:
     )
     assert non_medical_limit_balance == Decimal(0)
 
+    payment_date = parse_date("2020-08-03")
+    amount = Decimal(700)
+    payment_request_id = "medical_payment"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=uc.id,
+        payment_request_id=payment_request_id,
+    )
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
     payment_received(
         session=session,
         user_loan=uc,
-        payment_amount=Decimal(700),
-        payment_date=parse_date("2020-08-03"),
-        payment_request_id="medical_payment",
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=uc,
     )
 
     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")
@@ -610,13 +653,29 @@ def test_non_medical_payment_received(session: Session) -> None:
 
     payment_date = parse_date("2020-08-03")
     amount = Decimal(1200)
-
+    payment_request_id = "non_medical_payment"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=uc.id,
+        payment_request_id=payment_request_id,
+    )
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
     payment_received(
         session=session,
         user_loan=uc,
-        payment_amount=amount,
-        payment_date=payment_date,
-        payment_request_id="non_medical_payment",
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=uc,
     )
 
     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")

@@ -4,21 +4,20 @@ from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
 from rush.card import (
-    HealthCard,
     create_user_product,
     get_user_product,
 )
+from rush.card.health_card import HealthCard
 from rush.card.utils import (
-    add_pre_product_fee,
-    add_reload_fee,
+    create_activation_fee,
+    create_reload_fee,
+    create_user_product_mapping,
 )
 from rush.models import (
     CardKitNumbers,
     CardNames,
     Lenders,
-    LoanFee,
     Product,
-    ProductFee,
     User,
 )
 
@@ -77,26 +76,6 @@ def create_test_user_loan(session: Session) -> HealthCard:
     return uc
 
 
-def test_add_pre_product_fees(session: Session) -> None:
-    create_lenders(session=session)
-    create_products(session=session)
-    create_user(session=session)
-
-    card_activation_fee = add_pre_product_fee(
-        session=session,
-        user_id=5,
-        product_type="health_card",
-        fee_name="card_activation_fee",
-        fee_amount=Decimal(1000),
-    )
-
-    sell_book_id = card_activation_fee.identifier_id
-
-    assert type(card_activation_fee) == ProductFee
-    assert sell_book_id is not None
-    assert card_activation_fee.fee_status == "UNPAID"
-
-
 def test_add_reload_fee(session: Session) -> None:
     create_lenders(session=session)
     card_db_updates(session=session)
@@ -111,16 +90,16 @@ def test_add_reload_fee(session: Session) -> None:
     user_loan = get_user_product(session=session, user_id=uc.user_id, card_type="health_card")
     assert isinstance(user_loan, HealthCard) == True
 
-    reload_fee = add_reload_fee(
+    reload_fee = create_reload_fee(
         session=session,
         user_loan=uc,
-        fee_amount=Decimal("100"),
-        post_date=parse_date("2020-08-01").date(),
+        gross_fee_amount=Decimal("100"),
+        post_date=parse_date("2020-08-01 00:00:00"),
     )
 
-    assert type(reload_fee) == LoanFee
     assert reload_fee.identifier_id == uc.loan_id
     assert reload_fee.fee_status == "UNPAID"
+    assert reload_fee.gross_amount == Decimal(100)
 
 
 def test_reset_joining_fees(session: Session) -> None:
@@ -128,16 +107,24 @@ def test_reset_joining_fees(session: Session) -> None:
     create_products(session=session)
     create_user(session=session)
 
-    card_activation_fee = add_pre_product_fee(
+    user_product = create_user_product_mapping(
+        session=session, user_id=5, product_type="term_loan_reset", lender_id=1756833
+    )
+    user_loan = get_user_product(
         session=session,
-        user_id=5,
-        product_type="term_loan_reset",
-        fee_name="reset_joining_fees",
-        fee_amount=Decimal(1000),
+        user_id=user_product.user_id,
+        card_type="term_loan_reset",
+        user_product_id=user_product.id,
     )
 
-    sell_book_id = card_activation_fee.identifier_id
+    card_activation_fee = create_activation_fee(
+        session=session,
+        user_loan=user_loan,
+        post_date=parse_date("2019-02-01 00:00:00"),
+        gross_amount=Decimal(1000),
+        include_gst_from_gross_amount=False,
+        fee_name="reset_joining_fees",
+    )
 
-    assert type(card_activation_fee) == ProductFee
-    assert sell_book_id is not None
     assert card_activation_fee.fee_status == "UNPAID"
+    assert card_activation_fee.gross_amount == Decimal(1180)

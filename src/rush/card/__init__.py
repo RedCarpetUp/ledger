@@ -35,7 +35,7 @@ def get_user_product(
     loan_id: Optional[int] = None,
     user_product_id: Optional[int] = None,
     _rows: str = "one",
-) -> Optional[Loan]:
+) -> BaseLoan:
     user_product_query = session.query(Loan).filter(
         Loan.user_id == user_id, Loan.product_type == card_type
     )
@@ -50,8 +50,6 @@ def get_user_product(
         user_product = user_product_query.one()
     elif _rows == "one_or_none":
         user_product = user_product_query.one_or_none()
-        if not user_product:
-            return
 
     user_product.prepare(session=session)
     return user_product

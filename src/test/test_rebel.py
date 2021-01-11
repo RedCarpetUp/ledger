@@ -4,35 +4,16 @@ from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
 from rush.card import (
-    RebelCard,
     create_user_product,
-    get_product_class,
     get_user_product,
 )
-from rush.card.base_card import (
-    BaseBill,
-    BaseLoan,
-)
-from rush.card.utils import (
-    add_pre_product_fee,
-    create_user_product_mapping,
-)
+from rush.card.base_card import BaseBill
+from rush.card.utils import create_user_product_mapping
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import get_account_balance_from_str
 from rush.models import (
-    BillFee,
-    CardKitNumbers,
-    CardNames,
-    EventDpd,
-    Fee,
-    LedgerTriggerEvent,
-    LenderPy,
     Lenders,
-    LoanData,
-    LoanMoratorium,
-    PaymentMapping,
-    PaymentSplit,
     Product,
     User,
 )
@@ -64,7 +45,9 @@ def test_rubpro_user(session: Session) -> None:
     create_products(session=session)
     create_user(session=session)
 
-    user_product = create_user_product_mapping(session=session, user_id=4369, product_type="rebel")
+    user_product = create_user_product_mapping(
+        session=session, user_id=4369, product_type="rebel", lender_id=1756833
+    )
     user_card = create_user_product(
         session=session,
         card_type="rebel",
@@ -94,6 +77,7 @@ def test_rubpro_user(session: Session) -> None:
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 1200
     user_loan = get_user_product(session, 4369, card_type="rebel")
+    assert user_loan is not None
     bill_date = parse_date("2020-12-01 00:00:00")
     bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
     latest_bill = user_loan.get_latest_bill()

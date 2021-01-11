@@ -1,11 +1,7 @@
 from typing import List
 
 from pendulum import DateTime
-from sqlalchemy import (
-    and_,
-    func,
-    or_,
-)
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from rush.accrue_financial_charges import (
@@ -41,25 +37,14 @@ def get_affected_events(session: Session, user_loan: BaseLoan) -> List[LedgerTri
 
 
 def get_payment_events(session: Session, user_loan: BaseLoan) -> List[LedgerTriggerEvent]:
-    events = session.query(LedgerTriggerEvent).filter(
-        LedgerTriggerEvent.name.in_(["payment_received", "transaction_refund"]),
-    )
-
-    # fetch downpayment events too for term loans.
-    if "term_loan" in user_loan.product_type:
-        events = events.filter(
-            or_(
-                LedgerTriggerEvent.loan_id == user_loan.loan_id,
-                and_(
-                    LedgerTriggerEvent.user_product_id == user_loan.user_product_id,
-                    LedgerTriggerEvent.payment_type == "downpayment",
-                ),
-            )
-        ).all()
-    else:
-        events = events.filter(
+    events = (
+        session.query(LedgerTriggerEvent)
+        .filter(
             LedgerTriggerEvent.loan_id == user_loan.loan_id,
-        ).all()
+            LedgerTriggerEvent.name.in_(["payment_received", "transaction_refund"]),
+        )
+        .all()
+    )
     return events
 
 

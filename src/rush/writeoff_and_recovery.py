@@ -3,7 +3,7 @@ from sqlalchemy import and_
 from rush.card import BaseLoan
 from rush.ledger_utils import create_ledger_entry_from_str
 from rush.models import (
-    BillFee,
+    Fee,
     LedgerTriggerEvent,
     LoanData,
 )
@@ -54,11 +54,16 @@ def recovery_event(user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
 def reverse_all_unpaid_fees(user_loan: BaseLoan) -> None:
     session = user_loan.session
     fee = (
-        session.query(BillFee)
+        session.query(Fee)
         .join(
-            LoanData, and_(LoanData.loan_id == user_loan.loan_id, BillFee.identifier_id == LoanData.id)
+            LoanData,
+            and_(
+                LoanData.loan_id == user_loan.loan_id,
+                Fee.identifier_id == LoanData.id,
+                Fee.identifier == "bill",
+            ),
         )
-        .filter(BillFee.loan_id == user_loan.loan_id, BillFee.fee_status == "UNPAID")
+        .filter(Fee.loan_id == user_loan.loan_id, Fee.fee_status == "UNPAID")
         .all()
     )
     fee.fee_status = "REVERSED"
