@@ -299,7 +299,7 @@ class BaseLoan(Loan):
             bills = func(self)
             if not bills:
                 return None
-            if type(bills) is List:
+            if type(bills) is list:
                 return [self.convert_to_bill_class(bill) for bill in bills]
             return self.convert_to_bill_class(bills)
 
@@ -399,12 +399,12 @@ class BaseLoan(Loan):
         return latest_bill
 
     @_convert_to_bill_class_decorator
-    def get_latest_bill_to_generate(self) -> BaseBill:
+    def get_latest_bill_to_generate(self) -> List[BaseBill]:
         loan_data = (
             self.session.query(LoanData)
             .filter(LoanData.loan_id == self.loan_id, LoanData.is_generated.is_(False))
             .order_by(LoanData.bill_start_date)
-            .first()
+            .all()
         )
         return loan_data
 

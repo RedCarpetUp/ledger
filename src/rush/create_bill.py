@@ -70,58 +70,64 @@ def bill_generate(
     skip_bill_schedule_creation: bool = False,
 ) -> BaseBill:
     session = user_loan.session
-    bill = user_loan.get_latest_bill_to_generate()  # Get the first bill which is not generated.
-    if not bill:
+    bills = user_loan.get_latest_bill_to_generate() or []  # Get the first bill which is not generated.
+    if not bills:
         bill = get_or_create_bill_for_card_swipe(
             user_loan=user_loan, txn_time=creation_time
         )  # TODO not sure about this
         if bill["result"] == "error":
             return bill
-        bill = bill["bill"]
-    lt = LedgerTriggerEvent(
-        name="bill_generate",
-        loan_id=user_loan.loan_id,
-        post_date=bill.bill_close_date,
-        extra_details={"bill_id": bill.id},
-    )
-    session.add(lt)
-    session.flush()
+        bills.append(bill["bill"])
 
-    bill_generate_event(session=session, bill=bill, user_loan=user_loan, event=lt)
+    for bill in bills:
+        lt = LedgerTriggerEvent(
+            name="bill_generate",
+            loan_id=user_loan.loan_id,
+            post_date=bill.bill_close_date,
+            extra_details={"bill_id": bill.id},
+        )
+        session.add(lt)
+        session.flush()
 
-    bill.table.is_generated = True
+        bill_generate_event(session=session, bill=bill, user_loan=user_loan, event=lt)
 
-    _, billed_amount = get_account_balance_from_str(
-        session=session, book_string=f"{bill.id}/bill/principal_receivable/a"
-    )
-    lt.amount = billed_amount  # Set the amount for event
+        bill.table.is_generated = True
 
-    # Update the bill row here.
-    bill.table.principal = billed_amount
+        _, billed_amount = get_account_balance_from_str(
+            session=session, book_string=f"{bill.id}/bill/principal_receivable/a"
+        )
+        lt.amount = billed_amount  # Set the amount for event
 
-    # Add to max amount to pay account.
-    add_max_amount_event(session, bill, lt, billed_amount)
+        # Update the bill row here.
+        bill.table.principal = billed_amount
 
-    # After the bill has generated. Call the min generation event on all unpaid bills.
-    add_min_to_all_bills(session=session, post_date=bill.table.bill_close_date, user_loan=user_loan)
+        # Add to max amount to pay account.
+        add_max_amount_event(session, bill, lt, billed_amount)
 
-    if not skip_bill_schedule_creation:
-        create_bill_schedule(session, user_loan, bill)
+        # After the bill has generated. Call the min generation event on all unpaid bills.
+        add_min_to_all_bills(session=session, post_date=bill.table.bill_close_date, user_loan=user_loan)
 
-        atm_transactions_sum = bill.sum_of_atm_transactions()
-        if atm_transactions_sum > 0:
-            add_atm_fee(
-                session=session,
-                bill=bill,
-                post_date=bill.table.bill_close_date,
-                atm_transactions_amount=atm_transactions_sum,
-                user_loan=user_loan,
-            )
+        if not skip_bill_schedule_creation:
+            create_bill_schedule(session, user_loan, bill)
 
-    # Update Journal Entry
-    update_journal_entry(user_loan=user_loan, event=lt)
+            atm_transactions_sum = bill.sum_of_atm_transactions()
+            if atm_transactions_sum > 0:
+                add_atm_fee(
+                    session=session,
+                    bill=bill,
+                    post_date=bill.table.bill_close_date,
+                    atm_transactions_amount=atm_transactions_sum,
+                    user_loan=user_loan,
+                )
 
-    return bill
+        # Update Journal Entry
+        update_journal_entry(user_loan=user_loan, event=lt)
+
+    if len(bills) == 1:
+        return bills[0]
+
+    else:
+        return bills
 
 
 def add_atm_fee(
