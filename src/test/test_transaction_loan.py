@@ -274,6 +274,31 @@ def test_transaction_loan_new(session: Session) -> None:
     )
     assert billed_amount == 1200
 
+    lt = LedgerTriggerEvent(
+        name="payment_received",
+        loan_id=user_loan.loan_id if user_loan else None,
+        amount=1200,
+        post_date=parse_date("2020-12-02 19:23:11"),
+        extra_details={
+            "payment_request_id": "dummy_payment_0",
+            "payment_type": "principal",
+            "user_product_id": user_product.id if user_product.id else user_loan.user_product_id,
+            "lender_id": user_loan.lender_id,
+        },
+    )
+    session.add(lt)
+    session.flush()
+
+    lender_id = user_loan.lender_id
+    payment_received_event(
+        session=session,
+        user_loan=user_loan,
+        debit_book_str=f"{lender_id}/lender/pg_account/a",
+        event=lt,
+        skip_closing=False,
+        user_product_id=user_product.id if user_product.id else user_loan.user_product_id,
+    )
+
     swipe1 = create_card_swipe(
         session=session,
         user_loan=user_card,
@@ -355,10 +380,11 @@ def test_transaction_loan_new(session: Session) -> None:
         session=session, user_loan=user_loan, total_amount_to_slide=2540
     )
 
-    assert len(payment_split_info) == 3
+    assert len(payment_split_info) == 2
     assert payment_split_info[0]["type"] == "principal"
+    assert payment_split_info[0]["amount_to_adjust"] == Decimal("1693.33")
     assert payment_split_info[1]["type"] == "principal"
-    assert payment_split_info[2]["type"] == "principal"
+    assert payment_split_info[1]["amount_to_adjust"] == Decimal("846.67")
 
     lt = LedgerTriggerEvent(
         name="payment_received",
