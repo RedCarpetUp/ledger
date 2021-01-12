@@ -111,7 +111,7 @@ def transaction_to_loan_new(
         bill_start_date=bill.bill_start_date,
         bill_close_date=bill.bill_close_date,
         bill_due_date=bill.bill_due_date,
-        is_generated=True,
+        is_generated=False,
         bill_tenure=tenure,
         principal=transaction.amount,
     )
