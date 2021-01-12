@@ -3,6 +3,7 @@ from datetime import (
     datetime,
 )
 from decimal import Decimal
+from typing import Optional
 
 from dateutil.relativedelta import relativedelta
 from sqlalchemy.orm.session import Session
@@ -81,7 +82,12 @@ def transaction_to_loan(session: Session, txn_id: int, user_id: int, post_date: 
 
 
 def transaction_to_loan_new(
-    session: Session, transaction_id: int, user_id: int, post_date: DateTime, tenure: int
+    session: Session,
+    transaction_id: int,
+    user_id: int,
+    post_date: DateTime,
+    tenure: int,
+    interest_rate: Optional[int] = None,
 ) -> str:
     transaction: CardTransaction = (
         session.query(CardTransaction).filter(CardTransaction.id == transaction_id).scalar()
@@ -90,7 +96,7 @@ def transaction_to_loan_new(
     if not transaction:
         return {"result": "error", "message": "Invalid Transaction ID"}
 
-    # checking if bill is already generated for this txn
+    # checking if bill has already been generated for this transaction
     bill: LoanData = session.query(LoanData).filter(LoanData.id == transaction.loan_id).scalar()
 
     if bill.is_generated:
@@ -99,8 +105,7 @@ def transaction_to_loan_new(
     user_loan: BaseLoan = (
         session.query(BaseLoan)
         .join(LoanData, LoanData.loan_id == BaseLoan.id)
-        .join(CardTransaction, CardTransaction.loan_id == LoanData.id)
-        .filter(CardTransaction.id == transaction_id)
+        .filter(LoanData.id == bill.id)
         .scalar()
     )
 
@@ -123,7 +128,7 @@ def transaction_to_loan_new(
         performed_by=user_id,
         name="transaction_to_loan",
         loan_id=user_loan.id,
-        post_date=post_date,  # what is post_date?
+        post_date=post_date,
         amount=transaction.amount,
     )
 
