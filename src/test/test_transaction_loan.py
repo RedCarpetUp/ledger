@@ -1,3 +1,4 @@
+import pdb
 from decimal import Decimal
 
 from pendulum import parse as parse_date  # type: ignore
@@ -330,8 +331,13 @@ def test_transaction_loan_new(session: Session) -> None:
     for bill in bills:
         assert bill.bill_start_date == parse_date("2020-12-01").date()
         assert bill.table.is_generated is True
-
-    regular_bill = bills[0]
+        if (
+            get_account_balance_from_str(session, book_string=f"{bill.id}/bill/principal_receivable/a")[
+                1
+            ]
+            == 2400
+        ):
+            regular_bill = bill
 
     assert any(
         get_account_balance_from_str(session, book_string=f"{bill.id}/bill/principal_receivable/a")[1]
