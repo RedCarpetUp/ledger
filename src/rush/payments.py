@@ -95,6 +95,14 @@ def payment_received(
                 event=event,
                 skip_closing=skip_closing,
             )
+            run_anomaly(
+                session=session,
+                user_loan=loan,
+                event_date=payment_request_data.intermediary_payment_date,
+            )
+
+            # Update dpd
+            update_event_with_dpd(user_loan=loan, event=event)
 
     if remaining_payment_amount > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
@@ -198,7 +206,7 @@ def payment_received_event(
             # TODO set loan status to recovered.
 
         # We will either slide or close bills
-        slide_payment_to_emis(user_loan, event)
+        # slide_payment_to_emis(user_loan, event)
     return remaining_amount
 
 
@@ -311,7 +319,7 @@ def transaction_refund_event(session: Session, user_loan: BaseLoan, event: Ledge
         amount=Decimal(event.amount),
     )
     create_payment_split(session, event)
-    slide_payment_to_emis(user_loan, event)
+    # slide_payment_to_emis(user_loan, event)
 
 
 def adjust_payment(
@@ -343,6 +351,7 @@ def adjust_payment(
             )
             # The amount to adjust is computed for this bill. It should all settle.
             assert remaining_amount == 0
+            slide_payment_to_emis(user_loan, event, data["amount_to_adjust"])
         amount_to_adjust -= data["amount_to_adjust"]
 
     return amount_to_adjust

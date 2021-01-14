@@ -1,5 +1,6 @@
 from collections import defaultdict
 from datetime import date
+from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
 from pendulum import datetime
@@ -94,18 +95,13 @@ def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
     readjust_future_payment(user_loan, bill.table.bill_close_date)
 
 
-def slide_payment_to_emis(user_loan: BaseLoan, payment_event: LedgerTriggerEvent):
+def slide_payment_to_emis(
+    user_loan: BaseLoan, payment_event: LedgerTriggerEvent, amount_to_slide: Decimal
+):
     """
     Settles a payment into loan's emi schedule.
     Also creates a payment split at emi level.
     """
-    from rush.payments import get_payment_split_from_event
-
-    payment_split = get_payment_split_from_event(user_loan.session, payment_event)
-
-    # Payment can get adjusted in late fee, gst etc. For emi, we only need to settle the principal
-    # and interest amount.
-    amount_to_slide = payment_split.get("principal", 0) + payment_split.get("interest", 0)
     unpaid_emis = user_loan.get_loan_schedule(only_unpaid_emis=True)
     for emi in unpaid_emis:
         if amount_to_slide <= 0:
