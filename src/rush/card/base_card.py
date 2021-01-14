@@ -17,6 +17,7 @@ from pendulum import (
 from sqlalchemy import func
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.sqltypes import Integer
 
 from rush.ledger_utils import (
     get_account_balance_from_str,
@@ -450,3 +451,19 @@ class BaseLoan(Loan):
             q = q.filter(LoanSchedule.due_date >= only_emis_after_date)
         emis = q.order_by(LoanSchedule.emi_number).all()
         return emis
+
+    def get_child_loans(self) -> List["BaseLoan"]:
+        return (
+            self.session.query(BaseLoan)
+            .join(
+                LedgerTriggerEvent,
+                LedgerTriggerEvent.extra_details["child_loan_id"].astext.cast(Integer) == BaseLoan.id,
+            )
+            .filter(
+                LedgerTriggerEvent.name.in_(
+                    "transaction_to_loan",
+                ),
+                LedgerTriggerEvent.loan_id == self.id,
+            )
+            .all()
+        )

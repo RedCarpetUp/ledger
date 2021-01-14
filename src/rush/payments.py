@@ -55,21 +55,58 @@ def payment_received(
     )
     session.flush()
 
-    payment_received_event(
-        session=session,
-        user_loan=user_loan,
-        payment_request_data=payment_request_data,
-        debit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
-        event=event,
-        skip_closing=skip_closing,
-    )
+    remaining_payment_amount = payment_request_data.payment_request_amount
 
-    run_anomaly(
-        session=session, user_loan=user_loan, event_date=payment_request_data.intermediary_payment_date
-    )
+    loans = [user_loan]
+    loans.extend(user_loan.get_child_loans())
 
-    # Update dpd
-    update_event_with_dpd(user_loan=user_loan, event=event)
+    for loan in loans:
+        if loan.get_remaining_min() and remaining_payment_amount:
+            amount_to_adjust = min(loan.get_remaining_min(), remaining_payment_amount)
+            remaining_payment_amount -= amount_to_adjust
+
+            payment_received_event(
+                session=session,
+                user_loan=user_loan,
+                payment_request_data=payment_request_data,
+                amount_to_adjust=amount_to_adjust,
+                debit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
+                event=event,
+                skip_closing=skip_closing,
+            )
+
+            run_anomaly(
+                session=session,
+                user_loan=user_loan,
+                event_date=payment_request_data.intermediary_payment_date,
+            )
+
+            # Update dpd
+            update_event_with_dpd(user_loan=user_loan, event=event)
+
+    for loan in loans:
+        if loan.get_remaining_max() and remaining_payment_amount:
+            amount_to_adjust = min(loan.get_remaining_max(), remaining_payment_amount)
+            remaining_payment_amount -= amount_to_adjust
+
+            payment_received_event(
+                session=session,
+                user_loan=user_loan,
+                payment_request_data=payment_request_data,
+                amount_to_adjust=amount_to_adjust,
+                debit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
+                event=event,
+                skip_closing=skip_closing,
+            )
+
+            run_anomaly(
+                session=session,
+                user_loan=user_loan,
+                event_date=payment_request_data.intermediary_payment_date,
+            )
+
+            # Update dpd
+            update_event_with_dpd(user_loan=user_loan, event=event)
 
 
 def refund_payment(
@@ -105,10 +142,11 @@ def payment_received_event(
     payment_request_data: PaymentRequestsData,
     debit_book_str: str,
     event: LedgerTriggerEvent,
+    amount_to_adjust: Decimal,
     skip_closing: bool = False,
     user_product_id: Optional[int] = None,
 ) -> None:
-    payment_received_amt = Decimal(event.amount)
+    payment_received_amt = amount_to_adjust
 
     payment_type = payment_request_data.type
     if payment_type == "downpayment":
