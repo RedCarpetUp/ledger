@@ -89,7 +89,7 @@ def get_interest_to_charge(
     principal: Decimal,
     interest_rate_monthly: Decimal,
 ):
-    interest = principal * (interest_rate_monthly / 100)
+    interest = principal * Decimal(interest_rate_monthly / 100)
     return interest
 
 

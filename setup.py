@@ -4,12 +4,12 @@ from setuptools import (
 )
 
 DEV_REQUIRES = [
-    "black",
+    "black==20.8b1",
     "pylint",
     "pre-commit",
-    "mypy",
+    "mypy==0.782",
     "sqlalchemy-stubs",
-    "pytest",
+    "pytest==6.0.1",
     "pytest-cov",
     "mkdocs",
 ]

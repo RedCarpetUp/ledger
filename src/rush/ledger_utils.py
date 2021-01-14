@@ -78,6 +78,7 @@ def get_account_balance_from_str(
             func_call = func.get_lender_account_balance(
                 cast(book_variables["identifier"], sqlalchemy.Integer),
                 cast(book_variables["name"], sqlalchemy.String),
+                cast(book_variables["account_type"], sqlalchemy.String),
                 cast(to_date, sqlalchemy.TIMESTAMP),
             )
         else:
@@ -93,6 +94,7 @@ def get_account_balance_from_str(
         func_call = func.get_lender_account_balance(
             cast(book_variables["identifier"], sqlalchemy.Integer),
             cast(book_variables["name"], sqlalchemy.String),
+            cast(book_variables["account_type"], sqlalchemy.String),
         )
 
     # If to_date isn't provided then fetch latest balance from book_account rather than ledger_event.

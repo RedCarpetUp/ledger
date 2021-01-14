@@ -21,9 +21,10 @@ def upgrade() -> None:
 
     op.execute(
         """
-       create or replace function get_lender_account_balance(
+       create function get_lender_account_balance(
             book_identifier integer,
             book_name varchar(50),
+            account_type varchar,
             till_date timestamp DEFAULT now() at time zone 'Asia/Kolkata'
         )
         returns numeric
@@ -36,7 +37,7 @@ def upgrade() -> None:
         BEGIN
             SELECT id INTO book_id
             FROM book_account AS ba
-            WHERE ba.identifier = $1 AND ba.book_name = $2;
+            WHERE ba.identifier = $1 AND identifier_type = 'lender' AND ba.book_name = $2 AND ba.account_type = $3;
 
             with balances as (
               select 
@@ -53,7 +54,7 @@ def upgrade() -> None:
               where 
                 (debit_account = book_id 
                 or credit_account = book_id) and lte.id = l.event_id
-                and lte.post_date <= $3 
+                and lte.post_date <= $4 
               group by 
                 1
             )
