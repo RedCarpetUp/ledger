@@ -202,7 +202,7 @@ def _convert_to_bill_class_decorator(function: Callable[["BaseLoan"], LoanData])
         bills = function(self)
         if not bills:
             return None
-        if type(bills) is List:
+        if type(bills) is list:
             return [self.convert_to_bill_class(bill) for bill in bills]
         return self.convert_to_bill_class(bills)
 
@@ -293,17 +293,6 @@ class BaseLoan(Loan):
         from rush.ledger_events import limit_assignment_event
 
         limit_assignment_event(session=self.session, loan_id=self.loan_id, event=event, amount=amount)
-
-    def _convert_to_bill_class_decorator(func) -> BaseBill:
-        def f(self):
-            bills = func(self)
-            if not bills:
-                return None
-            if type(bills) is list:
-                return [self.convert_to_bill_class(bill) for bill in bills]
-            return self.convert_to_bill_class(bills)
-
-        return f
 
     def convert_to_bill_class(self, bill: LoanData):
         if not bill:

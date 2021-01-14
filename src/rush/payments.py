@@ -85,28 +85,25 @@ def payment_received(
             update_event_with_dpd(user_loan=user_loan, event=event)
 
     for loan in loans:
-        if loan.get_remaining_max() and remaining_payment_amount:
-            amount_to_adjust = min(loan.get_remaining_max(), remaining_payment_amount)
-            remaining_payment_amount -= amount_to_adjust
-
-            payment_received_event(
+        if remaining_payment_amount:
+            remaining_payment_amount = payment_received_event(
                 session=session,
                 user_loan=user_loan,
                 payment_request_data=payment_request_data,
-                amount_to_adjust=amount_to_adjust,
+                amount_to_adjust=remaining_payment_amount,
                 debit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
                 event=event,
                 skip_closing=skip_closing,
             )
 
-            run_anomaly(
-                session=session,
-                user_loan=user_loan,
-                event_date=payment_request_data.intermediary_payment_date,
-            )
-
-            # Update dpd
-            update_event_with_dpd(user_loan=user_loan, event=event)
+    if remaining_payment_amount > 0:  # if there's payment left to be adjusted.
+        _adjust_for_prepayment(
+            session=session,
+            loan_id=user_loan.loan_id,
+            event_id=event.id,
+            amount=remaining_payment_amount,
+            debit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
+        )
 
 
 def refund_payment(
@@ -146,7 +143,8 @@ def payment_received_event(
     skip_closing: bool = False,
     user_product_id: Optional[int] = None,
 ) -> None:
-    payment_received_amt = amount_to_adjust
+
+    remaining_amount = 0
 
     payment_type = payment_request_data.type
     if payment_type == "downpayment":
@@ -155,7 +153,7 @@ def payment_received_event(
             event_id=event.id,
             debit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
             credit_book_str=f"{user_loan.loan_id}/loan/downpayment/l",
-            amount=payment_received_amt,
+            amount=amount_to_adjust,
         )
     elif payment_type in (
         "card_reload_fees",
@@ -166,32 +164,22 @@ def payment_received_event(
         adjust_non_bill_payments(
             session=session,
             event=event,
-            amount=payment_received_amt,
+            amount=amount_to_adjust,
             payment_type=payment_type,
             identifier="loan",
             identifier_id=user_loan.loan_id,
             debit_book_str=debit_book_str,
         )
     else:
-        actual_payment = payment_received_amt
-        payment_received_amt = adjust_payment(session, user_loan, event, debit_book_str)
+        remaining_amount = adjust_payment(session, user_loan, event, debit_book_str)
 
         # Sometimes payments come in multiple decimal points.
         # adjust_payment() handles this while sliding, but we do this
         # for pre_payment
-        payment_received_amt = round(payment_received_amt, 2)
+        remaining_amount = round(remaining_amount, 2)
 
         if user_loan.should_reinstate_limit_on_payment:
-            user_loan.reinstate_limit_on_payment(event=event, amount=actual_payment)
-
-        if payment_received_amt > 0:  # if there's payment left to be adjusted.
-            _adjust_for_prepayment(
-                session=session,
-                loan_id=user_loan.loan_id,
-                event_id=event.id,
-                amount=payment_received_amt,
-                debit_book_str=debit_book_str,
-            )
+            user_loan.reinstate_limit_on_payment(event=event, amount=amount_to_adjust)
 
         is_in_write_off = (
             get_account_balance_from_str(session, f"{user_loan.loan_id}/loan/write_off_expenses/e")[1]
@@ -213,6 +201,8 @@ def payment_received_event(
     )
 
     create_payment_split(session, event)
+
+    return remaining_amount
 
 
 def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amount_to_slide: Decimal):
