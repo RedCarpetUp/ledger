@@ -67,22 +67,22 @@ def payment_received(
 
             payment_received_event(
                 session=session,
-                user_loan=user_loan,
+                user_loan=loan,
                 payment_request_data=payment_request_data,
                 amount_to_adjust=amount_to_adjust,
-                debit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
+                debit_book_str=f"{loan.lender_id}/lender/pg_account/a",
                 event=event,
                 skip_closing=skip_closing,
             )
 
             run_anomaly(
                 session=session,
-                user_loan=user_loan,
+                user_loan=loan,
                 event_date=payment_request_data.intermediary_payment_date,
             )
 
             # Update dpd
-            update_event_with_dpd(user_loan=user_loan, event=event)
+            update_event_with_dpd(user_loan=loan, event=event)
 
     for loan in loans:
         if remaining_payment_amount:
@@ -91,7 +91,7 @@ def payment_received(
                 user_loan=user_loan,
                 payment_request_data=payment_request_data,
                 amount_to_adjust=remaining_payment_amount,
-                debit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
+                debit_book_str=f"{loan.lender_id}/lender/pg_account/a",
                 event=event,
                 skip_closing=skip_closing,
             )
@@ -104,6 +104,15 @@ def payment_received(
             amount=remaining_payment_amount,
             debit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
         )
+    create_ledger_entry_from_str(
+        session=session,
+        event_id=event.id,
+        debit_book_str=f"{user_loan.lender_id}/lender/gateway_expenses/e",
+        credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
+        amount=payment_request_data.payment_execution_charges,
+    )
+
+    create_payment_split(session, event)
 
 
 def refund_payment(
@@ -141,10 +150,9 @@ def payment_received_event(
     event: LedgerTriggerEvent,
     amount_to_adjust: Decimal,
     skip_closing: bool = False,
-    user_product_id: Optional[int] = None,
-) -> None:
+) -> Decimal:
 
-    remaining_amount = 0
+    remaining_amount = Decimal(0)
 
     payment_type = payment_request_data.type
     if payment_type == "downpayment":
@@ -171,7 +179,7 @@ def payment_received_event(
             debit_book_str=debit_book_str,
         )
     else:
-        remaining_amount = adjust_payment(session, user_loan, event, debit_book_str)
+        remaining_amount = adjust_payment(session, user_loan, event, amount_to_adjust, debit_book_str)
 
         # Sometimes payments come in multiple decimal points.
         # adjust_payment() handles this while sliding, but we do this
@@ -191,17 +199,6 @@ def payment_received_event(
 
         # We will either slide or close bills
         slide_payment_to_emis(user_loan, event)
-
-    create_ledger_entry_from_str(
-        session=session,
-        event_id=event.id,
-        debit_book_str=f"{user_loan.lender_id}/lender/gateway_expenses/e",
-        credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
-        amount=payment_request_data.payment_execution_charges,
-    )
-
-    create_payment_split(session, event)
-
     return remaining_amount
 
 
@@ -295,7 +292,7 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
 
 def transaction_refund_event(session: Session, user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
     m2p_pool_account = f"{user_loan.lender_id}/lender/pool_balance/a"
-    refund_amount = adjust_payment(session, user_loan, event, m2p_pool_account)
+    refund_amount = adjust_payment(session, user_loan, event, event.amount, m2p_pool_account)
 
     if refund_amount > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
@@ -321,9 +318,9 @@ def adjust_payment(
     session: Session,
     user_loan: BaseLoan,
     event: LedgerTriggerEvent,
+    amount_to_adjust: Decimal,
     debit_book_str: str,
 ) -> Decimal:
-    amount_to_adjust = Decimal(event.amount)
     split_data = find_split_to_slide_in_loan(session, user_loan, amount_to_adjust)
 
     for data in split_data:
