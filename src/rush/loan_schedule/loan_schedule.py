@@ -116,12 +116,26 @@ def slide_payment_to_emis(user_loan: BaseLoan, payment_event: LedgerTriggerEvent
             emi.payment_status = "Paid"
         emi.last_payment_date = payment_event.post_date
         emi.dpd = (emi.last_payment_date.date() - emi.due_date).days
-        _ = PaymentMapping.new(
-            user_loan.session,
-            payment_request_id=payment_event.extra_details["payment_request_id"],
-            emi_id=emi.id,
-            amount_settled=amount_slid,
+
+        mapping: PaymentMapping = (
+            user_loan.session.query(PaymentMapping)
+            .filter(
+                PaymentMapping.emi_id == emi.id,
+                PaymentMapping.payment_request_id == payment_event.extra_details["payment_request_id"],
+            )
+            .scalar()
         )
+
+        if mapping:
+            mapping.amount_settled += amount_slid
+        else:
+            _ = PaymentMapping.new(
+                user_loan.session,
+                payment_request_id=payment_event.extra_details["payment_request_id"],
+                emi_id=emi.id,
+                amount_settled=amount_slid,
+            )
+
         amount_to_slide -= amount_slid
 
     # After doing the sliding we check if the loan can be closed.
