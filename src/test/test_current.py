@@ -778,7 +778,11 @@ def _partial_payment_bill_1(session: Session) -> None:
     min_due = user_loan.get_remaining_min()
     assert min_due == 14
 
-    _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+    _, lender_amount = get_account_balance_from_str(
+        session,
+        book_string=f"62311/lender/pg_account/a",
+        to_date=payment_requests_data.payment_received_in_bank_date,
+    )
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{user_loan.loan_id}/loan/lender_payable/l"
@@ -939,7 +943,11 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
     # payment got late and 118 rupees got settled in late fine.
     assert principal_due == Decimal("900")
 
-    _, pg_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+    _, pg_amount = get_account_balance_from_str(
+        session,
+        book_string=f"62311/lender/pg_account/a",
+        to_date=payment_requests_data.payment_received_in_bank_date,
+    )
     assert pg_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{user_loan.loan_id}/loan/lender_payable/l"
@@ -1018,7 +1026,11 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
     # changed from 916 to 816, the late did not get settled.
     assert principal_due == Decimal("900")
 
-    _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+    _, lender_amount = get_account_balance_from_str(
+        session,
+        book_string=f"62311/lender/pg_account/a",
+        to_date=payment_requests_data.payment_received_in_bank_date,
+    )
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{user_loan.loan_id}/loan/lender_payable/l"
@@ -1107,7 +1119,11 @@ def test_is_bill_paid_bill_1(session: Session) -> None:
     is_it_paid_now = is_bill_closed(session, bill)
     assert is_it_paid_now is True
 
-    _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+    _, lender_amount = get_account_balance_from_str(
+        session,
+        book_string=f"62311/lender/pg_account/a",
+        to_date=payment_requests_data.payment_received_in_bank_date,
+    )
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{user_loan.loan_id}/loan/lender_payable/l"
@@ -1501,7 +1517,11 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
         user_loan=user_loan,
     )
 
-    _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+    _, lender_amount = get_account_balance_from_str(
+        session,
+        book_string=f"62311/lender/pg_account/a",
+        to_date=payment_requests_data.payment_received_in_bank_date,
+    )
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{uc.loan_id}/loan/lender_payable/l"
@@ -2316,7 +2336,11 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
         user_loan=user_loan,
     )
 
-    _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+    _, lender_amount = get_account_balance_from_str(
+        session,
+        book_string=f"62311/lender/pg_account/a",
+        to_date=payment_requests_data.payment_received_in_bank_date,
+    )
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{user_loan.loan_id}/loan/lender_payable/l"
@@ -2397,7 +2421,11 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
         user_loan=user_loan,
     )
 
-    _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+    _, lender_amount = get_account_balance_from_str(
+        session,
+        book_string=f"62311/lender/pg_account/a",
+        to_date=payment_requests_data.payment_received_in_bank_date,
+    )
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{user_loan.loan_id}/loan/lender_payable/l"
@@ -2470,7 +2498,11 @@ def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
         user_loan=user_loan,
     )
 
-    _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+    _, lender_amount = get_account_balance_from_str(
+        session,
+        book_string=f"62311/lender/pg_account/a",
+        to_date=payment_requests_data.payment_received_in_bank_date,
+    )
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{user_loan.loan_id}/loan/lender_payable/l"
@@ -2530,7 +2562,11 @@ def _pay_minimum_amount_bill_2(session: Session) -> None:
         user_loan=user_loan,
     )
 
-    _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+    _, lender_amount = get_account_balance_from_str(
+        session,
+        book_string=f"62311/lender/pg_account/a",
+        to_date=payment_requests_data.payment_received_in_bank_date,
+    )
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{user_loan.loan_id}/loan/lender_payable/l"
@@ -2794,7 +2830,11 @@ def test_prepayment(session: Session) -> None:
         user_loan=user_loan,
     )
 
-    _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+    _, lender_amount = get_account_balance_from_str(
+        session,
+        book_string=f"62311/lender/pg_account/a",
+        to_date=payment_requests_data.payment_received_in_bank_date,
+    )
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{user_loan.loan_id}/loan/lender_payable/l"
@@ -3126,7 +3166,11 @@ def test_moratorium_schedule(session: Session) -> None:
         user_loan=user_loan,
     )
 
-    _, lender_amount = get_account_balance_from_str(session, book_string=f"62311/lender/pg_account/a")
+    _, lender_amount = get_account_balance_from_str(
+        session,
+        book_string=f"62311/lender/pg_account/a",
+        to_date=payment_requests_data.payment_received_in_bank_date,
+    )
     assert lender_amount == Decimal("0")
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{uc.loan_id}/loan/lender_payable/l"
