@@ -442,17 +442,4 @@ class BaseLoan(Loan):
         return emis
 
     def get_child_loans(self) -> List["BaseLoan"]:
-        return (
-            self.session.query(BaseLoan)
-            .join(
-                LedgerTriggerEvent,
-                LedgerTriggerEvent.extra_details["child_loan_id"].astext.cast(Integer) == BaseLoan.id,
-            )
-            .filter(
-                LedgerTriggerEvent.name.in_(
-                    "transaction_to_loan",
-                ),
-                LedgerTriggerEvent.loan_id == self.id,
-            )
-            .all()
-        )
+        return []

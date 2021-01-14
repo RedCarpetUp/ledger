@@ -33,7 +33,7 @@ from rush.payments import payment_received
 from rush.utils import get_current_ist_time
 
 
-def transaction_to_loan(session: Session, txn_id: int, user_id: int, post_date: DateTime) -> str:
+def transaction_to_loan(session: Session, txn_id: int, user_id: int, post_date: DateTime) -> dict:
     txn: CardTransaction = session.query(CardTransaction).filter(CardTransaction.id == txn_id).scalar()
 
     if not txn:
@@ -54,7 +54,7 @@ def transaction_to_loan(session: Session, txn_id: int, user_id: int, post_date: 
     )
 
     user_product = create_user_product_mapping(
-        session=session, user_id=user_id, product_type="transaction_loan"
+        session=session, user_id=user_id, product_type="transaction_loan", lender_id=1756833
     )
 
     # loan for txn amount
@@ -88,7 +88,7 @@ def transaction_to_loan_new(
     post_date: DateTime,
     tenure: int,
     interest_rate: Optional[int] = None,
-) -> str:
+) -> dict:
     transaction: CardTransaction = (
         session.query(CardTransaction).filter(CardTransaction.id == transaction_id).scalar()
     )

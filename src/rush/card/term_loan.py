@@ -93,7 +93,7 @@ def get_down_payment_for_loan(loan: BaseLoan) -> Decimal:
             PaymentRequestsData.row_status == "active",
         )
         .scalar()
-    )
+    ) or 0
     return total_downpayment
 
 

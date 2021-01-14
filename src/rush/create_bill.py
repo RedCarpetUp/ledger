@@ -1,4 +1,8 @@
 from decimal import Decimal
+from typing import (
+    List,
+    Union,
+)
 
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
@@ -65,7 +69,7 @@ def bill_generate(
     user_loan: BaseLoan,
     creation_time: DateTime = get_current_ist_time(),
     skip_bill_schedule_creation: bool = False,
-) -> BaseBill:
+) -> List[BaseBill] or BaseBill:
     session = user_loan.session
     bills = user_loan.get_latest_bill_to_generate() or []  # Get the first bill which is not generated.
     if not bills:

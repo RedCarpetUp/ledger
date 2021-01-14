@@ -1,8 +1,14 @@
 import pdb
 from decimal import Decimal
+from test.utils import (
+    pay_payment_request,
+    payment_request_data,
+)
+from typing import Sized
 
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.sqltypes import DECIMAL
 from sqlalchemy.util.langhelpers import only_once
 
 from rush.card import (
@@ -152,7 +158,7 @@ def test_transaction_loan(session: Session) -> None:
 
     assert txn_loan.get_remaining_max() == Decimal("1200")
 
-    assert user_loan.get_transaction_loans()[0].id == txn_loan.id
+    # assert user_loan.get_child_loans()[0].id == txn_loan.id
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 1200
@@ -165,7 +171,7 @@ def test_transaction_loan(session: Session) -> None:
     assert principal_receivable == 1200
 
     payment_split_info = find_split_to_slide_in_loan(
-        session=session, user_loan=user_loan, total_amount_to_slide=1340
+        session=session, user_loan=user_loan, total_amount_to_slide=Decimal(1340)
     )
 
     bills = user_loan.get_unpaid_bills()
@@ -194,6 +200,20 @@ def test_transaction_loan(session: Session) -> None:
     session.flush()
 
     lender_id = user_loan.lender_id
+
+    payment_date = parse_date("2020-08-03")
+    amount = Decimal(1200)
+    payment_request_id = "bill_payment"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=469,
+        payment_request_id=payment_request_id,
+    )
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
     payment_received_event(
         session=session,
         user_loan=user_loan,
@@ -201,6 +221,8 @@ def test_transaction_loan(session: Session) -> None:
         event=lt,
         skip_closing=False,
         user_product_id=user_product.id if user_product.id else user_loan.user_product_id,
+        amount_to_adjust=amount,
+        payment_request_data=payment_requests_data,
     )
 
     assert user_loan.get_remaining_min(date_to_check_against=parse_date("2021-01-03 00:00:00")) == 0
@@ -294,6 +316,20 @@ def test_transaction_loan_new(session: Session) -> None:
     session.flush()
 
     lender_id = user_loan.lender_id
+
+    payment_date = parse_date("2020-08-03")
+    amount = Decimal(1200)
+    payment_request_id = "bill_payment"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=469,
+        payment_request_id=payment_request_id,
+    )
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
     payment_received_event(
         session=session,
         user_loan=user_loan,
@@ -301,6 +337,8 @@ def test_transaction_loan_new(session: Session) -> None:
         event=lt,
         skip_closing=False,
         user_product_id=user_product.id if user_product.id else user_loan.user_product_id,
+        amount_to_adjust=amount,
+        payment_request_data=payment_requests_data,
     )
 
     swipe1 = create_card_swipe(
@@ -381,7 +419,7 @@ def test_transaction_loan_new(session: Session) -> None:
     )
 
     payment_split_info = find_split_to_slide_in_loan(
-        session=session, user_loan=user_loan, total_amount_to_slide=2540
+        session=session, user_loan=user_loan, total_amount_to_slide=Decimal(2540)
     )
 
     assert len(payment_split_info) == 2
@@ -406,6 +444,20 @@ def test_transaction_loan_new(session: Session) -> None:
     session.flush()
 
     lender_id = user_loan.lender_id
+
+    payment_date = parse_date("2020-08-03")
+    amount = Decimal(2540)
+    payment_request_id = "bill_payment"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=469,
+        payment_request_id=payment_request_id,
+    )
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
     payment_received_event(
         session=session,
         user_loan=user_loan,
@@ -413,6 +465,8 @@ def test_transaction_loan_new(session: Session) -> None:
         event=lt,
         skip_closing=False,
         user_product_id=user_product.id if user_product.id else user_loan.user_product_id,
+        amount_to_adjust=amount,
+        payment_request_data=payment_requests_data,
     )
 
     assert user_loan.get_remaining_min(date_to_check_against=parse_date("2021-01-03 00:00:00")) == 0
