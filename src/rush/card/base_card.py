@@ -1,6 +1,7 @@
 from datetime import date
 from decimal import Decimal
 from typing import (
+    Callable,
     Dict,
     List,
     Optional,
@@ -17,7 +18,6 @@ from sqlalchemy import func
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Session
 
-from rush.card.utils import create_user_product_mapping
 from rush.ledger_utils import (
     get_account_balance_from_str,
     is_bill_closed,
@@ -34,13 +34,14 @@ from rush.models import (
     LoanData,
     LoanMoratorium,
     LoanSchedule,
-    UserCard,
 )
 
 
 class BaseBill:
     session: Session = None
     table: LoanData = None
+    id = None
+    bill_start_date = None
     user_loan: "BaseLoan"
     round_emi_to = "one"
 
@@ -195,11 +196,22 @@ class BaseBill:
 B = TypeVar("B", bound=BaseBill)
 
 
+def _convert_to_bill_class_decorator(function: Callable[["BaseLoan"], LoanData]) -> Callable:
+    def f(self):
+        bills = function(self)
+        if not bills:
+            return None
+        if type(bills) is List:
+            return [self.convert_to_bill_class(bill) for bill in bills]
+        return self.convert_to_bill_class(bills)
+
+    return f
+
+
 class BaseLoan(Loan):
     should_reinstate_limit_on_payment: bool = False
     bill_class: Type[B] = BaseBill
     session: Session = None
-    can_generate_bill: bool = True
 
     __mapper_args__ = {"polymorphic_identity": "base_loan"}
 
@@ -227,40 +239,27 @@ class BaseLoan(Loan):
         user_product_id = kwargs.pop("user_product_id", None)
         card_type = kwargs.pop("card_type")
         if not user_product_id:
+            from rush.card.utils import create_user_product_mapping
+
             user_product_id = create_user_product_mapping(
-                session=session, user_id=kwargs["user_id"], product_type=card_type
+                session=session,
+                user_id=kwargs["user_id"],
+                product_type=card_type,
+                lender_id=kwargs["lender_id"],
             ).id
 
-        loan = cls(
-            session=session,
-            user_id=kwargs["user_id"],
-            user_product_id=user_product_id,
-            lender_id=kwargs.pop("lender_id"),
-            rc_rate_of_interest_monthly=kwargs.pop("rc_rate_of_interest_monthly"),
-            lender_rate_of_interest_annual=Decimal(18),  # this is hardcoded for one lender.
-            amortization_date=kwargs.get("card_activation_date"),  # TODO: change this later.
-            min_tenure=kwargs.pop("min_tenure", None),
-            min_multiplier=kwargs.pop("min_multiplier", None),
-            interest_type=kwargs.pop("interest_type", "flat"),
-        )
+        loan = session.query(cls).filter(cls.user_product_id == user_product_id).one()
+        loan.prepare(session=session)
 
+        loan.rc_rate_of_interest_monthly = kwargs.get("rc_rate_of_interest_monthly")
+        loan.lender_rate_of_interest_annual = kwargs.get("lender_rate_of_interest_annual", Decimal(18))
+        loan.amortization_date = kwargs.get("card_activation_date")
+        loan.min_tenure = kwargs.get("min_tenure")
+        loan.min_multiplier = kwargs.get("min_multiplier")
+        loan.interest_type = kwargs.get("interest_type", "flat")
         # Don't want to overwrite default value in case of None.
         if kwargs.get("interest_free_period_in_days"):
-            loan.interest_free_period_in_days = kwargs.pop("interest_free_period_in_days")
-
-        session.add(loan)
-        session.flush()
-
-        kwargs["loan_id"] = loan.id
-
-        kwargs["card_name"] = kwargs.get("card_name", "ruby")  # TODO: change this later.
-        kwargs["activation_type"] = kwargs.get("activation_type", "V")  # TODO: change this later.
-        kwargs["kit_number"] = kwargs.get("kit_number", "00000")  # TODO: change this later.
-
-        user_card = UserCard(**kwargs)
-        session.add(user_card)
-        session.flush()
-
+            loan.interest_free_period_in_days = kwargs.get("interest_free_period_in_days")
         return loan
 
     def disbursement_event(self, **kwargs):
@@ -389,7 +388,7 @@ class BaseLoan(Loan):
         return None
 
     @_convert_to_bill_class_decorator
-    def get_latest_generated_bill(self) -> BaseBill:
+    def get_latest_generated_bill(self) -> LoanData:
         latest_bill = (
             self.session.query(LoanData)
             .filter(LoanData.loan_id == self.loan_id, LoanData.is_generated.is_(True))
@@ -409,7 +408,7 @@ class BaseLoan(Loan):
         return loan_data
 
     @_convert_to_bill_class_decorator
-    def get_latest_bill(self) -> BaseBill:
+    def get_latest_bill(self) -> LoanData:
         loan_data = (
             self.session.query(LoanData)
             .filter(LoanData.loan_id == self.id)

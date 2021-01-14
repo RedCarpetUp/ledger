@@ -35,7 +35,7 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("performed_by", sa.Integer(), nullable=False),
         sa.Column("event_id", sa.Integer(), nullable=False),
-        sa.Column("loan_id", sa.Integer(), nullable=False),
+        sa.Column("loan_id", sa.Integer(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(
             ["event_id"], ["ledger_trigger_event.id"], name="fk_journal_entries_event_id"

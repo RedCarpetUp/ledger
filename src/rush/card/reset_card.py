@@ -5,11 +5,11 @@ from dateutil.relativedelta import relativedelta
 from pendulum import Date
 from sqlalchemy.orm.session import Session
 
-from rush.card.base_card import (
-    B,
-    BaseLoan,
+from rush.card.base_card import B
+from rush.card.term_loan import (
+    TermLoan,
+    TermLoanBill,
 )
-from rush.card.term_loan import TermLoanBill
 from rush.ledger_events import (
     add_max_amount_event,
     loan_disbursement_event,
@@ -17,10 +17,10 @@ from rush.ledger_events import (
 from rush.ledger_utils import create_ledger_entry_from_str
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
+    Fee,
     LedgerTriggerEvent,
     Loan,
     LoanData,
-    ProductFee,
 )
 
 
@@ -28,9 +28,8 @@ class ResetBill(TermLoanBill):
     round_emi_to = "one"
 
 
-class ResetCard(BaseLoan):
+class ResetCard(TermLoan):
     bill_class: Type[B] = ResetBill
-    can_generate_bill: bool = False
 
     __mapper_args__ = {"polymorphic_identity": "term_loan_reset"}
 
@@ -41,38 +40,16 @@ class ResetCard(BaseLoan):
     @classmethod
     def create(cls, session: Session, **kwargs) -> Loan:
         user_product_id = kwargs["user_product_id"]
+        loan = session.query(cls).filter(cls.user_product_id == user_product_id).one()
+        loan.prepare(session=session)
 
-        # assert joining fees.
-        joining_fees = (
-            session.query(ProductFee.id)
-            .filter(
-                ProductFee.user_id == kwargs["user_id"],
-                ProductFee.identifier_id == user_product_id,
-                ProductFee.name == "reset_joining_fees",
-                ProductFee.fee_status == "PAID",
-            )
-            .scalar()
-        )
-
-        assert joining_fees is not None
-
-        # create loan.
-        loan = cls(
-            session=session,
-            user_id=kwargs["user_id"],
-            user_product_id=user_product_id,
-            lender_id=kwargs["lender_id"],
-            rc_rate_of_interest_monthly=Decimal(
-                kwargs["interest_rate"]
-            ),  # this will probably come from user's end.
-            lender_rate_of_interest_annual=Decimal(18),
-            amortization_date=kwargs["product_order_date"],
-            downpayment_percent=Decimal("0"),
-        )
-        session.add(loan)
-        session.flush()
-
-        kwargs["loan_id"] = loan.id
+        loan.rc_rate_of_interest_monthly = kwargs.get("interest_rate")
+        loan.lender_rate_of_interest_annual = kwargs.get("lender_rate_of_interest_annual", Decimal(18))
+        loan.amortization_date = kwargs.get("product_order_date")
+        loan.min_tenure = kwargs.get("min_tenure")
+        loan.min_multiplier = kwargs.get("min_multiplier")
+        loan.interest_type = "flat"
+        loan.downpayment_percent = Decimal(0)
 
         bill_start_date, bill_close_date = cls.bill_class.calculate_bill_start_and_close_date(
             first_bill_date=cls.calculate_first_emi_date(product_order_date=loan.amortization_date),
@@ -80,8 +57,8 @@ class ResetCard(BaseLoan):
         )
 
         loan_data = LoanData(
-            user_id=kwargs["user_id"],
-            loan_id=kwargs["loan_id"],
+            user_id=loan.user_id,
+            loan_id=loan.loan_id,
             bill_start_date=bill_start_date,
             bill_close_date=bill_close_date,
             bill_due_date=bill_start_date + relativedelta(days=kwargs["interest_free_period_in_days"]),
@@ -94,9 +71,9 @@ class ResetCard(BaseLoan):
 
         event = LedgerTriggerEvent(
             performed_by=kwargs["user_id"],
-            name="reset_disbursal_event",
-            loan_id=kwargs["loan_id"],
-            post_date=kwargs["product_order_date"],  # what is post_date?
+            name="disbursal",
+            loan_id=loan.loan_id,
+            post_date=kwargs["product_order_date"],
             amount=kwargs["amount"],
         )
 
@@ -130,6 +107,19 @@ class ResetCard(BaseLoan):
             user_loan=loan,
             bill=bill,
         )
+
+        # assert joining fees.
+        joining_fees = (
+            session.query(Fee.identifier_id)
+            .filter(
+                Fee.identifier_id == loan.loan_id,
+                Fee.identifier == "loan",
+                Fee.name == "reset_joining_fees",
+                Fee.fee_status == "PAID",
+            )
+            .scalar()
+        )
+        assert joining_fees is not None
 
         add_max_amount_event(session=session, bill=bill, event=event, amount=kwargs["amount"])
 

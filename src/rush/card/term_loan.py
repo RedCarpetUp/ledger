@@ -28,6 +28,7 @@ from rush.models import (
     Loan,
     LoanData,
     LoanSchedule,
+    PaymentRequestsData,
 )
 
 
@@ -79,10 +80,26 @@ class TermLoanBill(BaseBill):
         return interest_to_accrue
 
 
+def get_down_payment_for_loan(loan: BaseLoan) -> Decimal:
+    session = loan.session
+    total_downpayment = (
+        session.query(func.sum(LedgerTriggerEvent.amount))
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.loan_id == loan.id,
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext
+            == PaymentRequestsData.payment_request_id,
+            PaymentRequestsData.type == "downpayment",
+            PaymentRequestsData.row_status == "active",
+        )
+        .scalar()
+    )
+    return total_downpayment
+
+
 class TermLoan(BaseLoan):
     bill_class: Type[B] = TermLoanBill
     session: Session = None
-    can_generate_bill: bool = False
 
     __mapper_args__ = {"polymorphic_identity": "term_loan"}
 
@@ -93,31 +110,19 @@ class TermLoan(BaseLoan):
     @classmethod
     def create(cls, session: Session, **kwargs) -> Loan:
         user_product_id = kwargs["user_product_id"]
+        loan = session.query(cls).filter(cls.user_product_id == user_product_id).one()
+        loan.prepare(session=session)
 
-        # check if downpayment is done, before loan creation.
-        total_downpayment = (
-            session.query(func.sum(LedgerTriggerEvent.amount))
-            .filter(
-                LedgerTriggerEvent.name == "payment_received",
-                LedgerTriggerEvent.loan_id.is_(None),
-                LedgerTriggerEvent.user_product_id == user_product_id,
-                LedgerTriggerEvent.extra_details["payment_type"].astext == "downpayment",
-            )
-            .scalar()
-        ) or 0
-
-        loan = cls(
-            session=session,
-            user_id=kwargs["user_id"],
-            user_product_id=user_product_id,
-            lender_id=kwargs["lender_id"],
-            rc_rate_of_interest_monthly=Decimal(3),
-            lender_rate_of_interest_annual=Decimal(18),
-            amortization_date=kwargs["product_order_date"],
-            downpayment_percent=kwargs["downpayment_percent"],
-        )
-        session.add(loan)
-        session.flush()
+        loan.rc_rate_of_interest_monthly = kwargs.get("rc_rate_of_interest_monthly", Decimal(3))
+        loan.lender_rate_of_interest_annual = kwargs.get("lender_rate_of_interest_annual", Decimal(18))
+        loan.amortization_date = kwargs.get("product_order_date")
+        loan.min_tenure = kwargs.get("min_tenure")
+        loan.min_multiplier = kwargs.get("min_multiplier")
+        loan.interest_type = kwargs.get("interest_type", "flat")
+        # Don't want to overwrite default value in case of None.
+        if kwargs.get("interest_free_period_in_days"):
+            loan.interest_free_period_in_days = kwargs.get("interest_free_period_in_days")
+        loan.downpayment_percent = kwargs["downpayment_percent"]
 
         kwargs["loan_id"] = loan.id
 
@@ -127,11 +132,11 @@ class TermLoan(BaseLoan):
         )
 
         loan_data = LoanData(
-            user_id=kwargs["user_id"],
-            loan_id=kwargs["loan_id"],
+            user_id=loan.user_id,
+            loan_id=loan.id,
             bill_start_date=bill_start_date,
             bill_close_date=bill_close_date,
-            bill_due_date=bill_start_date + relativedelta(days=kwargs["interest_free_period_in_days"]),
+            bill_due_date=bill_start_date + relativedelta(days=loan.interest_free_period_in_days),
             is_generated=True,
             bill_tenure=kwargs["tenure"],
             principal=kwargs["amount"],
@@ -142,12 +147,27 @@ class TermLoan(BaseLoan):
 
         bill = loan.convert_to_bill_class(loan_data)
 
-        actual_downpayment_amount = bill.get_down_payment()
-        kwargs["actual_downpayment_amount"] = actual_downpayment_amount
+        down_payment_paid = get_down_payment_for_loan(loan)
+        down_payment_due = bill.get_down_payment()
+        assert down_payment_paid == down_payment_due
 
-        assert total_downpayment == actual_downpayment_amount
+        event = LedgerTriggerEvent(
+            name="disbursal",
+            loan_id=loan.id,
+            post_date=kwargs["product_order_date"],
+            amount=kwargs["amount"],
+        )
 
-        event = loan.disbursement_event(**kwargs)
+        session.add(event)
+        session.flush()
+
+        loan_disbursement_event(
+            session=session,
+            loan=loan,
+            event=event,
+            bill_id=loan_data.id,
+            downpayment_amount=down_payment_paid,
+        )
 
         # create emis for term loan.
         from rush.loan_schedule.loan_schedule import create_bill_schedule
