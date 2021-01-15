@@ -66,7 +66,7 @@ def transaction_to_loan(session: Session, txn_id: int, user_id: int, post_date: 
         interest_free_period_in_days=15,
         tenure=12,
         amount=txn.amount,
-        product_order_date=get_current_ist_time().date(),
+        product_order_date=post_date,
         user_product_id=user_product.id,
         downpayment_percent=Decimal("0"),
         credit_book=f"{txn.loan_id}/bill/unbilled/a",
