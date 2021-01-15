@@ -31,7 +31,7 @@ class RebelCard(BaseLoan):
     bill_class: Type[B] = RebelBill
 
     def get_child_loans(self) -> List[BaseLoan]:
-        return (
+        child_loans = (
             self.session.query(BaseLoan)
             .join(
                 LedgerTriggerEvent,
@@ -39,11 +39,15 @@ class RebelCard(BaseLoan):
             )
             .filter(
                 LedgerTriggerEvent.name.in_(
-                    "transaction_to_loan",
+                    [
+                        "transaction_to_loan",
+                    ]
                 ),
                 LedgerTriggerEvent.loan_id == self.id,
             )
             .all()
         )
+
+        return child_loans
 
     __mapper_args__ = {"polymorphic_identity": "rebel"}

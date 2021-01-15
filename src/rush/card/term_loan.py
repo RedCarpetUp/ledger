@@ -151,23 +151,9 @@ class TermLoan(BaseLoan):
         down_payment_due = bill.get_down_payment()
         assert down_payment_paid == down_payment_due
 
-        event = LedgerTriggerEvent(
-            name="disbursal",
-            loan_id=loan.id,
-            post_date=kwargs["product_order_date"],
-            amount=kwargs["amount"],
-        )
+        kwargs["actual_downpayment_amount"] = down_payment_paid
 
-        session.add(event)
-        session.flush()
-
-        loan_disbursement_event(
-            session=session,
-            loan=loan,
-            event=event,
-            bill_id=loan_data.id,
-            downpayment_amount=down_payment_paid,
-        )
+        event = loan.disbursement_event(**kwargs)
 
         # create emis for term loan.
         from rush.loan_schedule.loan_schedule import create_bill_schedule

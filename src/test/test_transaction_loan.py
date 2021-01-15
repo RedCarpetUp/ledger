@@ -158,7 +158,7 @@ def test_transaction_loan(session: Session) -> None:
 
     assert txn_loan.get_remaining_max() == Decimal("1200")
 
-    # assert user_loan.get_child_loans()[0].id == txn_loan.id
+    assert user_loan.get_child_loans()[0].id == txn_loan.id
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 1200
@@ -169,20 +169,6 @@ def test_transaction_loan(session: Session) -> None:
         session, book_string=f"{txn_loan_bill.id}/bill/principal_receivable/a"
     )
     assert principal_receivable == 1200
-
-    payment_split_info = find_split_to_slide_in_loan(
-        session=session, user_loan=user_loan, total_amount_to_slide=Decimal(1340)
-    )
-
-    bills = user_loan.get_unpaid_bills()
-
-    assert any(bill.id == txn_loan_bill.id for bill in bills)
-
-    assert len(payment_split_info) == 2
-    assert payment_split_info[0]["type"] == "principal"
-    assert payment_split_info[0]["amount_to_adjust"] == Decimal(670)
-    assert payment_split_info[1]["type"] == "principal"
-    assert payment_split_info[1]["amount_to_adjust"] == Decimal(670)
 
     lt = LedgerTriggerEvent(
         name="payment_received",
@@ -202,7 +188,7 @@ def test_transaction_loan(session: Session) -> None:
     lender_id = user_loan.lender_id
 
     payment_date = parse_date("2020-08-03")
-    amount = Decimal(1200)
+    amount = Decimal(1340)
     payment_request_id = "bill_payment"
     payment_request_data(
         session=session,
@@ -220,7 +206,6 @@ def test_transaction_loan(session: Session) -> None:
         debit_book_str=f"{lender_id}/lender/pg_account/a",
         event=lt,
         skip_closing=False,
-        user_product_id=user_product.id if user_product.id else user_loan.user_product_id,
         amount_to_adjust=amount,
         payment_request_data=payment_requests_data,
     )
@@ -336,7 +321,6 @@ def test_transaction_loan_new(session: Session) -> None:
         debit_book_str=f"{lender_id}/lender/pg_account/a",
         event=lt,
         skip_closing=False,
-        user_product_id=user_product.id if user_product.id else user_loan.user_product_id,
         amount_to_adjust=amount,
         payment_request_data=payment_requests_data,
     )
@@ -464,7 +448,6 @@ def test_transaction_loan_new(session: Session) -> None:
         debit_book_str=f"{lender_id}/lender/pg_account/a",
         event=lt,
         skip_closing=False,
-        user_product_id=user_product.id if user_product.id else user_loan.user_product_id,
         amount_to_adjust=amount,
         payment_request_data=payment_requests_data,
     )
