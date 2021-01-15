@@ -166,16 +166,6 @@ def payment_received_event(
         # We will either slide or close bills
         slide_payment_to_emis(user_loan, event)
 
-    create_ledger_entry_from_str(
-        session=session,
-        event_id=event.id,
-        debit_book_str=f"{user_loan.lender_id}/lender/gateway_expenses/e",
-        credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
-        amount=payment_request_data.payment_execution_charges,
-    )
-
-    create_payment_split(session, event)
-
 
 def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amount_to_slide: Decimal):
     # slide late fee.
@@ -348,6 +338,16 @@ def settle_payment_in_bank(
         .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
         .first()
     )
+
+    create_ledger_entry_from_str(
+        session=session,
+        event_id=payment_ledger_event.id,
+        debit_book_str=f"{user_loan.lender_id}/lender/gateway_expenses/e",
+        credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
+        amount=gateway_expenses,
+    )
+
+    create_payment_split(session, payment_ledger_event)
 
     update_journal_entry(user_loan=user_loan, event=payment_ledger_event)
 
