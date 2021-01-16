@@ -1,6 +1,5 @@
 import pdb
 from decimal import Decimal
-from rush import loan_schedule
 from test.utils import (
     pay_payment_request,
     payment_request_data,
@@ -13,6 +12,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.sqltypes import DECIMAL
 from sqlalchemy.util.langhelpers import only_once
 
+from rush import loan_schedule
 from rush.accrue_financial_charges import accrue_interest_on_all_bills
 from rush.card import (
     create_user_product,
