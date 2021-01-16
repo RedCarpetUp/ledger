@@ -7,6 +7,7 @@ from test.utils import (
 from typing import Sized
 
 from pendulum import parse as parse_date  # type: ignore
+from pendulum.parser import parse
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.sqltypes import DECIMAL
 from sqlalchemy.util.langhelpers import only_once
@@ -14,6 +15,7 @@ from sqlalchemy.util.langhelpers import only_once
 from rush.card import (
     create_user_product,
     get_user_product,
+    transaction_loan,
 )
 from rush.card.base_card import (
     BaseBill,
@@ -37,7 +39,7 @@ from rush.payments import (
     payment_received,
     payment_received_event,
 )
-from rush.txn_loan import (
+from rush.transaction_loan import (
     transaction_to_loan,
     transaction_to_loan_new,
 )
@@ -54,8 +56,8 @@ def create_products(session: Session) -> None:
     hc_product = Product(product_name="rebel")
     session.add(hc_product)
     session.flush()
-    txn_loan_product = Product(product_name="transaction_loan")
-    session.add(txn_loan_product)
+    transaction_loan_product = Product(product_name="transaction_loan")
+    session.add(transaction_loan_product)
     session.flush()
 
 
@@ -117,26 +119,28 @@ def test_transaction_loan(session: Session) -> None:
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 2400
 
-    txn_loan = transaction_to_loan(
+    transaction_loan: TransactionLoan = transaction_to_loan(
         session=session,
-        txn_id=swipe2emi["data"].id,
+        transaction_id=swipe2emi["data"].id,
         user_id=469,
         post_date=parse_date("2020-11-01"),
     )["data"]
 
-    assert isinstance(txn_loan, TransactionLoan)
-    assert txn_loan.get_remaining_min() == Decimal("140")
-    assert txn_loan.get_remaining_max() == Decimal("1200")
+    assert isinstance(transaction_loan, TransactionLoan)
+    assert transaction_loan.get_remaining_min() == Decimal("140")
+    assert transaction_loan.get_remaining_max() == Decimal("1200")
 
-    assert user_loan.get_child_loans()[0].id == txn_loan.id
+    assert user_loan.get_child_loans()[0].id == transaction_loan.id
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
     assert unbilled_amount == 1200
 
-    txn_loan_bill = session.query(LoanData).filter(LoanData.loan_id == txn_loan.id).scalar()
+    transaction_loan_bill = (
+        session.query(LoanData).filter(LoanData.loan_id == transaction_loan.id).scalar()
+    )
 
     _, principal_receivable = get_account_balance_from_str(
-        session, book_string=f"{txn_loan_bill.id}/bill/principal_receivable/a"
+        session, book_string=f"{transaction_loan_bill.id}/bill/principal_receivable/a"
     )
     assert principal_receivable == 1200
 
@@ -159,8 +163,8 @@ def test_transaction_loan(session: Session) -> None:
     )
     assert billed_amount == 1200
 
-    bill = bill_generate(user_loan=txn_loan, creation_time=bill_date)
-    latest_bill = txn_loan.get_latest_bill()
+    bill = bill_generate(user_loan=transaction_loan, creation_time=bill_date)
+    latest_bill = transaction_loan.get_latest_bill()
     assert latest_bill is not None
     assert isinstance(latest_bill, BaseBill) == True
 
@@ -168,19 +172,20 @@ def test_transaction_loan(session: Session) -> None:
     assert bill.table.is_generated is True
 
     _, unbilled_amount = get_account_balance_from_str(
-        session, book_string=f"{txn_loan_bill.id}/bill/unbilled/a", to_date=bill_date
+        session, book_string=f"{transaction_loan_bill.id}/bill/unbilled/a", to_date=bill_date
     )
     assert unbilled_amount == 0
 
     _, billed_amount = get_account_balance_from_str(
-        session, book_string=f"{txn_loan_bill.id}/bill/principal_receivable/a", to_date=bill_date
+        session, book_string=f"{transaction_loan_bill.id}/bill/principal_receivable/a", to_date=bill_date
     )
     assert billed_amount == 1200
 
+    # paying min amount for rebel loan
     lt = LedgerTriggerEvent(
         name="payment_received",
         loan_id=user_loan.loan_id if user_loan else None,
-        amount=1340,
+        amount=121,
         post_date=parse_date("2020-12-02 19:23:11"),
         extra_details={
             "payment_request_id": "dummy_payment",
@@ -192,10 +197,8 @@ def test_transaction_loan(session: Session) -> None:
     session.add(lt)
     session.flush()
 
-    lender_id = user_loan.lender_id
-
     payment_date = parse_date("2020-12-02")
-    amount = Decimal(1340)
+    amount = Decimal(121)
     payment_request_id = "bill_payment"
     payment_request_data(
         session=session,
@@ -215,7 +218,179 @@ def test_transaction_loan(session: Session) -> None:
     )
 
     assert user_loan.get_remaining_min(date_to_check_against=parse_date("2020-12-03 00:00:00")) == 0
-    assert txn_loan.get_remaining_min(date_to_check_against=parse_date("2020-12-03 00:00:00")) == 0
+    assert (
+        transaction_loan.get_remaining_min(date_to_check_against=parse_date("2020-12-03 00:00:00"))
+        == 140
+    )
+
+    # generating next month's bill
+    bill_date = parse_date("2021-01-01 00:00:00")
+    bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
+    latest_bill = user_loan.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
+    assert bill.bill_start_date == parse_date("2020-12-01").date()
+    assert bill.table.is_generated is True
+
+    _, unbilled_amount = get_account_balance_from_str(
+        session, book_string=f"{bill_id}/bill/unbilled/a", to_date=bill_date
+    )
+    assert unbilled_amount == 0
+
+    _, billed_amount = get_account_balance_from_str(
+        session, book_string=f"{bill_id}/bill/principal_receivable/a", to_date=bill_date
+    )
+    assert billed_amount == 1079
+
+    bill = bill_generate(user_loan=transaction_loan, creation_time=bill_date)
+    latest_bill = transaction_loan.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
+    assert bill.bill_start_date == parse_date("2020-11-01").date()
+    assert bill.table.is_generated is True
+
+    _, unbilled_amount = get_account_balance_from_str(
+        session, book_string=f"{transaction_loan_bill.id}/bill/unbilled/a", to_date=bill_date
+    )
+    assert unbilled_amount == 0
+
+    _, billed_amount = get_account_balance_from_str(
+        session, book_string=f"{transaction_loan_bill.id}/bill/principal_receivable/a", to_date=bill_date
+    )
+    assert billed_amount == 1200
+
+    assert user_loan.get_remaining_min(date_to_check_against=parse_date("2021-01-03 00:00:00")) == 121
+    assert (
+        transaction_loan.get_remaining_min(date_to_check_against=parse_date("2021-01-03 00:00:00"))
+        == 140
+    )
+
+
+def test_transaction_loan2(session: Session) -> None:
+    create_lenders(session=session)
+    create_products(session=session)
+    create_user(session=session)
+
+    user_product = create_user_product_mapping(
+        session=session, user_id=469, product_type="rebel", lender_id=1756833
+    )
+    user_card = create_user_product(
+        session=session,
+        card_type="rebel",
+        rc_rate_of_interest_monthly=Decimal(3),
+        lender_id=1756833,
+        interest_free_period_in_days=45,
+        user_id=469,
+        user_product_id=user_product.id,
+        card_activation_date=parse_date("2020-11-01").date(),
+        interest_type="reducing",
+    )
+
+    user_loan: RebelCard = get_user_product(session, 469, card_type="rebel")
+
+    swipe = create_card_swipe(
+        session=session,
+        user_loan=user_card,
+        txn_time=parse_date("2020-11-03 19:23:11"),
+        amount=Decimal(1200),
+        description="thor.com",
+        txn_ref_no="dummy_txn_ref_no_1",
+        trace_no="123457",
+    )
+    swipe2emi = create_card_swipe(
+        session=session,
+        user_loan=user_card,
+        txn_time=parse_date("2020-11-04 19:23:11"),
+        amount=Decimal(1200),
+        description="thor.com",
+        txn_ref_no="dummy_txn_ref_no_2",
+        trace_no="123458",
+    )
+    session.flush()
+
+    assert swipe["data"].loan_id == swipe2emi["data"].loan_id
+
+    transaction_loan: TransactionLoan = transaction_to_loan(
+        session=session,
+        transaction_id=swipe2emi["data"].id,
+        user_id=469,
+        post_date=parse_date("2020-11-01"),
+    )["data"]
+
+    bill_date = parse_date("2020-12-01 00:00:00")
+    bill_generate(user_loan=user_loan, creation_time=bill_date)
+    bill_generate(user_loan=transaction_loan, creation_time=bill_date)
+
+    assert user_loan.get_remaining_min(date_to_check_against=parse_date("2020-12-01 19:23:11")) == 121
+    assert (
+        transaction_loan.get_remaining_min(date_to_check_against=parse_date("2020-12-01 19:23:11"))
+        == 140
+    )
+
+    assert user_loan.get_remaining_max(date_to_check_against=parse_date("2020-12-01 19:23:11")) == 1200
+    assert (
+        transaction_loan.get_remaining_max(date_to_check_against=parse_date("2020-12-01 19:23:11"))
+        == 1200
+    )
+
+    lt = LedgerTriggerEvent(
+        name="payment_received",
+        loan_id=user_loan.loan_id if user_loan else None,
+        amount=1480,
+        post_date=parse_date("2020-12-02 19:23:11"),
+        extra_details={
+            "payment_request_id": "dummy_payment",
+            "payment_type": "principal",
+            "user_product_id": user_product.id if user_product.id else user_loan.user_product_id,
+            "lender_id": user_loan.lender_id,
+        },
+    )
+    session.add(lt)
+    session.flush()
+
+    payment_date = parse_date("2020-12-02")
+    amount = Decimal(1480)
+    payment_request_id = "bill_payment"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=469,
+        payment_request_id=payment_request_id,
+    )
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_request_data=payment_requests_data,
+        skip_closing=False,
+    )
+
+    assert user_loan.get_remaining_min(date_to_check_against=parse_date("2020-12-03 00:00:00")) == 0
+    assert (
+        transaction_loan.get_remaining_min(date_to_check_against=parse_date("2020-12-03 00:00:00")) == 0
+    )
+
+    assert user_loan.get_remaining_max(date_to_check_against=parse_date("2020-12-03 00:00:00")) == 0
+    assert (
+        transaction_loan.get_remaining_max(date_to_check_against=parse_date("2020-12-03 00:00:00")) != 0
+    )
+
+    user_loan_schedule = user_loan.get_loan_schedule()
+    assert user_loan_schedule[0].payment_status == "Paid"
+    user_loan_schedule = user_loan_schedule[1:]
+    assert all(
+        emi.payment_status == "UnPaid" and emi.payment_received == 0 for emi in user_loan_schedule
+    )
+
+    transaction_loan_schedule = transaction_loan.get_loan_schedule()
+    assert transaction_loan_schedule[0].payment_status == "Paid"
+    transaction_loan_schedule = transaction_loan_schedule[1:]
+    assert all(emi.payment_status == "UnPaid" for emi in transaction_loan_schedule)
 
 
 def test_transaction_loan_new(session: Session) -> None:

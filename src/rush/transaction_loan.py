@@ -33,14 +33,18 @@ from rush.payments import payment_received
 from rush.utils import get_current_ist_time
 
 
-def transaction_to_loan(session: Session, txn_id: int, user_id: int, post_date: DateTime) -> dict:
-    txn: CardTransaction = session.query(CardTransaction).filter(CardTransaction.id == txn_id).scalar()
+def transaction_to_loan(
+    session: Session, transaction_id: int, user_id: int, post_date: DateTime
+) -> dict:
+    transaction: CardTransaction = (
+        session.query(CardTransaction).filter(CardTransaction.id == transaction_id).scalar()
+    )
 
-    if not txn:
+    if not transaction:
         return {"result": "error", "message": "Invalid Transaction ID"}
 
-    # checking if bill is already generated for this txn
-    bill: LoanData = session.query(LoanData).filter(LoanData.id == txn.loan_id).scalar()
+    # checking if bill is already generated for this transaction
+    bill: LoanData = session.query(LoanData).filter(LoanData.id == transaction.loan_id).scalar()
 
     if bill.is_generated:
         return {"result": "error", "message": "Bill for this transaction has already been generated."}
@@ -49,7 +53,7 @@ def transaction_to_loan(session: Session, txn_id: int, user_id: int, post_date: 
         session.query(BaseLoan)
         .join(LoanData, LoanData.loan_id == BaseLoan.id)
         .join(CardTransaction, CardTransaction.loan_id == LoanData.id)
-        .filter(CardTransaction.id == txn_id)
+        .filter(CardTransaction.id == transaction_id)
         .scalar()
     )
 
@@ -57,28 +61,30 @@ def transaction_to_loan(session: Session, txn_id: int, user_id: int, post_date: 
         session=session, user_id=user_id, product_type="transaction_loan", lender_id=1756833
     )
 
-    # loan for txn amount
-    txn_loan = create_user_product(
+    # loan for transaction amount
+    transaction_loan = create_user_product(
         session=session,
         user_id=user_id,
         card_type="transaction_loan",
         lender_id=user_loan.lender_id,
         interest_free_period_in_days=15,
         tenure=12,
-        amount=txn.amount,
+        amount=transaction.amount,
         product_order_date=post_date,
         user_product_id=user_product.id,
         downpayment_percent=Decimal("0"),
-        credit_book=f"{txn.loan_id}/bill/unbilled/a",
+        credit_book=f"{transaction.loan_id}/bill/unbilled/a",
         parent_loan_id=user_loan.id,
     )
 
-    txn_loan_bill: LoanData = session.query(LoanData).filter(LoanData.loan_id == txn_loan.id).scalar()
-    txn.loan_id = txn_loan_bill.id
+    transaction_loan_bill: LoanData = (
+        session.query(LoanData).filter(LoanData.loan_id == transaction_loan.id).scalar()
+    )
+    transaction.loan_id = transaction_loan_bill.id
 
     session.flush()
 
-    return {"result": "success", "data": txn_loan}
+    return {"result": "success", "data": transaction_loan}
 
 
 def transaction_to_loan_new(
