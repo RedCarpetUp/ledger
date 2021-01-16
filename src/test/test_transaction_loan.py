@@ -1,5 +1,6 @@
 import pdb
 from decimal import Decimal
+from rush import loan_schedule
 from test.utils import (
     pay_payment_request,
     payment_request_data,
@@ -12,6 +13,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.sqltypes import DECIMAL
 from sqlalchemy.util.langhelpers import only_once
 
+from rush.accrue_financial_charges import accrue_interest_on_all_bills
 from rush.card import (
     create_user_product,
     get_user_product,
@@ -27,6 +29,7 @@ from rush.card.utils import create_user_product_mapping
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import get_account_balance_from_str
+from rush.min_payment import add_min_to_all_bills
 from rush.models import (
     LedgerTriggerEvent,
     Lenders,
@@ -261,10 +264,17 @@ def test_transaction_loan(session: Session) -> None:
     )
     assert billed_amount == 1200
 
+    accrue_interest_on_all_bills(
+        session=session, post_date=parse_date("2020-01-01 00:00:00"), user_loan=transaction_loan
+    )
+    add_min_to_all_bills(
+        session=session, post_date=parse_date("2021-01-01 00:00:00"), user_loan=transaction_loan
+    )
+
     assert user_loan.get_remaining_min(date_to_check_against=parse_date("2021-01-03 00:00:00")) == 121
     assert (
         transaction_loan.get_remaining_min(date_to_check_against=parse_date("2021-01-03 00:00:00"))
-        == 140
+        == 560
     )
 
 
