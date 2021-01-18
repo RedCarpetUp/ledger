@@ -57,10 +57,8 @@ def payment_received(
 
     remaining_payment_amount = payment_request_data.payment_request_amount
 
-    loans = [user_loan]
-    loans.extend(user_loan.get_child_loans())
-
-    for loan in loans:
+    all_loans = [user_loan] + user_loan.get_child_loans()
+    for loan in all_loans:
         if loan.get_remaining_min() and remaining_payment_amount:
             amount_to_adjust = min(loan.get_remaining_min(), remaining_payment_amount)
             remaining_payment_amount -= amount_to_adjust
@@ -75,34 +73,27 @@ def payment_received(
                 skip_closing=skip_closing,
             )
 
-            run_anomaly(
-                session=session,
-                user_loan=loan,
-                event_date=payment_request_data.intermediary_payment_date,
-            )
+    for loan in all_loans:
+        if remaining_payment_amount <= 0:
+            break
+        remaining_payment_amount = payment_received_event(
+            session=session,
+            user_loan=user_loan,
+            payment_request_data=payment_request_data,
+            amount_to_adjust=remaining_payment_amount,
+            debit_book_str=f"{loan.lender_id}/lender/pg_account/a",
+            event=event,
+            skip_closing=skip_closing,
+        )
 
-            # Update dpd
-            update_event_with_dpd(user_loan=loan, event=event)
-
-    for loan in loans:
-        if remaining_payment_amount:
-            remaining_payment_amount = payment_received_event(
-                session=session,
-                user_loan=user_loan,
-                payment_request_data=payment_request_data,
-                amount_to_adjust=remaining_payment_amount,
-                debit_book_str=f"{loan.lender_id}/lender/pg_account/a",
-                event=event,
-                skip_closing=skip_closing,
-            )
-            run_anomaly(
-                session=session,
-                user_loan=loan,
-                event_date=payment_request_data.intermediary_payment_date,
-            )
-
-            # Update dpd
-            update_event_with_dpd(user_loan=loan, event=event)
+    for loan in all_loans:
+        run_anomaly(
+            session=session,
+            user_loan=loan,
+            event_date=payment_request_data.intermediary_payment_date,
+        )
+        # Update dpd
+        update_event_with_dpd(user_loan=loan, event=event)
 
     if remaining_payment_amount > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
