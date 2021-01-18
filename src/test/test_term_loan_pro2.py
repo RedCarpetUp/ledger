@@ -12,7 +12,10 @@ from rush.card import (
     get_user_product,
 )
 from rush.card.term_loan_pro2 import TermLoanPro2
-from rush.card.utils import create_user_product_mapping
+from rush.card.utils import (
+    create_loan,
+    create_user_product_mapping,
+)
 from rush.ledger_utils import get_account_balance_from_str
 from rush.loan_schedule.calculations import get_down_payment
 from rush.models import (
@@ -121,8 +124,9 @@ def test_create_term_loan(session: Session) -> None:
     create_user(session=session)
 
     user_product = create_user_product_mapping(
-        session=session, user_id=4, product_type="term_loan_pro_2", lender_id=62311
+        session=session, user_id=4, product_type="term_loan_pro_2"
     )
+    create_loan(session=session, user_product=user_product, lender_id=62311)
     user_loan = get_user_product(
         session=session, user_id=user_product.user_id, card_type="term_loan_pro_2"
     )
@@ -240,8 +244,9 @@ def test_create_term_loan_2(session: Session) -> None:
     create_user(session=session)
 
     user_product = create_user_product_mapping(
-        session=session, user_id=4, product_type="term_loan_pro_2", lender_id=62311
+        session=session, user_id=4, product_type="term_loan_pro_2"
     )
+    create_loan(session=session, user_product=user_product, lender_id=62311)
     user_loan = get_user_product(
         session=session, user_id=user_product.user_id, card_type="term_loan_pro_2"
     )

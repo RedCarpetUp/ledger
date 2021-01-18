@@ -15,6 +15,7 @@ from rush.card import (
 from rush.card.reset_card import ResetCard
 from rush.card.utils import (
     create_activation_fee,
+    create_loan,
     create_user_product_mapping,
 )
 from rush.ledger_utils import get_account_balance_from_str
@@ -86,8 +87,9 @@ def test_create_term_loan(session: Session) -> None:
     create_user(session=session)
 
     user_product = create_user_product_mapping(
-        session=session, user_id=6, product_type="term_loan_reset", lender_id=1756833
+        session=session, user_id=6, product_type="term_loan_reset"
     )
+    create_loan(session=session, user_product=user_product, lender_id=1756833)
     user_loan = get_user_product(
         session=session, user_id=user_product.user_id, card_type="term_loan_reset"
     )
@@ -201,8 +203,9 @@ def test_reset_loan_limit_unlock_success(session: Session) -> None:
     create_user(session=session)
 
     user_product = create_user_product_mapping(
-        session=session, user_id=6, product_type="term_loan_reset", lender_id=1756833
+        session=session, user_id=6, product_type="term_loan_reset"
     )
+    create_loan(session=session, user_product=user_product, lender_id=1756833)
     user_loan = get_user_product(
         session=session, user_id=user_product.user_id, card_type="term_loan_reset"
     )
@@ -284,8 +287,9 @@ def test_reset_loan_limit_unlock_error(session: Session) -> None:
     create_user(session=session)
 
     user_product = create_user_product_mapping(
-        session=session, user_id=6, product_type="term_loan_reset", lender_id=1756833
+        session=session, user_id=6, product_type="term_loan_reset"
     )
+    create_loan(session=session, user_product=user_product, lender_id=1756833)
     user_loan = get_user_product(
         session=session, user_id=user_product.user_id, card_type="term_loan_reset"
     )

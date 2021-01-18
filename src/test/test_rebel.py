@@ -8,7 +8,10 @@ from rush.card import (
     get_user_product,
 )
 from rush.card.base_card import BaseBill
-from rush.card.utils import create_user_product_mapping
+from rush.card.utils import (
+    create_loan,
+    create_user_product_mapping,
+)
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import get_account_balance_from_str
@@ -45,9 +48,8 @@ def test_rubpro_user(session: Session) -> None:
     create_products(session=session)
     create_user(session=session)
 
-    user_product = create_user_product_mapping(
-        session=session, user_id=4369, product_type="rebel", lender_id=1756833
-    )
+    user_product = create_user_product_mapping(session=session, user_id=4369, product_type="rebel")
+    create_loan(session=session, user_product=user_product, lender_id=1756833)
     user_card = create_user_product(
         session=session,
         card_type="rebel",

@@ -10,6 +10,7 @@ from rush.card import (
 from rush.card.health_card import HealthCard
 from rush.card.utils import (
     create_activation_fee,
+    create_loan,
     create_reload_fee,
     create_user_product_mapping,
 )
@@ -108,8 +109,10 @@ def test_reset_joining_fees(session: Session) -> None:
     create_user(session=session)
 
     user_product = create_user_product_mapping(
-        session=session, user_id=5, product_type="term_loan_reset", lender_id=1756833
+        session=session, user_id=5, product_type="term_loan_reset"
     )
+
+    create_loan(session=session, user_product=user_product, lender_id=1756833)
     user_loan = get_user_product(
         session=session,
         user_id=user_product.user_id,
