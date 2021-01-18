@@ -34,7 +34,12 @@ from rush.utils import get_current_ist_time
 
 
 def transaction_to_loan(
-    session: Session, transaction_id: int, user_id: int, post_date: DateTime
+    session: Session,
+    transaction_id: int,
+    user_id: int,
+    post_date: DateTime,
+    tenure: int,
+    interest_rate: Optional[int] = None,
 ) -> dict:
     transaction: CardTransaction = (
         session.query(CardTransaction).filter(CardTransaction.id == transaction_id).scalar()
@@ -68,7 +73,7 @@ def transaction_to_loan(
         card_type="transaction_loan",
         lender_id=user_loan.lender_id,
         interest_free_period_in_days=15,
-        tenure=12,
+        tenure=tenure,
         amount=transaction.amount,
         product_order_date=post_date,
         user_product_id=user_product.id,

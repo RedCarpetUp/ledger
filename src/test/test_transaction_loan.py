@@ -127,6 +127,7 @@ def test_transaction_loan(session: Session) -> None:
         transaction_id=swipe2emi["data"].id,
         user_id=469,
         post_date=parse_date("2020-11-01"),
+        tenure=12,
     )["data"]
 
     assert isinstance(transaction_loan, TransactionLoan)
@@ -226,6 +227,13 @@ def test_transaction_loan(session: Session) -> None:
         == 140
     )
 
+    accrue_interest_on_all_bills(
+        session=session, post_date=parse_date("2020-12-17 00:00:00"), user_loan=transaction_loan
+    )
+    add_min_to_all_bills(
+        session=session, post_date=parse_date("2020-12-17 00:00:00"), user_loan=transaction_loan
+    )
+
     # generating next month's bill
     bill_date = parse_date("2021-01-01 00:00:00")
     bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
@@ -264,17 +272,10 @@ def test_transaction_loan(session: Session) -> None:
     )
     assert billed_amount == 1200
 
-    accrue_interest_on_all_bills(
-        session=session, post_date=parse_date("2020-01-01 00:00:00"), user_loan=transaction_loan
-    )
-    add_min_to_all_bills(
-        session=session, post_date=parse_date("2021-01-01 00:00:00"), user_loan=transaction_loan
-    )
-
     assert user_loan.get_remaining_min(date_to_check_against=parse_date("2021-01-03 00:00:00")) == 121
     assert (
         transaction_loan.get_remaining_min(date_to_check_against=parse_date("2021-01-03 00:00:00"))
-        == 560
+        == 420
     )
 
 
@@ -327,6 +328,7 @@ def test_transaction_loan2(session: Session) -> None:
         transaction_id=swipe2emi["data"].id,
         user_id=469,
         post_date=parse_date("2020-11-01"),
+        tenure=12,
     )["data"]
 
     bill_date = parse_date("2020-12-01 00:00:00")
