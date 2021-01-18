@@ -167,24 +167,6 @@ def test_transaction_loan(session: Session) -> None:
     )
     assert billed_amount == 1200
 
-    bill = bill_generate(user_loan=transaction_loan, creation_time=bill_date)
-    latest_bill = transaction_loan.get_latest_bill()
-    assert latest_bill is not None
-    assert isinstance(latest_bill, BaseBill) == True
-
-    assert bill.bill_start_date == parse_date("2020-11-01").date()
-    assert bill.table.is_generated is True
-
-    _, unbilled_amount = get_account_balance_from_str(
-        session, book_string=f"{transaction_loan_bill.id}/bill/unbilled/a", to_date=bill_date
-    )
-    assert unbilled_amount == 0
-
-    _, billed_amount = get_account_balance_from_str(
-        session, book_string=f"{transaction_loan_bill.id}/bill/principal_receivable/a", to_date=bill_date
-    )
-    assert billed_amount == 1200
-
     # paying min amount for rebel loan
     lt = LedgerTriggerEvent(
         name="payment_received",
@@ -230,8 +212,11 @@ def test_transaction_loan(session: Session) -> None:
     accrue_interest_on_all_bills(
         session=session, post_date=parse_date("2020-12-17 00:00:00"), user_loan=transaction_loan
     )
+
     add_min_to_all_bills(
-        session=session, post_date=parse_date("2020-12-17 00:00:00"), user_loan=transaction_loan
+        session=session,
+        post_date=transaction_loan.convert_to_bill_class(transaction_loan_bill).table.bill_close_date,
+        user_loan=transaction_loan,
     )
 
     # generating next month's bill
@@ -254,29 +239,9 @@ def test_transaction_loan(session: Session) -> None:
     )
     assert billed_amount == 1079
 
-    bill = bill_generate(user_loan=transaction_loan, creation_time=bill_date)
-    latest_bill = transaction_loan.get_latest_bill()
-    assert latest_bill is not None
-    assert isinstance(latest_bill, BaseBill) == True
-
-    assert bill.bill_start_date == parse_date("2020-11-01").date()
-    assert bill.table.is_generated is True
-
-    _, unbilled_amount = get_account_balance_from_str(
-        session, book_string=f"{transaction_loan_bill.id}/bill/unbilled/a", to_date=bill_date
-    )
-    assert unbilled_amount == 0
-
-    _, billed_amount = get_account_balance_from_str(
-        session, book_string=f"{transaction_loan_bill.id}/bill/principal_receivable/a", to_date=bill_date
-    )
-    assert billed_amount == 1200
-
     assert user_loan.get_remaining_min(date_to_check_against=parse_date("2021-01-03 00:00:00")) == 121
-    assert (
-        transaction_loan.get_remaining_min(date_to_check_against=parse_date("2021-01-03 00:00:00"))
-        == 420
-    )
+    assert transaction_loan.get_remaining_min() == 280
+    assert transaction_loan.get_remaining_max() == 1240
 
 
 def test_transaction_loan2(session: Session) -> None:
@@ -333,7 +298,6 @@ def test_transaction_loan2(session: Session) -> None:
 
     bill_date = parse_date("2020-12-01 00:00:00")
     bill_generate(user_loan=user_loan, creation_time=bill_date)
-    bill_generate(user_loan=transaction_loan, creation_time=bill_date)
 
     assert user_loan.get_remaining_min(date_to_check_against=parse_date("2020-12-01 19:23:11")) == 121
     assert (
@@ -350,7 +314,7 @@ def test_transaction_loan2(session: Session) -> None:
     lt = LedgerTriggerEvent(
         name="payment_received",
         loan_id=user_loan.loan_id if user_loan else None,
-        amount=1480,
+        amount=1340,
         post_date=parse_date("2020-12-02 19:23:11"),
         extra_details={
             "payment_request_id": "dummy_payment",
@@ -363,7 +327,7 @@ def test_transaction_loan2(session: Session) -> None:
     session.flush()
 
     payment_date = parse_date("2020-12-02")
-    amount = Decimal(1480)
+    amount = Decimal("1340")
     payment_request_id = "bill_payment"
     payment_request_data(
         session=session,
@@ -389,7 +353,8 @@ def test_transaction_loan2(session: Session) -> None:
 
     assert user_loan.get_remaining_max(date_to_check_against=parse_date("2020-12-03 00:00:00")) == 0
     assert (
-        transaction_loan.get_remaining_max(date_to_check_against=parse_date("2020-12-03 00:00:00")) != 0
+        transaction_loan.get_remaining_max(date_to_check_against=parse_date("2020-12-03 00:00:00"))
+        == 1060
     )
 
     user_loan_schedule = user_loan.get_loan_schedule()
