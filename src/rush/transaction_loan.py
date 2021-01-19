@@ -57,8 +57,7 @@ def transaction_to_loan(
     user_loan: BaseLoan = (
         session.query(BaseLoan)
         .join(LoanData, LoanData.loan_id == BaseLoan.id)
-        .join(CardTransaction, CardTransaction.loan_id == LoanData.id)
-        .filter(CardTransaction.id == transaction_id)
+        .filter(LoanData.id == bill.id)
         .scalar()
     )
 
