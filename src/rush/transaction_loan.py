@@ -79,6 +79,7 @@ def transaction_to_loan(
         downpayment_percent=Decimal("0"),
         credit_book=f"{transaction.loan_id}/bill/unbilled/a",
         parent_loan_id=user_loan.id,
+        can_close_early=True,
     )
 
     transaction_loan_bill: LoanData = (

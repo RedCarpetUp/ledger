@@ -131,8 +131,9 @@ def test_transaction_loan(session: Session) -> None:
     )["data"]
 
     assert isinstance(transaction_loan, TransactionLoan)
-    assert transaction_loan.get_remaining_min() == Decimal("140")
-    assert transaction_loan.get_remaining_max() == Decimal("1200")
+    assert transaction_loan.can_close_early == True
+    assert transaction_loan.get_remaining_min() == 140
+    assert transaction_loan.get_remaining_max() == 1200
 
     assert user_loan.get_child_loans()[0].id == transaction_loan.id
 
