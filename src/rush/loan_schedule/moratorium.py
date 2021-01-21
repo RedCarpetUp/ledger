@@ -43,8 +43,6 @@ def provide_moratorium(user_loan: BaseLoan, start_date: date, end_date: date):
         loan_id=user_loan.loan_id,
         start_date=start_date,
         end_date=end_date,
-        start_emi_number=moratorium_emis[0].emi_number,
-        end_emi_number=moratorium_emis[-1].emi_number,
     )
 
     # Get future emis of all the bills

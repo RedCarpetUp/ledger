@@ -84,6 +84,7 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loa
     )
 
     for bill in unpaid_bills:
+        interest_to_accrue = 0
         loan_schedule = (
             session.query(LoanSchedule)
             .filter(
@@ -95,7 +96,8 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loa
             .limit(1)
             .scalar()
         )
-        interest_to_accrue = loan_schedule.interest_due
+        if loan_schedule:
+            interest_to_accrue += loan_schedule.interest_due
         if LoanMoratorium.is_in_moratorium(
             session, loan_id=user_loan.loan_id, date_to_check_against=post_date - relativedelta(days=1)
         ):
@@ -113,7 +115,11 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loa
             if moratorium_interest:
                 interest_to_accrue += moratorium_interest
 
-        if moratorium and loan_schedule.due_date == moratorium.end_date + relativedelta(months=1):
+        if (
+            moratorium
+            and loan_schedule
+            and loan_schedule.due_date == moratorium.end_date + relativedelta(months=1)
+        ):
             moratorium_interest = (
                 session.query(func.sum(MoratoriumInterest.interest).label("total_moratorium_interest"))
                 .join(

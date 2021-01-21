@@ -507,8 +507,6 @@ class LoanMoratorium(AuditMixin):
     loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
-    start_emi_number = Column(Integer, nullable=False)
-    end_emi_number = Column(Integer, nullable=False)
 
     @classmethod
     def is_in_moratorium(cls, session: Session, loan_id: int, date_to_check_against: PythonDate) -> bool:

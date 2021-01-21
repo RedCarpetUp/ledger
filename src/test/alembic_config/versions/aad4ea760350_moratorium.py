@@ -37,9 +37,6 @@ def upgrade() -> None:
         ),
     )
 
-    op.add_column("loan_moratorium", sa.Column("start_emi_number", sa.Integer, nullable=False))
-    op.add_column("loan_moratorium", sa.Column("end_emi_number", sa.Integer, nullable=False))
-
 
 def downgrade() -> None:
     pass
