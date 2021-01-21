@@ -26,18 +26,6 @@ def provide_moratorium(user_loan: BaseLoan, start_date: date, end_date: date):
         extra_details={"start_date": start_date.isoformat(), "end_date": end_date.isoformat()},
     )
 
-    moratorium_emis = (
-        user_loan.session.query(LoanSchedule)
-        .filter(
-            LoanSchedule.loan_id == user_loan.loan_id,
-            LoanSchedule.bill_id.is_(None),
-            LoanSchedule.due_date >= start_date,
-            LoanSchedule.due_date <= end_date,
-        )
-        .order_by(LoanSchedule.emi_number)
-        .all()
-    )
-
     loan_moratorium = LoanMoratorium.new(
         user_loan.session,
         loan_id=user_loan.loan_id,
