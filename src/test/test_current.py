@@ -120,6 +120,7 @@ def test_user2(session: Session) -> None:
     session.add(u)
     session.commit()
     a = session.query(User).first()
+    assert a is not None
     u = UserPy(
         id=a.id,
         performed_by=123,
@@ -139,6 +140,7 @@ def test_user(session: Session) -> None:
     session.add(u)
     session.commit()
     a = session.query(User).first()
+    assert a is not None
     u = UserPy(
         id=a.id,
         performed_by=123,
@@ -156,6 +158,7 @@ def test_lenders(session: Session) -> None:
     session.add(l2)
     session.flush()
     a = session.query(Lenders).first()
+    assert a is not None
     u = LenderPy(id=a.id, performed_by=123, lender_name="DMI", row_status="active")
 
 
@@ -765,6 +768,7 @@ def _accrue_late_fine_bill_1(session: Session) -> None:
         .filter(BillFee.identifier_id == bill.id, BillFee.name == "late_fee")
         .one_or_none()
     )
+    assert fee_due is not None
     assert fee_due.net_amount == Decimal(100)
     assert fee_due.gross_amount == Decimal(118)
 
@@ -784,6 +788,7 @@ def _accrue_late_fine_bill_2(session: Session) -> None:
         .order_by(BillFee.id.desc())
         .one_or_none()
     )
+    assert fee_due is not None
     assert fee_due.net_amount == Decimal(100)
     assert fee_due.gross_amount == Decimal(118)
 
@@ -831,6 +836,7 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
     assert min_due == Decimal(0)
 
     bill_fee = session.query(Fee).filter_by(id=fee_id).one_or_none()
+    assert bill_fee is not None
     assert bill_fee.fee_status == "PAID"
     assert bill_fee.net_amount_paid == Decimal(100)
     assert bill_fee.sgst_paid == Decimal(9)
@@ -907,6 +913,7 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
         .filter(BillFee.identifier_id == bill.id, BillFee.name == "late_fee")
         .one_or_none()
     )
+    assert fee_due is not None
     assert fee_due.fee_status == "PAID"
 
     _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine/r")
@@ -1683,6 +1690,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         .filter(BillFee.identifier_id == bill_may.id, BillFee.name == "atm_fee")
         .one_or_none()
     )
+    assert atm_fee_due is not None
     assert atm_fee_due.gross_amount == 59
 
     create_card_swipe(
@@ -2203,6 +2211,7 @@ def _pay_minimum_amount_bill_2(session: Session) -> None:
         .filter(LedgerTriggerEvent.name == "payment_received")
         .first()
     )
+    assert balance_paid is not None
     assert balance_paid.amount == Decimal(110)
 
 
@@ -3508,6 +3517,7 @@ def test_customer_fee_refund(session: Session) -> None:
         .filter(BillFee.identifier_id == bill.id, BillFee.name == "late_fee")
         .one_or_none()
     )
+    assert fee_due is not None
     assert fee_due.net_amount == Decimal(100)
     assert fee_due.gross_amount == Decimal(118)
 
@@ -3520,7 +3530,7 @@ def test_customer_fee_refund(session: Session) -> None:
     )
 
     bill_fee = session.query(Fee).filter_by(id=fee_due.id).one_or_none()
-
+    assert bill_fee is not None
     assert bill_fee.fee_status == "PAID"
     assert bill_fee.net_amount_paid == Decimal(100)
     assert bill_fee.gross_amount_paid == Decimal(118)
@@ -3536,7 +3546,7 @@ def test_customer_fee_refund(session: Session) -> None:
     assert status["result"] == "success"
 
     fee = session.query(Fee).filter_by(id=fee_due.id).one_or_none()
-
+    assert fee is not None
     assert fee.fee_status == "REFUND"
 
 

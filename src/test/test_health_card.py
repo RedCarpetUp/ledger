@@ -112,7 +112,7 @@ def test_medical_health_card_swipe(session: Session) -> None:
     swipe_loan_id = swipe["data"].loan_id
 
     transaction = session.query(CardTransaction).filter(CardTransaction.mcc == "8011").first()
-
+    assert transaction is not None
     assert transaction.amount == Decimal(700)
     assert transaction.description == "Amazon.com"
 
