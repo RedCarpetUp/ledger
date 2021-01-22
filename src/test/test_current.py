@@ -172,6 +172,7 @@ def test_card_swipe_and_reversal(session: Session) -> None:
         card_type="ruby",
         rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
+        tenure=12,
     )
 
     swipe1 = create_card_swipe(
