@@ -60,6 +60,7 @@ def test_rubpro_user(session: Session) -> None:
         user_product_id=user_product.id,
         card_activation_date=parse_date("2020-11-01").date(),
         interest_type="reducing",
+        tenure=12,
     )
 
     assert user_card.product_type == "rebel"
