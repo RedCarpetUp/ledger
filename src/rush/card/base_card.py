@@ -262,6 +262,7 @@ class BaseLoan(Loan):
         loan.min_tenure = kwargs.get("min_tenure")
         loan.min_multiplier = kwargs.get("min_multiplier")
         loan.interest_type = kwargs.get("interest_type", "flat")
+        loan.tenure_in_months = kwargs.get("tenure")
         # Don't want to overwrite default value in case of None.
         if kwargs.get("interest_free_period_in_days"):
             loan.interest_free_period_in_days = kwargs.get("interest_free_period_in_days")
@@ -290,11 +291,11 @@ class BaseLoan(Loan):
         new_bill = LoanData(
             user_id=self.user_id,
             loan_id=self.loan_id,
-            # lender_id=lender_id,
             bill_start_date=bill_start_date,
             bill_close_date=bill_close_date,
             bill_due_date=bill_due_date,
             is_generated=is_generated,
+            bill_tenure=self.tenure_in_months,
         )
         self.session.add(new_bill)
         self.session.flush()

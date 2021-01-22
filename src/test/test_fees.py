@@ -72,6 +72,7 @@ def create_test_user_loan(session: Session) -> HealthCard:
         rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
         kit_number="10000",
+        tenure=12,
     )
 
     return uc
