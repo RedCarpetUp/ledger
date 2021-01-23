@@ -169,21 +169,6 @@ def test_transaction_loan(session: Session) -> None:
     assert billed_amount == 1200
 
     # paying min amount for rebel loan
-    lt = LedgerTriggerEvent(
-        name="payment_received",
-        loan_id=user_loan.loan_id if user_loan else None,
-        amount=121,
-        post_date=parse_date("2020-12-02 19:23:11"),
-        extra_details={
-            "payment_request_id": "dummy_payment",
-            "payment_type": "principal",
-            "user_product_id": user_product.id if user_product.id else user_loan.user_product_id,
-            "lender_id": user_loan.lender_id,
-        },
-    )
-    session.add(lt)
-    session.flush()
-
     payment_date = parse_date("2020-12-02")
     amount = Decimal(121)
     payment_request_id = "bill_payment"
@@ -311,21 +296,6 @@ def test_transaction_loan2(session: Session) -> None:
         transaction_loan.get_remaining_max(date_to_check_against=parse_date("2020-12-01 19:23:11"))
         == 1200
     )
-
-    lt = LedgerTriggerEvent(
-        name="payment_received",
-        loan_id=user_loan.loan_id if user_loan else None,
-        amount=1340,
-        post_date=parse_date("2020-12-02 19:23:11"),
-        extra_details={
-            "payment_request_id": "dummy_payment",
-            "payment_type": "principal",
-            "user_product_id": user_product.id if user_product.id else user_loan.user_product_id,
-            "lender_id": user_loan.lender_id,
-        },
-    )
-    session.add(lt)
-    session.flush()
 
     payment_date = parse_date("2020-12-02")
     amount = Decimal("1340")
