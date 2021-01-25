@@ -4,6 +4,7 @@ from typing import (
     Any,
     Dict,
 )
+from dateutil.relativedelta import relativedelta
 
 from pendulum import Date as PythonDate
 from pendulum import DateTime
@@ -32,6 +33,7 @@ from sqlalchemy.orm import (
     relationship,
 )
 from sqlalchemy.schema import Index
+from sqlalchemy import func
 from sqlalchemy.util.langhelpers import hybridproperty
 
 from rush.utils import get_current_ist_time
@@ -443,6 +445,39 @@ class CardTransaction(AuditMixin):
     status = Column(String(15), nullable=False)
 
 
+class LoanMoratorium(AuditMixin):
+    __tablename__ = "loan_moratorium"
+
+    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+
+    @classmethod
+    def is_in_moratorium(cls, session: Session, loan_id: int, date_to_check_against: PythonDate) -> bool:
+        if not date_to_check_against:
+            date_to_check_against = get_current_ist_time()
+        v = (
+            session.query(cls)
+            .filter(
+                cls.loan_id == loan_id,
+                date_to_check_against >= cls.start_date,
+                date_to_check_against <= cls.end_date,
+            )
+            .one_or_none()
+        )
+        return v is not None
+
+
+class MoratoriumInterest(AuditMixin):
+    __tablename__ = "moratorium_interest"
+
+    moratorium_id = Column(Integer, ForeignKey(LoanMoratorium.id), nullable=False)
+    emi_number = Column(Integer, nullable=False)
+    interest = Column(Numeric, nullable=False)
+    bill_id = Column(Integer, ForeignKey(LoanData.id), nullable=False)
+    due_date = Column(Date, nullable=False)
+
+
 class LoanSchedule(AuditMixin):
     __tablename__ = "loan_schedule"
     loan_id = Column(Integer, ForeignKey(Loan.id))
@@ -465,6 +500,46 @@ class LoanSchedule(AuditMixin):
     @hybrid_property
     def remaining_amount(self):
         return self.total_due_amount - self.payment_received
+
+    def interest_to_accrue(self, session: Session, loan_moratorium: LoanMoratorium):
+        interest_to_accrue = 0
+        interest_to_accrue += self.interest_due
+        if (
+            loan_moratorium
+            and self.due_date >= loan_moratorium.start_date
+            and self.due_date <= loan_moratorium.end_date
+        ):
+            moratorium_interest = (
+                session.query(MoratoriumInterest.interest)
+                .filter(
+                    MoratoriumInterest.bill_id == self.bill_id,
+                    MoratoriumInterest.due_date == self.due_date,
+                )
+                .order_by(MoratoriumInterest.due_date.desc())
+                .limit(1)
+                .scalar()
+            )
+            if moratorium_interest:
+                interest_to_accrue += moratorium_interest
+
+        if loan_moratorium and self.due_date == loan_moratorium.end_date + relativedelta(months=1):
+            moratorium_interest = (
+                session.query(func.sum(MoratoriumInterest.interest).label("total_moratorium_interest"))
+                .join(
+                    LoanMoratorium,
+                    MoratoriumInterest.moratorium_id == loan_moratorium.id,
+                )
+                .filter(
+                    LoanMoratorium.loan_id == self.loan_id,
+                    MoratoriumInterest.due_date >= loan_moratorium.start_date,
+                    MoratoriumInterest.due_date <= loan_moratorium.end_date,
+                )
+                .first()
+            )
+            if interest_to_accrue:
+                interest_to_accrue -= moratorium_interest.total_moratorium_interest
+
+        return interest_to_accrue
 
     def make_emi_unpaid(self):
         self.payment_received = 0
@@ -499,29 +574,6 @@ class PaymentSplit(AuditMixin):
     component = Column(String(50), nullable=False)
     amount_settled = Column(Numeric, nullable=False)
     loan_id = Column(Integer, ForeignKey(Loan.id), nullable=True)
-
-
-class LoanMoratorium(AuditMixin):
-    __tablename__ = "loan_moratorium"
-
-    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
-    start_date = Column(Date, nullable=False)
-    end_date = Column(Date, nullable=False)
-
-    @classmethod
-    def is_in_moratorium(cls, session: Session, loan_id: int, date_to_check_against: PythonDate) -> bool:
-        if not date_to_check_against:
-            date_to_check_against = get_current_ist_time()
-        v = (
-            session.query(cls)
-            .filter(
-                cls.loan_id == loan_id,
-                date_to_check_against >= cls.start_date,
-                date_to_check_against <= cls.end_date,
-            )
-            .one_or_none()
-        )
-        return v is not None
 
 
 class Fee(AuditMixin):
@@ -719,13 +771,3 @@ class PaymentRequestsData(AuditMixin):
     coupon_data = Column(JSONB, default=lambda: {})
     gross_request_amount = Column(Integer, nullable=True)
     extra_details = Column(JSONB, default=lambda: {})
-
-
-class MoratoriumInterest(AuditMixin):
-    __tablename__ = "moratorium_interest"
-
-    moratorium_id = Column(Integer, ForeignKey(LoanMoratorium.id), nullable=False)
-    emi_number = Column(Integer, nullable=False)
-    interest = Column(Numeric, nullable=False)
-    bill_id = Column(Integer, ForeignKey(LoanData.id), nullable=True)
-    due_date = Column(Date, nullable=False)

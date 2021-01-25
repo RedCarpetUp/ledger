@@ -96,16 +96,13 @@ def provide_moratorium(user_loan: BaseLoan, start_date: date, end_date: date):
 
     group_bills(user_loan)
 
-    group_moratorium_bills(user_loan, loan_moratorium)
 
-
-def add_moratorium_bills(session: Session, user_loan: BaseLoan, bill: BaseBill):
+def add_moratorium_emis(session: Session, user_loan: BaseLoan, bill: BaseBill):
 
     emi_number = 1
-    due_date = bill.table.bill_start_date
     opening_principal = bill.table.principal
     moratorium_emi_objects = []
-    bill_due_date = bill.table.bill_due_date
+    due_date = bill.table.bill_due_date
 
     if user_loan.interest_type == "reducing":
         interest_due = bill.get_interest_to_charge(principal=opening_principal)
@@ -121,13 +118,7 @@ def add_moratorium_bills(session: Session, user_loan: BaseLoan, bill: BaseBill):
         .first()
     )
 
-    while LoanMoratorium.is_in_moratorium(
-        session, loan_id=user_loan.loan_id, date_to_check_against=bill_due_date
-    ):
-        due_date_deltas = bill.get_relative_delta_for_emi(
-            emi_number=emi_number, amortization_date=user_loan.amortization_date
-        )
-        due_date += relativedelta(**due_date_deltas)
+    while due_date >= loan_moratorium.start_date and due_date <= loan_moratorium.end_date:
         bill_schedule = LoanSchedule(
             loan_id=bill.table.loan_id,
             bill_id=bill.table.id,
@@ -146,57 +137,22 @@ def add_moratorium_bills(session: Session, user_loan: BaseLoan, bill: BaseBill):
             due_date=due_date,
         )
         emi_number += 1
-        bill_due_date += relativedelta(months=1)
+        due_date_deltas = bill.get_relative_delta_for_emi(
+            emi_number=emi_number, amortization_date=user_loan.amortization_date
+        )
+        due_date += relativedelta(**due_date_deltas)
         moratorium_emi_objects.append(bill_schedule)
-    group_moratorium_bills(user_loan, loan_moratorium)
 
     number_of_months_added = emi_number - 1
-    interest_to_be_added = interest_due * number_of_months_added
+    moratorium_interest_to_be_added = interest_due * number_of_months_added
+    due_date_deltas = bill.get_relative_delta_for_emi(
+        emi_number=emi_number, amortization_date=user_loan.amortization_date
+    )
+    due_date -= relativedelta(**due_date_deltas)
 
     return {
         "moratorium_emi_objects": moratorium_emi_objects,
         "number_of_months_added": number_of_months_added,
         "due_date": due_date,
-        "interest_to_be_added": interest_to_be_added,
+        "moratorium_interest_to_be_added": moratorium_interest_to_be_added,
     }
-
-
-def group_moratorium_bills(user_loan: BaseLoan, loan_moratorium: LoanMoratorium):
-    session = user_loan.session
-    cumulative_values_query = (
-        session.query(
-            MoratoriumInterest.due_date,
-            func.sum(MoratoriumInterest.interest).label("interest"),
-        )
-        .filter(
-            MoratoriumInterest.moratorium_id == loan_moratorium.id,
-            MoratoriumInterest.bill_id.isnot(None),
-        )
-        .group_by(MoratoriumInterest.due_date)
-    ).subquery()
-    q_results = (
-        session.query(cumulative_values_query, MoratoriumInterest.id)
-        .join(
-            MoratoriumInterest,
-            and_(
-                MoratoriumInterest.moratorium_id == loan_moratorium.id,
-                MoratoriumInterest.due_date == cumulative_values_query.c.due_date,
-                MoratoriumInterest.bill_id.is_(None),
-            ),
-            isouter=True,
-        )
-        .order_by(cumulative_values_query.c.due_date)
-        .all()
-    )
-    for emi_number, cumulative_values in enumerate(q_results, 1):
-        cumulative_values_dict = cumulative_values._asdict()
-        emi_id = cumulative_values.id
-        if emi_id:  # If emi id is present then we update the record.
-            session.query(MoratoriumInterest).filter_by(id=emi_id).update(cumulative_values_dict)
-        else:
-            MoratoriumInterest.new(
-                session,
-                moratorium_id=loan_moratorium.id,
-                emi_number=emi_number,
-                **cumulative_values_dict,
-            )

@@ -3625,7 +3625,7 @@ def test_customer_prepayment_refund(session: Session) -> None:
     assert prepayment_amount == Decimal(0)
 
 
-def test_moratorium_bill_schedule(session: Session) -> None:
+def test_moratorium_emi_schedule(session: Session) -> None:
     test_lenders(session)
     card_db_updates(session)
 

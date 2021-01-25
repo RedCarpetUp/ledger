@@ -76,7 +76,7 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loa
     session.add(accrue_event)
     session.flush()
 
-    moratorium = (
+    loan_moratorium = (
         session.query(LoanMoratorium)
         .filter(LoanMoratorium.loan_id == user_loan.loan_id)
         .order_by(LoanMoratorium.start_date.desc())
@@ -97,45 +97,15 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loa
             .scalar()
         )
         if loan_schedule:
-            interest_to_accrue += loan_schedule.interest_due
-        if LoanMoratorium.is_in_moratorium(
-            session, loan_id=user_loan.loan_id, date_to_check_against=post_date - relativedelta(days=1)
-        ):
-            moratorium_interest = (
-                session.query(MoratoriumInterest.interest)
-                .filter(
-                    MoratoriumInterest.bill_id == bill.table.id,
-                    MoratoriumInterest.due_date < post_date,
-                    MoratoriumInterest.due_date > post_date - relativedelta(months=1),
-                )
-                .order_by(MoratoriumInterest.due_date.desc())
-                .limit(1)
-                .scalar()
+            interest_to_accrue = loan_schedule.interest_to_accrue(
+                session=session, loan_moratorium=loan_moratorium
             )
-            if moratorium_interest:
-                interest_to_accrue += moratorium_interest
-
         if (
-            moratorium
+            loan_moratorium
             and loan_schedule
-            and loan_schedule.due_date == moratorium.end_date + relativedelta(months=1)
+            and loan_schedule.due_date == loan_moratorium.end_date + relativedelta(months=1)
         ):
-            moratorium_interest = (
-                session.query(func.sum(MoratoriumInterest.interest).label("total_moratorium_interest"))
-                .join(
-                    LoanMoratorium,
-                    MoratoriumInterest.moratorium_id == LoanMoratorium.id,
-                )
-                .filter(
-                    LoanMoratorium.loan_id == user_loan.loan_id,
-                    MoratoriumInterest.bill_id.is_(None),
-                )
-                .group_by(MoratoriumInterest.moratorium_id)
-                .first()
-            )
-            if interest_to_accrue:
-                interest_to_accrue -= moratorium_interest.total_moratorium_interest
-                moratorium = None
+            loan_moratorium = None
 
         if interest_to_accrue:
             accrue_event.amount += interest_to_accrue

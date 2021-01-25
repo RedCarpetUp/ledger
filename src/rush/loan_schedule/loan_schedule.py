@@ -13,8 +13,7 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
-from rush.loan_schedule.calculations import get_interest_to_charge
-from rush.loan_schedule.moratorium import add_moratorium_bills
+from rush.loan_schedule.moratorium import add_moratorium_emis
 from rush.models import (
     LedgerTriggerEvent,
     LoanMoratorium,
@@ -71,15 +70,17 @@ def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
     opening_principal = bill.table.principal
     downpayment = bill.get_down_payment()
     new_emi_number = 1
-    interest_to_be_added = 0
+    moratorium_interest_to_be_added = 0
 
     if LoanMoratorium.is_in_moratorium(
-        session, loan_id=user_loan.loan_id, date_to_check_against=bill.table.bill_due_date
+        session,
+        loan_id=user_loan.loan_id,
+        date_to_check_against=bill.table.bill_due_date,
     ):
-        data_after_moratorium = add_moratorium_bills(session, user_loan, bill)
+        data_after_moratorium = add_moratorium_emis(session, user_loan, bill)
         number_of_months_added = data_after_moratorium["number_of_months_added"]
         due_date = data_after_moratorium["due_date"]
-        interest_to_be_added = data_after_moratorium["interest_to_be_added"]
+        moratorium_interest_to_be_added = data_after_moratorium["moratorium_interest_to_be_added"]
         emi_objects.extend(data_after_moratorium["moratorium_emi_objects"])
         new_emi_number = number_of_months_added + 1
         bill.table.bill_tenure += number_of_months_added
@@ -99,11 +100,11 @@ def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
             bill_id=bill.table.id,
             emi_number=emi_number,
             due_date=due_date,
-            interest_due=round(interest_due + interest_to_be_added, 2),
+            interest_due=round(interest_due + moratorium_interest_to_be_added, 2),
             principal_due=round(principal_due, 2),
             total_closing_balance=round(opening_principal, 2),
         )
-        interest_to_be_added = 0
+        moratorium_interest_to_be_added = 0
         opening_principal -= principal_due
         if emi_number == 1 and downpayment:  # add downpayment in first emi
             bill_schedule.principal_due = downpayment - bill_schedule.interest_due
@@ -180,11 +181,6 @@ def close_loan(user_loan: BaseLoan, last_payment_date: datetime):
         )
         .all()
     )
-    is_in_moratorium = LoanMoratorium.is_in_moratorium(
-        user_loan.session,
-        user_loan.loan_id,
-        date_to_check_against=last_payment_date.date(),
-    )
     loan_moratorium = (
         user_loan.session.query(LoanMoratorium)
         .filter(
@@ -193,20 +189,18 @@ def close_loan(user_loan: BaseLoan, last_payment_date: datetime):
         .order_by(LoanMoratorium.start_date.desc())
         .first()
     )
+    is_in_moratorium = (
+        loan_moratorium
+        and last_payment_date.date() >= loan_moratorium.start_date
+        and last_payment_date.date() <= loan_moratorium.end_date
+    )
     if loan_moratorium:
         moratorium_interest = (
             user_loan.session.query(
                 func.sum(MoratoriumInterest.interest).label("total_moratorium_interest_added")
             )
-            .join(
-                LoanMoratorium,
-                and_(
-                    MoratoriumInterest.moratorium_id == loan_moratorium.id,
-                    MoratoriumInterest.bill_id.is_(None),
-                    LoanMoratorium.loan_id == user_loan.loan_id,
-                ),
-            )
             .filter(
+                MoratoriumInterest.moratorium_id == loan_moratorium.id,
                 MoratoriumInterest.due_date <= last_payment_date,
             )
             .group_by(MoratoriumInterest.moratorium_id)

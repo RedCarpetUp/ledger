@@ -22,7 +22,7 @@ def upgrade() -> None:
         sa.Column("moratorium_id", sa.Integer, nullable=False),
         sa.Column("emi_number", sa.Integer, nullable=False),
         sa.Column("interest", sa.Numeric, nullable=False),
-        sa.Column("bill_id", sa.Integer, nullable=True),
+        sa.Column("bill_id", sa.Integer, nullable=False),
         sa.Column("due_date", sa.Date(), nullable=False),
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
