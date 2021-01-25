@@ -56,24 +56,12 @@ def get_account_balance_from_str(
     book_string: str,
     to_date: Optional[DateTime] = None,
     from_date: Optional[DateTime] = None,
+    event_id: Optional[int] = None,
 ) -> Tuple[int, Decimal]:
     book_variables = breakdown_account_variables_from_str(book_string)
     func_call = None
     is_lender_account = book_variables["identifier_type"] == "lender"
-    if from_date and to_date:
-        if is_lender_account:
-            raise Exception("Not implemented")
-
-        func_call = func.get_account_balance_between_periods(
-            cast(book_variables["identifier"], sqlalchemy.Integer),
-            cast(book_variables["identifier_type"], sqlalchemy.String),
-            cast(book_variables["name"], sqlalchemy.String),
-            cast(book_variables["account_type"], sqlalchemy.String),
-            cast(from_date, sqlalchemy.TIMESTAMP),
-            cast(to_date, sqlalchemy.TIMESTAMP),
-        )
-
-    elif to_date:
+    if event_id or to_date:
         if is_lender_account:
             func_call = func.get_lender_account_balance(
                 cast(book_variables["identifier"], sqlalchemy.Integer),
@@ -88,8 +76,20 @@ def get_account_balance_from_str(
                 cast(book_variables["name"], sqlalchemy.String),
                 cast(book_variables["account_type"], sqlalchemy.String),
                 cast(to_date, sqlalchemy.TIMESTAMP),
+                cast(event_id, sqlalchemy.Integer),
             )
+    elif from_date and to_date:
+        if is_lender_account:
+            raise Exception("Not implemented")
 
+        func_call = func.get_account_balance_between_periods(
+            cast(book_variables["identifier"], sqlalchemy.Integer),
+            cast(book_variables["identifier_type"], sqlalchemy.String),
+            cast(book_variables["name"], sqlalchemy.String),
+            cast(book_variables["account_type"], sqlalchemy.String),
+            cast(from_date, sqlalchemy.TIMESTAMP),
+            cast(to_date, sqlalchemy.TIMESTAMP),
+        )
     elif is_lender_account:
         func_call = func.get_lender_account_balance(
             cast(book_variables["identifier"], sqlalchemy.Integer),

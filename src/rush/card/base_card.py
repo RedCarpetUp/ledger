@@ -119,9 +119,11 @@ class BaseBill:
         )
         return min_due
 
-    def get_remaining_max(self, as_of_date: Optional[DateTime] = None) -> Decimal:
+    def get_remaining_max(
+        self, as_of_date: Optional[DateTime] = None, event_id: Optional[int] = None
+    ) -> Decimal:
         _, max_amount = get_account_balance_from_str(
-            self.session, book_string=f"{self.id}/bill/max/a", to_date=as_of_date
+            self.session, book_string=f"{self.id}/bill/max/a", to_date=as_of_date, event_id=event_id
         )
         return max_amount
 
@@ -398,9 +400,11 @@ class BaseLoan(Loan):
         )
         return remaining_min_of_all_bills
 
-    def get_remaining_max(self, date_to_check_against: DateTime = None) -> Decimal:
+    def get_remaining_max(self, date_to_check_against: DateTime = None, event_id: int = None) -> Decimal:
         unpaid_bills = self.get_unpaid_generated_bills()
-        total_max_amount = sum(bill.get_remaining_max(date_to_check_against) for bill in unpaid_bills)
+        total_max_amount = sum(
+            bill.get_remaining_max(date_to_check_against, event_id) for bill in unpaid_bills
+        )
         return total_max_amount
 
     def get_total_outstanding(self, date_to_check_against: DateTime = None) -> Decimal:
