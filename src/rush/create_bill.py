@@ -69,7 +69,7 @@ def bill_generate(
     user_loan: BaseLoan,
     creation_time: DateTime = get_current_ist_time(),
     skip_bill_schedule_creation: bool = False,
-) -> List[BaseBill] or BaseBill:
+) -> BaseBill:
     session = user_loan.session
     bill = user_loan.get_latest_bill_to_generate()  # Get the first bill which is not generated.
     if not bill:
