@@ -1,10 +1,7 @@
-from datetime import (
-    date,
-    datetime,
-)
 from decimal import Decimal
 from typing import Optional
 
+import pendulum
 from dateutil.relativedelta import relativedelta
 from sqlalchemy.orm.session import Session
 from sqlalchemy.sql.functions import user
@@ -74,7 +71,9 @@ def transaction_to_loan(
         interest_free_period_in_days=15,
         tenure=tenure,
         amount=transaction.amount,
-        product_order_date=post_date,
+        product_order_date=pendulum.datetime(
+            bill.bill_start_date.year, bill.bill_start_date.month, bill.bill_start_date.day
+        ),
         user_product_id=user_product.id,
         downpayment_percent=Decimal("0"),
         credit_book=f"{transaction.loan_id}/bill/unbilled/a",

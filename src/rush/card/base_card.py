@@ -388,12 +388,12 @@ class BaseLoan(Loan):
         return latest_bill
 
     @_convert_to_bill_class_decorator
-    def get_latest_bill_to_generate(self) -> List[BaseBill]:
+    def get_latest_bill_to_generate(self) -> BaseBill:
         loan_data = (
             self.session.query(LoanData)
             .filter(LoanData.loan_id == self.loan_id, LoanData.is_generated.is_(False))
             .order_by(LoanData.bill_start_date)
-            .all()
+            .first()
         )
         return loan_data
 
