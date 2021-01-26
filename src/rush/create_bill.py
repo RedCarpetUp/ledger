@@ -16,6 +16,7 @@ from rush.card.base_card import (
 from rush.create_emi import update_journal_entry
 from rush.ledger_events import (
     add_max_amount_event,
+    add_min_amount_event,
     bill_generate_event,
 )
 from rush.ledger_utils import get_account_balance_from_str
@@ -24,6 +25,7 @@ from rush.min_payment import add_min_to_all_bills
 from rush.models import (
     CardTransaction,
     LedgerTriggerEvent,
+    LoanSchedule,
 )
 from rush.utils import (
     get_current_ist_time,
@@ -103,43 +105,43 @@ def bill_generate(
     # Update the bill row here.
     bill.table.principal = billed_amount
 
-    # Add to max amount to pay account.
-    add_max_amount_event(session, bill, lt, billed_amount)
-
-    # After the bill has generated. Call the min generation event on all unpaid bills.
-    add_min_to_all_bills(session=session, post_date=bill.table.bill_close_date, user_loan=user_loan)
-
-    emis = []
+    # Accrual of child loan emis for this bill.
+    emi_amount = 0
     child_loans = user_loan.get_child_loans()
-    for child_loan in child_loans:
-        child_loan.prepare(session=session)
-        child_loan_bill = child_loan.get_all_bills()
-        if child_loan_bill:
-            emis.append(
-                [
-                    child_loan_bill[0].get_instalment_amount(),
-                    child_loan_bill[0].bill_start_date,
-                    child_loan_bill[0].bill_close_date,
-                    child_loan.id,
-                ]
-            )
-    emis_for_this_bill = [
-        [emi, child_loan_id]
-        for emi, start_date, close_date, child_loan_id in emis
-        if bill.bill_start_date >= start_date and bill.bill_close_date <= close_date
-    ]
-    for emi, child_loan_id in emis_for_this_bill:
+    child_loan_ids = [child_loan.id for child_loan in child_loans]
+    emis = (
+        session.query(LoanSchedule.principal_due, LoanSchedule.loan_id)
+        .filter(
+            LoanSchedule.bill_id == bill.id,
+            LoanSchedule.due_date < bill.bill_close_date,
+            LoanSchedule.due_date > bill.bill_close_date - relativedelta(months=1),
+            LoanSchedule.loan_id.in_(child_loan_ids),
+            LoanSchedule.bill_id.is_(None),
+        )
+        .all()
+    )
+    for amount, child_loan_id in emis:
         CardTransaction.new(
             session=session,
             loan_id=bill.id,
             txn_time=bill.bill_close_date,
-            amount=emi,
+            amount=amount,
             source="LEDGER",
             description="Transaction Loan EMI",
             trace_no="888888",
             txn_ref_no=f"{child_loan_id}",
             status="COMPLETED",
         )
+        emi_amount += amount
+
+    # Add to max amount to pay account.
+    add_max_amount_event(session, bill, lt, billed_amount + emi_amount)
+
+    # Add emi to min amount.
+    add_min_amount_event(session, bill, lt, emi_amount)
+
+    # After the bill has generated. Call the min generation event on all unpaid bills.
+    add_min_to_all_bills(session=session, post_date=bill.table.bill_close_date, user_loan=user_loan)
 
     if not skip_bill_schedule_creation:
         create_bill_schedule(session, user_loan, bill)
