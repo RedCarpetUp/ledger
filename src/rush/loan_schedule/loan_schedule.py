@@ -136,7 +136,7 @@ def slide_payment_to_emis(
 
     # After doing the sliding we check if the loan can be closed.
     if user_loan.product_type == "rebel":
-        if user_loan.get_remaining_max(payment_event.post_date, include_child_loans = False) == 0:
+        if user_loan.get_remaining_max(payment_event.post_date, include_child_loans=False) == 0:
             close_loan(user_loan, payment_event.post_date)
     else:
         if user_loan.get_remaining_max(payment_event.post_date) == 0:
