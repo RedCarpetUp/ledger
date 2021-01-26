@@ -21,7 +21,10 @@ from rush.ledger_events import (
 from rush.ledger_utils import get_account_balance_from_str
 from rush.loan_schedule.loan_schedule import create_bill_schedule
 from rush.min_payment import add_min_to_all_bills
-from rush.models import LedgerTriggerEvent
+from rush.models import (
+    CardTransaction,
+    LedgerTriggerEvent,
+)
 from rush.utils import (
     get_current_ist_time,
     mul,
@@ -105,6 +108,38 @@ def bill_generate(
 
     # After the bill has generated. Call the min generation event on all unpaid bills.
     add_min_to_all_bills(session=session, post_date=bill.table.bill_close_date, user_loan=user_loan)
+
+    emis = []
+    child_loans = user_loan.get_child_loans()
+    for child_loan in child_loans:
+        child_loan.prepare(session=session)
+        child_loan_bill = child_loan.get_all_bills()
+        if child_loan_bill:
+            emis.append(
+                [
+                    child_loan_bill[0].get_instalment_amount(),
+                    child_loan_bill[0].bill_start_date,
+                    child_loan_bill[0].bill_close_date,
+                    child_loan.id,
+                ]
+            )
+    emis_for_this_bill = [
+        [emi, child_loan_id]
+        for emi, start_date, close_date, child_loan_id in emis
+        if bill.bill_start_date >= start_date and bill.bill_close_date <= close_date
+    ]
+    for emi, child_loan_id in emis_for_this_bill:
+        CardTransaction.new(
+            session=session,
+            loan_id=bill.id,
+            txn_time=bill.bill_close_date,
+            amount=emi,
+            source="LEDGER",
+            description="Transaction Loan EMI",
+            trace_no="888888",
+            txn_ref_no=f"{child_loan_id}",
+            status="COMPLETED",
+        )
 
     if not skip_bill_schedule_creation:
         create_bill_schedule(session, user_loan, bill)
