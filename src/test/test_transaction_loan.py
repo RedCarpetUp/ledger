@@ -189,7 +189,7 @@ def test_transaction_loan(session: Session) -> None:
         skip_closing=False,
     )
 
-    assert user_loan.get_remaining_min(date_to_check_against=parse_date("2020-12-03 00:00:00")) == 0
+    assert user_loan.get_remaining_min(date_to_check_against=parse_date("2020-12-03 00:00:00")) == 140
     assert (
         transaction_loan.get_remaining_min(date_to_check_against=parse_date("2020-12-03 00:00:00"))
         == 140
@@ -225,7 +225,7 @@ def test_transaction_loan(session: Session) -> None:
     )
     assert billed_amount == 1079
 
-    assert user_loan.get_remaining_min(date_to_check_against=parse_date("2021-01-03 00:00:00")) == 121
+    assert user_loan.get_remaining_min() == 401
     assert transaction_loan.get_remaining_min() == 280
     assert transaction_loan.get_remaining_max() == 1240
 
@@ -285,13 +285,13 @@ def test_transaction_loan2(session: Session) -> None:
     bill_date = parse_date("2020-12-01 00:00:00")
     bill_generate(user_loan=user_loan, creation_time=bill_date)
 
-    assert user_loan.get_remaining_min(date_to_check_against=parse_date("2020-12-01 19:23:11")) == 121
+    assert user_loan.get_remaining_min(date_to_check_against=parse_date("2020-12-01 19:23:11")) == 261
     assert (
         transaction_loan.get_remaining_min(date_to_check_against=parse_date("2020-12-01 19:23:11"))
         == 140
     )
 
-    assert user_loan.get_remaining_max(date_to_check_against=parse_date("2020-12-01 19:23:11")) == 1200
+    assert user_loan.get_remaining_max(date_to_check_against=parse_date("2020-12-01 19:23:11")) == 2400
     assert (
         transaction_loan.get_remaining_max(date_to_check_against=parse_date("2020-12-01 19:23:11"))
         == 1200
@@ -322,7 +322,7 @@ def test_transaction_loan2(session: Session) -> None:
         transaction_loan.get_remaining_min(date_to_check_against=parse_date("2020-12-03 00:00:00")) == 0
     )
 
-    assert user_loan.get_remaining_max(date_to_check_against=parse_date("2020-12-03 00:00:00")) == 0
+    assert user_loan.get_remaining_max(date_to_check_against=parse_date("2020-12-03 00:00:00")) == 1060
     assert (
         transaction_loan.get_remaining_max(date_to_check_against=parse_date("2020-12-03 00:00:00"))
         == 1060

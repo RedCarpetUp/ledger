@@ -106,7 +106,6 @@ def bill_generate(
     bill.table.principal = billed_amount
 
     # Accrual of child loan emis for this bill.
-    emi_amount = 0
     child_loans = user_loan.get_child_loans()
     child_loan_ids = [child_loan.id for child_loan in child_loans]
     emis = (
@@ -131,13 +130,9 @@ def bill_generate(
             txn_ref_no=f"{child_loan_id}",
             status="COMPLETED",
         )
-        emi_amount += principal + interest
 
     # Add to max amount to pay account.
-    add_max_amount_event(session, bill, lt, billed_amount + emi_amount)
-
-    # Add emi to min amount.
-    add_min_amount_event(session, bill, lt, emi_amount)
+    add_max_amount_event(session, bill, lt, billed_amount)
 
     # After the bill has generated. Call the min generation event on all unpaid bills.
     add_min_to_all_bills(session=session, post_date=bill.table.bill_close_date, user_loan=user_loan)
