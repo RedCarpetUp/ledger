@@ -29,6 +29,7 @@ from rush.loan_schedule.calculations import (
     get_monthly_instalment,
 )
 from rush.models import (
+    Base,
     CardTransaction,
     LedgerTriggerEvent,
     Loan,
@@ -294,7 +295,7 @@ class BaseLoan(Loan):
 
         limit_assignment_event(session=self.session, loan_id=self.loan_id, event=event, amount=amount)
 
-    def convert_to_bill_class(self, bill: LoanData):
+    def convert_to_bill_class(self, bill: LoanData) -> BaseBill:
         if not bill:
             return None
         return self.bill_class(session=self.session, user_loan=self, loan_data=bill)
@@ -388,7 +389,7 @@ class BaseLoan(Loan):
         return latest_bill
 
     @_convert_to_bill_class_decorator
-    def get_latest_bill_to_generate(self) -> BaseBill:
+    def get_latest_bill_to_generate(self) -> LoanData:
         loan_data = (
             self.session.query(LoanData)
             .filter(LoanData.loan_id == self.loan_id, LoanData.is_generated.is_(False))

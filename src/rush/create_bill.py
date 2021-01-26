@@ -79,7 +79,6 @@ def bill_generate(
         if bill["result"] == "error":
             return bill
         bill = bill["bill"]
-
     lt = LedgerTriggerEvent(
         name="bill_generate",
         loan_id=user_loan.loan_id,
