@@ -59,7 +59,7 @@ days_wise_balance AS (
     coalesce(
       get_account_balance(
         loan_id, 'loan', 'lender_payable', 
-        'l', portfolio_balance_change_date + interval '23 hours' + interval '59 minutes' + interval '59 seconds'
+        'l', portfolio_balance_change_date + interval '23 hours' + interval '59 minutes' + interval '59 seconds', null
       ), 
       0
     ) as balance, 
