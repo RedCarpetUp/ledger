@@ -112,7 +112,6 @@ def bill_generate(
     emis = (
         session.query(LoanSchedule.principal_due, LoanSchedule.loan_id)
         .filter(
-            LoanSchedule.bill_id == bill.id,
             LoanSchedule.due_date < bill.bill_close_date,
             LoanSchedule.due_date > bill.bill_close_date - relativedelta(months=1),
             LoanSchedule.loan_id.in_(child_loan_ids),
