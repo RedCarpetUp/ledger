@@ -448,8 +448,10 @@ class BaseLoan(Loan):
             child_loans_max = 0
 
         unpaid_bills = self.get_unpaid_generated_bills()
-        total_max_amount = sum(bill.get_remaining_max(date_to_check_against) for bill in unpaid_bills)
-        return total_max_amount + child_loans_max
+        remaining_max_of_all_bills = sum(
+            bill.get_remaining_max(date_to_check_against) for bill in unpaid_bills
+        )
+        return remaining_max_of_all_bills + child_loans_max
 
     def get_total_outstanding(self, date_to_check_against: DateTime = None) -> Decimal:
         all_bills = self.get_all_bills()
