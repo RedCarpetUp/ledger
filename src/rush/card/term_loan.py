@@ -154,7 +154,7 @@ class TermLoan(BaseLoan):
 
         kwargs["actual_downpayment_amount"] = down_payment_paid
 
-        event = loan.disbursement_event(**kwargs)
+        event = loan.disbursal(**kwargs)
 
         # create emis for term loan.
         from rush.loan_schedule.loan_schedule import create_bill_schedule

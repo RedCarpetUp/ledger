@@ -267,12 +267,12 @@ class BaseLoan(Loan):
             loan.interest_free_period_in_days = kwargs.get("interest_free_period_in_days")
         return loan
 
-    def disbursement_event(self, **kwargs):
+    def disbursal(self, **kwargs):
         event = LedgerTriggerEvent(
             performed_by=kwargs["user_id"],
             name="termloan_disbursal_event",
             loan_id=kwargs["loan_id"],
-            post_date=kwargs["product_order_date"],  # what is post_date?
+            post_date=kwargs["product_order_date"],
             amount=kwargs["amount"],
         )
 
@@ -422,17 +422,17 @@ class BaseLoan(Loan):
 
         if include_child_loans:
             txn_loans = self.get_child_loans()
-            txn_loans_remaining_min_sum = sum(
+            child_loans_min = sum(
                 loan.get_remaining_min(date_to_check_against=date_to_check_against) for loan in txn_loans
             )
         else:
-            txn_loans_remaining_min_sum = 0
+            child_loans_min = 0
 
         unpaid_bills = self.get_unpaid_generated_bills()
         remaining_min_of_all_bills = sum(
             bill.get_remaining_min(date_to_check_against) for bill in unpaid_bills
         )
-        return remaining_min_of_all_bills + txn_loans_remaining_min_sum
+        return remaining_min_of_all_bills + child_loans_min
 
     def get_remaining_max(
         self,
@@ -441,15 +441,15 @@ class BaseLoan(Loan):
     ) -> Decimal:
         if include_child_loans:
             txn_loans = self.get_child_loans()
-            txn_loans_remaining_max_sum = sum(
+            child_loans_max = sum(
                 loan.get_remaining_max(date_to_check_against=date_to_check_against) for loan in txn_loans
             )
         else:
-            txn_loans_remaining_max_sum = 0
+            child_loans_max = 0
 
         unpaid_bills = self.get_unpaid_generated_bills()
         total_max_amount = sum(bill.get_remaining_max(date_to_check_against) for bill in unpaid_bills)
-        return total_max_amount + txn_loans_remaining_max_sum
+        return total_max_amount + child_loans_max
 
     def get_total_outstanding(self, date_to_check_against: DateTime = None) -> Decimal:
         all_bills = self.get_all_bills()

@@ -109,10 +109,11 @@ def test_transaction_loan(session: Session) -> None:
         user_id=469,
         post_date=parse_date("2020-11-01"),
         tenure=12,
+        interest_rate=Decimal(3),
     )["data"]
 
     assert isinstance(transaction_loan, TransactionLoan)
-    assert transaction_loan.can_close_early == True
+    assert transaction_loan.can_close_early == False
     assert transaction_loan.get_remaining_min() == 140
     assert transaction_loan.get_remaining_max() == 1200
 
@@ -261,6 +262,7 @@ def test_transaction_loan2(session: Session) -> None:
         user_id=469,
         post_date=parse_date("2020-11-01"),
         tenure=12,
+        interest_rate=Decimal(3),
     )["data"]
 
     bill_date = parse_date("2020-12-01 00:00:00")

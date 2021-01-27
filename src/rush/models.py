@@ -262,7 +262,7 @@ class Loan(AuditMixin):
     dpd = Column(Integer, nullable=True)
     ever_dpd = Column(Integer, nullable=True)
     downpayment_percent: Decimal = Column(Numeric, nullable=True, default=Decimal(0))
-    can_close_early: Column(Boolean, server_default="false", nullable=True)
+    can_close_early: Column(Boolean, server_default="true", nullable=True)
 
     __mapper_args__ = {
         "polymorphic_identity": "v3_loans",

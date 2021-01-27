@@ -107,22 +107,23 @@ def bill_generate(
 
     # Accrual of child loan emis for this bill.
     child_loans = user_loan.get_child_loans()
-    child_loan_ids = [child_loan.id for child_loan in child_loans]
+    child_loan_dict = {child_loan.id: child_loan for child_loan in child_loans}
     emis = (
         session.query(LoanSchedule.principal_due, LoanSchedule.interest_due, LoanSchedule.loan_id)
         .filter(
             LoanSchedule.due_date < bill.bill_close_date,
             LoanSchedule.due_date > bill.bill_close_date - relativedelta(months=1),
-            LoanSchedule.loan_id.in_(child_loan_ids),
+            LoanSchedule.loan_id.in_(child_loan_dict.keys()),
             LoanSchedule.bill_id.is_(None),
         )
         .all()
     )
     for principal, interest, child_loan_id in emis:
+        child_loan = child_loan_dict[child_loan_id]
         CardTransaction.new(
             session=session,
             loan_id=bill.id,
-            txn_time=bill.bill_close_date,
+            txn_time=min(child_loan.amortization_date, bill.bill_start_date),
             amount=principal + interest,
             source="LEDGER",
             description="Transaction Loan EMI",

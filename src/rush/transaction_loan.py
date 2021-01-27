@@ -1,17 +1,25 @@
 from decimal import Decimal
-from typing import Optional
 
 import pendulum
+from dateutil.relativedelta import relativedelta
 from sqlalchemy.orm.session import Session
 from sqlalchemy.sql.sqltypes import DateTime
 
 from rush.card import create_user_product
 from rush.card.base_card import BaseLoan
+from rush.card.term_loan import (
+    B,
+    TermLoanBill,
+)
 from rush.card.utils import create_user_product_mapping
 from rush.models import (
     CardTransaction,
     LoanData,
 )
+
+
+class TransactionLoanBill(TermLoanBill):
+    pass
 
 
 def transaction_to_loan(
@@ -20,7 +28,7 @@ def transaction_to_loan(
     user_id: int,
     post_date: DateTime,
     tenure: int,
-    interest_rate: Optional[int] = None,
+    interest_rate: Decimal,
 ) -> dict:
     transaction: CardTransaction = (
         session.query(CardTransaction).filter(CardTransaction.id == transaction_id).scalar()
@@ -43,7 +51,7 @@ def transaction_to_loan(
     )
 
     user_product = create_user_product_mapping(
-        session=session, user_id=user_id, product_type="transaction_loan", lender_id=1756833
+        session=session, user_id=user_id, product_type="transaction_loan", lender_id=user_loan.lender_id
     )
 
     # loan for transaction amount
@@ -55,14 +63,13 @@ def transaction_to_loan(
         interest_free_period_in_days=15,
         tenure=tenure,
         amount=transaction.amount,
-        product_order_date=pendulum.datetime(
-            bill.bill_start_date.year, bill.bill_start_date.month, bill.bill_start_date.day
-        ),
+        product_order_date=post_date,
         user_product_id=user_product.id,
         downpayment_percent=Decimal("0"),
         credit_book=f"{transaction.loan_id}/bill/unbilled/a",
         parent_loan_id=user_loan.id,
-        can_close_early=True,
+        rc_rate_of_interest_monthly=interest_rate,
+        can_close_early=False,
     )
 
     transaction_loan_bill: LoanData = (
