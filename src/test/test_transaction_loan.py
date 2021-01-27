@@ -1,28 +1,18 @@
-import pdb
 from decimal import Decimal
 from test.utils import (
     pay_payment_request,
     payment_request_data,
 )
-from typing import Sized
 
 from pendulum import parse as parse_date  # type: ignore
-from pendulum.parser import parse
 from sqlalchemy.orm import Session
-from sqlalchemy.sql.sqltypes import DECIMAL
-from sqlalchemy.util.langhelpers import only_once
 
-from rush import loan_schedule
 from rush.accrue_financial_charges import accrue_interest_on_all_bills
 from rush.card import (
     create_user_product,
     get_user_product,
-    transaction_loan,
 )
-from rush.card.base_card import (
-    BaseBill,
-    BaseLoan,
-)
+from rush.card.base_card import BaseBill
 from rush.card.rebel_card import RebelCard
 from rush.card.transaction_loan import TransactionLoan
 from rush.card.utils import create_user_product_mapping
@@ -31,22 +21,13 @@ from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import get_account_balance_from_str
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
-    LedgerTriggerEvent,
     Lenders,
     LoanData,
     Product,
     User,
 )
-from rush.payments import (
-    find_split_to_slide_in_loan,
-    payment_received,
-    payment_received_event,
-)
-from rush.transaction_loan import (
-    transaction_to_loan,
-    transaction_to_loan_new,
-)
-from rush.utils import get_current_ist_time
+from rush.payments import payment_received
+from rush.transaction_loan import transaction_to_loan
 
 
 def create_lenders(session: Session) -> None:
