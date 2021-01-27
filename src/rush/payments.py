@@ -59,16 +59,10 @@ def payment_received(
 
     all_loans = [user_loan] + user_loan.get_child_loans()
     for loan in all_loans:
-        if (
-            (loan.product_type == "rebel" and loan.get_remaining_min(include_child_loans=False))
-            or (loan.product_type != "rebel" and loan.get_remaining_min())
-        ) and remaining_payment_amount:
-            if loan.product_type == "rebel":
-                amount_to_adjust = min(
-                    loan.get_remaining_min(include_child_loans=False), remaining_payment_amount
-                )
-            else:
-                amount_to_adjust = min(loan.get_remaining_min(), remaining_payment_amount)
+        if loan.get_remaining_min(include_child_loans=False) and remaining_payment_amount:
+            amount_to_adjust = min(
+                loan.get_remaining_min(include_child_loans=False), remaining_payment_amount
+            )
             remaining_payment_amount -= amount_to_adjust
 
             payment_received_event(
