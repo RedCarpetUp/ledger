@@ -29,7 +29,7 @@ def transaction_to_loan(
     if not transaction:
         return {"result": "error", "message": "Invalid Transaction ID"}
 
-    # checking if bill is already generated for this transaction
+    # checking if the bill has already been generated for this transaction
     bill: LoanData = session.query(LoanData).filter(LoanData.id == transaction.loan_id).scalar()
 
     if bill.is_generated:
