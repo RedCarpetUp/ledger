@@ -14,7 +14,10 @@ from rush.card import (
 )
 from rush.card.base_card import BaseBill
 from rush.card.rebel_card import RebelCard
-from rush.card.transaction_loan import TransactionLoan
+from rush.card.transaction_loan import (
+    TransactionLoan,
+    transaction_to_loan,
+)
 from rush.card.utils import create_user_product_mapping
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
@@ -27,7 +30,6 @@ from rush.models import (
     User,
 )
 from rush.payments import payment_received
-from rush.transaction_loan import transaction_to_loan
 
 
 def create_lenders(session: Session) -> None:
