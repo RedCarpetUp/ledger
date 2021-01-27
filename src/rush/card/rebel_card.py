@@ -52,40 +52,4 @@ class RebelCard(BaseLoan):
 
         return child_loans
 
-    def get_remaining_min(
-        self,
-        date_to_check_against: Optional[DateTime] = None,
-        include_child_loans: Optional[Boolean] = True,
-    ) -> Decimal:
-        if include_child_loans:
-            txn_loans = self.get_child_loans()
-            txn_loans_remaining_min_sum = sum(
-                loan.get_remaining_min(date_to_check_against=date_to_check_against) for loan in txn_loans
-            )
-        else:
-            txn_loans_remaining_min_sum = 0
-
-        return (
-            super().get_remaining_min(date_to_check_against=date_to_check_against)
-            + txn_loans_remaining_min_sum
-        )
-
-    def get_remaining_max(
-        self,
-        date_to_check_against: Optional[DateTime] = None,
-        include_child_loans: Optional[Boolean] = True,
-    ) -> Decimal:
-        if include_child_loans:
-            txn_loans = self.get_child_loans()
-            txn_loans_remaining_max_sum = sum(
-                loan.get_remaining_max(date_to_check_against=date_to_check_against) for loan in txn_loans
-            )
-        else:
-            txn_loans_remaining_max_sum = 0
-
-        return (
-            super().get_remaining_max(date_to_check_against=date_to_check_against)
-            + txn_loans_remaining_max_sum
-        )
-
     __mapper_args__ = {"polymorphic_identity": "rebel"}

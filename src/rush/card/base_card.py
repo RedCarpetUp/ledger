@@ -17,7 +17,10 @@ from pendulum import (
 from sqlalchemy import func
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Session
-from sqlalchemy.sql.sqltypes import Integer
+from sqlalchemy.sql.sqltypes import (
+    Boolean,
+    Integer,
+)
 
 from rush.ledger_utils import (
     get_account_balance_from_str,
@@ -408,20 +411,45 @@ class BaseLoan(Loan):
         )
         return loan_data
 
-    def get_remaining_min(self, date_to_check_against: DateTime = None) -> Decimal:
+    def get_remaining_min(
+        self,
+        date_to_check_against: Optional[DateTime] = None,
+        include_child_loans: Optional[Boolean] = True,
+    ) -> Decimal:
         # if user is in moratorium then return 0
         if LoanMoratorium.is_in_moratorium(self.session, self.id, date_to_check_against):
             return Decimal(0)
+
+        if include_child_loans:
+            txn_loans = self.get_child_loans()
+            txn_loans_remaining_min_sum = sum(
+                loan.get_remaining_min(date_to_check_against=date_to_check_against) for loan in txn_loans
+            )
+        else:
+            txn_loans_remaining_min_sum = 0
+
         unpaid_bills = self.get_unpaid_generated_bills()
         remaining_min_of_all_bills = sum(
             bill.get_remaining_min(date_to_check_against) for bill in unpaid_bills
         )
-        return remaining_min_of_all_bills
+        return remaining_min_of_all_bills + txn_loans_remaining_min_sum
 
-    def get_remaining_max(self, date_to_check_against: DateTime = None) -> Decimal:
+    def get_remaining_max(
+        self,
+        date_to_check_against: Optional[DateTime] = None,
+        include_child_loans: Optional[Boolean] = True,
+    ) -> Decimal:
+        if include_child_loans:
+            txn_loans = self.get_child_loans()
+            txn_loans_remaining_max_sum = sum(
+                loan.get_remaining_max(date_to_check_against=date_to_check_against) for loan in txn_loans
+            )
+        else:
+            txn_loans_remaining_max_sum = 0
+
         unpaid_bills = self.get_unpaid_generated_bills()
         total_max_amount = sum(bill.get_remaining_max(date_to_check_against) for bill in unpaid_bills)
-        return total_max_amount
+        return total_max_amount + txn_loans_remaining_max_sum
 
     def get_total_outstanding(self, date_to_check_against: DateTime = None) -> Decimal:
         all_bills = self.get_all_bills()
