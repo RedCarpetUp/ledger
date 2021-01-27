@@ -57,36 +57,31 @@ def payment_received(
 
     remaining_payment_amount = payment_request_data.payment_request_amount
 
-    all_loans = [user_loan] + user_loan.get_child_loans()
-    for loan in all_loans:
-        if loan.get_remaining_min(include_child_loans=False) and remaining_payment_amount:
-            amount_to_adjust = min(
-                loan.get_remaining_min(include_child_loans=False), remaining_payment_amount
-            )
-            remaining_payment_amount -= amount_to_adjust
-
-            payment_received_event(
-                session=session,
-                user_loan=loan,
-                payment_request_data=payment_request_data,
-                amount_to_adjust=amount_to_adjust,
-                debit_book_str=f"{loan.lender_id}/lender/pg_account/a",
-                event=event,
-                skip_closing=skip_closing,
-            )
-
-    for loan in all_loans:
-        if remaining_payment_amount <= 0:
-            break
-        remaining_payment_amount = payment_received_event(
+    def call_payment_received_event(amount_to_adjust: Decimal) -> Decimal:
+        if amount_to_adjust <= 0:
+            return amount_to_adjust
+        remaining_amount = payment_received_event(
             session=session,
-            user_loan=user_loan,
+            user_loan=loan,
             payment_request_data=payment_request_data,
-            amount_to_adjust=remaining_payment_amount,
+            amount_to_adjust=amount_to_adjust,
             debit_book_str=f"{loan.lender_id}/lender/pg_account/a",
             event=event,
             skip_closing=skip_closing,
         )
+        return remaining_amount
+
+    all_loans = [user_loan] + user_loan.get_child_loans()
+    if len(all_loans) > 1:  # if more than 2 loans then pay minimum of all loans first.
+        for loan in all_loans:
+            min_to_pay = loan.get_remaining_min(include_child_loans=False)
+            amount_to_actually_adjust = min(min_to_pay, remaining_payment_amount)
+            call_payment_received_event(amount_to_actually_adjust)
+            remaining_payment_amount -= amount_to_actually_adjust
+
+    # Settle whatever is remaining after it.
+    for loan in all_loans:
+        remaining_payment_amount = call_payment_received_event(remaining_payment_amount)
 
     for loan in all_loans:
         run_anomaly(
@@ -94,7 +89,6 @@ def payment_received(
             user_loan=loan,
             event_date=payment_request_data.intermediary_payment_date,
         )
-        # Update dpd
         update_event_with_dpd(user_loan=loan, event=event)
 
     if remaining_payment_amount > 0:  # if there's payment left to be adjusted.

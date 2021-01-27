@@ -414,7 +414,7 @@ class BaseLoan(Loan):
     def get_remaining_min(
         self,
         date_to_check_against: Optional[DateTime] = None,
-        include_child_loans: Optional[Boolean] = True,
+        include_child_loans: Optional[bool] = True,
     ) -> Decimal:
         # if user is in moratorium then return 0
         if LoanMoratorium.is_in_moratorium(self.session, self.id, date_to_check_against):
