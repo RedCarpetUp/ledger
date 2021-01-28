@@ -17,10 +17,6 @@ from pendulum import (
 from sqlalchemy import func
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Session
-from sqlalchemy.sql.sqltypes import (
-    Boolean,
-    Integer,
-)
 
 from rush.ledger_utils import (
     get_account_balance_from_str,
@@ -447,7 +443,7 @@ class BaseLoan(Loan):
         self,
         date_to_check_against: Optional[DateTime] = None,
         event_id: int = None,
-        include_child_loans: Optional[Boolean] = True,
+        include_child_loans: Optional[bool] = True,
     ) -> Decimal:
         if include_child_loans:
             child_loans = self.get_child_loans()
