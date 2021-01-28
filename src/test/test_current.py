@@ -3694,6 +3694,8 @@ def test_moratorium_emi_schedule(session: Session) -> None:
     loan_moratorium = (
         session.query(LoanMoratorium).filter(LoanMoratorium.loan_id == user_loan.loan_id).first()
     )
+    assert loan_moratorium is not None
+
     moratorium_interest_for_sep = (
         session.query(MoratoriumInterest.interest)
         .filter(
@@ -3829,8 +3831,9 @@ def test_moratorium_emi_schedule(session: Session) -> None:
             MoratoriumInterest.due_date <= bill_oct.bill_due_date,
         )
         .first()
-    )[0]
-    assert total_moratorium_interest_accrued_till_oct == Decimal("227.01")
+    )
+    assert total_moratorium_interest_accrued_till_oct is not None
+    assert total_moratorium_interest_accrued_till_oct[0] == Decimal("227.01")
 
     emis = user_loan.get_loan_schedule()
 
@@ -3932,8 +3935,9 @@ def test_moratorium_emi_schedule(session: Session) -> None:
             MoratoriumInterest.due_date <= bill_nov.bill_due_date,
         )
         .first()
-    )[0]
-    assert total_moratorium_interest_accrued_till_nov == Decimal("454.02")
+    )
+    assert total_moratorium_interest_accrued_till_nov is not None
+    assert total_moratorium_interest_accrued_till_nov[0] == Decimal("454.02")
 
     assert len(emis) == 15
     assert emis[0].emi_number == 1
