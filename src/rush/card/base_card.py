@@ -421,9 +421,10 @@ class BaseLoan(Loan):
             return Decimal(0)
 
         if include_child_loans:
-            txn_loans = self.get_child_loans()
+            child_loans = self.get_child_loans()
             child_loans_min = sum(
-                loan.get_remaining_min(date_to_check_against=date_to_check_against) for loan in txn_loans
+                loan.get_remaining_min(date_to_check_against=date_to_check_against)
+                for loan in child_loans
             )
         else:
             child_loans_min = 0
@@ -440,9 +441,10 @@ class BaseLoan(Loan):
         include_child_loans: Optional[Boolean] = True,
     ) -> Decimal:
         if include_child_loans:
-            txn_loans = self.get_child_loans()
+            child_loans = self.get_child_loans()
             child_loans_max = sum(
-                loan.get_remaining_max(date_to_check_against=date_to_check_against) for loan in txn_loans
+                loan.get_remaining_max(date_to_check_against=date_to_check_against)
+                for loan in child_loans
             )
         else:
             child_loans_max = 0
