@@ -109,7 +109,12 @@ def bill_generate(
     child_loans = user_loan.get_child_loans()
     child_loans_dict = {child_loan.id: child_loan for child_loan in child_loans}
     emis = (
-        session.query(LoanSchedule.principal_due, LoanSchedule.interest_due, LoanSchedule.loan_id, LoanSchedule.emi_number)
+        session.query(
+            LoanSchedule.principal_due,
+            LoanSchedule.interest_due,
+            LoanSchedule.loan_id,
+            LoanSchedule.emi_number,
+        )
         .filter(
             LoanSchedule.due_date < bill.bill_close_date,
             LoanSchedule.due_date > bill.bill_close_date - relativedelta(months=1),
