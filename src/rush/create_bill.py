@@ -109,7 +109,7 @@ def bill_generate(
     child_loans = user_loan.get_child_loans()
     child_loans_dict = {child_loan.id: child_loan for child_loan in child_loans}
     emis = (
-        session.query(LoanSchedule.principal_due, LoanSchedule.interest_due, LoanSchedule.loan_id)
+        session.query(LoanSchedule.principal_due, LoanSchedule.interest_due, LoanSchedule.loan_id, LoanSchedule.emi_number)
         .filter(
             LoanSchedule.due_date < bill.bill_close_date,
             LoanSchedule.due_date > bill.bill_close_date - relativedelta(months=1),
@@ -118,7 +118,7 @@ def bill_generate(
         )
         .all()
     )
-    for principal, interest, child_loan_id in emis:
+    for principal, interest, child_loan_id, emi_number in emis:
         child_loan = child_loans_dict[child_loan_id]
         CardTransaction.new(
             session=session,
@@ -126,10 +126,7 @@ def bill_generate(
             txn_time=min(child_loan.amortization_date, bill.bill_start_date),
             amount=principal + interest,
             source="LEDGER",
-            description="Transaction Loan EMI",
-            trace_no="888888",
-            txn_ref_no=f"{child_loan_id}",
-            status="COMPLETED",
+            description=f"Transaction Loan EMI {emi_number}",
         )
 
     # Add to max amount to pay account.
