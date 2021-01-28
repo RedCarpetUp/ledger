@@ -2,6 +2,7 @@ from decimal import Decimal
 from typing import Type
 
 from sqlalchemy.orm.session import Session
+from sqlalchemy.sql.functions import user
 from sqlalchemy.sql.sqltypes import DateTime
 
 from rush.card.base_card import BaseLoan
@@ -82,18 +83,21 @@ def transaction_to_loan(
     )
 
     from rush.card import create_user_product
-    from rush.card.utils import create_user_product_mapping
+    from rush.card.utils import (
+        create_loan,
+        create_user_product_mapping,
+    )
 
     user_product = create_user_product_mapping(
-        session=session, user_id=user_id, product_type="transaction_loan", lender_id=user_loan.lender_id
+        session=session, user_id=user_id, product_type="transaction_loan"
     )
+    create_loan(session=session, user_product=user_product, lender_id=user_loan.lender_id)
 
     # loan for transaction amount
     transaction_loan = create_user_product(
         session=session,
         user_id=user_id,
         card_type="transaction_loan",
-        lender_id=user_loan.lender_id,
         interest_free_period_in_days=15,
         tenure=tenure,
         amount=transaction.amount,

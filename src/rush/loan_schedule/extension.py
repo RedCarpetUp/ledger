@@ -86,7 +86,6 @@ def extend_bill_schedule(user_loan: BaseLoan, bill: BaseBill, from_date: date, n
 def extend_schedule(
     user_loan: BaseLoan, new_tenure: int, from_date: date, bills: Optional[List[BaseBill]] = None
 ):
-    # TODO this won't work if there's payment in future emis that is being readjusted. Can do it tho.
     if not bills:
         bills = user_loan.get_unpaid_generated_bills()
     for bill in bills:

@@ -76,6 +76,7 @@ def upgrade() -> None:
     op.execute(
         """create index index_on_extra_details_payment_request_id on ledger_trigger_event((extra_details->>'payment_request_id'))"""
     )
+    op.add_column("v3_loans", sa.Column("tenure_in_months", sa.Integer, nullable=True))
 
 
 def downgrade() -> None:

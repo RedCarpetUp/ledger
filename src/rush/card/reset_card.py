@@ -48,6 +48,7 @@ class ResetCard(TermLoan):
         loan.amortization_date = kwargs.get("product_order_date")
         loan.min_tenure = kwargs.get("min_tenure")
         loan.min_multiplier = kwargs.get("min_multiplier")
+        loan.tenure_in_months = kwargs.get("tenure")
         loan.interest_type = "flat"
         loan.downpayment_percent = Decimal(0)
 
@@ -63,7 +64,7 @@ class ResetCard(TermLoan):
             bill_close_date=bill_close_date,
             bill_due_date=bill_start_date + relativedelta(days=kwargs["interest_free_period_in_days"]),
             is_generated=True,
-            bill_tenure=kwargs["tenure"],
+            bill_tenure=loan.tenure_in_months,
             principal=kwargs["amount"],
         )
         session.add(loan_data)

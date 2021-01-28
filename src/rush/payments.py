@@ -99,13 +99,6 @@ def payment_received(
             amount=remaining_payment_amount,
             debit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
         )
-    create_ledger_entry_from_str(
-        session=session,
-        event_id=event.id,
-        debit_book_str=f"{user_loan.lender_id}/lender/gateway_expenses/e",
-        credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
-        amount=payment_request_data.payment_execution_charges,
-    )
 
     create_payment_split(session, event)
 
@@ -368,6 +361,14 @@ def settle_payment_in_bank(
         session.query(LedgerTriggerEvent)
         .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
         .first()
+    )
+
+    create_ledger_entry_from_str(
+        session=session,
+        event_id=payment_ledger_event.id,
+        debit_book_str=f"{user_loan.lender_id}/lender/gateway_expenses/e",
+        credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
+        amount=gateway_expenses,
     )
 
     update_journal_entry(user_loan=user_loan, event=payment_ledger_event)

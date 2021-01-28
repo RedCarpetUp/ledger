@@ -120,6 +120,7 @@ class TermLoan(BaseLoan):
         loan.min_multiplier = kwargs.get("min_multiplier")
         loan.interest_type = kwargs.get("interest_type", "flat")
         loan.can_close_early = kwargs.get("can_close_early")
+        loan.tenure_in_months = kwargs.get("tenure")
         # Don't want to overwrite default value in case of None.
         if kwargs.get("interest_free_period_in_days"):
             loan.interest_free_period_in_days = kwargs.get("interest_free_period_in_days")
@@ -139,7 +140,7 @@ class TermLoan(BaseLoan):
             bill_close_date=bill_close_date,
             bill_due_date=bill_start_date + relativedelta(days=loan.interest_free_period_in_days),
             is_generated=True,
-            bill_tenure=kwargs["tenure"],
+            bill_tenure=loan.tenure_in_months,
             principal=kwargs["amount"],
         )
         session.add(loan_data)

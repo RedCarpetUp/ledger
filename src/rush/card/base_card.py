@@ -124,9 +124,11 @@ class BaseBill:
         )
         return min_due
 
-    def get_remaining_max(self, as_of_date: Optional[DateTime] = None) -> Decimal:
+    def get_remaining_max(
+        self, as_of_date: Optional[DateTime] = None, event_id: Optional[int] = None
+    ) -> Decimal:
         _, max_amount = get_account_balance_from_str(
-            self.session, book_string=f"{self.id}/bill/max/a", to_date=as_of_date
+            self.session, book_string=f"{self.id}/bill/max/a", to_date=as_of_date, event_id=event_id
         )
         return max_amount
 
@@ -246,12 +248,17 @@ class BaseLoan(Loan):
         if not user_product_id:
             from rush.card.utils import create_user_product_mapping
 
-            user_product_id = create_user_product_mapping(
+            user_product = create_user_product_mapping(
                 session=session,
                 user_id=kwargs["user_id"],
                 product_type=card_type,
-                lender_id=kwargs["lender_id"],
-            ).id
+            )
+
+            user_product_id = user_product.id
+
+            from rush.card.utils import create_loan
+
+            create_loan(session=session, user_product=user_product, lender_id=kwargs["lender_id"])
 
         loan = session.query(cls).filter(cls.user_product_id == user_product_id).one()
         loan.prepare(session=session)
@@ -262,6 +269,7 @@ class BaseLoan(Loan):
         loan.min_tenure = kwargs.get("min_tenure")
         loan.min_multiplier = kwargs.get("min_multiplier")
         loan.interest_type = kwargs.get("interest_type", "flat")
+        loan.tenure_in_months = kwargs.get("tenure")
         # Don't want to overwrite default value in case of None.
         if kwargs.get("interest_free_period_in_days"):
             loan.interest_free_period_in_days = kwargs.get("interest_free_period_in_days")
@@ -314,11 +322,11 @@ class BaseLoan(Loan):
         new_bill = LoanData(
             user_id=self.user_id,
             loan_id=self.loan_id,
-            # lender_id=lender_id,
             bill_start_date=bill_start_date,
             bill_close_date=bill_close_date,
             bill_due_date=bill_due_date,
             is_generated=is_generated,
+            bill_tenure=self.tenure_in_months,
         )
         self.session.add(new_bill)
         self.session.flush()
@@ -438,6 +446,7 @@ class BaseLoan(Loan):
     def get_remaining_max(
         self,
         date_to_check_against: Optional[DateTime] = None,
+        event_id: int = None,
         include_child_loans: Optional[Boolean] = True,
     ) -> Decimal:
         if include_child_loans:
@@ -451,7 +460,7 @@ class BaseLoan(Loan):
 
         unpaid_bills = self.get_unpaid_generated_bills()
         remaining_max_of_all_bills = sum(
-            bill.get_remaining_max(date_to_check_against) for bill in unpaid_bills
+            bill.get_remaining_max(date_to_check_against, event_id) for bill in unpaid_bills
         )
         return remaining_max_of_all_bills + child_loans_max
 

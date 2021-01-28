@@ -172,6 +172,7 @@ def test_card_swipe_and_reversal(session: Session) -> None:
         card_type="ruby",
         rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
+        tenure=12,
     )
 
     swipe1 = create_card_swipe(
@@ -249,6 +250,7 @@ def test_closing_bill(session: Session) -> None:
         card_type="ruby",
         rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
+        tenure=12,
     )
 
     swipe_date = parse_date("2019-02-02 19:23:11")
@@ -436,6 +438,7 @@ def test_generate_bill_1(session: Session) -> None:
         card_type="ruby",
         rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
+        tenure=12,
     )
 
     swipe = create_card_swipe(
@@ -511,6 +514,7 @@ def test_generate_bill_reducing_interest_1(session: Session) -> None:
         rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
         interest_type="reducing",
+        tenure=12,
     )
 
     swipe = create_card_swipe(
@@ -617,6 +621,7 @@ def test_min_multiplier(session: Session) -> None:
         rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
         min_multiplier=Decimal(2),
+        tenure=12,
     )
 
     swipe = create_card_swipe(
@@ -681,6 +686,7 @@ def test_min_tenure(session: Session) -> None:
         rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
         min_tenure=24,
+        tenure=12,
     )
     assert user_loan is not None
     swipe = create_card_swipe(
@@ -1260,6 +1266,7 @@ def test_generate_bill_3(session: Session) -> None:
         card_type="ruby",
         rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
+        tenure=12,
     )
 
     create_card_swipe(
@@ -1318,6 +1325,7 @@ def test_emi_creation(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
         lender_id=62311,
+        tenure=12,
     )
 
     create_card_swipe(
@@ -1370,6 +1378,7 @@ def test_subsequent_emi_creation(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
         lender_id=62311,
+        tenure=12,
     )
 
     create_card_swipe(
@@ -1451,6 +1460,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-05-01").date(),
         lender_id=62311,
+        tenure=12,
     )
 
     create_card_swipe(
@@ -1602,6 +1612,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-05-04").date(),
         lender_id=62311,
+        tenure=12,
     )
 
     # Card transactions
@@ -2658,6 +2669,7 @@ def test_lender_incur(session: Session) -> None:
         card_type="ruby",
         rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
+        tenure=12,
     )
     swipe = create_card_swipe(
         session=session,
@@ -2750,6 +2762,7 @@ def test_lender_incur_two(session: Session) -> None:
         card_type="ruby",
         rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
+        tenure=12,
     )
     swipe = create_card_swipe(
         session=session,
@@ -3035,6 +3048,7 @@ def test_moratorium(session: Session) -> None:
         card_activation_date=parse_date("2020-01-20").date(),
         interest_free_period_in_days=25,
         lender_id=62311,
+        tenure=12,
     )
 
     create_card_swipe(
@@ -3112,6 +3126,7 @@ def test_moratorium_schedule(session: Session) -> None:
         user_id=a.id,
         card_activation_date=parse_date("2020-04-02").date(),
         lender_id=62311,
+        tenure=12,
     )
 
     create_card_swipe(
@@ -3264,6 +3279,7 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
         card_activation_date=parse_date("2020-01-20").date(),
         interest_free_period_in_days=25,
         lender_id=62311,
+        tenure=12,
     )
 
     create_card_swipe(
@@ -3350,6 +3366,7 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
         # 16th March actual
         card_activation_date=parse_date("2020-03-01").date(),
         lender_id=62311,
+        tenure=12,
     )
 
     create_card_swipe(
@@ -3469,6 +3486,7 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
         # 16th March actual
         card_activation_date=parse_date("2020-03-01").date(),
         lender_id=62311,
+        tenure=12,
     )
 
     create_card_swipe(
@@ -3570,6 +3588,7 @@ def test_reducing_interest_with_extension(session: Session) -> None:
         card_activation_date=parse_date("2020-03-01").date(),
         lender_id=62311,
         interest_type="reducing",
+        tenure=12,
     )
 
     create_card_swipe(
@@ -3721,6 +3740,7 @@ def test_transaction_before_activation(session: Session) -> None:
         rc_rate_of_interest_monthly=Decimal(3),
         user_id=a.id,
         lender_id=62311,
+        tenure=12,
     )
 
     # Swipe before activation
@@ -3989,6 +4009,7 @@ def test_readjust_future_payment_with_extension(session: Session) -> None:
         card_type="ruby",
         rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
+        tenure=12,
     )
 
     swipe = create_card_swipe(
@@ -4062,6 +4083,7 @@ def test_customer_fee_refund(session: Session) -> None:
         card_type="ruby",
         rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
+        tenure=12,
     )
 
     create_card_swipe(
@@ -4154,6 +4176,7 @@ def test_customer_prepayment_refund(session: Session) -> None:
         card_type="ruby",
         rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
+        tenure=12,
     )
 
     create_card_swipe(
@@ -4248,6 +4271,7 @@ def test_find_split_to_slide_in_loan(session: Session) -> None:
         card_type="ruby",
         rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
+        tenure=12,
     )
 
     create_card_swipe(
@@ -4317,6 +4341,7 @@ def test_payment_split_for_multiple_fees_of_multiple_types(session: Session) -> 
         card_type="ruby",
         rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
+        tenure=12,
     )
 
     create_card_swipe(
@@ -4453,6 +4478,7 @@ def test_updated_emi_payment_mapping_after_early_loan_close(session: Session) ->
         card_type="ruby",
         rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
+        tenure=12,
     )
 
     create_card_swipe(

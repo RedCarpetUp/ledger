@@ -61,9 +61,6 @@ def test_transaction_loan(session: Session) -> None:
     create_products(session=session)
     create_user(session=session)
 
-    user_product = create_user_product_mapping(
-        session=session, user_id=469, product_type="rebel", lender_id=1756833
-    )
     user_card = create_user_product(
         session=session,
         card_type="rebel",
@@ -71,9 +68,9 @@ def test_transaction_loan(session: Session) -> None:
         lender_id=1756833,
         interest_free_period_in_days=45,
         user_id=469,
-        user_product_id=user_product.id,
         card_activation_date=parse_date("2020-11-01").date(),
         interest_type="reducing",
+        tenure=12,
     )
 
     user_loan: RebelCard = get_user_product(session, 469, card_type="rebel")
@@ -219,9 +216,6 @@ def test_transaction_loan2(session: Session) -> None:
     create_products(session=session)
     create_user(session=session)
 
-    user_product = create_user_product_mapping(
-        session=session, user_id=469, product_type="rebel", lender_id=1756833
-    )
     user_card = create_user_product(
         session=session,
         card_type="rebel",
@@ -229,9 +223,9 @@ def test_transaction_loan2(session: Session) -> None:
         lender_id=1756833,
         interest_free_period_in_days=45,
         user_id=469,
-        user_product_id=user_product.id,
         card_activation_date=parse_date("2020-11-01").date(),
         interest_type="reducing",
+        tenure=12,
     )
 
     user_loan: RebelCard = get_user_product(session, 469, card_type="rebel")

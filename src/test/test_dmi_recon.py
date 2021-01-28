@@ -81,6 +81,7 @@ def _create_user_raghav_and_do_swipes(session: Session) -> BaseLoan:
         rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
         kit_number="11111",
+        tenure=12,
     )
 
     # Create card swipes.
@@ -150,6 +151,7 @@ def _create_user_ananth_and_do_swipes(session: Session) -> BaseLoan:
         rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
         kit_number="00000",
+        tenure=12,
     )
 
     # Create card swipes.
