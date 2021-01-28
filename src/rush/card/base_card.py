@@ -452,8 +452,7 @@ class BaseLoan(Loan):
         if include_child_loans:
             child_loans = self.get_child_loans()
             child_loans_max = sum(
-                loan.get_remaining_max(date_to_check_against=date_to_check_against)
-                for loan in child_loans
+                loan.get_remaining_max(date_to_check_against, event_id) for loan in child_loans
             )
         else:
             child_loans_max = 0
