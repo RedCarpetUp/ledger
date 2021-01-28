@@ -62,6 +62,7 @@ from rush.models import (
     Lenders,
     LoanData,
     LoanMoratorium,
+    MoratoriumInterest,
     PaymentMapping,
     PaymentSplit,
     Product,
@@ -3671,10 +3672,10 @@ def test_moratorium_emi_schedule(session: Session) -> None:
     )
     assert interest_due == Decimal("75.67")
 
-    _, interest_due = get_account_balance_from_str(
+    _, interest_accrued = get_account_balance_from_str(
         session, book_string=f"{bill_sep.id}/bill/interest_accrued/r"
     )
-    assert interest_due == Decimal("75.67")
+    assert interest_accrued == Decimal("75.67")
 
     interest_event = (
         session.query(LedgerTriggerEvent)
@@ -3690,7 +3691,34 @@ def test_moratorium_emi_schedule(session: Session) -> None:
     # Apply moratorium
     provide_moratorium(user_loan, start_date, end_date)
 
-    # Get list post refresh
+    loan_moratorium = (
+        session.query(LoanMoratorium).filter(LoanMoratorium.loan_id == user_loan.loan_id).first()
+    )
+    moratorium_interest_for_sep = (
+        session.query(MoratoriumInterest.interest)
+        .filter(
+            MoratoriumInterest.bill_id == bill_sep.id,
+            MoratoriumInterest.due_date == bill_sep.bill_due_date,
+        )
+        .order_by(MoratoriumInterest.due_date.desc())
+        .limit(1)
+        .scalar()
+    )
+    assert moratorium_interest_for_sep is not None
+    assert moratorium_interest_for_sep == Decimal("75.67")
+
+    total_moratorium_interest_sep_bill = (
+        session.query(func.sum(MoratoriumInterest.interest))
+        .filter(
+            MoratoriumInterest.bill_id == bill_sep.id,
+        )
+        .group_by(MoratoriumInterest.bill_id)
+        .limit(1)
+        .scalar()
+    )
+    assert total_moratorium_interest_sep_bill is not None
+    assert total_moratorium_interest_sep_bill == Decimal("227.01")
+
     emis = user_loan.get_loan_schedule()
 
     assert len(emis) == 15
@@ -3740,25 +3768,25 @@ def test_moratorium_emi_schedule(session: Session) -> None:
         session, bill_oct.table.bill_due_date + relativedelta(days=1), user_loan
     )
 
-    _, interest_due = get_account_balance_from_str(
+    _, sep_interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_sep.id}/bill/interest_receivable/a"
     )
-    assert interest_due == Decimal("151.34")
+    assert sep_interest_due == Decimal("151.34")
 
-    _, interest_due = get_account_balance_from_str(
+    _, sep_interest_accrued = get_account_balance_from_str(
         session, book_string=f"{bill_sep.id}/bill/interest_accrued/r"
     )
-    assert interest_due == Decimal("151.34")
+    assert sep_interest_accrued == Decimal("151.34")
 
-    _, interest_due = get_account_balance_from_str(
+    _, oct_interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_oct.id}/bill/interest_receivable/a"
     )
-    assert interest_due == Decimal("75.67")
+    assert oct_interest_due == Decimal("75.67")
 
-    _, interest_due = get_account_balance_from_str(
+    _, oct_interest_accrued = get_account_balance_from_str(
         session, book_string=f"{bill_oct.id}/bill/interest_accrued/r"
     )
-    assert interest_due == Decimal("75.67")
+    assert oct_interest_accrued == Decimal("75.67")
 
     interest_event = (
         session.query(LedgerTriggerEvent)
@@ -3768,6 +3796,41 @@ def test_moratorium_emi_schedule(session: Session) -> None:
     )
     assert interest_event is not None
     assert interest_event.amount == Decimal("151.34")
+
+    moratorium_interest_for_oct = (
+        session.query(MoratoriumInterest.interest)
+        .filter(
+            MoratoriumInterest.bill_id == bill_oct.id,
+            MoratoriumInterest.due_date == bill_oct.bill_due_date,
+        )
+        .order_by(MoratoriumInterest.due_date.desc())
+        .limit(1)
+        .scalar()
+    )
+    assert moratorium_interest_for_oct is not None
+    assert moratorium_interest_for_oct == Decimal("75.67")
+
+    total_moratorium_interest_oct_bill = (
+        session.query(func.sum(MoratoriumInterest.interest))
+        .filter(
+            MoratoriumInterest.bill_id == bill_oct.id,
+        )
+        .group_by(MoratoriumInterest.bill_id)
+        .limit(1)
+        .scalar()
+    )
+    assert total_moratorium_interest_oct_bill is not None
+    assert total_moratorium_interest_oct_bill == Decimal("151.34")
+
+    total_moratorium_interest_accrued_till_oct = (
+        session.query(func.sum(MoratoriumInterest.interest))
+        .filter(
+            MoratoriumInterest.moratorium_id == loan_moratorium.id,
+            MoratoriumInterest.due_date <= bill_oct.bill_due_date,
+        )
+        .first()
+    )[0]
+    assert total_moratorium_interest_accrued_till_oct == Decimal("227.01")
 
     emis = user_loan.get_loan_schedule()
 
@@ -3818,15 +3881,15 @@ def test_moratorium_emi_schedule(session: Session) -> None:
         session, bill_nov.table.bill_due_date + relativedelta(days=1), user_loan
     )
 
-    _, interest_due = get_account_balance_from_str(
+    _, nov_interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_nov.id}/bill/interest_receivable/a"
     )
-    assert interest_due == Decimal("75.67")
+    assert nov_interest_due == Decimal("75.67")
 
-    _, interest_due = get_account_balance_from_str(
+    _, nov_interest_accrued = get_account_balance_from_str(
         session, book_string=f"{bill_nov.id}/bill/interest_accrued/r"
     )
-    assert interest_due == Decimal("75.67")
+    assert nov_interest_accrued == Decimal("75.67")
 
     interest_event = (
         session.query(LedgerTriggerEvent)
@@ -3836,6 +3899,41 @@ def test_moratorium_emi_schedule(session: Session) -> None:
     )
     assert interest_event is not None
     assert interest_event.amount == Decimal("227.01")
+
+    moratorium_interest_for_nov = (
+        session.query(MoratoriumInterest.interest)
+        .filter(
+            MoratoriumInterest.bill_id == bill_nov.id,
+            MoratoriumInterest.due_date == bill_nov.bill_due_date,
+        )
+        .order_by(MoratoriumInterest.due_date.desc())
+        .limit(1)
+        .scalar()
+    )
+    assert moratorium_interest_for_nov is not None
+    assert moratorium_interest_for_nov == Decimal("75.67")
+
+    total_moratorium_interest_nov_bill = (
+        session.query(func.sum(MoratoriumInterest.interest))
+        .filter(
+            MoratoriumInterest.bill_id == bill_nov.id,
+        )
+        .group_by(MoratoriumInterest.bill_id)
+        .limit(1)
+        .scalar()
+    )
+    assert total_moratorium_interest_nov_bill is not None
+    assert total_moratorium_interest_nov_bill == Decimal("75.67")
+
+    total_moratorium_interest_accrued_till_nov = (
+        session.query(func.sum(MoratoriumInterest.interest))
+        .filter(
+            MoratoriumInterest.moratorium_id == loan_moratorium.id,
+            MoratoriumInterest.due_date <= bill_nov.bill_due_date,
+        )
+        .first()
+    )[0]
+    assert total_moratorium_interest_accrued_till_nov == Decimal("454.02")
 
     assert len(emis) == 15
     assert emis[0].emi_number == 1
@@ -3884,15 +3982,15 @@ def test_moratorium_emi_schedule(session: Session) -> None:
         session, bill_dec.table.bill_due_date + relativedelta(days=1), user_loan
     )
 
-    _, interest_due = get_account_balance_from_str(
+    _, dec_interest_due = get_account_balance_from_str(
         session, book_string=f"{bill_dec.id}/bill/interest_receivable/a"
     )
-    assert interest_due == Decimal("75.67")
+    assert dec_interest_due == Decimal("75.67")
 
-    _, interest_due = get_account_balance_from_str(
+    _, dec_interest_accrued = get_account_balance_from_str(
         session, book_string=f"{bill_dec.id}/bill/interest_accrued/r"
     )
-    assert interest_due == Decimal("75.67")
+    assert dec_interest_accrued == Decimal("75.67")
 
     interest_event = (
         session.query(LedgerTriggerEvent)

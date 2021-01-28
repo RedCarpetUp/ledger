@@ -501,9 +501,15 @@ class LoanSchedule(AuditMixin):
     def remaining_amount(self):
         return self.total_due_amount - self.payment_received
 
-    def interest_to_accrue(self, session: Session, loan_moratorium: LoanMoratorium):
+    def interest_to_accrue(self, session: Session):
         interest_to_accrue = 0
         interest_to_accrue += self.interest_due
+        loan_moratorium = (
+            session.query(LoanMoratorium)
+            .filter(LoanMoratorium.loan_id == self.loan_id)
+            .order_by(LoanMoratorium.start_date.desc())
+            .first()
+        )
         if (
             loan_moratorium
             and self.due_date >= loan_moratorium.start_date
@@ -531,12 +537,13 @@ class LoanSchedule(AuditMixin):
                 )
                 .filter(
                     LoanMoratorium.loan_id == self.loan_id,
+                    MoratoriumInterest.bill_id == self.bill_id,
                     MoratoriumInterest.due_date >= loan_moratorium.start_date,
                     MoratoriumInterest.due_date <= loan_moratorium.end_date,
                 )
                 .first()
             )
-            if interest_to_accrue:
+            if interest_to_accrue and moratorium_interest.total_moratorium_interest:
                 interest_to_accrue -= moratorium_interest.total_moratorium_interest
 
         return interest_to_accrue
