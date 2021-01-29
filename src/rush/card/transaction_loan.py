@@ -1,8 +1,12 @@
 from decimal import Decimal
-from typing import Type
+from typing import (
+    Dict,
+    Type,
+)
 
+from dateutil.relativedelta import relativedelta
+from pendulum.date import Date
 from sqlalchemy.orm.session import Session
-from sqlalchemy.sql.functions import user
 from sqlalchemy.sql.sqltypes import DateTime
 
 from rush.card.base_card import BaseLoan
@@ -20,11 +24,23 @@ from rush.models import (
 
 
 class TransactionLoanBill(TermLoanBill):
-    pass
+    def get_relative_delta_for_emi(self, emi_number: int, amortization_date: Date) -> Dict[str, int]:
+        if emi_number == 1:
+            delta = (
+                (
+                    amortization_date.replace(month=amortization_date.month % 12 + 1, day=1)
+                    - relativedelta(days=1)
+                ).day
+                - amortization_date.day
+                + 15
+            )
+            return {"months": 0, "days": delta}
+
+        return {"months": 1, "days": 0}
 
 
 class TransactionLoan(TermLoan):
-    bill_class: Type[B] = TermLoanBill
+    bill_class: Type[B] = TransactionLoanBill
 
     def disbursal(self, **kwargs):
         event = LedgerTriggerEvent(

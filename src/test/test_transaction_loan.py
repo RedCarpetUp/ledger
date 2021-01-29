@@ -18,12 +18,12 @@ from rush.card.transaction_loan import (
     TransactionLoan,
     transaction_to_loan,
 )
-from rush.card.utils import create_user_product_mapping
 from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import get_account_balance_from_str
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
+    CardTransaction,
     Lenders,
     LoanData,
     Product,
@@ -106,7 +106,7 @@ def test_transaction_loan(session: Session) -> None:
         session=session,
         transaction_id=swipe2emi["data"].id,
         user_id=469,
-        post_date=parse_date("2020-11-01"),
+        post_date=parse_date("2020-11-05"),
         tenure=12,
         interest_rate=Decimal(3),
     )["data"]
@@ -148,6 +148,9 @@ def test_transaction_loan(session: Session) -> None:
         session, book_string=f"{bill_id}/bill/principal_receivable/a", to_date=bill_date
     )
     assert billed_amount == 1200
+
+    statement_entries = session.query(CardTransaction).filter(CardTransaction.source == "LEDGER").all()
+    assert len(statement_entries) == 1
 
     # paying min amount for rebel loan
     payment_date = parse_date("2020-12-02")
@@ -206,6 +209,9 @@ def test_transaction_loan(session: Session) -> None:
     )
     assert billed_amount == 1079
 
+    statement_entries = session.query(CardTransaction).filter(CardTransaction.source == "LEDGER").all()
+    assert len(statement_entries) == 2
+
     assert user_loan.get_remaining_min() == 401
     assert transaction_loan.get_remaining_min() == 280
     assert transaction_loan.get_remaining_max() == 1240
@@ -256,13 +262,16 @@ def test_transaction_loan2(session: Session) -> None:
         session=session,
         transaction_id=swipe2emi["data"].id,
         user_id=469,
-        post_date=parse_date("2020-11-01"),
+        post_date=parse_date("2020-11-05"),
         tenure=12,
         interest_rate=Decimal(3),
     )["data"]
 
     bill_date = parse_date("2020-12-01 00:00:00")
     bill_generate(user_loan=user_loan, creation_time=bill_date)
+
+    statement_entries = session.query(CardTransaction).filter(CardTransaction.source == "LEDGER").all()
+    assert len(statement_entries) == 1
 
     assert user_loan.get_remaining_min(date_to_check_against=parse_date("2020-12-01 19:23:11")) == 261
     assert (
@@ -313,13 +322,17 @@ def test_transaction_loan2(session: Session) -> None:
     )
 
     user_loan_schedule = user_loan.get_loan_schedule()
+    transaction_loan_schedule = transaction_loan.get_loan_schedule()
+
+    for emi_number in range(0, len(user_loan_schedule)):
+        assert user_loan_schedule[emi_number].due_date == transaction_loan_schedule[emi_number].due_date
+
     assert user_loan_schedule[0].payment_status == "Paid"
     user_loan_schedule = user_loan_schedule[1:]
     assert all(
         emi.payment_status == "UnPaid" and emi.payment_received == 0 for emi in user_loan_schedule
     )
 
-    transaction_loan_schedule = transaction_loan.get_loan_schedule()
     assert transaction_loan_schedule[0].payment_status == "Paid"
     transaction_loan_schedule = transaction_loan_schedule[1:]
     assert all(emi.payment_status == "UnPaid" for emi in transaction_loan_schedule)

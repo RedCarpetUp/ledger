@@ -116,8 +116,8 @@ def bill_generate(
             LoanSchedule.emi_number,
         )
         .filter(
-            LoanSchedule.due_date < bill.bill_close_date,
-            LoanSchedule.due_date > bill.bill_close_date - relativedelta(months=1),
+            LoanSchedule.due_date <= bill.bill_due_date,
+            LoanSchedule.due_date > bill.bill_due_date - relativedelta(months=1),
             LoanSchedule.loan_id.in_(child_loans_dict.keys()),
             LoanSchedule.bill_id.is_(None),
         )
@@ -128,7 +128,7 @@ def bill_generate(
         CardTransaction.new(
             session=session,
             loan_id=bill.id,
-            txn_time=min(child_loan.amortization_date, bill.bill_start_date),
+            txn_time=min(child_loan.amortization_date.date(), bill.bill_start_date),
             amount=principal + interest,
             source="LEDGER",
             description=f"Transaction Loan EMI {emi_number}",
