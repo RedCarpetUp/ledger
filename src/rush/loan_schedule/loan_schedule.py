@@ -158,10 +158,16 @@ def close_loan(user_loan: BaseLoan, last_payment_date: datetime):
     if not future_emis:  # Loan has closed naturally.
         return
 
+    is_in_moratorium = LoanMoratorium.is_in_moratorium(
+        session=user_loan.session,
+        loan_id=user_loan.loan_id,
+        date_to_check_against=last_payment_date.date(),
+    )
+
     next_emi_due_date = future_emis[0].due_date
     for emi in future_emis:
         # set the received amount of first emi to closing balance as of that date.
-        if emi.due_date == next_emi_due_date:
+        if not is_in_moratorium and emi.due_date == next_emi_due_date:
             emi.payment_received = emi.total_closing_balance
             emi.payment_status = "Paid"
             emi.last_payment_date = last_payment_date
@@ -169,6 +175,15 @@ def close_loan(user_loan: BaseLoan, last_payment_date: datetime):
             emi.payment_received = 0  # set principal to 0 of remaining future emis.
             emi.payment_status = "UnPaid"
             emi.last_payment_date = None
+
+        if is_in_moratorium:
+            emi_after_moratorium = LoanMoratorium.get_emi_after_moratorium(
+                session=user_loan.session, loan_id=user_loan.loan_id
+            )
+            if emi_after_moratorium and emi.emi_number == emi_after_moratorium.emi_number:
+                emi.payment_received = emi.total_closing_balance
+                emi.payment_status = "Paid"
+                emi.last_payment_date = last_payment_date
 
     # Do what we did above but for bill emis and for due amount.
     all_future_bill_emis = (
@@ -180,45 +195,28 @@ def close_loan(user_loan: BaseLoan, last_payment_date: datetime):
         )
         .all()
     )
-    loan_moratorium = (
-        user_loan.session.query(LoanMoratorium)
-        .filter(
-            LoanMoratorium.loan_id == user_loan.loan_id,
-        )
-        .order_by(LoanMoratorium.start_date.desc())
-        .first()
-    )
-    is_in_moratorium = (
-        loan_moratorium
-        and last_payment_date.date() >= loan_moratorium.start_date
-        and last_payment_date.date() <= loan_moratorium.end_date
-    )
-    if loan_moratorium:
-        moratorium_interest = (
-            user_loan.session.query(
-                func.sum(MoratoriumInterest.interest).label("total_moratorium_interest_added")
-            )
-            .filter(
-                MoratoriumInterest.moratorium_id == loan_moratorium.id,
-                MoratoriumInterest.due_date <= last_payment_date,
-            )
-            .group_by(MoratoriumInterest.moratorium_id)
-            .first()
-        )
+
     for bill_emi in all_future_bill_emis:
         if not is_in_moratorium and bill_emi.due_date == next_emi_due_date:
             bill_emi.principal_due = bill_emi.total_closing_balance
         else:
             bill_emi.principal_due = 0
         bill_emi.interest_due = 0
-        if (
-            loan_moratorium
-            and moratorium_interest
-            and bill_emi.due_date == loan_moratorium.end_date + relativedelta(months=1)
-        ):
-            bill_emi.interest_due = moratorium_interest.total_moratorium_interest_added
-            bill_emi.principal_due = bill_emi.total_closing_balance
-            loan_moratorium = None
+        if is_in_moratorium:
+            bill_emi_after_moratorium = MoratoriumInterest.get_bill_emi_after_moratorium(
+                session=user_loan.session, loan_id=user_loan.loan_id, bill_id=bill_emi.id
+            )
+            if bill_emi_after_moratorium:
+                total_bill_moratorium_interest = (
+                    MoratoriumInterest.get_bill_total_moratorium_interest_to_date(
+                        session=user_loan.session,
+                        loan_id=user_loan.loan_id,
+                        bill_id=bill_emi.id,
+                        date=last_payment_date.date(),
+                    )
+                )
+                bill_emi.interest_due = total_bill_moratorium_interest
+                bill_emi.principal_due = bill_emi.total_closing_balance
 
     # Refresh the due amounts of loan schedule after altering bill's schedule.
     group_bills(user_loan)
