@@ -506,15 +506,15 @@ class LoanSchedule(AuditMixin):
         interest_to_accrue += self.interest_due
         loan_moratorium = (
             session.query(LoanMoratorium)
-            .filter(LoanMoratorium.loan_id == self.loan_id)
+            .filter(
+                LoanMoratorium.loan_id == self.loan_id,
+                LoanMoratorium.start_date <= self.due_date,
+                LoanMoratorium.end_date >= self.due_date,
+            )
             .order_by(LoanMoratorium.start_date.desc())
             .first()
         )
-        if (
-            loan_moratorium
-            and self.due_date >= loan_moratorium.start_date
-            and self.due_date <= loan_moratorium.end_date
-        ):
+        if loan_moratorium:
             moratorium_interest = (
                 session.query(MoratoriumInterest.interest)
                 .filter(
@@ -522,24 +522,35 @@ class LoanSchedule(AuditMixin):
                     MoratoriumInterest.due_date == self.due_date,
                 )
                 .order_by(MoratoriumInterest.due_date.desc())
-                .limit(1)
                 .scalar()
             )
             if moratorium_interest:
-                interest_to_accrue += moratorium_interest
+                interest_to_accrue = moratorium_interest
 
-        if loan_moratorium and self.due_date == loan_moratorium.end_date + relativedelta(months=1):
+        last_moratorium_emi = (
+            session.query(func.max(MoratoriumInterest.emi_number).label("emi_number"))
+            .join(
+                LoanMoratorium,
+                LoanMoratorium.loan_id == self.loan_id,
+            )
+            .filter(
+                MoratoriumInterest.moratorium_id == LoanMoratorium.id,
+                MoratoriumInterest.bill_id == self.bill_id,
+            )
+            .first()
+        )
+        if last_moratorium_emi.emi_number and self.emi_number == last_moratorium_emi.emi_number + 1:
             moratorium_interest = (
                 session.query(func.sum(MoratoriumInterest.interest).label("total_moratorium_interest"))
                 .join(
                     LoanMoratorium,
-                    MoratoriumInterest.moratorium_id == loan_moratorium.id,
+                    MoratoriumInterest.moratorium_id == LoanMoratorium.id,
                 )
                 .filter(
                     LoanMoratorium.loan_id == self.loan_id,
                     MoratoriumInterest.bill_id == self.bill_id,
-                    MoratoriumInterest.due_date >= loan_moratorium.start_date,
-                    MoratoriumInterest.due_date <= loan_moratorium.end_date,
+                    MoratoriumInterest.due_date >= LoanMoratorium.start_date,
+                    MoratoriumInterest.due_date <= LoanMoratorium.end_date,
                 )
                 .first()
             )
