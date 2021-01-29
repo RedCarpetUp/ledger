@@ -20,10 +20,8 @@ def upgrade() -> None:
         "moratorium_interest",
         sa.Column("id", sa.Integer, primary_key=True, nullable=False),
         sa.Column("moratorium_id", sa.Integer, nullable=False),
-        sa.Column("emi_number", sa.Integer, nullable=False),
         sa.Column("interest", sa.Numeric, nullable=False),
-        sa.Column("bill_id", sa.Integer, nullable=False),
-        sa.Column("due_date", sa.Date(), nullable=False),
+        sa.Column("loan_schedule_id", sa.Integer, nullable=False),
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("performed_by", sa.Integer(), nullable=False),
@@ -31,10 +29,7 @@ def upgrade() -> None:
             ["moratorium_id"],
             ["loan_moratorium.id"],
         ),
-        sa.ForeignKeyConstraint(
-            ["bill_id"],
-            ["loan_data.id"],
-        ),
+        sa.ForeignKeyConstraint(["loan_schedule_id"], ["loan_schedule.id"]),
     )
 
 

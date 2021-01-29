@@ -34,6 +34,7 @@ from sqlalchemy.orm import (
 )
 from sqlalchemy.schema import Index
 from sqlalchemy import func
+from sqlalchemy.sql.elements import and_
 from sqlalchemy.util.langhelpers import hybridproperty
 
 from rush.utils import get_current_ist_time
@@ -468,16 +469,6 @@ class LoanMoratorium(AuditMixin):
         return v is not None
 
 
-class MoratoriumInterest(AuditMixin):
-    __tablename__ = "moratorium_interest"
-
-    moratorium_id = Column(Integer, ForeignKey(LoanMoratorium.id), nullable=False)
-    emi_number = Column(Integer, nullable=False)
-    interest = Column(Numeric, nullable=False)
-    bill_id = Column(Integer, ForeignKey(LoanData.id), nullable=False)
-    due_date = Column(Date, nullable=False)
-
-
 class LoanSchedule(AuditMixin):
     __tablename__ = "loan_schedule"
     loan_id = Column(Integer, ForeignKey(Loan.id))
@@ -517,45 +508,47 @@ class LoanSchedule(AuditMixin):
         if loan_moratorium:
             moratorium_interest = (
                 session.query(MoratoriumInterest.interest)
+                .join(LoanSchedule, LoanSchedule.id == MoratoriumInterest.loan_schedule_id)
                 .filter(
-                    MoratoriumInterest.bill_id == self.bill_id,
-                    MoratoriumInterest.due_date == self.due_date,
+                    LoanSchedule.bill_id == self.bill_id,
+                    LoanSchedule.due_date == self.due_date,
                 )
-                .order_by(MoratoriumInterest.due_date.desc())
                 .scalar()
             )
             if moratorium_interest:
                 interest_to_accrue = moratorium_interest
 
-        last_moratorium_emi = (
-            session.query(func.max(MoratoriumInterest.emi_number).label("emi_number"))
+        last_moratorium_emi_number = (
+            session.query(func.max(LoanSchedule.emi_number))
             .join(
                 LoanMoratorium,
                 LoanMoratorium.loan_id == self.loan_id,
             )
             .filter(
                 MoratoriumInterest.moratorium_id == LoanMoratorium.id,
-                MoratoriumInterest.bill_id == self.bill_id,
+                LoanSchedule.id == MoratoriumInterest.loan_schedule_id,
+                LoanSchedule.bill_id == self.bill_id,
             )
-            .first()
+            .scalar()
         )
-        if last_moratorium_emi.emi_number and self.emi_number == last_moratorium_emi.emi_number + 1:
-            moratorium_interest = (
-                session.query(func.sum(MoratoriumInterest.interest).label("total_moratorium_interest"))
+        if last_moratorium_emi_number and self.emi_number == last_moratorium_emi_number + 1:
+            total_moratorium_interest = (
+                session.query(func.sum(MoratoriumInterest.interest))
                 .join(
                     LoanMoratorium,
-                    MoratoriumInterest.moratorium_id == LoanMoratorium.id,
+                    and_(
+                        MoratoriumInterest.moratorium_id == LoanMoratorium.id,
+                        LoanMoratorium.loan_id == self.loan_id,
+                    ),
                 )
                 .filter(
-                    LoanMoratorium.loan_id == self.loan_id,
-                    MoratoriumInterest.bill_id == self.bill_id,
-                    MoratoriumInterest.due_date >= LoanMoratorium.start_date,
-                    MoratoriumInterest.due_date <= LoanMoratorium.end_date,
+                    LoanSchedule.bill_id == self.bill_id,
+                    LoanSchedule.id == MoratoriumInterest.loan_schedule_id,
                 )
-                .first()
+                .scalar()
             )
-            if interest_to_accrue and moratorium_interest.total_moratorium_interest:
-                interest_to_accrue -= moratorium_interest.total_moratorium_interest
+            if interest_to_accrue and total_moratorium_interest:
+                interest_to_accrue -= total_moratorium_interest
 
         return interest_to_accrue
 
@@ -566,6 +559,14 @@ class LoanSchedule(AuditMixin):
 
     def can_mark_emi_paid(self) -> bool:
         return self.remaining_amount <= Decimal(1)
+
+
+class MoratoriumInterest(AuditMixin):
+    __tablename__ = "moratorium_interest"
+
+    moratorium_id = Column(Integer, ForeignKey(LoanMoratorium.id), nullable=False)
+    interest = Column(Numeric, nullable=False)
+    loan_schedule_id = Column(Integer, ForeignKey(LoanSchedule.id))
 
 
 class PaymentMapping(AuditMixin):

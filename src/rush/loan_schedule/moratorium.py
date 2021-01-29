@@ -48,7 +48,6 @@ def provide_moratorium(user_loan: BaseLoan, start_date: date, end_date: date):
     for emi in bill_emis:
         bill_id_and_its_emis.setdefault(emi.bill_id, []).append(emi)
 
-    newly_added_moratorium_emis = []
     for bill_id, emis in bill_id_and_its_emis.items():
         first_emi_before_moratorium = emis[0]
         new_emi_due_date = first_emi_before_moratorium.due_date
@@ -65,19 +64,17 @@ def provide_moratorium(user_loan: BaseLoan, start_date: date, end_date: date):
                 interest_due=0,
                 total_closing_balance=first_emi_before_moratorium.total_closing_balance,
             )
-
+            user_loan.session.add(moratorium_emi)
+            user_loan.session.flush()
             MoratoriumInterest.new(
                 session=user_loan.session,
                 moratorium_id=loan_moratorium.id,
-                emi_number=new_emi_number,
                 interest=first_emi_before_moratorium.interest_due,
-                bill_id=bill_id,
-                due_date=new_emi_due_date,
+                loan_schedule_id=moratorium_emi.id,
             )
 
             new_emi_due_date += relativedelta(months=1)
             new_emi_number += 1
-            newly_added_moratorium_emis.append(moratorium_emi)
 
         total_emis_added = new_emi_number - first_emi_before_moratorium.emi_number
         # Pick interest from the number of emis that were newly added. i.e. if 3 emis were added
@@ -90,7 +87,6 @@ def provide_moratorium(user_loan: BaseLoan, start_date: date, end_date: date):
             emi.emi_number = updated_emi_number
             emi.due_date = new_emi_due_date
             new_emi_due_date += relativedelta(months=1)
-    user_loan.session.bulk_save_objects(newly_added_moratorium_emis)
 
     from rush.loan_schedule.loan_schedule import group_bills
 
@@ -101,7 +97,6 @@ def add_moratorium_emis(session: Session, user_loan: BaseLoan, bill: BaseBill):
 
     emi_number = 1
     opening_principal = bill.table.principal
-    moratorium_emi_objects = []
     due_date = bill.table.bill_due_date
 
     if user_loan.interest_type == "reducing":
@@ -119,7 +114,7 @@ def add_moratorium_emis(session: Session, user_loan: BaseLoan, bill: BaseBill):
     )
 
     while due_date >= loan_moratorium.start_date and due_date <= loan_moratorium.end_date:
-        bill_schedule = LoanSchedule(
+        moratorium_emi = LoanSchedule(
             loan_id=bill.table.loan_id,
             bill_id=bill.table.id,
             emi_number=emi_number,
@@ -128,20 +123,19 @@ def add_moratorium_emis(session: Session, user_loan: BaseLoan, bill: BaseBill):
             principal_due=0,
             total_closing_balance=round(opening_principal, 2),
         )
+        session.add(moratorium_emi)
+        session.flush()
         MoratoriumInterest.new(
             session=session,
             moratorium_id=loan_moratorium.id,
-            emi_number=emi_number,
             interest=round(interest_due, 2),
-            bill_id=bill.table.id,
-            due_date=due_date,
+            loan_schedule_id=moratorium_emi.id,
         )
         emi_number += 1
         due_date_deltas = bill.get_relative_delta_for_emi(
             emi_number=emi_number, amortization_date=user_loan.amortization_date
         )
         due_date += relativedelta(**due_date_deltas)
-        moratorium_emi_objects.append(bill_schedule)
 
     number_of_months_added = emi_number - 1
     moratorium_interest_to_be_added = interest_due * number_of_months_added
@@ -151,7 +145,6 @@ def add_moratorium_emis(session: Session, user_loan: BaseLoan, bill: BaseBill):
     due_date -= relativedelta(**due_date_deltas)
 
     return {
-        "moratorium_emi_objects": moratorium_emi_objects,
         "number_of_months_added": number_of_months_added,
         "due_date": due_date,
         "moratorium_interest_to_be_added": moratorium_interest_to_be_added,

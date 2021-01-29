@@ -81,7 +81,6 @@ def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
         number_of_months_added = data_after_moratorium["number_of_months_added"]
         due_date = data_after_moratorium["due_date"]
         moratorium_interest_to_be_added = data_after_moratorium["moratorium_interest_to_be_added"]
-        emi_objects.extend(data_after_moratorium["moratorium_emi_objects"])
         new_emi_number = number_of_months_added + 1
         bill.table.bill_tenure += number_of_months_added
 
