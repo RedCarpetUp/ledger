@@ -301,7 +301,12 @@ def test_transaction_loan2(session: Session) -> None:
         transaction_loan.get_remaining_min(date_to_check_against=parse_date("2020-12-03 00:00:00")) == 0
     )
 
-    assert user_loan.get_remaining_max(date_to_check_against=parse_date("2020-12-03 00:00:00")) == 1060
+    assert (
+        user_loan.get_remaining_max(
+            date_to_check_against=parse_date("2020-12-03 00:00:00"), include_child_loans=False
+        )
+        == 0
+    )
     assert (
         transaction_loan.get_remaining_max(date_to_check_against=parse_date("2020-12-03 00:00:00"))
         == 1060
