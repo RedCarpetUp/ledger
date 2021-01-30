@@ -170,13 +170,19 @@ def payment_received_event(
 
 
 def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amount_to_slide: Decimal):
-    # slide late fee.
     unpaid_bills = user_loan.get_unpaid_bills()
     unpaid_bill_ids = [unpaid_bill.table.id for unpaid_bill in unpaid_bills]
     split_info = []
 
     # higher priority is first
-    fees_priority = ["atm_fee", "late_fee"]
+    fees_priority = [
+        "card_activation_fees",
+        "card_reload_fees",
+        "reset_joining_fees",
+        "card_upgrade_fees",
+        "atm_fee",
+        "late_fee",
+    ]
 
     priority_case_expression = []
     for index, fee in enumerate(fees_priority):
