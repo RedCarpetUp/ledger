@@ -1,3 +1,4 @@
+from calendar import monthrange
 from datetime import timedelta
 from decimal import Decimal
 
@@ -47,14 +48,11 @@ def get_or_create_bill_for_card_swipe(user_loan: BaseLoan, txn_time: DateTime) -
         for i in range(months_diff + 1):
             new_bill = user_loan.create_bill(
                 bill_start_date=new_bill_date + relativedelta(months=i),
-                bill_close_date=new_bill_date
+                bill_close_date=new_bill_date  # last date of this month
                 + relativedelta(
                     months=i,
-                    days=(
-                        new_bill_date.replace(month=new_bill_date.month % 12 + 1, day=1)
-                        - timedelta(days=2)
-                    ).day,
-                ),
+                    days=monthrange(new_bill_date.year, new_bill_date.month)[1] - 1,
+                ),  # number of days in this month
                 bill_due_date=new_bill_date
                 + relativedelta(
                     user_loan.bill_class.get_relative_delta_for_emi(
@@ -70,13 +68,11 @@ def get_or_create_bill_for_card_swipe(user_loan: BaseLoan, txn_time: DateTime) -
         new_bill_date = last_bill.bill_close_date + relativedelta(days=1)
     new_bill = user_loan.create_bill(
         bill_start_date=new_bill_date,
-        bill_close_date=new_bill_date
+        bill_close_date=new_bill_date  # last date of this month
         + relativedelta(
             months=0,
-            days=(
-                new_bill_date.replace(month=new_bill_date.month % 12 + 1, day=1) - relativedelta(days=2)
-            ).day,
-        ),
+            days=monthrange(new_bill_date.year, new_bill_date.month)[1] - 1,
+        ),  # number of days in this month
         bill_due_date=new_bill_date
         + relativedelta(
             user_loan.bill_class.get_relative_delta_for_emi(
