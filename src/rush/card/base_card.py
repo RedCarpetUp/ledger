@@ -165,7 +165,8 @@ class BaseBill:
         )
         return principal_due
 
-    def get_relative_delta_for_emi(self, emi_number: int, amortization_date: Date) -> Dict[str, int]:
+    @staticmethod
+    def get_relative_delta_for_emi(emi_number: int, amortization_date: Date) -> Dict[str, int]:
         return {"months": 1, "day": 15}
 
     def get_down_payment(self, include_first_emi=False) -> Decimal:

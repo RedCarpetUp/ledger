@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
@@ -33,28 +34,56 @@ def get_or_create_bill_for_card_swipe(user_loan: BaseLoan, txn_time: DateTime) -
         does_swipe_belong_to_current_bill = txn_date < last_bill.bill_close_date
         if does_swipe_belong_to_current_bill:
             return {"result": "success", "bill": last_bill}
-        new_bill_date = last_bill.bill_close_date
+        new_bill_date = last_bill.bill_close_date + relativedelta(days=1)
     else:
         new_bill_date = user_loan.amortization_date
-    new_closing_date = new_bill_date + relativedelta(months=1)
+    new_closing_date = new_bill_date + relativedelta(
+        months=1,
+        days=(new_bill_date.replace(month=new_bill_date.month % 12 + 1, day=1) - timedelta(days=2)).day,
+    )
     # Check if some months of bill generation were skipped and if they were then generate their bills
     months_diff = (txn_date.year - new_closing_date.year) * 12 + txn_date.month - new_closing_date.month
     if months_diff > 0:
         for i in range(months_diff + 1):
             new_bill = user_loan.create_bill(
-                bill_start_date=new_bill_date + relativedelta(months=i, day=1),
-                bill_close_date=new_bill_date + relativedelta(months=i + 1, day=1),
-                bill_due_date=new_bill_date + relativedelta(months=i + 1, day=15),
+                bill_start_date=new_bill_date + relativedelta(months=i),
+                bill_close_date=new_bill_date
+                + relativedelta(
+                    months=i,
+                    days=(
+                        new_bill_date.replace(month=new_bill_date.month % 12 + 1, day=1)
+                        - timedelta(days=2)
+                    ).day,
+                ),
+                bill_due_date=new_bill_date
+                + relativedelta(
+                    user_loan.bill_class.get_relative_delta_for_emi(
+                        emi_number=(1 if new_bill_date == user_loan.amortization_date else 2),
+                        amortization_date=user_loan.amortization_date,
+                    )
+                ),
                 lender_id=lender_id,
                 is_generated=False,
             )
             bill_generate(user_loan)
         last_bill = user_loan.get_latest_bill()
-        new_bill_date = last_bill.bill_close_date
+        new_bill_date = last_bill.bill_close_date + relativedelta(days=1)
     new_bill = user_loan.create_bill(
         bill_start_date=new_bill_date,
-        bill_close_date=new_bill_date + relativedelta(months=1, day=1),
-        bill_due_date=new_bill_date + relativedelta(months=1, day=15),
+        bill_close_date=new_bill_date
+        + relativedelta(
+            months=0,
+            days=(
+                new_bill_date.replace(month=new_bill_date.month % 12 + 1, day=1) - relativedelta(days=2)
+            ).day,
+        ),
+        bill_due_date=new_bill_date
+        + relativedelta(
+            user_loan.bill_class.get_relative_delta_for_emi(
+                emi_number=(1 if new_bill_date == user_loan.amortization_date else 2),
+                amortization_date=user_loan.amortization_date,
+            )
+        ),
         lender_id=lender_id,
         is_generated=False,
     )
