@@ -51,13 +51,15 @@ def get_or_create_bill_for_card_swipe(user_loan: BaseLoan, txn_time: DateTime) -
                 bill_close_date=new_bill_date  # last date of this month
                 + relativedelta(
                     months=i,
-                    days=monthrange(new_bill_date.year, new_bill_date.month)[1] - 1,
+                    days=monthrange(new_bill_date.year, new_bill_date.month)[1] - new_bill_date.day,
                 ),  # number of days in this month
                 bill_due_date=new_bill_date
                 + relativedelta(
-                    user_loan.bill_class.get_relative_delta_for_emi(
-                        emi_number=(1 if new_bill_date == user_loan.amortization_date else 2),
-                        amortization_date=user_loan.amortization_date,
+                    **(
+                        user_loan.bill_class.get_relative_delta_for_emi(
+                            emi_number=(1 if new_bill_date == user_loan.amortization_date else 2),
+                            amortization_date=user_loan.amortization_date,
+                        )
                     )
                 ),
                 lender_id=lender_id,
@@ -71,13 +73,15 @@ def get_or_create_bill_for_card_swipe(user_loan: BaseLoan, txn_time: DateTime) -
         bill_close_date=new_bill_date  # last date of this month
         + relativedelta(
             months=0,
-            days=monthrange(new_bill_date.year, new_bill_date.month)[1] - 1,
+            days=monthrange(new_bill_date.year, new_bill_date.month)[1] - new_bill_date.day,
         ),  # number of days in this month
         bill_due_date=new_bill_date
         + relativedelta(
-            user_loan.bill_class.get_relative_delta_for_emi(
-                emi_number=(1 if new_bill_date == user_loan.amortization_date else 2),
-                amortization_date=user_loan.amortization_date,
+            **(
+                user_loan.bill_class.get_relative_delta_for_emi(
+                    emi_number=(1 if new_bill_date == user_loan.amortization_date else 2),
+                    amortization_date=user_loan.amortization_date,
+                )
             )
         ),
         lender_id=lender_id,
