@@ -1,10 +1,10 @@
+from calendar import monthrange
 from decimal import Decimal
 from typing import (
     Dict,
     Type,
 )
 
-from dateutil.relativedelta import relativedelta
 from pendulum.date import Date
 from sqlalchemy.orm.session import Session
 from sqlalchemy.sql.sqltypes import DateTime
@@ -27,10 +27,9 @@ class TransactionLoanBill(TermLoanBill):
     def get_relative_delta_for_emi(self, emi_number: int, amortization_date: Date) -> Dict[str, int]:
         if emi_number == 1:
             delta = (
-                (
-                    amortization_date.replace(month=amortization_date.month % 12 + 1, day=1)
-                    - relativedelta(days=1)
-                ).day
+                monthrange(amortization_date.year, amortization_date.month)[
+                    1
+                ]  # number of days in this month
                 - amortization_date.day
                 + 15
             )
