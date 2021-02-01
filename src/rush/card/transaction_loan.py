@@ -132,4 +132,8 @@ def transaction_to_loan(
 
     session.flush()
 
-    return {"result": "success", "data": transaction_loan}
+    return {
+        "result": "success",
+        "message": "Transaction has been successfully converted to emi",
+        "data": transaction_loan,
+    }
