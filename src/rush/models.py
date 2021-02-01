@@ -384,6 +384,7 @@ class CardKitNumbers(AuditMixin):
     last_5_digits = Column(String(5), nullable=False)
     status = Column(String(15), nullable=False)
     extra_details = Column(JSONB, nullable=False, default={})
+    provider = Column(String(15), nullable=False, default="sbm")
 
 
 class LedgerTriggerEvent(AuditMixin):
