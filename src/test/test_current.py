@@ -4160,6 +4160,19 @@ def test_close_loan_in_moratorium(session: Session) -> None:
     is_sep_bill_closed = is_bill_closed(session, bill_sep)
     assert is_sep_bill_closed is True
 
+    future_moratorium_interest_emis = (
+        session.query(MoratoriumInterest)
+        .filter(
+            MoratoriumInterest.moratorium_id == loan_moratorium.id,
+            LoanSchedule.id == MoratoriumInterest.loan_schedule_id,
+            LoanSchedule.due_date > payment_date,
+        )
+        .all()
+    )
+
+    for moratorium_interest_emi in future_moratorium_interest_emis:
+        assert moratorium_interest_emi.interest == Decimal("0")
+
     emis = user_loan.get_loan_schedule()
 
     assert len(emis) == 15
@@ -4169,10 +4182,14 @@ def test_close_loan_in_moratorium(session: Session) -> None:
     assert emis[0].total_closing_balance == Decimal("2500.00")
     assert emis[0].payment_status == "UnPaid"
     assert emis[1].emi_number == 2
-    assert emis[1].total_due_amount == 0
+    assert emis[1].principal_due == Decimal("2500")
+    assert emis[1].interest_due == Decimal("75.67")
+    assert emis[1].total_due_amount == Decimal("2575.67")
     assert emis[1].due_date == parse_date("2020-10-15").date()
     assert emis[1].total_closing_balance == Decimal("2500.00")
-    assert emis[1].payment_status == "UnPaid"
+    assert emis[1].payment_status == "Paid"
+    assert emis[1].payment_received == Decimal("2500.00")
+    assert emis[1].last_payment_date == payment_date
     assert emis[2].emi_number == 3
     assert emis[2].total_due_amount == 0
     assert emis[2].due_date == parse_date("2020-11-15").date()
@@ -4184,9 +4201,7 @@ def test_close_loan_in_moratorium(session: Session) -> None:
     assert emis[3].total_due_amount == Decimal("0")
     assert emis[3].due_date == parse_date("2020-12-15").date()
     assert emis[3].total_closing_balance == Decimal("2500.00")
-    assert emis[3].payment_received == Decimal("2500.00")
-    assert emis[3].last_payment_date == payment_date
-    assert emis[3].payment_status == "Paid"
+    assert emis[3].payment_status == "UnPaid"
     assert emis[4].emi_number == 5
     assert emis[4].principal_due == Decimal("0")
     assert emis[4].interest_due == Decimal("0")

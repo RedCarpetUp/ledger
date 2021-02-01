@@ -526,25 +526,6 @@ class LoanMoratorium(AuditMixin):
         )
         return v is not None
 
-    @classmethod
-    def get_emi_after_moratorium(cls, session: Session, loan_id: int) -> LoanSchedule:
-        moratorium_last_emi = (
-            session.query(LoanSchedule)
-            .join(LoanMoratorium, LoanMoratorium.loan_id == loan_id)
-            .filter(LoanSchedule.bill_id.is_(None), LoanSchedule.due_date == LoanMoratorium.end_date)
-            .first()
-        )
-        emi_after_moratorium = (
-            session.query(LoanSchedule)
-            .filter(
-                LoanSchedule.loan_id == loan_id,
-                LoanSchedule.bill_id.is_(None),
-                LoanSchedule.emi_number == moratorium_last_emi.emi_number + 1,
-            )
-            .first()
-        )
-        return emi_after_moratorium
-
 
 class MoratoriumInterest(AuditMixin):
     __tablename__ = "moratorium_interest"
@@ -600,11 +581,9 @@ class MoratoriumInterest(AuditMixin):
         return total_bill_moratorium_interest
 
     @classmethod
-    def get_bill_total_moratorium_interest_to_date(
-        cls, session: Session, loan_id: int, bill_id: int, date: PythonDate
-    ) -> Decimal:
-        moratorium_interest = (
-            session.query(func.sum(cls.interest))
+    def is_bill_in_moratorium(cls, session: Session, loan_id: int, bill_id: int):
+        data = (
+            session.query(cls)
             .join(
                 LoanMoratorium,
                 and_(
@@ -613,13 +592,12 @@ class MoratoriumInterest(AuditMixin):
                 ),
             )
             .filter(
+                LoanSchedule.id == cls.loan_schedule_id,
                 LoanSchedule.bill_id == bill_id,
-                LoanSchedule.due_date.between(LoanMoratorium.start_date, date),
             )
-            .group_by(MoratoriumInterest.moratorium_id)
             .first()
         )
-        return moratorium_interest
+        return data is not None
 
 
 class PaymentMapping(AuditMixin):
