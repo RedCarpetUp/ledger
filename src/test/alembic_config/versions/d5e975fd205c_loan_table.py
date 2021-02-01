@@ -48,6 +48,7 @@ def upgrade() -> None:
         sa.Column("card_type", sa.String(length=5), nullable=False),
         sa.Column("last_5_digits", sa.String(length=5), nullable=False),
         sa.Column("status", sa.String(length=15), nullable=False),
+        sa.Column("provider", sa.String(15), nullable=False, default="sbm"),
         sa.ForeignKeyConstraint(
             ["card_type"],
             ["v3_card_types.name"],
