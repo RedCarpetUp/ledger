@@ -17,7 +17,6 @@ from rush.ledger_events import (
     _adjust_bill,
     _adjust_for_prepayment,
     adjust_for_revenue,
-    adjust_non_bill_payments,
     reduce_revenue_for_fee_refund,
 )
 from rush.ledger_utils import (
@@ -119,21 +118,6 @@ def payment_received_event(
             credit_book_str=f"{user_loan.loan_id}/loan/downpayment/l",
             amount=payment_received_amt,
         )
-    elif payment_type in (
-        "card_reload_fees",
-        "reset_joining_fees",
-        "card_activation_fees",
-        "card_upgrade_fees",
-    ):
-        adjust_non_bill_payments(
-            session=session,
-            event=event,
-            amount=payment_received_amt,
-            payment_type=payment_type,
-            identifier="loan",
-            identifier_id=user_loan.loan_id,
-            debit_book_str=debit_book_str,
-        )
     else:
         actual_payment = payment_received_amt
         payment_received_amt = adjust_payment(session, user_loan, event, debit_book_str)
@@ -171,7 +155,11 @@ def payment_received_event(
 
 def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amount_to_slide: Decimal):
     unpaid_bills = user_loan.get_unpaid_bills()
-    unpaid_bill_ids = [unpaid_bill.table.id for unpaid_bill in unpaid_bills]
+    fee_identifier_ids = [unpaid_bill.table.id for unpaid_bill in unpaid_bills]
+
+    # Since we're handling non-bill fees here as well
+    fee_identifier_ids.append(user_loan.id)
+
     split_info = []
 
     # higher priority is first
@@ -193,9 +181,9 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
         .filter(
             Fee.user_id == user_loan.user_id,
             Fee.name.in_(fees_priority),
-            Fee.identifier_id.in_(unpaid_bill_ids),
+            Fee.identifier_id.in_(fee_identifier_ids),
             Fee.fee_status == "UNPAID",
-            Fee.identifier == "bill",
+            Fee.identifier.in_(["bill", "loan"]),
         )
         .order_by(case(priority_case_expression))
         .all()
@@ -212,6 +200,16 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
             total_amount_to_be_adjusted_in_fee = min(total_fee_amount, total_amount_to_slide)
 
             for fee in fees:
+                # For non-bill fees
+                if fee.identifier is "loan":
+                    x = {
+                        "type": "fee",
+                        "fee": fee,
+                        "amount_to_adjust": fee.gross_amount
+                    }
+                    split_info.append(x)
+                    continue
+
                 bill = next(bill for bill in unpaid_bills if bill.table.id == fee.identifier_id)
                 amount_to_slide_based_on_ratio = mul(
                     fee.remaining_fee_amount / total_fee_amount,
@@ -297,7 +295,9 @@ def adjust_payment(
     split_data = find_split_to_slide_in_loan(session, user_loan, amount_to_adjust)
 
     for data in split_data:
-        adjust_for_min_max_accounts(data["bill"], data["amount_to_adjust"], event.id)
+        if "bill" in data:
+            adjust_for_min_max_accounts(data["bill"], data["amount_to_adjust"], event.id)
+
         if data["type"] == "fee":
             adjust_for_revenue(
                 session=session,
