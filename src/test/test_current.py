@@ -11,6 +11,7 @@ from _pytest.monkeypatch import MonkeyPatch
 from alembic.command import current as alembic_current
 from dateutil.relativedelta import relativedelta
 from pendulum import parse as parse_date  # type: ignore
+from pendulum.parser import parse
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
 
@@ -466,6 +467,7 @@ def test_generate_bill_1(session: Session) -> None:
     assert isinstance(latest_bill, BaseBill) == True
 
     assert bill.bill_start_date == parse_date("2020-04-02").date()
+    assert bill.table.bill_close_date == parse_date("2020-04-30").date()
     assert bill.table.is_generated is True
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
@@ -542,6 +544,7 @@ def test_generate_bill_reducing_interest_1(session: Session) -> None:
     assert isinstance(latest_bill, BaseBill) == True
 
     assert bill.bill_start_date == parse_date("2020-04-02").date()
+    assert bill.table.bill_close_date == parse_date("2020-04-30").date()
     assert bill.table.is_generated is True
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
@@ -651,6 +654,7 @@ def test_min_multiplier(session: Session) -> None:
     )
 
     assert bill.bill_start_date == parse_date("2020-04-02").date()
+    assert bill.table.bill_close_date == parse_date("2020-04-30").date()
     assert bill.table.is_generated is True
 
     _, min_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/min/a")
@@ -716,6 +720,7 @@ def test_min_tenure(session: Session) -> None:
     )
 
     assert bill.bill_start_date == parse_date("2020-04-02").date()
+    assert bill.table.bill_close_date == parse_date("2020-04-30").date()
     assert bill.table.is_generated is True
 
     _, min_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/min/a")

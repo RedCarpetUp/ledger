@@ -88,6 +88,7 @@ def test_rubpro_user(session: Session) -> None:
     assert isinstance(latest_bill, BaseBill) == True
 
     assert bill.bill_start_date == parse_date("2020-11-01").date()
+    assert bill.table.bill_close_date == parse_date("2020-11-30").date()
     assert bill.table.is_generated is True
 
     _, unbilled_amount = get_account_balance_from_str(
