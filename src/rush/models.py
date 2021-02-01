@@ -39,16 +39,6 @@ from rush.utils import get_current_ist_time
 Base = declarative_base()  # type: Any
 
 
-class pg_json_property(index_property):
-    def __init__(self, attr_name, index, cast_type, default=None):
-        super(pg_json_property, self).__init__(attr_name, index, default=default)
-        self.cast_type = cast_type
-
-    def expr(self, model):
-        expr = super(pg_json_property, self).expr(model)
-        return expr.astext.cast(self.cast_type)
-
-
 class AuditMixin(Base):
     __abstract__ = True
     id = Column(Integer, primary_key=True)
@@ -66,44 +56,6 @@ class AuditMixin(Base):
         d = {c.name: getattr(self, c.name) for c in self.__table__.columns}
         return d
 
-    def as_dict_for_json(self):
-        d = {
-            c.name: getattr(self, c.name).isoformat()
-            if isinstance(getattr(self, c.name), datetime)
-            else getattr(self, c.name)
-            for c in self.__table__.columns
-        }
-        return d
-
-    @classmethod
-    def snapshot(
-        cls, session: Session, primary_key, new_data, skip_columns=("id", "created_at", "updated_at")
-    ):
-        assert hasattr(cls, "row_status") == True
-
-        old_row = (
-            session.query(cls)
-            .filter(
-                getattr(cls, primary_key) == new_data[primary_key],
-                getattr(cls, "row_status") == "active",
-            )
-            .with_for_update(skip_locked=True)
-            .one_or_none()
-        )
-        if old_row:
-            old_row.row_status = "inactive"
-            session.flush()
-
-        cls_keys = cls.__table__.columns.keys()
-        keys_to_skip = [key for key in new_data.keys() if key not in cls_keys]
-        new_skip_columns = keys_to_skip + list(skip_columns)
-        for column in new_skip_columns:
-            new_data.pop(column, None)
-
-        new_obj = cls.new(**new_data)
-        session.flush()
-        return new_obj
-
 
 def get_or_create(session: Session, model: Any, defaults: Dict[Any, Any] = None, **kwargs: str) -> Any:
     instance = session.query(model).filter_by(**kwargs).first()
@@ -118,40 +70,15 @@ def get_or_create(session: Session, model: Any, defaults: Dict[Any, Any] = None,
         return instance
 
 
-@py_dataclass
-class AuditMixinPy:
-    id: int
-    performed_by: int
-
-
 class Lenders(AuditMixin):
     __tablename__ = "rc_lenders"
     lender_name = Column(String(), nullable=False)
     row_status = Column(String(length=10), nullable=False, default="active")
 
 
-@py_dataclass
-class LenderPy(AuditMixinPy):
-    lender_name: str
-    row_status: str
-
-
-# class User(AuditMixin):
-#     __tablename__ = "users"
-#     name = Column(String(50))
-#     email = Column(String(100))
-#     fullname = Column(String(50))
-#     nickname = Column(String(12))
-
-
 class Product(AuditMixin):
     __tablename__ = "product"
     product_name = Column(String(), nullable=False, unique=True)
-
-
-@py_dataclass
-class ProductPy(AuditMixinPy):
-    product_name: str
 
 
 class UserData(AuditMixin):
@@ -226,8 +153,6 @@ class User(AuditMixin):
     __tablename__ = "v3_users"
 
     histories = relationship("UserData", foreign_keys=[UserData.user_id])
-    roles = relationship("UserRoles")
-    identities = relationship("UserIdentities", back_populates="user")
     latest = relationship(
         "UserData",
         lazy="joined",
@@ -270,80 +195,6 @@ class Loan(AuditMixin):
     }
 
 
-@py_dataclass
-class LoanPy(AuditMixinPy):
-    user_id: int
-    amortization_date: DateTime
-    loan_status: str
-    product_id: int
-
-
-class UserIdentities(AuditMixin):
-    __tablename__ = "v3_user_identities"
-
-    user_id = Column(Integer, ForeignKey(User.id), nullable=False)
-    identity = Column(String(length=255), nullable=False)
-    identity_type = Column(String(length=50), nullable=False)
-    row_status = Column(String(length=20), nullable=False)
-    comments = Column(Text, nullable=True)
-    user = relationship("User", back_populates="identities")
-    __table_args__ = (
-        Index("index_on_user_id_v3_user_identity", user_id),
-        Index(
-            "index_on_identity_v3_user_identity",
-            identity,
-            row_status,
-            unique=True,
-            postgresql_where=row_status == "active",
-        ),
-    )
-
-
-class Role(AuditMixin):
-    __tablename__ = "v3_roles"
-
-    name = Column(String(length=50), nullable=False)
-    data = Column(JSONB, server_default="{}", nullable=True)
-    comments = Column(Text)
-
-    __table_args__ = (Index("index_on_name_and_id_v3_roles", name, "id"),)
-
-
-class UserRoles(AuditMixin):
-    __tablename__ = "v3_user_roles"
-
-    user_id = Column(Integer, ForeignKey(User.id), nullable=False)
-    role_id = Column(Integer, ForeignKey(Role.id), nullable=False)
-    data = Column(JSONB, server_default="{}", nullable=True)
-    row_status = Column(String(20), default="active", nullable=False)
-
-    __table_args__ = (
-        Index("index_on_user_id_v3_user_roles", user_id),
-        Index(
-            "unique_index_on_user_id_role_id",
-            user_id,
-            role_id,
-            row_status,
-            unique=True,
-            postgresql_where=row_status == "active",
-        ),
-    )
-
-
-@py_dataclass
-class UserPy(AuditMixinPy):
-    name: str
-    email: str
-    fullname: str
-    nickname: str
-
-
-@py_dataclass
-class LedgerTriggerEventPy(AuditMixinPy):
-    name: str
-    extra_details: Dict[str, Any]
-
-
 class BookAccount(AuditMixin):
     __tablename__ = "book_account"
     identifier = Column(Integer)
@@ -353,39 +204,6 @@ class BookAccount(AuditMixin):
     balance = Column(DECIMAL, default=0)
 
 
-@py_dataclass
-class BookAccountPy(AuditMixinPy):
-    identifier: int
-    book_type: str
-    account_type: str
-
-
-@py_dataclass
-class LedgerEntryPy(AuditMixinPy):
-    event_id: int
-    debit_account: int
-    credit_account: int
-    amount: Decimal
-    business_date: DateTime
-    user_id = Column(Integer, ForeignKey(User.id), nullable=False)
-    is_deleted = Column(Boolean, nullable=True)
-
-
-class CardNames(AuditMixin):
-    __tablename__ = "v3_card_names"
-    name = Column(String(20), nullable=False, unique=True)
-
-
-class CardKitNumbers(AuditMixin):
-    __tablename__ = "v3_card_kit_numbers"
-    kit_number = Column(String(12), unique=True, nullable=False)
-    card_name_id = Column(Integer, ForeignKey(CardNames.id), nullable=False)
-    card_type = Column(String(12), nullable=True)
-    last_5_digits = Column(String(5), nullable=False)
-    status = Column(String(15), nullable=False)
-    extra_details = Column(JSONB, nullable=False, default={})
-
-
 class LedgerTriggerEvent(AuditMixin):
     __tablename__ = "ledger_trigger_event"
     name = Column(String(50))
@@ -393,8 +211,6 @@ class LedgerTriggerEvent(AuditMixin):
     post_date = Column(TIMESTAMP)
     amount: Decimal = Column(Numeric)
     extra_details = Column(JSON, default={})
-
-    payment_type = pg_json_property("extra_details", "payment_type", String, default=None)
 
 
 class LedgerEntry(Base):
@@ -421,13 +237,6 @@ class LoanData(AuditMixin):
     principal: Decimal = Column(Numeric, nullable=True)
     principal_instalment: Decimal = Column(Numeric, nullable=True)
     interest_to_charge: Decimal = Column(Numeric, nullable=True)
-
-
-@py_dataclass
-class LoanDataPy(AuditMixinPy):
-    user_id: int
-    bill_start_date: DateTime
-    bill_generation_date: DateTime
 
 
 class CardTransaction(AuditMixin):

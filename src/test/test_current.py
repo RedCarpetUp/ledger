@@ -52,13 +52,10 @@ from rush.lender_funds import (
 from rush.loan_schedule.extension import extend_schedule
 from rush.loan_schedule.moratorium import provide_moratorium
 from rush.models import (
-    CardKitNumbers,
-    CardNames,
     EventDpd,
     Fee,
     JournalEntry,
     LedgerTriggerEvent,
-    LenderPy,
     Lenders,
     LoanData,
     LoanMoratorium,
@@ -99,17 +96,7 @@ def create_products(session: Session) -> None:
 
 def card_db_updates(session: Session) -> None:
     create_products(session=session)
-
-    cn = CardNames(name="ruby")
-    session.add(cn)
-    session.flush()
-    ckn = CardKitNumbers(kit_number="00000", card_name_id=cn.id, last_5_digits="0000", status="active")
-    session.add(ckn)
-    session.flush()
-
-    ckn = CardKitNumbers(kit_number="11111", card_name_id=cn.id, last_5_digits="0000", status="active")
-    session.add(ckn)
-    session.flush()
+    pass
 
 
 def test_user2(session: Session) -> None:
@@ -142,7 +129,6 @@ def test_lenders(session: Session) -> None:
     session.flush()
     lender = session.query(Lenders).first()
     assert isinstance(lender, Lenders) == True
-    LenderPy(id=lender.id, performed_by=123, lender_name="DMI", row_status="active")
 
 
 def test_lender_disbursal(session: Session) -> None:

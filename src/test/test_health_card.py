@@ -22,8 +22,6 @@ from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import get_account_balance_from_str
 from rush.models import (
-    CardKitNumbers,
-    CardNames,
     CardTransaction,
     Lenders,
     Loan,
@@ -53,14 +51,7 @@ def create_products(session: Session) -> None:
 
 def card_db_updates(session: Session) -> None:
     create_products(session=session)
-
-    cn = CardNames(name="ruby")
-    session.add(cn)
-    session.flush()
-
-    ckn = CardKitNumbers(kit_number="10000", card_name_id=cn.id, last_5_digits="0000", status="active")
-    session.add(ckn)
-    session.flush()
+    pass
 
 
 def create_user(session: Session) -> None:
