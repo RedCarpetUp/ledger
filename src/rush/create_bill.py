@@ -39,20 +39,19 @@ def get_or_create_bill_for_card_swipe(user_loan: BaseLoan, txn_time: DateTime) -
     else:
         new_bill_date = user_loan.amortization_date
     new_closing_date = new_bill_date + relativedelta(
-        months=1,
         days=monthrange(new_bill_date.year, new_bill_date.month)[1] - new_bill_date.day,
-    )  # number of days in this month
+    )  # setting it to the last date of the month
     # Check if some months of bill generation were skipped and if they were then generate their bills
     months_diff = (txn_date.year - new_closing_date.year) * 12 + txn_date.month - new_closing_date.month
     if months_diff > 0:
         for i in range(months_diff + 1):
             new_bill = user_loan.create_bill(
                 bill_start_date=new_bill_date + relativedelta(months=i),
-                bill_close_date=new_bill_date  # last date of this month
+                bill_close_date=new_bill_date
                 + relativedelta(
                     months=i,
                     days=monthrange(new_bill_date.year, new_bill_date.month)[1] - new_bill_date.day,
-                ),  # number of days in this month
+                ),  # setting it to the last date of the month
                 bill_due_date=new_bill_date
                 + relativedelta(
                     **(
@@ -70,11 +69,7 @@ def get_or_create_bill_for_card_swipe(user_loan: BaseLoan, txn_time: DateTime) -
         new_bill_date = last_bill.bill_close_date + relativedelta(days=1)
     new_bill = user_loan.create_bill(
         bill_start_date=new_bill_date,
-        bill_close_date=new_bill_date  # last date of this month
-        + relativedelta(
-            months=0,
-            days=monthrange(new_bill_date.year, new_bill_date.month)[1] - new_bill_date.day,
-        ),  # number of days in this month
+        bill_close_date=new_closing_date,
         bill_due_date=new_bill_date
         + relativedelta(
             **(
