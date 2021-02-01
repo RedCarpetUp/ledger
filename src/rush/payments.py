@@ -202,11 +202,7 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
             for fee in fees:
                 # For non-bill fees
                 if fee.identifier is "loan":
-                    x = {
-                        "type": "fee",
-                        "fee": fee,
-                        "amount_to_adjust": fee.gross_amount
-                    }
+                    x = {"type": "fee", "fee": fee, "amount_to_adjust": fee.gross_amount}
                     split_info.append(x)
                     continue
 
