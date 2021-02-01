@@ -37,7 +37,6 @@ from sqlalchemy.util.langhelpers import hybridproperty
 from rush.utils import get_current_ist_time
 
 Base = declarative_base()  # type: Any
-Base = declarative_base()  # type: Any
 
 
 class AuditMixin(Base):
