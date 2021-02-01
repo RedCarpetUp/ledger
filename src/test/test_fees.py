@@ -15,8 +15,6 @@ from rush.card.utils import (
     create_user_product_mapping,
 )
 from rush.models import (
-    CardKitNumbers,
-    CardNames,
     Lenders,
     Product,
     User,
@@ -44,14 +42,7 @@ def create_products(session: Session) -> None:
 
 def card_db_updates(session: Session) -> None:
     create_products(session=session)
-
-    cn = CardNames(name="ruby")
-    session.add(cn)
-    session.flush()
-
-    ckn = CardKitNumbers(kit_number="10000", card_name_id=cn.id, last_5_digits="0000", status="active")
-    session.add(ckn)
-    session.flush()
+    pass
 
 
 def create_user(session: Session) -> None:
