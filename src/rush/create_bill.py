@@ -115,20 +115,20 @@ def bill_generate(
             LoanSchedule.due_date > bill.bill_due_date - relativedelta(months=1),
             LoanSchedule.loan_id.in_(child_loans_dict.keys()),
             LoanSchedule.bill_id.is_(None),
+            LoanSchedule.payment_status == "UnPaid",
         )
         .all()
     )
     for emi in emis:
-        if emi.payment_status == "UnPaid":
-            child_loan = child_loans_dict[emi.loan_id]
-            CardTransaction.new(
-                session=session,
-                loan_id=bill.id,
-                txn_time=min(child_loan.amortization_date.date(), bill.bill_start_date),
-                amount=emi.total_due_amount,
-                source="LEDGER",
-                description=f"Transaction Loan EMI {emi.emi_number}",
-            )
+        child_loan = child_loans_dict[emi.loan_id]
+        CardTransaction.new(
+            session=session,
+            loan_id=bill.id,
+            txn_time=min(child_loan.amortization_date.date(), bill.bill_start_date),
+            amount=emi.total_due_amount,
+            source="LEDGER",
+            description=f"Transaction Loan EMI {emi.emi_number}",
+        )
 
     # Add to max amount to pay account.
     add_max_amount_event(session, bill, lt, billed_amount)
