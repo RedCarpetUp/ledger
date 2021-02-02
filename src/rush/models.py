@@ -443,6 +443,14 @@ class CardTransaction(AuditMixin):
     txn_ref_no = Column(String(50), nullable=True)
     status = Column(String(15), nullable=True)
 
+    __table_args__ = (
+        Index(
+            "unique_index_on_txn_ref_no_card_transaction",
+            txn_ref_no,
+            unique=True,
+        ),
+    )
+
 
 class LoanSchedule(AuditMixin):
     __tablename__ = "loan_schedule"

@@ -4,8 +4,10 @@ from test.utils import (
     payment_request_data,
 )
 
+from dateutil.relativedelta import relativedelta
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.expression import intersect
 
 from rush.accrue_financial_charges import accrue_interest_on_all_bills
 from rush.card import (
@@ -286,7 +288,7 @@ def test_transaction_loan2(session: Session) -> None:
     )
 
     payment_date = parse_date("2020-12-02")
-    amount = Decimal("1340")
+    amount = Decimal("1480")
     payment_request_id = "bill_payment"
     payment_request_data(
         session=session,
@@ -318,7 +320,7 @@ def test_transaction_loan2(session: Session) -> None:
     )
     assert (
         transaction_loan.get_remaining_max(date_to_check_against=parse_date("2020-12-03 00:00:00"))
-        == 1060
+        == 920
     )
 
     user_loan_schedule = user_loan.get_loan_schedule()
@@ -334,5 +336,12 @@ def test_transaction_loan2(session: Session) -> None:
     )
 
     assert transaction_loan_schedule[0].payment_status == "Paid"
-    transaction_loan_schedule = transaction_loan_schedule[1:]
+    assert transaction_loan_schedule[1].payment_status == "Paid"
+    transaction_loan_schedule = transaction_loan_schedule[2:]
     assert all(emi.payment_status == "UnPaid" for emi in transaction_loan_schedule)
+
+    bill_date = parse_date("2021-01-01 00:00:00")
+    bill_generate(user_loan=user_loan, creation_time=bill_date)
+
+    statement_entries = session.query(CardTransaction).filter(CardTransaction.source == "LEDGER").all()
+    assert len(statement_entries) == 1

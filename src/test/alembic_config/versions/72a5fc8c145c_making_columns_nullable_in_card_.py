@@ -20,6 +20,9 @@ def upgrade() -> None:
     op.alter_column("card_transaction", "trace_no", nullable=True)
     op.alter_column("card_transaction", "txn_ref_no", nullable=True)
     op.alter_column("card_transaction", "status", nullable=True)
+    op.create_index(
+        "unique_index_on_txn_ref_no_card_transaction", "card_transaction", ["txn_ref_no"], unique=True
+    )
 
 
 def downgrade() -> None:

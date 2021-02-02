@@ -105,16 +105,11 @@ def bill_generate(
     # Update the bill row here.
     bill.table.principal = billed_amount
 
-    # Accrual of child loan emis for this bill.
+    # Handling child loan emis for this bill.
     child_loans = user_loan.get_child_loans()
     child_loans_dict = {child_loan.id: child_loan for child_loan in child_loans}
     emis = (
-        session.query(
-            LoanSchedule.principal_due,
-            LoanSchedule.interest_due,
-            LoanSchedule.loan_id,
-            LoanSchedule.emi_number,
-        )
+        session.query(LoanSchedule)
         .filter(
             LoanSchedule.due_date <= bill.bill_due_date,
             LoanSchedule.due_date > bill.bill_due_date - relativedelta(months=1),
@@ -123,16 +118,17 @@ def bill_generate(
         )
         .all()
     )
-    for principal, interest, child_loan_id, emi_number in emis:
-        child_loan = child_loans_dict[child_loan_id]
-        CardTransaction.new(
-            session=session,
-            loan_id=bill.id,
-            txn_time=min(child_loan.amortization_date.date(), bill.bill_start_date),
-            amount=principal + interest,
-            source="LEDGER",
-            description=f"Transaction Loan EMI {emi_number}",
-        )
+    for emi in emis:
+        if emi.payment_status == "UnPaid":
+            child_loan = child_loans_dict[emi.loan_id]
+            CardTransaction.new(
+                session=session,
+                loan_id=bill.id,
+                txn_time=min(child_loan.amortization_date.date(), bill.bill_start_date),
+                amount=emi.total_due_amount,
+                source="LEDGER",
+                description=f"Transaction Loan EMI {emi.emi_number}",
+            )
 
     # Add to max amount to pay account.
     add_max_amount_event(session, bill, lt, billed_amount)

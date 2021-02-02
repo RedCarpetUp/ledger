@@ -29,7 +29,7 @@ class TransactionLoanBill(TermLoanBill):
             delta = (
                 monthrange(amortization_date.year, amortization_date.month)[
                     1
-                ]  # number of days in this month
+                ]  # Number of days in this month
                 - amortization_date.day
                 + 15
             )
@@ -84,7 +84,7 @@ def transaction_to_loan(
     if not transaction:
         return {"result": "error", "message": "Invalid Transaction ID"}
 
-    # checking if the bill has already been generated for this transaction
+    # Checking if the bill has already been generated for this transaction
     bill: LoanData = session.query(LoanData).filter(LoanData.id == transaction.loan_id).scalar()
 
     if bill.is_generated:
@@ -108,7 +108,7 @@ def transaction_to_loan(
     )
     create_loan(session=session, user_product=user_product, lender_id=user_loan.lender_id)
 
-    # loan for transaction amount
+    # Loan for transaction amount
     transaction_loan = create_user_product(
         session=session,
         user_id=user_id,
