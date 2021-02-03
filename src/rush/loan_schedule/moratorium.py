@@ -1,14 +1,13 @@
 from dateutil.relativedelta import relativedelta
 from pendulum import date
-from sqlalchemy.orm import Session
 from sqlalchemy import (
     and_,
     func,
 )
+from sqlalchemy.orm import Session
 
 from rush.card import BaseLoan
 from rush.card.base_card import BaseBill
-
 from rush.models import (
     LedgerTriggerEvent,
     LoanMoratorium,

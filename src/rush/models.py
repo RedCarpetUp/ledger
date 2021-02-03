@@ -4,8 +4,8 @@ from typing import (
     Any,
     Dict,
 )
-from dateutil.relativedelta import relativedelta
 
+from dateutil.relativedelta import relativedelta
 from pendulum import Date as PythonDate
 from pendulum import DateTime
 from pydantic.dataclasses import dataclass as py_dataclass
@@ -20,6 +20,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    func,
 )
 from sqlalchemy.dialects.postgresql import (
     JSON,
@@ -33,7 +34,6 @@ from sqlalchemy.orm import (
     relationship,
 )
 from sqlalchemy.schema import Index
-from sqlalchemy import func
 from sqlalchemy.sql.elements import and_
 from sqlalchemy.util.langhelpers import hybridproperty
 
@@ -470,19 +470,6 @@ class LoanSchedule(AuditMixin):
         return self.total_due_amount - self.payment_received
 
     def interest_to_accrue(self, session: Session):
-        interest_to_accrue = self.interest_due
-        if LoanMoratorium.is_in_moratorium(
-            session=session, loan_id=self.loan_id, date_to_check_against=self.due_date
-        ):
-            moratorium_interest = (
-                session.query(MoratoriumInterest.interest)
-                .filter(
-                    MoratoriumInterest.loan_schedule_id == self.id,
-                )
-                .scalar()
-            )
-            if moratorium_interest:
-                interest_to_accrue = moratorium_interest
         loan_moratorium = (
             session.query(LoanMoratorium)
             .filter(
@@ -491,21 +478,30 @@ class LoanSchedule(AuditMixin):
             .order_by(LoanMoratorium.start_date.desc())
             .first()
         )
-        if (
-            loan_moratorium
-            and self.due_date == loan_moratorium.due_date_after_moratorium
-            and MoratoriumInterest.is_bill_in_moratorium(
-                session=session,
-                loan_id=self.loan_id,
-                bill_id=self.bill_id,
-            )
-        ):
-            total_bill_moratorium_interest = MoratoriumInterest.get_bill_total_moratorium_interest(
-                session=session, loan_id=self.loan_id, bill_id=self.bill_id
-            )
-            interest_to_accrue -= total_bill_moratorium_interest
+        if not loan_moratorium or self.due_date > loan_moratorium.due_date_after_moratorium:
+            return self.interest_due
 
-        return interest_to_accrue
+        moratorium_interest_for_this_emi = (
+            session.query(MoratoriumInterest.interest)
+            .filter(
+                MoratoriumInterest.loan_schedule_id == self.id,
+            )
+            .scalar()
+        )
+        if moratorium_interest_for_this_emi:  # if emi is present in moratorium table then return that.
+            return moratorium_interest_for_this_emi
+
+        # Now emi can either be from the bill right after moratorium or bills before/during moratorium period.
+        # For former we return the schedule's interest due. For later we reduce the total moratorium interest of the
+        # bill from the schedule's interest due.
+        total_bill_moratorium_interest = MoratoriumInterest.get_bill_total_moratorium_interest(
+            session=session, loan_id=self.loan_id, bill_id=self.bill_id
+        )
+        if not total_bill_moratorium_interest:  # if nothing comes then emi is from non moratorium bill.
+            return self.interest_due
+
+        emi_interest_without_moratorium = self.interest_due - total_bill_moratorium_interest
+        return emi_interest_without_moratorium
 
     def make_emi_unpaid(self):
         self.payment_received = 0

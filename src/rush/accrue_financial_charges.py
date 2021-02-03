@@ -3,8 +3,8 @@ from typing import Optional
 
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
-from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from rush.card.base_card import (
     BaseBill,
@@ -77,7 +77,6 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loa
     session.flush()
 
     for bill in unpaid_bills:
-        interest_to_accrue = 0
         loan_schedule = (
             session.query(LoanSchedule)
             .filter(
@@ -90,9 +89,7 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loa
             .scalar()
         )
         if loan_schedule:
-            interest_to_accrue = loan_schedule.interest_to_accrue(session=session)
-
-        if interest_to_accrue:
+            interest_to_accrue = loan_schedule.interest_to_accrue(session)
             accrue_event.amount += interest_to_accrue
             accrue_interest_event(session, bill, accrue_event, interest_to_accrue)
             add_max_amount_event(session, bill, accrue_event, interest_to_accrue)
