@@ -233,7 +233,7 @@ def test_create_term_loan(session: Session) -> None:
     )
     assert loan_lender_payable == Decimal("7090.5")
 
-    assert loan.get_remaining_min() == Decimal("910")
+    assert loan.get_remaining_min() == Decimal("0")
 
     assert loan.get_remaining_max() == Decimal("10000")
 

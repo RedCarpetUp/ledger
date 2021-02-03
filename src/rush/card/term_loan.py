@@ -168,6 +168,6 @@ class TermLoan(BaseLoan):
 
         add_max_amount_event(session=session, bill=bill, event=event, amount=kwargs["amount"])
 
-        add_min_to_all_bills(session=session, post_date=kwargs["product_order_date"], user_loan=loan)
+        # add_min_to_all_bills(session=session, post_date=kwargs["product_order_date"], user_loan=loan)
 
         return loan

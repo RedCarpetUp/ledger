@@ -6,6 +6,7 @@ from test.utils import (
 
 from dateutil.relativedelta import relativedelta
 from pendulum import parse as parse_date  # type: ignore
+from pendulum.parser import parse
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.expression import intersect
 
@@ -115,7 +116,7 @@ def test_transaction_loan(session: Session) -> None:
 
     assert isinstance(transaction_loan, TransactionLoan)
     assert transaction_loan.can_close_early == False
-    assert transaction_loan.get_remaining_min() == 140
+    assert transaction_loan.get_remaining_min() == 0
     assert transaction_loan.get_remaining_max() == 1200
 
     assert user_loan.get_child_loans()[0].id == transaction_loan.id
@@ -185,12 +186,6 @@ def test_transaction_loan(session: Session) -> None:
         session=session, post_date=parse_date("2020-12-17 00:00:00"), user_loan=transaction_loan
     )
 
-    add_min_to_all_bills(
-        session=session,
-        post_date=transaction_loan.convert_to_bill_class(transaction_loan_bill).table.bill_close_date,
-        user_loan=transaction_loan,
-    )
-
     # generating next month's bill
     bill_date = parse_date("2021-01-01 00:00:00")
     bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
@@ -214,9 +209,15 @@ def test_transaction_loan(session: Session) -> None:
     statement_entries = session.query(CardTransaction).filter(CardTransaction.source == "LEDGER").all()
     assert len(statement_entries) == 2
 
-    assert user_loan.get_remaining_min() == 401
-    assert transaction_loan.get_remaining_min() == 280
-    assert transaction_loan.get_remaining_max() == 1240
+    assert user_loan.get_remaining_min(date_to_check_against=parse_date("2021-01-02 00:00:00")) == 401
+    assert (
+        transaction_loan.get_remaining_min(date_to_check_against=parse_date("2021-01-02 00:00:00"))
+        == 280
+    )
+    assert (
+        transaction_loan.get_remaining_max(date_to_check_against=parse_date("2021-01-02 00:00:00"))
+        == 1240
+    )
 
 
 def test_transaction_loan2(session: Session) -> None:
@@ -275,15 +276,15 @@ def test_transaction_loan2(session: Session) -> None:
     statement_entries = session.query(CardTransaction).filter(CardTransaction.source == "LEDGER").all()
     assert len(statement_entries) == 1
 
-    assert user_loan.get_remaining_min(date_to_check_against=parse_date("2020-12-01 19:23:11")) == 261
+    assert user_loan.get_remaining_min(date_to_check_against=parse_date("2020-12-02 19:23:11")) == 261
     assert (
-        transaction_loan.get_remaining_min(date_to_check_against=parse_date("2020-12-01 19:23:11"))
+        transaction_loan.get_remaining_min(date_to_check_against=parse_date("2020-12-02 19:23:11"))
         == 140
     )
 
-    assert user_loan.get_remaining_max(date_to_check_against=parse_date("2020-12-01 19:23:11")) == 2400
+    assert user_loan.get_remaining_max(date_to_check_against=parse_date("2020-12-02 19:23:11")) == 2400
     assert (
-        transaction_loan.get_remaining_max(date_to_check_against=parse_date("2020-12-01 19:23:11"))
+        transaction_loan.get_remaining_max(date_to_check_against=parse_date("2020-12-02 19:23:11"))
         == 1200
     )
 

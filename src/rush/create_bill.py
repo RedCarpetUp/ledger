@@ -130,6 +130,10 @@ def bill_generate(
             description=f"Transaction Loan EMI {emi.emi_number}",
         )
 
+    # Calling the min generation event on all child loans
+    for child_loan in child_loans:
+        add_min_to_all_bills(session=session, post_date=bill.table.bill_close_date, user_loan=child_loan)
+
     # Add to max amount to pay account.
     add_max_amount_event(session, bill, lt, billed_amount)
 
