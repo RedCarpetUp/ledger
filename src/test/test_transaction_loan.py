@@ -282,10 +282,9 @@ def test_transaction_loan2(session: Session) -> None:
         == 140
     )
 
-    assert user_loan.get_remaining_max(date_to_check_against=parse_date("2020-12-02 19:23:11")) == 2400
     assert (
-        transaction_loan.get_remaining_max(date_to_check_against=parse_date("2020-12-02 19:23:11"))
-        == 1200
+        user_loan.get_remaining_max(date_to_check_against=parse_date("2020-12-02 19:23:11"))
+        == swipe["data"].amount + statement_entries[0].amount
     )
 
     payment_date = parse_date("2020-12-02")
@@ -345,4 +344,4 @@ def test_transaction_loan2(session: Session) -> None:
     bill_generate(user_loan=user_loan, creation_time=bill_date)
 
     statement_entries = session.query(CardTransaction).filter(CardTransaction.source == "LEDGER").all()
-    assert len(statement_entries) == 1
+    assert len(statement_entries) == 2

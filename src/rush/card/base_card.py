@@ -271,10 +271,10 @@ class BaseLoan(Loan):
             loan.interest_free_period_in_days = kwargs.get("interest_free_period_in_days")
         return loan
 
-    def disbursal(self, **kwargs):
+    def disburse(self, **kwargs):
         event = LedgerTriggerEvent(
             performed_by=kwargs["user_id"],
-            name="termloan_disbursal_event",
+            name="disbursal",
             loan_id=kwargs["loan_id"],
             post_date=kwargs["product_order_date"],
             amount=kwargs["amount"],
@@ -424,20 +424,20 @@ class BaseLoan(Loan):
         if LoanMoratorium.is_in_moratorium(self.session, self.id, date_to_check_against):
             return Decimal(0)
 
+        unpaid_bills = self.get_unpaid_generated_bills()
+        remaining_min_of_all_bills = sum(
+            bill.get_remaining_min(date_to_check_against) for bill in unpaid_bills
+        )
+
         if include_child_loans:
             child_loans = self.get_child_loans()
             child_loans_min = sum(
                 loan.get_remaining_min(date_to_check_against=date_to_check_against)
                 for loan in child_loans
             )
-        else:
-            child_loans_min = 0
+            remaining_min_of_all_bills += child_loans_min
 
-        unpaid_bills = self.get_unpaid_generated_bills()
-        remaining_min_of_all_bills = sum(
-            bill.get_remaining_min(date_to_check_against) for bill in unpaid_bills
-        )
-        return remaining_min_of_all_bills + child_loans_min
+        return remaining_min_of_all_bills
 
     def get_remaining_max(
         self,
@@ -445,19 +445,19 @@ class BaseLoan(Loan):
         event_id: int = None,
         include_child_loans: Optional[bool] = True,
     ) -> Decimal:
-        if include_child_loans:
-            child_loans = self.get_child_loans()
-            child_loans_max = sum(
-                loan.get_remaining_max(date_to_check_against, event_id) for loan in child_loans
-            )
-        else:
-            child_loans_max = 0
-
         unpaid_bills = self.get_unpaid_generated_bills()
         remaining_max_of_all_bills = sum(
             bill.get_remaining_max(date_to_check_against, event_id) for bill in unpaid_bills
         )
-        return remaining_max_of_all_bills + child_loans_max
+
+        if include_child_loans:
+            child_loans = self.get_child_loans()
+            child_loans_min = sum(
+                loan.get_remaining_min(date_to_check_against, event_id) for loan in child_loans
+            )
+            remaining_max_of_all_bills += child_loans_min
+
+        return remaining_max_of_all_bills
 
     def get_total_outstanding(self, date_to_check_against: DateTime = None) -> Decimal:
         all_bills = self.get_all_bills()

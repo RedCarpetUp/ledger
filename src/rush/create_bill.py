@@ -13,6 +13,7 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
+from rush.card.transaction_loan import TransactionLoan
 from rush.create_emi import update_journal_entry
 from rush.ledger_events import (
     add_max_amount_event,
@@ -106,33 +107,24 @@ def bill_generate(
     bill.table.principal = billed_amount
 
     # Handling child loan emis for this bill.
-    child_loans = user_loan.get_child_loans()
-    child_loans_dict = {child_loan.id: child_loan for child_loan in child_loans}
-    emis = (
-        session.query(LoanSchedule)
-        .filter(
-            LoanSchedule.due_date <= bill.bill_due_date,
-            LoanSchedule.due_date > bill.bill_due_date - relativedelta(months=1),
-            LoanSchedule.loan_id.in_(child_loans_dict.keys()),
-            LoanSchedule.bill_id.is_(None),
-            LoanSchedule.payment_status == "UnPaid",
-        )
-        .all()
-    )
-    for emi in emis:
-        child_loan = child_loans_dict[emi.loan_id]
-        CardTransaction.new(
-            session=session,
-            loan_id=bill.id,
-            txn_time=min(child_loan.amortization_date.date(), bill.bill_start_date),
-            amount=emi.total_due_amount,
-            source="LEDGER",
-            description=f"Transaction Loan EMI {emi.emi_number}",
-        )
-
-    # Calling the min generation event on all child loans
+    child_loans: List[BaseLoan] = user_loan.get_child_loans()
     for child_loan in child_loans:
-        add_min_to_all_bills(session=session, post_date=bill.table.bill_close_date, user_loan=child_loan)
+        child_loan_bill: BaseBill = child_loan.get_all_bills()[0]
+        amount = child_loan_bill.get_min_amount_to_add()
+        if amount:
+            CardTransaction.new(
+                session=session,
+                loan_id=bill.id,
+                txn_time=min(child_loan.amortization_date.date(), bill.bill_start_date),
+                amount=amount,
+                source="LEDGER",
+                description=f"Transaction Loan Rs. {child_loan_bill.table.principal} EMI",
+            )
+
+            # Calling the min generation event on all child loans
+            add_min_to_all_bills(
+                session=session, post_date=bill.table.bill_close_date, user_loan=child_loan
+            )
 
     # Add to max amount to pay account.
     add_max_amount_event(session, bill, lt, billed_amount)
