@@ -562,25 +562,6 @@ class MoratoriumInterest(AuditMixin):
         )
         return total_bill_moratorium_interest
 
-    @classmethod
-    def is_bill_in_moratorium(cls, session: Session, loan_id: int, bill_id: int):
-        data = (
-            session.query(cls)
-            .join(
-                LoanMoratorium,
-                and_(
-                    cls.moratorium_id == LoanMoratorium.id,
-                    LoanMoratorium.loan_id == loan_id,
-                ),
-            )
-            .filter(
-                LoanSchedule.id == cls.loan_schedule_id,
-                LoanSchedule.bill_id == bill_id,
-            )
-            .first()
-        )
-        return data is not None
-
 
 class PaymentMapping(AuditMixin):
     __tablename__ = "emi_payment_mapping_new"
