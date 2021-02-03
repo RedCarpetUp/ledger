@@ -216,8 +216,12 @@ def close_loan(user_loan: BaseLoan, last_payment_date: datetime):
         else:
             bill_emi.principal_due = 0
         if (
-            is_in_moratorium
-            and bill_emi.due_date == next_emi_due_date
+            (is_in_moratorium and bill_emi.due_date == next_emi_due_date)
+            or (
+                not is_in_moratorium
+                and loan_moratorium
+                and loan_moratorium.due_date_after_moratorium == bill_emi.due_date
+            )
             and MoratoriumInterest.is_bill_in_moratorium(
                 session=user_loan.session,
                 loan_id=user_loan.loan_id,
@@ -230,21 +234,6 @@ def close_loan(user_loan: BaseLoan, last_payment_date: datetime):
                 bill_id=bill_emi.bill_id,
             )
             bill_emi.interest_due = total_bill_moratorium_interest
-        elif not is_in_moratorium and loan_moratorium:
-            bill_emi_after_moratorium = MoratoriumInterest.get_bill_emi_after_moratorium(
-                session=user_loan.session,
-                loan_id=user_loan.loan_id,
-                bill_id=bill_emi.bill_id,
-            )
-            if bill_emi_after_moratorium and bill_emi_after_moratorium.emi_number == bill_emi.emi_number:
-                total_bill_moratorium_interest = MoratoriumInterest.get_bill_total_moratorium_interest(
-                    session=user_loan.session,
-                    loan_id=user_loan.loan_id,
-                    bill_id=bill_emi.bill_id,
-                )
-                bill_emi.interest_due = total_bill_moratorium_interest
-            else:
-                bill_emi.interest_due = 0
         else:
             bill_emi.interest_due = 0
 

@@ -31,6 +31,7 @@ def provide_moratorium(user_loan: BaseLoan, start_date: date, end_date: date):
         loan_id=user_loan.loan_id,
         start_date=start_date,
         end_date=end_date,
+        due_date_after_moratorium=end_date + relativedelta(months=+1, day=+15),
     )
 
     # Get future emis of all the bills
@@ -73,7 +74,7 @@ def provide_moratorium(user_loan: BaseLoan, start_date: date, end_date: date):
                 loan_schedule_id=moratorium_emi.id,
             )
 
-            new_emi_due_date += relativedelta(months=1)
+            new_emi_due_date += relativedelta(months=1, day=15)
             new_emi_number += 1
 
         total_emis_added = new_emi_number - first_emi_before_moratorium.emi_number
@@ -86,7 +87,7 @@ def provide_moratorium(user_loan: BaseLoan, start_date: date, end_date: date):
                 emi.interest_due += moratorium_interest_to_be_added
             emi.emi_number = updated_emi_number
             emi.due_date = new_emi_due_date
-            new_emi_due_date += relativedelta(months=1)
+            new_emi_due_date += relativedelta(months=1, day=15)
 
     from rush.loan_schedule.loan_schedule import group_bills
 

@@ -483,15 +483,27 @@ class LoanSchedule(AuditMixin):
             )
             if moratorium_interest:
                 interest_to_accrue = moratorium_interest
-        else:
-            bill_emi_after_moratorium = MoratoriumInterest.get_bill_emi_after_moratorium(
+        loan_moratorium = (
+            session.query(LoanMoratorium)
+            .filter(
+                LoanMoratorium.loan_id == self.loan_id,
+            )
+            .order_by(LoanMoratorium.start_date.desc())
+            .first()
+        )
+        if (
+            loan_moratorium
+            and self.due_date == loan_moratorium.due_date_after_moratorium
+            and MoratoriumInterest.is_bill_in_moratorium(
+                session=session,
+                loan_id=self.loan_id,
+                bill_id=self.bill_id,
+            )
+        ):
+            total_bill_moratorium_interest = MoratoriumInterest.get_bill_total_moratorium_interest(
                 session=session, loan_id=self.loan_id, bill_id=self.bill_id
             )
-            if bill_emi_after_moratorium and self.emi_number == bill_emi_after_moratorium.emi_number:
-                total_bill_moratorium_interest = MoratoriumInterest.get_bill_total_moratorium_interest(
-                    session=session, loan_id=self.loan_id, bill_id=self.bill_id
-                )
-                interest_to_accrue -= total_bill_moratorium_interest
+            interest_to_accrue -= total_bill_moratorium_interest
 
         return interest_to_accrue
 
@@ -510,6 +522,7 @@ class LoanMoratorium(AuditMixin):
     loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
+    due_date_after_moratorium = Column(Date, nullable=False)
 
     @classmethod
     def is_in_moratorium(cls, session: Session, loan_id: int, date_to_check_against: PythonDate) -> bool:
@@ -533,33 +546,6 @@ class MoratoriumInterest(AuditMixin):
     moratorium_id = Column(Integer, ForeignKey(LoanMoratorium.id), nullable=False)
     interest = Column(Numeric, nullable=False)
     loan_schedule_id = Column(Integer, ForeignKey(LoanSchedule.id))
-
-    @classmethod
-    def get_bill_emi_after_moratorium(cls, session: Session, loan_id: int, bill_id: int) -> LoanSchedule:
-        last_moratorium_bill_emi = (
-            session.query(LoanSchedule)
-            .join(
-                LoanMoratorium,
-                LoanMoratorium.loan_id == loan_id,
-            )
-            .filter(
-                LoanSchedule.id == cls.loan_schedule_id,
-                LoanSchedule.bill_id == bill_id,
-            )
-            .order_by(LoanSchedule.emi_number.desc())
-            .first()
-        )
-        if not last_moratorium_bill_emi:
-            return
-        bill_emi_after_moratorium = (
-            session.query(LoanSchedule)
-            .filter(
-                LoanSchedule.bill_id == bill_id,
-                LoanSchedule.emi_number == last_moratorium_bill_emi.emi_number + 1,
-            )
-            .first()
-        )
-        return bill_emi_after_moratorium
 
     @classmethod
     def get_bill_total_moratorium_interest(cls, session: Session, loan_id: int, bill_id: int) -> Decimal:

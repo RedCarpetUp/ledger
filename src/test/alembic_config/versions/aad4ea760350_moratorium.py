@@ -32,6 +32,8 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["loan_schedule_id"], ["loan_schedule.id"]),
     )
 
+    op.add_column("loan_moratorium", sa.Column("due_date_after_moratorium", sa.Date(), nullable=False))
+
 
 def downgrade() -> None:
     pass
