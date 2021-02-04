@@ -503,6 +503,22 @@ class LoanSchedule(AuditMixin):
         emi_interest_without_moratorium = self.interest_due - total_bill_moratorium_interest
         return emi_interest_without_moratorium
 
+    @classmethod
+    def get_next_emi_due_date(cls, session: Session, loan_id: int, current_due_date: PythonDate):
+        current_emi = (
+            session.query(cls).filter(cls.bill_id.is_(None), cls.due_date == current_due_date).first()
+        )
+        next_emi = (
+            session.query(cls)
+            .filter(
+                cls.loan_id == loan_id,
+                cls.bill_id.is_(None),
+                cls.emi_number == current_emi.emi_number + 1,
+            )
+            .first()
+        )
+        return next_emi.due_date
+
     def make_emi_unpaid(self):
         self.payment_received = 0
         self.payment_status = "UnPaid"
