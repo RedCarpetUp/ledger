@@ -1,8 +1,4 @@
 from calendar import monthrange
-from datetime import (
-    datetime,
-    timedelta,
-)
 from decimal import Decimal
 from typing import (
     List,
@@ -12,7 +8,6 @@ from typing import (
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
 from sqlalchemy.orm import Session
-from sqlalchemy.sql.functions import user
 
 from rush.accrue_financial_charges import create_bill_fee_entry
 from rush.card.base_card import (
