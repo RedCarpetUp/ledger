@@ -13,7 +13,6 @@ from rush.ledger_utils import (
     get_account_balance_from_str,
 )
 from rush.models import (
-    BillFee,
     CardTransaction,
     Fee,
     LedgerTriggerEvent,
@@ -178,29 +177,15 @@ def _adjust_bill(
 
     remaining_amount = amount_to_adjust_in_this_bill
 
-    fees = (
-        session.query(BillFee)
-        .filter(BillFee.identifier_id == bill.id, BillFee.fee_status == "UNPAID")
-        .all()
-    )
-    for fee in fees:
-        remaining_amount = remaining_amount = adjust_for_revenue(
-            session=session,
-            event_id=event_id,
-            payment_to_adjust_from=remaining_amount,
-            debit_str=debit_acc_str,
-            fee=fee,
-        )
-
-    remaining_amount = adjust_for_receivable(
-        remaining_amount,
-        to_acc=debit_acc_str,
-        from_acc=f"{bill.id}/bill/unbilled/a",
-    )
     remaining_amount = adjust_for_receivable(
         remaining_amount,
         to_acc=debit_acc_str,
         from_acc=f"{bill.id}/bill/interest_receivable/a",
+    )
+    remaining_amount = adjust_for_receivable(
+        remaining_amount,
+        to_acc=debit_acc_str,
+        from_acc=f"{bill.id}/bill/unbilled/a",
     )
     remaining_amount = adjust_for_receivable(
         remaining_amount,
@@ -296,7 +281,7 @@ def loan_disbursement_event(
         session,
         event_id=event.id,
         debit_book_str=f"{bill_id}/bill/principal_receivable/a",
-        credit_book_str="12345/redcarpet/rc_cash/a",  # TODO: confirm if this right.
+        credit_book_str="12345/redcarpet/rc_cash/a",
         amount=event.amount,
     )
 
@@ -310,53 +295,13 @@ def loan_disbursement_event(
 
     # settling downpayment balance as well.
     if downpayment_amount:
-        downpayment_event = (
-            session.query(LedgerTriggerEvent)
-            .filter(
-                LedgerTriggerEvent.name == "payment_received",
-                LedgerTriggerEvent.loan_id.is_(None),
-                LedgerTriggerEvent.user_product_id == loan.user_product_id,
-            )
-            .one()
-        )
-
-        assert downpayment_event.amount == downpayment_amount
-
         create_ledger_entry_from_str(
             session=session,
             event_id=event.id,
-            debit_book_str=f"{loan.user_product_id}/product/downpayment/l",
+            debit_book_str=f"{loan.loan_id}/loan/downpayment/l",
             credit_book_str=f"{bill_id}/bill/principal_receivable/a",
             amount=downpayment_amount,
         )
-
-        create_ledger_entry_from_str(  # TODO This is wrong.
-            session=session,
-            event_id=event.id,
-            debit_book_str=f"{loan.loan_id}/loan/lender_payable/l",
-            credit_book_str=f"{loan.user_product_id}/product/lender_payable/l",
-            amount=downpayment_amount,
-        )
-
-
-def _adjust_for_downpayment(session: Session, event: LedgerTriggerEvent, amount: Decimal) -> None:
-    lender_id = event.extra_details["lender_id"]
-    user_product_id = event.extra_details["user_product_id"]
-    create_ledger_entry_from_str(
-        session=session,
-        event_id=event.id,
-        debit_book_str=f"{lender_id}/lender/pg_account/a",
-        credit_book_str=f"{user_product_id}/product/downpayment/l",
-        amount=amount,
-    )
-
-    create_ledger_entry_from_str(
-        session=session,
-        event_id=event.id,
-        debit_book_str=f"{user_product_id}/product/lender_payable/l",  # TODO: This is wrong.
-        credit_book_str=f"{lender_id}/lender/pg_account/a",
-        amount=amount,
-    )
 
 
 def limit_unlock_event(
@@ -381,12 +326,14 @@ def get_revenue_book_str_for_fee(fee: Fee) -> str:
         return f"{fee.identifier_id}/bill/late_fine/r"
     elif fee.name == "atm_fee":
         return f"{fee.identifier_id}/bill/atm_fee/r"
-    elif fee.name == "card_activation_fee":
+    elif fee.name == "card_activation_fees":
         return f"{fee.identifier_id}/product/card_activation_fees/r"
     elif fee.name == "reset_joining_fees":
         return f"{fee.identifier_id}/product/reset_joining_fees/r"
-    elif fee.name == "card_reload_fee":
+    elif fee.name == "card_reload_fees":
         return f"{fee.identifier_id}/loan/card_reload_fees/r"
+    elif fee.name == "card_upgrade_fees":
+        return f"{fee.identifier_id}/loan/card_upgrade_fees/r"
     else:
         raise Exception("InvalidCreditBookStringError")
 
@@ -397,7 +344,7 @@ def adjust_for_revenue(
 
     credit_book_str = get_revenue_book_str_for_fee(fee=fee)
 
-    fee_to_adjust = min(payment_to_adjust_from, fee.gross_amount)
+    fee_to_adjust = min(payment_to_adjust_from, fee.remaining_fee_amount)
     gst_split = get_gst_split_from_amount(
         amount=fee_to_adjust,
         total_gst_rate=fee.igst_rate,
@@ -411,39 +358,39 @@ def adjust_for_revenue(
         credit_book_str=credit_book_str,
         amount=gst_split["net_amount"],
     )
-    fee.net_amount_paid = gst_split["net_amount"]
+    fee.net_amount_paid += gst_split["net_amount"]
 
     # Settle for cgst
     create_ledger_entry_from_str(
         session,
         event_id=event_id,
         debit_book_str=debit_str,
-        credit_book_str="12345/redcarpet/cgst_payable/l",
+        credit_book_str=f"{fee.user_id}/user/cgst_payable/l",
         amount=gst_split["cgst"],
     )
-    fee.cgst_paid = gst_split["cgst"]
+    fee.cgst_paid += gst_split["cgst"]
 
     # Settle for sgst
     create_ledger_entry_from_str(
         session,
         event_id=event_id,
         debit_book_str=debit_str,
-        credit_book_str="12345/redcarpet/sgst_payable/l",
+        credit_book_str=f"{fee.user_id}/user/sgst_payable/l",
         amount=gst_split["sgst"],
     )
-    fee.sgst_paid = gst_split["sgst"]
+    fee.sgst_paid += gst_split["sgst"]
 
     # Settle for igst
     create_ledger_entry_from_str(
         session,
         event_id=event_id,
         debit_book_str=debit_str,
-        credit_book_str="12345/redcarpet/igst_payable/l",
+        credit_book_str=f"{fee.user_id}/user/igst_payable/l",
         amount=gst_split["igst"],
     )
-    fee.igst_paid = gst_split["igst"]
+    fee.igst_paid += gst_split["igst"]
 
-    fee.gross_amount_paid = gst_split["gross_amount"]
+    fee.gross_amount_paid += gst_split["gross_amount"]
     if fee.gross_amount == fee.gross_amount_paid:
         fee.fee_status = "PAID"
 
@@ -500,7 +447,7 @@ def reduce_revenue_for_fee_refund(
     create_ledger_entry_from_str(
         session,
         event_id=fee.event_id,
-        debit_book_str="12345/redcarpet/cgst_payable/l",
+        debit_book_str=f"{fee.user_id}/user/cgst_payable/l",
         credit_book_str=credit_book_str,
         amount=Decimal(fee.cgst_paid),
     )
@@ -508,7 +455,7 @@ def reduce_revenue_for_fee_refund(
     create_ledger_entry_from_str(
         session,
         event_id=fee.event_id,
-        debit_book_str="12345/redcarpet/sgst_payable/l",
+        debit_book_str=f"{fee.user_id}/user/sgst_payable/l",
         credit_book_str=credit_book_str,
         amount=Decimal(fee.sgst_paid),
     )
@@ -516,7 +463,7 @@ def reduce_revenue_for_fee_refund(
     create_ledger_entry_from_str(
         session,
         event_id=fee.event_id,
-        debit_book_str="12345/redcarpet/igst_payable/l",
+        debit_book_str=f"{fee.user_id}/user/igst_payable/l",
         credit_book_str=credit_book_str,
         amount=Decimal(fee.igst_paid),
     )

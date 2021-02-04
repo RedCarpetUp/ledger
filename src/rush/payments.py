@@ -1,10 +1,10 @@
 from decimal import Decimal
 from typing import Optional
 
-from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.expression import case
 
 from rush.anomaly_detection import run_anomaly
 from rush.card import BaseLoan
@@ -15,10 +15,9 @@ from rush.create_emi import (
 )
 from rush.ledger_events import (
     _adjust_bill,
-    _adjust_for_downpayment,
     _adjust_for_prepayment,
+    adjust_for_revenue,
     adjust_non_bill_payments,
-    customer_refund_event,
     reduce_revenue_for_fee_refund,
 )
 from rush.ledger_utils import (
@@ -41,76 +40,48 @@ from rush.writeoff_and_recovery import recovery_event
 def payment_received(
     session: Session,
     user_loan: Optional[BaseLoan],
-    payment_amount: Decimal,
-    payment_date: DateTime,
-    payment_request_id: str,
-    payment_type: Optional[str] = None,
-    user_product_id: Optional[int] = None,
-    lender_id: Optional[int] = None,
+    payment_request_data: PaymentRequestsData,
     skip_closing: bool = False,
 ) -> None:
-    assert user_loan is not None or lender_id is not None
-    assert user_loan is not None or user_product_id is not None
-
-    lt = LedgerTriggerEvent(
+    event = LedgerTriggerEvent.new(
+        session,
         name="payment_received",
         loan_id=user_loan.loan_id if user_loan else None,
-        amount=payment_amount,
-        post_date=payment_date,
+        amount=payment_request_data.payment_request_amount,
+        post_date=payment_request_data.intermediary_payment_date,
         extra_details={
-            "payment_request_id": payment_request_id,
-            "payment_type": payment_type,
-            "user_product_id": user_product_id if user_product_id else user_loan.user_product_id,
-            "lender_id": user_loan.lender_id if user_loan else lender_id,
+            "payment_request_id": payment_request_data.payment_request_id,
         },
     )
-    session.add(lt)
     session.flush()
 
     payment_received_event(
         session=session,
         user_loan=user_loan,
-        debit_book_str=f"{user_loan.lender_id if user_loan else lender_id}/lender/pg_account/a",
-        event=lt,
+        payment_request_data=payment_request_data,
+        debit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
+        event=event,
         skip_closing=skip_closing,
-        user_product_id=user_product_id if user_product_id else user_loan.user_product_id,
     )
 
-    # TODO: check if this code is needed for downpayment, since there is no user loan at that point of time.
-    if payment_type in ("downpayment", "card_activation_fee", "reset_joining_fees"):
-        return
-
-    run_anomaly(session=session, user_loan=user_loan, event_date=payment_date)
-    gateway_charges = Decimal("0.5")
-    settle_payment_in_bank(
-        session=session,
-        payment_request_id=payment_request_id,
-        gateway_expenses=gateway_charges,
-        gross_payment_amount=payment_amount,
-        settlement_date=payment_date + relativedelta(days=2),
-        user_loan=user_loan,
+    run_anomaly(
+        session=session, user_loan=user_loan, event_date=payment_request_data.intermediary_payment_date
     )
 
     # Update dpd
-    update_event_with_dpd(user_loan=user_loan, event=lt)
-    # Update Journal Entry
-    update_journal_entry(user_loan=user_loan, event=lt)
+    update_event_with_dpd(user_loan=user_loan, event=event)
 
 
 def refund_payment(
-    session: Session,
-    user_loan: BaseLoan,
-    payment_amount: Decimal,
-    payment_date: DateTime,
-    payment_request_id: str,
+    session: Session, user_loan: BaseLoan, payment_request_data: PaymentRequestsData
 ) -> None:
     lt = LedgerTriggerEvent(
         name="transaction_refund",
         loan_id=user_loan.loan_id,
-        amount=payment_amount,
-        post_date=payment_date,
+        amount=payment_request_data.payment_request_amount,
+        post_date=payment_request_data.intermediary_payment_date,
         extra_details={
-            "payment_request_id": payment_request_id,
+            "payment_request_id": payment_request_data.payment_request_id,
         },
     )
     session.add(lt)
@@ -118,7 +89,9 @@ def refund_payment(
 
     # Checking if bill is generated or not. if not then reduce from unbilled else treat as payment.
     transaction_refund_event(session=session, user_loan=user_loan, event=lt)
-    run_anomaly(session=session, user_loan=user_loan, event_date=payment_date)
+    run_anomaly(
+        session=session, user_loan=user_loan, event_date=payment_request_data.intermediary_payment_date
+    )
 
     # Update dpd
     update_event_with_dpd(user_loan=user_loan, event=lt)
@@ -129,6 +102,7 @@ def refund_payment(
 def payment_received_event(
     session: Session,
     user_loan: BaseLoan,
+    payment_request_data: PaymentRequestsData,
     debit_book_str: str,
     event: LedgerTriggerEvent,
     skip_closing: bool = False,
@@ -136,47 +110,39 @@ def payment_received_event(
 ) -> None:
     payment_received_amt = Decimal(event.amount)
 
-    payment_type = event.payment_type
-    if not user_loan or payment_type in ("card_reload_fee", "card_activation_fee"):
-        assert user_product_id is not None
-
-        if payment_type == "downpayment":
-            _adjust_for_downpayment(session=session, event=event, amount=payment_received_amt)
-        else:
-            if not user_loan:
-                identifier = "product"
-                identifier_id = user_product_id
-                assert payment_type != "card_reload_fee"
-            else:
-                identifier = "loan"
-                identifier_id = user_loan.id
-                assert payment_type == "card_reload_fee"
-
-            adjust_non_bill_payments(
-                session=session,
-                event=event,
-                amount=payment_received_amt,
-                payment_type=payment_type,
-                identifier=identifier,
-                identifier_id=identifier_id,
-                debit_book_str=debit_book_str,
-            )
-
+    payment_type = payment_request_data.type
+    if payment_type == "downpayment":
+        create_ledger_entry_from_str(
+            session=session,
+            event_id=event.id,
+            debit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
+            credit_book_str=f"{user_loan.loan_id}/loan/downpayment/l",
+            amount=payment_received_amt,
+        )
+    elif payment_type in (
+        "card_reload_fees",
+        "reset_joining_fees",
+        "card_activation_fees",
+        "card_upgrade_fees",
+    ):
+        adjust_non_bill_payments(
+            session=session,
+            event=event,
+            amount=payment_received_amt,
+            payment_type=payment_type,
+            identifier="loan",
+            identifier_id=user_loan.loan_id,
+            debit_book_str=debit_book_str,
+        )
     else:
         actual_payment = payment_received_amt
-        bills_data = find_amount_to_slide_in_bills(user_loan, payment_received_amt)
-        for bill_data in bills_data:
-            adjust_for_min_max_accounts(bill_data["bill"], bill_data["amount_to_adjust"], event.id)
-            remaining_amount = _adjust_bill(
-                session,
-                bill_data["bill"],
-                bill_data["amount_to_adjust"],
-                event.id,
-                debit_acc_str=debit_book_str,
-            )
-            # The amount to adjust is computed for this bill. It should all settle.
-            assert remaining_amount == 0
-            payment_received_amt -= bill_data["amount_to_adjust"]
+        payment_received_amt = adjust_payment(session, user_loan, event, debit_book_str)
+
+        # Sometimes payments come in multiple decimal points.
+        # adjust_payment() handles this while sliding, but we do this
+        # for pre_payment
+        payment_received_amt = round(payment_received_amt, 2)
+
         if user_loan.should_reinstate_limit_on_payment:
             user_loan.reinstate_limit_on_payment(event=event, amount=actual_payment)
 
@@ -203,52 +169,98 @@ def payment_received_event(
     create_payment_split(session, event)
 
 
-def find_amount_to_slide_in_bills(user_loan: BaseLoan, total_amount_to_slide: Decimal) -> list:
+def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amount_to_slide: Decimal):
+    # slide late fee.
     unpaid_bills = user_loan.get_unpaid_bills()
-    bills_dict = [
-        {
-            "bill": bill,
-            "total_outstanding": bill.get_outstanding_amount(),
-            "amount_to_adjust": 0,
-        }
-        for bill in unpaid_bills
-    ]
-    total_amount_before_sliding = total_amount_to_slide
-    total_loan_outstanding = sum(bill["total_outstanding"] for bill in bills_dict)
-    # Either nothing is left to slide or loan is completely settled and there is excess payment.
-    for bill_data in bills_dict:
-        # If bill isn't generated there's no minimum amount scheduled. So can slide entire amount.
-        if not bill_data["bill"].table.is_generated:
-            amount_to_slide_based_on_ratio = total_amount_to_slide
-        else:
-            amount_to_slide_based_on_ratio = mul(
-                bill_data["total_outstanding"] / total_loan_outstanding, total_amount_before_sliding
-            )
-        amount_to_adjust = min(
-            amount_to_slide_based_on_ratio, total_amount_to_slide, bill_data["total_outstanding"]
+    unpaid_bill_ids = [unpaid_bill.table.id for unpaid_bill in unpaid_bills]
+    split_info = []
+
+    # higher priority is first
+    fees_priority = ["atm_fee", "late_fee"]
+
+    priority_case_expression = []
+    for index, fee in enumerate(fees_priority):
+        priority_case_expression.append((Fee.name == fee, index + 1))
+
+    all_fees = (
+        session.query(Fee)
+        .filter(
+            Fee.user_id == user_loan.user_id,
+            Fee.name.in_(fees_priority),
+            Fee.identifier_id.in_(unpaid_bill_ids),
+            Fee.fee_status == "UNPAID",
+            Fee.identifier == "bill",
         )
-        bill_data["amount_to_adjust"] += amount_to_adjust
-        bill_data["total_outstanding"] -= amount_to_adjust
-    filtered_bills_dict = filter(lambda x: x["amount_to_adjust"] > 0, bills_dict)
-    return filtered_bills_dict
+        .order_by(case(priority_case_expression))
+        .all()
+    )
+
+    if all_fees:
+        all_fees_by_type = {}
+        for fee in all_fees:
+            all_fees_by_type.setdefault(fee.name, []).append(fee)
+
+        # Slide fees type-by-type
+        for fee_type, fees in all_fees_by_type.items():
+            total_fee_amount = sum(fee.remaining_fee_amount for fee in fees)
+            total_amount_to_be_adjusted_in_fee = min(total_fee_amount, total_amount_to_slide)
+
+            for fee in fees:
+                bill = next(bill for bill in unpaid_bills if bill.table.id == fee.identifier_id)
+                amount_to_slide_based_on_ratio = mul(
+                    fee.remaining_fee_amount / total_fee_amount,
+                    total_amount_to_be_adjusted_in_fee,
+                )
+                x = {
+                    "type": "fee",
+                    "bill": bill,
+                    "fee": fee,
+                    "amount_to_adjust": amount_to_slide_based_on_ratio,
+                }
+                split_info.append(x)
+            total_amount_to_slide -= total_amount_to_be_adjusted_in_fee
+
+    # slide interest.
+    total_interest_amount = sum(bill.get_interest_due() for bill in unpaid_bills)
+    if total_amount_to_slide > 0 and total_interest_amount > 0:
+        total_amount_to_be_adjusted_in_interest = min(total_interest_amount, total_amount_to_slide)
+        for bill in unpaid_bills:
+            amount_to_slide_based_on_ratio = mul(
+                bill.get_interest_due() / total_interest_amount, total_amount_to_be_adjusted_in_interest
+            )
+            if amount_to_slide_based_on_ratio > 0:  # will be 0 for 0 bill with late fee.
+                x = {
+                    "type": "interest",
+                    "bill": bill,
+                    "amount_to_adjust": amount_to_slide_based_on_ratio,
+                }
+                split_info.append(x)
+        total_amount_to_slide -= total_amount_to_be_adjusted_in_interest
+
+    # slide principal.
+    total_principal_amount = sum(bill.get_principal_due() for bill in unpaid_bills)
+    if total_amount_to_slide > 0 and total_principal_amount > 0:
+        total_amount_to_be_adjusted_in_principal = min(total_principal_amount, total_amount_to_slide)
+        for bill in unpaid_bills:
+            amount_to_slide_based_on_ratio = mul(
+                bill.get_principal_due() / total_principal_amount,
+                total_amount_to_be_adjusted_in_principal,
+            )
+            if amount_to_slide_based_on_ratio > 0:
+                x = {
+                    "type": "principal",
+                    "bill": bill,
+                    "amount_to_adjust": amount_to_slide_based_on_ratio,
+                }
+                split_info.append(x)
+        total_amount_to_slide -= total_amount_to_be_adjusted_in_principal
+    return split_info
 
 
 def transaction_refund_event(session: Session, user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
-    refund_amount = Decimal(event.amount)
     m2p_pool_account = f"{user_loan.lender_id}/lender/pool_balance/a"
-    bills_data = find_amount_to_slide_in_bills(user_loan, refund_amount)
+    refund_amount = adjust_payment(session, user_loan, event, m2p_pool_account)
 
-    for bill_data in bills_data:
-        adjust_for_min_max_accounts(bill_data["bill"], bill_data["amount_to_adjust"], event.id)
-        remaining_amount = _adjust_bill(
-            session,
-            bill_data["bill"],
-            bill_data["amount_to_adjust"],
-            event.id,
-            debit_acc_str=m2p_pool_account,
-        )
-        assert remaining_amount == 0
-        refund_amount -= bill_data["amount_to_adjust"]
     if refund_amount > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
             session=session,
@@ -269,6 +281,40 @@ def transaction_refund_event(session: Session, user_loan: BaseLoan, event: Ledge
     slide_payment_to_emis(user_loan, event)
 
 
+def adjust_payment(
+    session: Session,
+    user_loan: BaseLoan,
+    event: LedgerTriggerEvent,
+    debit_book_str: str,
+) -> Decimal:
+    amount_to_adjust = Decimal(event.amount)
+    split_data = find_split_to_slide_in_loan(session, user_loan, amount_to_adjust)
+
+    for data in split_data:
+        adjust_for_min_max_accounts(data["bill"], data["amount_to_adjust"], event.id)
+        if data["type"] == "fee":
+            adjust_for_revenue(
+                session=session,
+                event_id=event.id,
+                payment_to_adjust_from=data["amount_to_adjust"],
+                debit_str=debit_book_str,
+                fee=data["fee"],
+            )
+        if data["type"] in ("interest", "principal"):
+            remaining_amount = _adjust_bill(
+                session,
+                data["bill"],
+                data["amount_to_adjust"],
+                event.id,
+                debit_acc_str=debit_book_str,
+            )
+            # The amount to adjust is computed for this bill. It should all settle.
+            assert remaining_amount == 0
+        amount_to_adjust -= data["amount_to_adjust"]
+
+    return amount_to_adjust
+
+
 def settle_payment_in_bank(
     session: Session,
     payment_request_id: str,
@@ -287,22 +333,26 @@ def settle_payment_in_bank(
     session.add(event)
     session.flush()
 
-    payment_settlement_event(
-        session=session, gateway_expenses=gateway_expenses, user_loan=user_loan, event=event
+    payment_settlement_event(session=session, user_loan=user_loan, event=event)
+
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
     )
 
+    create_ledger_entry_from_str(
+        session=session,
+        event_id=payment_ledger_event.id,
+        debit_book_str=f"{user_loan.lender_id}/lender/gateway_expenses/e",
+        credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
+        amount=gateway_expenses,
+    )
 
-def payment_settlement_event(
-    session: Session, gateway_expenses: Decimal, user_loan: BaseLoan, event: LedgerTriggerEvent
-) -> None:
-    if gateway_expenses > 0:  # Adjust for gateway expenses.
-        create_ledger_entry_from_str(
-            session=session,
-            event_id=event.id,
-            debit_book_str="12345/redcarpet/gateway_expenses/e",
-            credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
-            amount=gateway_expenses,
-        )
+    update_journal_entry(user_loan=user_loan, event=payment_ledger_event)
+
+
+def payment_settlement_event(session: Session, user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
     _, writeoff_balance = get_account_balance_from_str(
         session=session, book_string=f"{user_loan.loan_id}/loan/writeoff_expenses/e"
     )
@@ -371,15 +421,16 @@ def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
         "principal_receivable",
         "unbilled",
         "atm_fee",
-        "card_activation_fee",
-        "card_reload_fee",
+        "card_activation_fees",
+        "card_reload_fees",
         "downpayment",
         "reset_joining_fees",
+        "pre_payment",
+        "card_upgrade_fees",
     )
     # unbilled and principal belong to same component.
     updated_component_names = {
         "principal_receivable": "principal",
-        "unbilled": "principal",
         "downpayment": "principal",
         "interest_receivable": "interest",
         "igst_payable": "igst",
@@ -423,7 +474,6 @@ def customer_refund(
     payment_date: DateTime,
     payment_request_id: str,
 ):
-
     lt = LedgerTriggerEvent(
         name="customer_refund",
         loan_id=user_loan.loan_id,

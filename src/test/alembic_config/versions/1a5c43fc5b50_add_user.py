@@ -16,20 +16,6 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # op.create_table(
-    #     "users",
-    #     sa.Column("id", sa.Integer(), nullable=False),
-    #     sa.Column("performed_by", sa.Integer(), nullable=False),
-    #     sa.Column("name", sa.String(), nullable=False),
-    #     sa.Column("email", sa.String(), nullable=False),
-    #     sa.Column("fullname", sa.String(), nullable=False),
-    #     sa.Column("nickname", sa.String(), nullable=False),
-    #     sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
-    #     sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
-    #     sa.PrimaryKeyConstraint("id"),
-    # )
-    # pass
-
     op.create_table(
         "v3_users",
         sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False),
@@ -151,54 +137,6 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id", name="v3_user_data_pkey"),
         postgresql_ignore_search_path=False,
     )
-
-    op.create_table(
-        "v3_user_identities",
-        sa.Column("id", sa.INTEGER(), nullable=False),
-        sa.Column("performed_by", sa.Integer(), nullable=False),
-        sa.Column("user_id", sa.INTEGER(), autoincrement=False, nullable=False),
-        sa.Column("identity", sa.VARCHAR(length=255), autoincrement=False, nullable=False),
-        sa.Column("identity_type", sa.VARCHAR(length=50), autoincrement=False, nullable=False),
-        sa.Column("comments", sa.TEXT(), autoincrement=False, nullable=True),
-        sa.Column("row_status", sa.VARCHAR(length=20), autoincrement=False, nullable=False),
-        sa.Column("created_at", sa.TIMESTAMP(), autoincrement=False, nullable=False),
-        sa.Column("updated_at", sa.TIMESTAMP(), autoincrement=False, nullable=False),
-        sa.ForeignKeyConstraint(["user_id"], ["v3_users.id"], name="fk_rails_97a0647e3a"),
-        sa.PrimaryKeyConstraint("id", name="v3_user_identities_pkey"),
-    )
-
-    op.create_index("index_on_identity_v3_user_identity", "v3_user_identities", ["identity"])
-    op.create_index("index_on_user_id_v3_user_identity", "v3_user_identities", ["user_id"])
-
-    op.create_table(
-        "v3_roles",
-        sa.Column("id", sa.INTEGER(), nullable=False),
-        sa.Column("performed_by", sa.Integer(), nullable=False),
-        sa.Column("name", sa.VARCHAR(length=20), autoincrement=False, nullable=False),
-        sa.Column("comments", sa.TEXT(), autoincrement=False, nullable=True),
-        sa.Column("created_at", sa.TIMESTAMP(), autoincrement=False, nullable=False),
-        sa.Column("updated_at", sa.TIMESTAMP(), autoincrement=False, nullable=False),
-        sa.Column("data", sa.JSON(), autoincrement=False, nullable=True),
-        sa.PrimaryKeyConstraint("id", name="v3_roles_pkey"),
-    )
-    op.create_index("index_on_name_and_id_v3_roles", "v3_roles", ["name", "id"], unique=False)
-
-    op.create_table(
-        "v3_user_roles",
-        sa.Column("id", sa.INTEGER(), nullable=False),
-        sa.Column("performed_by", sa.Integer(), nullable=False),
-        sa.Column("user_id", sa.INTEGER(), autoincrement=False, nullable=False),
-        sa.Column("role_id", sa.INTEGER(), autoincrement=False, nullable=False),
-        sa.Column("created_at", sa.TIMESTAMP(), autoincrement=False, nullable=False),
-        sa.Column("updated_at", sa.TIMESTAMP(), autoincrement=False, nullable=False),
-        sa.Column("data", sa.JSON(), autoincrement=False, nullable=True),
-        sa.Column("row_status", sa.VARCHAR(length=20), autoincrement=False, nullable=False),
-        sa.ForeignKeyConstraint(["role_id"], ["v3_roles.id"], name="fk_rails_fdf6a6d9f6"),
-        sa.ForeignKeyConstraint(["user_id"], ["v3_users.id"], name="fk_rails_f70ade1178"),
-        sa.PrimaryKeyConstraint("id", name="v3_user_roles_pkey"),
-    )
-
-    op.create_index("index_on_user_id_v3_user_roles", "v3_user_roles", ["user_id"])
 
     op.add_column(
         "v3_user_data", sa.Column("email_verified", sa.Boolean(), server_default="false", nullable=False)

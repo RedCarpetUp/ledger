@@ -144,7 +144,7 @@ def slide_payment_to_emis(user_loan: BaseLoan, payment_event: LedgerTriggerEvent
         amount_to_slide -= amount_slid
 
     # After doing the sliding we check if the loan can be closed.
-    if user_loan.get_remaining_max(payment_event.post_date) == 0:
+    if user_loan.get_remaining_max(event_id=payment_event.id) == 0:
         close_loan(user_loan, payment_event.post_date)
 
 
@@ -157,6 +157,36 @@ def close_loan(user_loan: BaseLoan, last_payment_date: datetime):
     future_emis = user_loan.get_loan_schedule(only_emis_after_date=last_payment_date.date())
     if not future_emis:  # Loan has closed naturally.
         return
+
+    emi_ids = [emi.id for emi in future_emis]
+
+    # Aggregate old payment mappings to generate new ones
+    new_mappings = (
+        user_loan.session.query(
+            PaymentMapping.payment_request_id, func.sum(PaymentMapping.amount_settled)
+        )
+        .filter(PaymentMapping.emi_id.in_(emi_ids), PaymentMapping.row_status == "active")
+        .group_by(PaymentMapping.payment_request_id)
+        .all()
+    )
+
+    # Mark old payment mappings inactive
+    (
+        user_loan.session.query(PaymentMapping)
+        .filter(PaymentMapping.emi_id.in_(emi_ids), PaymentMapping.row_status == "active")
+        .update({PaymentMapping.row_status: "inactive"}, synchronize_session=False)
+    )
+
+    closing_emi_id = emi_ids[0]
+
+    # Create new payment mappings
+    for payment_request_id, amount_settled in new_mappings:
+        _ = PaymentMapping.new(
+            user_loan.session,
+            payment_request_id=payment_request_id,
+            emi_id=closing_emi_id,
+            amount_settled=amount_settled,
+        )
 
     loan_moratorium = (
         user_loan.session.query(LoanMoratorium)

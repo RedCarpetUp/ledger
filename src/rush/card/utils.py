@@ -5,28 +5,28 @@ from typing import (
     Optional,
 )
 
-from pendulum import Date
+from pendulum import (
+    Date,
+    DateTime,
+)
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from rush.accrue_financial_charges import create_loan_fee_entry
+from rush.card import BaseLoan
 from rush.models import (
     CardTransaction,
     Fee,
     LedgerTriggerEvent,
     Loan,
     LoanData,
-    LoanFee,
     Product,
-    ProductFee,
     UserCard,
     UserInstrument,
     UserProduct,
     UserUPI,
 )
-from rush.utils import (
-    get_current_ist_time,
-    get_gst_split_from_amount,
-)
+from rush.utils import get_current_ist_time
 
 
 def get_product_id_from_card_type(session: Session, card_type: str) -> int:
@@ -40,11 +40,27 @@ def get_product_id_from_card_type(session: Session, card_type: str) -> int:
 
 
 def create_user_product_mapping(session: Session, user_id: int, product_type: str) -> UserProduct:
-    user_product = UserProduct(user_id=user_id, product_type=product_type)
-    session.add(user_product)
+    user_product = UserProduct.new(session, user_id=user_id, product_type=product_type)
     session.flush()
 
     return user_product
+
+
+def create_loan(
+    session: Session,
+    user_product: UserProduct,
+    lender_id: Optional[int] = None,
+) -> Loan:
+    loan = Loan.new(
+        session=session,
+        user_id=user_product.user_id,
+        user_product_id=user_product.id,
+        product_type=user_product.product_type,
+        lender_id=lender_id,
+    )
+    session.flush()
+
+    return loan
 
 
 def get_user_product_mapping(
@@ -80,103 +96,81 @@ def get_product_type_from_user_product_id(session: Session, user_product_id: int
     return session.query(UserProduct.product_type).filter(UserProduct.id == user_product_id).scalar()
 
 
-def add_pre_product_fee(
+def create_activation_fee(
     session: Session,
-    user_id: int,
-    product_type: str,
+    user_loan: BaseLoan,
+    post_date: DateTime,
+    gross_amount: Decimal,
+    include_gst_from_gross_amount: bool,
     fee_name: str,
-    fee_amount: Decimal,
-    post_date: Optional[Date] = None,
-    user_product_id: Optional[int] = None,
 ) -> Fee:
-    """
-    In case of no sell_book_id, it will always create a new ephemeral account.
-    For multiple pre-product fees, this needs to be maintained by ledger user. Also, same ephemeral
-    account should be passed to loan during loan creation.
-    """
-
-    if post_date is None:
-        post_date = get_current_ist_time().date()
-
     event = LedgerTriggerEvent(
-        name="pre_product_fee_added",
-        post_date=get_current_ist_time().date(),
-        extra_details={"fee_name": fee_name},
+        name="activation_fee",
+        post_date=post_date,
     )
     session.add(event)
     session.flush()
 
-    if user_product_id is None:
-        user_product_id = create_user_product_mapping(
-            session=session, user_id=user_id, product_type=product_type
-        ).id
-
-    f = ProductFee(
-        user_id=user_id,
-        event_id=event.id,
-        identifier_id=user_product_id,
-        name=fee_name,
-        fee_status="UNPAID",
-        sgst_rate=Decimal(0),  # TODO: check what should be the value.
-        cgst_rate=Decimal(0),  # TODO: check what should be the value.
-        igst_rate=Decimal(18),  # TODO: check what should be the value.
+    fee = create_loan_fee_entry(
+        session=session,
+        user_loan=user_loan,
+        event=event,
+        fee_name=fee_name,
+        gross_fee_amount=gross_amount,
+        include_gst_from_gross_amount=include_gst_from_gross_amount,
     )
-
-    d = get_gst_split_from_amount(fee_amount, total_gst_rate=Decimal(18))
-    f.net_amount = d["net_amount"]
-    f.gross_amount = d["gross_amount"]
-    session.add(f)
-    session.flush()
-
-    return f
+    event.amount = fee.gross_amount
+    return fee
 
 
-def add_reload_fee(
+def create_reload_fee(
     session: Session,
-    user_loan: Loan,
-    fee_amount: Decimal,
-    post_date: Optional[Date] = None,
+    user_loan: BaseLoan,
+    post_date: DateTime,
+    gross_fee_amount: Decimal,
 ) -> Fee:
-    assert user_loan.amortization_date is not None
-
-    if post_date is None:
-        post_date = get_current_ist_time().date()
-
-    # TODO Add segregation for processing fee to split in journal entry
     event = LedgerTriggerEvent(
-        name="reload_fee_added",
-        post_date=get_current_ist_time().date(),
+        name="reload_fee",
+        post_date=post_date,
     )
     session.add(event)
     session.flush()
 
-    f = LoanFee(
-        user_id=user_loan.user_id,
-        identifier_id=user_loan.id,
-        event_id=event.id,
-        name="card_reload_fee",
-        fee_status="UNPAID",
-        sgst_rate=Decimal(0),  # TODO: check what should be the value.
-        cgst_rate=Decimal(0),  # TODO: check what should be the value.
-        igst_rate=Decimal(18),  # TODO: check what should be the value.
+    fee = create_loan_fee_entry(
+        session=session,
+        user_loan=user_loan,
+        event=event,
+        fee_name="card_reload_fees",
+        gross_fee_amount=gross_fee_amount,
+        include_gst_from_gross_amount=True,
     )
+    event.amount = fee.gross_amount
+    return fee
 
-    d = get_gst_split_from_amount(fee_amount, total_gst_rate=Decimal(18))
-    f.net_amount = d["net_amount"]
-    f.gross_amount = d["gross_amount"]
-    event.amount = d["gross_amount"]
-    session.add(f)
 
-    # Update DPD and Journal Entries
-    from rush.create_emi import (
-        update_event_with_dpd,
-        update_journal_entry,
+def create_upgrade_fee(
+    session: Session,
+    user_loan: BaseLoan,
+    post_date: DateTime,
+    gross_fee_amount: Decimal,
+) -> Fee:
+    event = LedgerTriggerEvent(
+        name="upgrade_fee",
+        post_date=post_date,
     )
+    session.add(event)
+    session.flush()
 
-    update_event_with_dpd(user_loan=user_loan, event=event)
-    update_journal_entry(user_loan=user_loan, event=event)
-
-    return f
+    fee = create_loan_fee_entry(
+        session=session,
+        user_loan=user_loan,
+        event=event,
+        fee_name="card_upgrade_fees",
+        gross_fee_amount=gross_fee_amount,
+        include_gst_from_gross_amount=True,
+    )
+    event.amount = fee.gross_amount
+    return fee
 
 
 def add_card_to_loan(session: Session, loan: Loan, card_info: Dict[str, Any]) -> UserCard:

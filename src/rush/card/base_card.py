@@ -1,6 +1,7 @@
 from datetime import date
 from decimal import Decimal
 from typing import (
+    Callable,
     Dict,
     List,
     Optional,
@@ -17,7 +18,6 @@ from sqlalchemy import func
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Session
 
-from rush.card.utils import create_user_product_mapping
 from rush.ledger_utils import (
     get_account_balance_from_str,
     is_bill_closed,
@@ -34,13 +34,14 @@ from rush.models import (
     LoanData,
     LoanMoratorium,
     LoanSchedule,
-    UserCard,
 )
 
 
 class BaseBill:
     session: Session = None
     table: LoanData = None
+    id = None
+    bill_start_date = None
     user_loan: "BaseLoan"
     round_emi_to = "one"
 
@@ -118,9 +119,11 @@ class BaseBill:
         )
         return min_due
 
-    def get_remaining_max(self, as_of_date: Optional[DateTime] = None) -> Decimal:
+    def get_remaining_max(
+        self, as_of_date: Optional[DateTime] = None, event_id: Optional[int] = None
+    ) -> Decimal:
         _, max_amount = get_account_balance_from_str(
-            self.session, book_string=f"{self.id}/bill/max/a", to_date=as_of_date
+            self.session, book_string=f"{self.id}/bill/max/a", to_date=as_of_date, event_id=event_id
         )
         return max_amount
 
@@ -149,6 +152,18 @@ class BaseBill:
             .scalar()
         )
         return atm_transactions_sum or 0
+
+    def get_interest_due(self):
+        _, interest_due = get_account_balance_from_str(
+            self.session, book_string=f"{self.id}/bill/interest_receivable/a"
+        )
+        return interest_due
+
+    def get_principal_due(self):
+        _, principal_due = get_account_balance_from_str(
+            self.session, book_string=f"{self.id}/bill/principal_receivable/a"
+        )
+        return principal_due
 
     def get_relative_delta_for_emi(self, emi_number: int, amortization_date: Date) -> Dict[str, int]:
         return {"months": 1, "day": 15}
@@ -183,11 +198,22 @@ class BaseBill:
 B = TypeVar("B", bound=BaseBill)
 
 
+def _convert_to_bill_class_decorator(function: Callable[["BaseLoan"], LoanData]) -> Callable:
+    def f(self):
+        bills = function(self)
+        if not bills:
+            return None
+        if type(bills) is List:
+            return [self.convert_to_bill_class(bill) for bill in bills]
+        return self.convert_to_bill_class(bills)
+
+    return f
+
+
 class BaseLoan(Loan):
     should_reinstate_limit_on_payment: bool = False
     bill_class: Type[B] = BaseBill
     session: Session = None
-    can_generate_bill: bool = True
 
     __mapper_args__ = {"polymorphic_identity": "base_loan"}
 
@@ -215,40 +241,33 @@ class BaseLoan(Loan):
         user_product_id = kwargs.pop("user_product_id", None)
         card_type = kwargs.pop("card_type")
         if not user_product_id:
-            user_product_id = create_user_product_mapping(
-                session=session, user_id=kwargs["user_id"], product_type=card_type
-            ).id
+            from rush.card.utils import create_user_product_mapping
 
-        loan = cls(
-            session=session,
-            user_id=kwargs["user_id"],
-            user_product_id=user_product_id,
-            lender_id=kwargs.pop("lender_id"),
-            rc_rate_of_interest_monthly=kwargs.pop("rc_rate_of_interest_monthly"),
-            lender_rate_of_interest_annual=Decimal(18),  # this is hardcoded for one lender.
-            amortization_date=kwargs.get("card_activation_date"),  # TODO: change this later.
-            min_tenure=kwargs.pop("min_tenure", None),
-            min_multiplier=kwargs.pop("min_multiplier", None),
-            interest_type=kwargs.pop("interest_type", "flat"),
-        )
+            user_product = create_user_product_mapping(
+                session=session,
+                user_id=kwargs["user_id"],
+                product_type=card_type,
+            )
 
+            user_product_id = user_product.id
+
+            from rush.card.utils import create_loan
+
+            create_loan(session=session, user_product=user_product, lender_id=kwargs["lender_id"])
+
+        loan = session.query(cls).filter(cls.user_product_id == user_product_id).one()
+        loan.prepare(session=session)
+
+        loan.rc_rate_of_interest_monthly = kwargs.get("rc_rate_of_interest_monthly")
+        loan.lender_rate_of_interest_annual = kwargs.get("lender_rate_of_interest_annual", Decimal(18))
+        loan.amortization_date = kwargs.get("card_activation_date")
+        loan.min_tenure = kwargs.get("min_tenure")
+        loan.min_multiplier = kwargs.get("min_multiplier")
+        loan.interest_type = kwargs.get("interest_type", "flat")
+        loan.tenure_in_months = kwargs.get("tenure")
         # Don't want to overwrite default value in case of None.
         if kwargs.get("interest_free_period_in_days"):
-            loan.interest_free_period_in_days = kwargs.pop("interest_free_period_in_days")
-
-        session.add(loan)
-        session.flush()
-
-        kwargs["loan_id"] = loan.id
-
-        kwargs["card_name"] = kwargs.get("card_name", "ruby")  # TODO: change this later.
-        kwargs["activation_type"] = kwargs.get("activation_type", "V")  # TODO: change this later.
-        kwargs["kit_number"] = kwargs.get("kit_number", "00000")  # TODO: change this later.
-
-        user_card = UserCard(**kwargs)
-        session.add(user_card)
-        session.flush()
-
+            loan.interest_free_period_in_days = kwargs.get("interest_free_period_in_days")
         return loan
 
     def reinstate_limit_on_payment(self, event: LedgerTriggerEvent, amount: Decimal) -> None:
@@ -258,18 +277,7 @@ class BaseLoan(Loan):
 
         limit_assignment_event(session=self.session, loan_id=self.loan_id, event=event, amount=amount)
 
-    def _convert_to_bill_class_decorator(func) -> BaseBill:
-        def f(self):
-            bills = func(self)
-            if not bills:
-                return None
-            if type(bills) is List:
-                return [self.convert_to_bill_class(bill) for bill in bills]
-            return self.convert_to_bill_class(bills)
-
-        return f
-
-    def convert_to_bill_class(self, bill: LoanData):
+    def convert_to_bill_class(self, bill: LoanData) -> BaseBill:
         if not bill:
             return None
         return self.bill_class(session=self.session, user_loan=self, loan_data=bill)
@@ -285,11 +293,11 @@ class BaseLoan(Loan):
         new_bill = LoanData(
             user_id=self.user_id,
             loan_id=self.loan_id,
-            # lender_id=lender_id,
             bill_start_date=bill_start_date,
             bill_close_date=bill_close_date,
             bill_due_date=bill_due_date,
             is_generated=is_generated,
+            bill_tenure=self.tenure_in_months,
         )
         self.session.add(new_bill)
         self.session.flush()
@@ -353,7 +361,7 @@ class BaseLoan(Loan):
         return None
 
     @_convert_to_bill_class_decorator
-    def get_latest_generated_bill(self) -> BaseBill:
+    def get_latest_generated_bill(self) -> LoanData:
         latest_bill = (
             self.session.query(LoanData)
             .filter(LoanData.loan_id == self.loan_id, LoanData.is_generated.is_(True))
@@ -363,7 +371,7 @@ class BaseLoan(Loan):
         return latest_bill
 
     @_convert_to_bill_class_decorator
-    def get_latest_bill_to_generate(self) -> BaseBill:
+    def get_latest_bill_to_generate(self) -> LoanData:
         loan_data = (
             self.session.query(LoanData)
             .filter(LoanData.loan_id == self.loan_id, LoanData.is_generated.is_(False))
@@ -373,7 +381,7 @@ class BaseLoan(Loan):
         return loan_data
 
     @_convert_to_bill_class_decorator
-    def get_latest_bill(self) -> BaseBill:
+    def get_latest_bill(self) -> LoanData:
         loan_data = (
             self.session.query(LoanData)
             .filter(LoanData.loan_id == self.id)
@@ -392,9 +400,11 @@ class BaseLoan(Loan):
         )
         return remaining_min_of_all_bills
 
-    def get_remaining_max(self, date_to_check_against: DateTime = None) -> Decimal:
+    def get_remaining_max(self, date_to_check_against: DateTime = None, event_id: int = None) -> Decimal:
         unpaid_bills = self.get_unpaid_generated_bills()
-        total_max_amount = sum(bill.get_remaining_max(date_to_check_against) for bill in unpaid_bills)
+        total_max_amount = sum(
+            bill.get_remaining_max(date_to_check_against, event_id) for bill in unpaid_bills
+        )
         return total_max_amount
 
     def get_total_outstanding(self, date_to_check_against: DateTime = None) -> Decimal:

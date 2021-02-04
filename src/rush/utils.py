@@ -56,18 +56,19 @@ def round_up_to_ten(val: Decimal) -> Decimal:
 def get_gst_split_from_amount(amount: Decimal, total_gst_rate: Decimal) -> Dict[str, Any]:
     gst_multiplier = total_gst_rate / 100
 
-    net_amount = amount / (gst_multiplier + Decimal(1))
-    gst_split_data = add_gst_split_to_amount(net_amount, total_gst_rate)
-    # there could be 0.1 extra in gst. So we reduce the 0.1 from net amount in this case.
-    # to make sure net_amount + gst = gross amount.
-    diff = gst_split_data["gross_amount"] - amount
-    gst_split_data["net_amount"] -= diff
-    gst_split_data["gross_amount"] = (
-        gst_split_data["net_amount"]
-        + gst_split_data["sgst"]
-        + gst_split_data["cgst"]
-        + gst_split_data["igst"]
-    )
+    total_gst = amount * gst_multiplier / (gst_multiplier + Decimal(1))
+    cgst = round(total_gst / 2, 2)
+    sgst = cgst
+
+    net_amount = amount - cgst - sgst
+
+    gst_split_data = {
+        "gross_amount": amount,
+        "net_amount": net_amount,
+        "sgst": sgst,
+        "cgst": cgst,
+        "igst": 0,
+    }
     return gst_split_data
 
 

@@ -1,4 +1,8 @@
 from decimal import Decimal
+from test.utils import (
+    pay_payment_request,
+    payment_request_data,
+)
 
 from dateutil.relativedelta import relativedelta
 from pendulum import parse as parse_date  # type: ignore
@@ -12,13 +16,14 @@ from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import get_account_balance_from_str
 from rush.lender_funds import lender_interest_incur
 from rush.models import (
-    CardKitNumbers,
-    CardNames,
     Lenders,
     Product,
     User,
 )
-from rush.payments import payment_received
+from rush.payments import (
+    payment_received,
+    settle_payment_in_bank,
+)
 from rush.recon.revenue_earned import get_revenue_earned_in_a_period
 
 
@@ -30,17 +35,7 @@ def create_products(session: Session) -> None:
 
 def card_db_updates(session: Session) -> None:
     create_products(session=session)
-
-    cn = CardNames(name="ruby")
-    session.add(cn)
-    session.flush()
-    ckn = CardKitNumbers(kit_number="00000", card_name_id=cn.id, last_5_digits="0000", status="active")
-    session.add(ckn)
-    session.flush()
-
-    ckn = CardKitNumbers(kit_number="11111", card_name_id=cn.id, last_5_digits="0000", status="active")
-    session.add(ckn)
-    session.flush()
+    pass
 
 
 def test_lenders(session: Session) -> None:
@@ -74,6 +69,7 @@ def _create_user_raghav_and_do_swipes(session: Session) -> BaseLoan:
         rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
         kit_number="11111",
+        tenure=12,
     )
 
     # Create card swipes.
@@ -143,6 +139,7 @@ def _create_user_ananth_and_do_swipes(session: Session) -> BaseLoan:
         rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
         kit_number="00000",
+        tenure=12,
     )
 
     # Create card swipes.
@@ -231,19 +228,58 @@ def test_dmi_recon_process_1(session: Session) -> None:
     assert revenue_earned == 0
 
     # Some payment comes
+    payment_date = parse_date("2020-02-10 15:23:20")
+    payment_request_id = "r23gs23"
+    amount = Decimal(200)
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=user_loan_raghav.user_id,
+        payment_request_id=payment_request_id,
+    )
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
     payment_received(
         session=session,
         user_loan=user_loan_raghav,
-        payment_amount=200,
-        payment_date=parse_date("2020-02-10 15:23:20"),
-        payment_request_id="r23gs23",
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan_raghav,
+    )
+
+    payment_date = parse_date("2020-02-13 15:23:20")
+    payment_request_id = "r23gs24"
+    amount = Decimal(500)
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=user_loan_ananth.user_id,
+        payment_request_id=payment_request_id,
+    )
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=user_loan_ananth,
-        payment_amount=500,
-        payment_date=parse_date("2020-02-13 15:33:20"),
-        payment_request_id="r23gs24",
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan_ananth,
     )
 
     # Got adjusted in principal because interest is not accrued yet.
@@ -274,19 +310,58 @@ def test_dmi_recon_process_1(session: Session) -> None:
     assert interest_due_ananth == Decimal("195.27")
 
     # Payment came after interest has been accrued.
+    payment_date = parse_date("2020-02-26 15:23:20")
+    payment_request_id = "r23gs25"
+    amount = Decimal(100)
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=user_loan_raghav.user_id,
+        payment_request_id=payment_request_id,
+    )
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
     payment_received(
         session=session,
         user_loan=user_loan_raghav,
-        payment_amount=100,
-        payment_date=parse_date("2020-02-26 15:23:20"),
-        payment_request_id="r23gs25",
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan_raghav,
+    )
+
+    payment_date = parse_date("2020-02-25 15:23:20")
+    payment_request_id = "r23gs26"
+    amount = Decimal(50)
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=user_loan_ananth.user_id,
+        payment_request_id=payment_request_id,
+    )
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
     payment_received(
         session=session,
         user_loan=user_loan_ananth,
-        payment_amount=50,
-        payment_date=parse_date("2020-02-25 15:33:20"),
-        payment_request_id="r23gs26",
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan_ananth,
     )
 
     _, interest_due_raghav = get_account_balance_from_str(
@@ -308,4 +383,4 @@ def test_dmi_recon_process_1(session: Session) -> None:
     _, lender_payable_raghav = get_account_balance_from_str(
         session, f"{user_loan_raghav.loan_id}/loan/lender_payable/l"
     )
-    assert lender_payable_raghav == Decimal("829.82")
+    assert lender_payable_raghav == Decimal("815.90")

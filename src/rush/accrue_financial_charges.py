@@ -10,20 +10,20 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
+from rush.create_emi import update_event_with_dpd
 from rush.ledger_events import (
     _adjust_bill,
     _adjust_for_prepayment,
     accrue_interest_event,
     add_max_amount_event,
     add_min_amount_event,
+    adjust_for_revenue,
 )
 from rush.ledger_utils import (
     create_ledger_entry_from_str,
     get_account_balance_from_str,
-    is_bill_closed,
 )
 from rush.models import (
-    BillFee,
     BookAccount,
     Fee,
     LedgerEntry,
@@ -123,16 +123,17 @@ def is_late_fee_valid(session: Session, user_loan: BaseLoan) -> bool:
 
 def create_bill_fee_entry(
     session: Session,
-    user_id: int,
+    user_loan: BaseLoan,
     bill: BaseBill,
     event: LedgerTriggerEvent,
     fee_name: str,
     gross_fee_amount: Decimal,
     include_gst_from_gross_amount: Optional[bool] = False,
 ) -> Fee:
-    f = BillFee(
-        user_id=user_id,
+    f = Fee(
+        user_id=user_loan.user_id,
         event_id=event.id,
+        identifier="bill",
         identifier_id=bill.id,
         name=fee_name,
         sgst_rate=Decimal(0),
@@ -149,6 +150,38 @@ def create_bill_fee_entry(
     # Add into min/max amount of the bill too.
     add_min_amount_event(session, bill, event, f.gross_amount)
     add_max_amount_event(session, bill, event, f.gross_amount)
+    update_event_with_dpd(user_loan=user_loan, event=event)
+    return f
+
+
+def create_loan_fee_entry(
+    session: Session,
+    user_loan: BaseLoan,
+    event: LedgerTriggerEvent,
+    fee_name: str,
+    gross_fee_amount: Decimal,
+    include_gst_from_gross_amount: Optional[bool] = False,
+) -> Fee:
+    f = Fee(
+        user_id=user_loan.user_id,
+        event_id=event.id,
+        identifier="loan",
+        identifier_id=user_loan.id,
+        name=fee_name,
+        sgst_rate=Decimal(0),
+        cgst_rate=Decimal(0),
+        igst_rate=Decimal(18),
+    )
+    if include_gst_from_gross_amount:
+        d = get_gst_split_from_amount(gross_fee_amount, total_gst_rate=Decimal(18))
+    else:
+        d = add_gst_split_to_amount(gross_fee_amount, total_gst_rate=Decimal(18))
+    f.net_amount = d["net_amount"]
+    f.gross_amount = d["gross_amount"]
+    session.add(f)
+    from rush.create_emi import update_event_with_dpd
+
+    update_event_with_dpd(user_loan=user_loan, event=event)
     return f
 
 
@@ -172,7 +205,7 @@ def accrue_late_charges(
         session.flush()
         fee = create_bill_fee_entry(
             session=session,
-            user_id=user_loan.user_id,
+            user_loan=user_loan,
             bill=latest_bill,
             event=event,
             fee_name="late_fee",
@@ -182,14 +215,6 @@ def accrue_late_charges(
         event.amount = fee.gross_amount
 
         session.flush()
-
-        from rush.create_emi import (
-            update_event_with_dpd,
-            update_journal_entry,
-        )
-
-        update_event_with_dpd(user_loan=user_loan, event=event)
-        update_journal_entry(user_loan=user_loan, event=event)
     return latest_bill
 
 
@@ -198,7 +223,7 @@ def reverse_interest_charges(
 ) -> None:
     from rush.payments import (
         adjust_for_min_max_accounts,
-        find_amount_to_slide_in_bills,
+        find_split_to_slide_in_loan,
     )
 
     """
@@ -254,26 +279,35 @@ def reverse_interest_charges(
         inter_bill_movement_entries.append(d)  # Move amount from this bill to some other bill.
 
     total_amount_to_readjust = sum(d["amount"] for d in inter_bill_movement_entries)
-    bills_data = find_amount_to_slide_in_bills(user_loan, total_amount_to_readjust)
+    split_data = find_split_to_slide_in_loan(session, user_loan, total_amount_to_readjust)
 
-    for bill_data in bills_data:
+    for d in split_data:
         for entry in inter_bill_movement_entries:
-            amount_to_adjust_in_this_bill = min(bill_data["amount_to_adjust"], entry["amount"])
+            amount_to_adjust_in_this_bill = min(d["amount_to_adjust"], entry["amount"])
             if amount_to_adjust_in_this_bill == 0:
                 continue
-            adjust_for_min_max_accounts(bill_data["bill"], amount_to_adjust_in_this_bill, event.id)
-            remaining_amount = _adjust_bill(
-                session,
-                bill_data["bill"],
-                amount_to_adjust_in_this_bill,
-                event.id,
-                debit_acc_str=entry["acc_to_remove_from"],
-            )
-            assert remaining_amount == 0
+            adjust_for_min_max_accounts(d["bill"], amount_to_adjust_in_this_bill, event.id)
+            if d["type"] == "fee":
+                adjust_for_revenue(
+                    session=session,
+                    event_id=event.id,
+                    payment_to_adjust_from=amount_to_adjust_in_this_bill,
+                    debit_str=entry["acc_to_remove_from"],
+                    fee=d["fee"],
+                )
+            if d["type"] in ("interest", "principal"):
+                remaining_amount = _adjust_bill(
+                    session,
+                    d["bill"],
+                    amount_to_adjust_in_this_bill,
+                    event.id,
+                    debit_acc_str=entry["acc_to_remove_from"],
+                )
+                assert remaining_amount == 0
             # if not all of it got adjusted in this bill, move remaining amount to next bill.
             # if got adjusted then this will be 0.
             entry["amount"] -= amount_to_adjust_in_this_bill
-            bill_data["amount_to_adjust"] -= amount_to_adjust_in_this_bill
+            d["amount_to_adjust"] -= amount_to_adjust_in_this_bill
 
     # Check if there's still amount that's left. If yes, then we received extra prepayment.
     is_payment_left = any(e["amount"] > 0 for e in inter_bill_movement_entries)
@@ -307,8 +341,12 @@ def reverse_incorrect_late_charges(
     session.flush()
 
     fee, bill = (
-        session.query(BillFee, LoanData)
-        .filter(BillFee.event_id == event_to_reverse.id, LoanData.id == BillFee.identifier_id)
+        session.query(Fee, LoanData)
+        .filter(
+            Fee.event_id == event_to_reverse.id,
+            LoanData.id == Fee.identifier_id,
+            Fee.identifier == "bill",
+        )
         .one_or_none()
     )
 
