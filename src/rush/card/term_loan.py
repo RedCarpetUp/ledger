@@ -43,8 +43,7 @@ class TermLoanBill(BaseBill):
 
         return bill_start_date, bill_close_date
 
-    @staticmethod
-    def get_relative_delta_for_emi(emi_number: int, amortization_date: Date) -> Dict[str, int]:
+    def get_relative_delta_for_emi(self, emi_number: int, amortization_date: Date) -> Dict[str, int]:
         """
         Sample Tenure Loan:
             +-----------+-------------+----------------------+---------------------+--------------+---------------------+--------------+
