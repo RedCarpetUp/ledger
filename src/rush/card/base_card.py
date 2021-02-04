@@ -28,6 +28,7 @@ from rush.loan_schedule.calculations import (
     get_monthly_instalment,
 )
 from rush.models import (
+    Base,
     CardTransaction,
     LedgerTriggerEvent,
     Loan,
@@ -203,7 +204,7 @@ def _convert_to_bill_class_decorator(function: Callable[["BaseLoan"], LoanData])
         bills = function(self)
         if not bills:
             return None
-        if type(bills) is List:
+        if type(bills) is list:
             return [self.convert_to_bill_class(bill) for bill in bills]
         return self.convert_to_bill_class(bills)
 
@@ -269,6 +270,30 @@ class BaseLoan(Loan):
         if kwargs.get("interest_free_period_in_days"):
             loan.interest_free_period_in_days = kwargs.get("interest_free_period_in_days")
         return loan
+
+    def disburse(self, **kwargs):
+        event = LedgerTriggerEvent(
+            performed_by=kwargs["user_id"],
+            name="disbursal",
+            loan_id=kwargs["loan_id"],
+            post_date=kwargs["product_order_date"],
+            amount=kwargs["amount"],
+        )
+
+        self.session.add(event)
+        self.session.flush()
+
+        from rush.ledger_events import loan_disbursement_event
+
+        loan_disbursement_event(
+            session=self.session,
+            loan=self,
+            event=event,
+            bill_id=kwargs["loan_data"].id,
+            downpayment_amount=kwargs["actual_downpayment_amount"],
+        )
+
+        return event
 
     def reinstate_limit_on_payment(self, event: LedgerTriggerEvent, amount: Decimal) -> None:
         assert self.should_reinstate_limit_on_payment == True
@@ -390,22 +415,49 @@ class BaseLoan(Loan):
         )
         return loan_data
 
-    def get_remaining_min(self, date_to_check_against: DateTime = None) -> Decimal:
+    def get_remaining_min(
+        self,
+        date_to_check_against: Optional[DateTime] = None,
+        include_child_loans: Optional[bool] = True,
+    ) -> Decimal:
         # if user is in moratorium then return 0
         if LoanMoratorium.is_in_moratorium(self.session, self.id, date_to_check_against):
             return Decimal(0)
+
         unpaid_bills = self.get_unpaid_generated_bills()
         remaining_min_of_all_bills = sum(
             bill.get_remaining_min(date_to_check_against) for bill in unpaid_bills
         )
+
+        if include_child_loans:
+            child_loans = self.get_child_loans()
+            child_loans_min = sum(
+                loan.get_remaining_min(date_to_check_against=date_to_check_against)
+                for loan in child_loans
+            )
+            remaining_min_of_all_bills += child_loans_min
+
         return remaining_min_of_all_bills
 
-    def get_remaining_max(self, date_to_check_against: DateTime = None, event_id: int = None) -> Decimal:
+    def get_remaining_max(
+        self,
+        date_to_check_against: Optional[DateTime] = None,
+        event_id: int = None,
+        include_child_loans: Optional[bool] = True,
+    ) -> Decimal:
         unpaid_bills = self.get_unpaid_generated_bills()
-        total_max_amount = sum(
+        remaining_max_of_all_bills = sum(
             bill.get_remaining_max(date_to_check_against, event_id) for bill in unpaid_bills
         )
-        return total_max_amount
+
+        if include_child_loans:
+            child_loans = self.get_child_loans()
+            child_loans_min = sum(
+                loan.get_remaining_min(date_to_check_against, event_id) for loan in child_loans
+            )
+            remaining_max_of_all_bills += child_loans_min
+
+        return remaining_max_of_all_bills
 
     def get_total_outstanding(self, date_to_check_against: DateTime = None) -> Decimal:
         all_bills = self.get_all_bills()
@@ -425,3 +477,6 @@ class BaseLoan(Loan):
             q = q.filter(LoanSchedule.due_date >= only_emis_after_date)
         emis = q.order_by(LoanSchedule.emi_number).all()
         return emis
+
+    def get_child_loans(self) -> List["BaseLoan"]:
+        return []

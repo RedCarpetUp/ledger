@@ -190,6 +190,7 @@ class Loan(AuditMixin):
     dpd = Column(Integer, nullable=True)
     ever_dpd = Column(Integer, nullable=True)
     downpayment_percent: Decimal = Column(Numeric, nullable=True, default=Decimal(0))
+    can_close_early = Column(Boolean, nullable=True, default=True)
     tenure_in_months = Column(Integer, nullable=True)
 
     __mapper_args__ = {
@@ -244,15 +245,23 @@ class LoanData(AuditMixin):
 
 class CardTransaction(AuditMixin):
     __tablename__ = "card_transaction"
-    loan_id = Column(Integer, ForeignKey(LoanData.id))
+    loan_id = Column(Integer, ForeignKey(LoanData.id), nullable=False)
     txn_time = Column(TIMESTAMP, nullable=False)
     amount: Decimal = Column(Numeric, nullable=False)
     source = Column(String(30), nullable=False)
-    description = Column(String(100), nullable=False)
+    description = Column(String(100), nullable=True)
     mcc = Column(String(10), nullable=True)
-    trace_no = Column(String(20), nullable=False)
-    txn_ref_no = Column(String(50), nullable=False)
-    status = Column(String(15), nullable=False)
+    trace_no = Column(String(20), nullable=True)
+    txn_ref_no = Column(String(50), nullable=True)
+    status = Column(String(15), nullable=True)
+
+    __table_args__ = (
+        Index(
+            "unique_index_on_txn_ref_no_card_transaction",
+            txn_ref_no,
+            unique=True,
+        ),
+    )
 
 
 class LoanSchedule(AuditMixin):

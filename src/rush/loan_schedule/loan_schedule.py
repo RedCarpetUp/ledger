@@ -1,5 +1,6 @@
 from collections import defaultdict
 from datetime import date
+from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
 from pendulum import datetime
@@ -113,18 +114,13 @@ def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
     readjust_future_payment(user_loan, bill.table.bill_close_date)
 
 
-def slide_payment_to_emis(user_loan: BaseLoan, payment_event: LedgerTriggerEvent):
+def slide_payment_to_emis(
+    user_loan: BaseLoan, payment_event: LedgerTriggerEvent, amount_to_slide: Decimal
+):
     """
     Settles a payment into loan's emi schedule.
     Also creates a payment split at emi level.
     """
-    from rush.payments import get_payment_split_from_event
-
-    payment_split = get_payment_split_from_event(user_loan.session, payment_event)
-
-    # Payment can get adjusted in late fee, gst etc. For emi, we only need to settle the principal
-    # and interest amount.
-    amount_to_slide = payment_split.get("principal", 0) + payment_split.get("interest", 0)
     unpaid_emis = user_loan.get_loan_schedule(only_unpaid_emis=True)
     for emi in unpaid_emis:
         if amount_to_slide <= 0:
@@ -135,17 +131,42 @@ def slide_payment_to_emis(user_loan: BaseLoan, payment_event: LedgerTriggerEvent
             emi.payment_status = "Paid"
         emi.last_payment_date = payment_event.post_date
         emi.dpd = (emi.last_payment_date.date() - emi.due_date).days
-        _ = PaymentMapping.new(
-            user_loan.session,
-            payment_request_id=payment_event.extra_details["payment_request_id"],
-            emi_id=emi.id,
-            amount_settled=amount_slid,
+
+        mapping: PaymentMapping = (
+            user_loan.session.query(PaymentMapping)
+            .filter(
+                PaymentMapping.emi_id == emi.id,
+                PaymentMapping.payment_request_id == payment_event.extra_details["payment_request_id"],
+            )
+            .scalar()
         )
+
+        if mapping:
+            mapping.amount_settled += amount_slid
+        else:
+            _ = PaymentMapping.new(
+                user_loan.session,
+                payment_request_id=payment_event.extra_details["payment_request_id"],
+                emi_id=emi.id,
+                amount_settled=amount_slid,
+            )
+
         amount_to_slide -= amount_slid
 
     # After doing the sliding we check if the loan can be closed.
-    if user_loan.get_remaining_max(event_id=payment_event.id) == 0:
+    if can_close_loan(user_loan, as_of_event_id=payment_event.id):
         close_loan(user_loan, payment_event.post_date)
+
+
+def can_close_loan(user_loan: BaseLoan, as_of_event_id: int = None) -> bool:
+    unpaid_emis = user_loan.get_loan_schedule(only_unpaid_emis=True)
+    if not unpaid_emis:  # If all emis are paid then can close. Term loan, Reset. Transaction Loan etc.
+        return True
+    max_remaining = user_loan.get_remaining_max(event_id=as_of_event_id, include_child_loans=False)
+    # If max amount is clear and the loan can be closed early. i.e. in case of credit card products.
+    if max_remaining == 0 and user_loan.can_close_early:
+        return True
+    return False
 
 
 def close_loan(user_loan: BaseLoan, last_payment_date: datetime):

@@ -55,21 +55,52 @@ def payment_received(
     )
     session.flush()
 
-    payment_received_event(
-        session=session,
-        user_loan=user_loan,
-        payment_request_data=payment_request_data,
-        debit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
-        event=event,
-        skip_closing=skip_closing,
-    )
+    remaining_payment_amount = payment_request_data.payment_request_amount
 
-    run_anomaly(
-        session=session, user_loan=user_loan, event_date=payment_request_data.intermediary_payment_date
-    )
+    def call_payment_received_event(amount_to_adjust: Decimal) -> Decimal:
+        if amount_to_adjust <= 0:
+            return amount_to_adjust
+        remaining_amount = payment_received_event(
+            session=session,
+            user_loan=loan,
+            payment_request_data=payment_request_data,
+            amount_to_adjust=amount_to_adjust,
+            debit_book_str=f"{loan.lender_id}/lender/pg_account/a",
+            event=event,
+            skip_closing=skip_closing,
+        )
+        return remaining_amount
 
-    # Update dpd
-    update_event_with_dpd(user_loan=user_loan, event=event)
+    all_loans = [user_loan] + user_loan.get_child_loans()
+    if len(all_loans) > 1:  # if more than 2 loans then pay minimum of all loans first.
+        for loan in all_loans:
+            min_to_pay = loan.get_remaining_min(include_child_loans=False)
+            amount_to_actually_adjust = min(min_to_pay, remaining_payment_amount)
+            call_payment_received_event(amount_to_actually_adjust)
+            remaining_payment_amount -= amount_to_actually_adjust
+
+    # Settle whatever is remaining after it.
+    for loan in all_loans:
+        remaining_payment_amount = call_payment_received_event(remaining_payment_amount)
+
+    for loan in all_loans:
+        run_anomaly(
+            session=session,
+            user_loan=loan,
+            event_date=payment_request_data.intermediary_payment_date,
+        )
+        update_event_with_dpd(user_loan=loan, event=event)
+
+    if remaining_payment_amount > 0:  # if there's payment left to be adjusted.
+        _adjust_for_prepayment(
+            session=session,
+            loan_id=user_loan.loan_id,
+            event_id=event.id,
+            amount=remaining_payment_amount,
+            debit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
+        )
+
+    create_payment_split(session, event)
 
 
 def refund_payment(
@@ -105,10 +136,11 @@ def payment_received_event(
     payment_request_data: PaymentRequestsData,
     debit_book_str: str,
     event: LedgerTriggerEvent,
+    amount_to_adjust: Decimal,
     skip_closing: bool = False,
-    user_product_id: Optional[int] = None,
-) -> None:
-    payment_received_amt = Decimal(event.amount)
+) -> Decimal:
+
+    remaining_amount = Decimal(0)
 
     payment_type = payment_request_data.type
     if payment_type == "downpayment":
@@ -117,7 +149,7 @@ def payment_received_event(
             event_id=event.id,
             debit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
             credit_book_str=f"{user_loan.loan_id}/loan/downpayment/l",
-            amount=payment_received_amt,
+            amount=amount_to_adjust,
         )
     elif payment_type in (
         "card_reload_fees",
@@ -128,32 +160,22 @@ def payment_received_event(
         adjust_non_bill_payments(
             session=session,
             event=event,
-            amount=payment_received_amt,
+            amount=amount_to_adjust,
             payment_type=payment_type,
             identifier="loan",
             identifier_id=user_loan.loan_id,
             debit_book_str=debit_book_str,
         )
     else:
-        actual_payment = payment_received_amt
-        payment_received_amt = adjust_payment(session, user_loan, event, debit_book_str)
+        remaining_amount = adjust_payment(session, user_loan, event, amount_to_adjust, debit_book_str)
 
         # Sometimes payments come in multiple decimal points.
         # adjust_payment() handles this while sliding, but we do this
         # for pre_payment
-        payment_received_amt = round(payment_received_amt, 2)
+        remaining_amount = round(remaining_amount, 2)
 
         if user_loan.should_reinstate_limit_on_payment:
-            user_loan.reinstate_limit_on_payment(event=event, amount=actual_payment)
-
-        if payment_received_amt > 0:  # if there's payment left to be adjusted.
-            _adjust_for_prepayment(
-                session=session,
-                loan_id=user_loan.loan_id,
-                event_id=event.id,
-                amount=payment_received_amt,
-                debit_book_str=debit_book_str,
-            )
+            user_loan.reinstate_limit_on_payment(event=event, amount=amount_to_adjust)
 
         is_in_write_off = (
             get_account_balance_from_str(session, f"{user_loan.loan_id}/loan/write_off_expenses/e")[1]
@@ -164,9 +186,8 @@ def payment_received_event(
             # TODO set loan status to recovered.
 
         # We will either slide or close bills
-        slide_payment_to_emis(user_loan, event)
-
-    create_payment_split(session, event)
+        # slide_payment_to_emis(user_loan, event)
+    return remaining_amount
 
 
 def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amount_to_slide: Decimal):
@@ -259,7 +280,7 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
 
 def transaction_refund_event(session: Session, user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
     m2p_pool_account = f"{user_loan.lender_id}/lender/pool_balance/a"
-    refund_amount = adjust_payment(session, user_loan, event, m2p_pool_account)
+    refund_amount = adjust_payment(session, user_loan, event, event.amount, m2p_pool_account)
 
     if refund_amount > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
@@ -278,16 +299,16 @@ def transaction_refund_event(session: Session, user_loan: BaseLoan, event: Ledge
         amount=Decimal(event.amount),
     )
     create_payment_split(session, event)
-    slide_payment_to_emis(user_loan, event)
+    # slide_payment_to_emis(user_loan, event)
 
 
 def adjust_payment(
     session: Session,
     user_loan: BaseLoan,
     event: LedgerTriggerEvent,
+    amount_to_adjust: Decimal,
     debit_book_str: str,
 ) -> Decimal:
-    amount_to_adjust = Decimal(event.amount)
     split_data = find_split_to_slide_in_loan(session, user_loan, amount_to_adjust)
 
     for data in split_data:
@@ -310,6 +331,7 @@ def adjust_payment(
             )
             # The amount to adjust is computed for this bill. It should all settle.
             assert remaining_amount == 0
+            slide_payment_to_emis(user_loan, event, data["amount_to_adjust"])
         amount_to_adjust -= data["amount_to_adjust"]
 
     return amount_to_adjust

@@ -7,6 +7,7 @@ Create Date: 2020-04-28 15:32:45.585137
 """
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.sql.elements import True_
 
 # revision identifiers, used by Alembic.
 revision = "d5e975fd205c"
@@ -57,6 +58,7 @@ def upgrade() -> None:
         sa.Column("lender_rate_of_interest_annual", sa.Numeric(), nullable=True),
         sa.Column("min_tenure", sa.Integer(), nullable=True),
         sa.Column("min_multiplier", sa.Numeric(), nullable=True),
+        sa.Column("can_close_early", sa.Boolean(), server_default="true", nullable=True),
         sa.ForeignKeyConstraint(["lender_id"], ["rc_lenders.id"], name="fk_v3_user_cards_lender_id"),
         sa.ForeignKeyConstraint(["product_id"], ["product.id"], name="fk_loan_product_id"),
         sa.PrimaryKeyConstraint("id"),
