@@ -26,10 +26,6 @@ from sqlalchemy.dialects.postgresql import (
     JSON,
     JSONB,
 )
-from sqlalchemy.dialects.postgresql import (
-    JSON,
-    JSONB,
-)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.ext.indexable import index_property
