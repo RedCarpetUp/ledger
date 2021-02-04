@@ -4656,7 +4656,7 @@ def test_moratorium_emi_schedule(session: Session) -> None:
         txn_time=parse_date("2020-08-04 19:23:11"),
         amount=Decimal(2500),
         description="BigB.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_1",
         trace_no="123456",
     )
     bill_date = parse_date("2019-09-01").date()
@@ -4758,7 +4758,7 @@ def test_moratorium_emi_schedule(session: Session) -> None:
         txn_time=parse_date("2020-09-04 19:23:11"),
         amount=Decimal(2500),
         description="BigB.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_2",
         trace_no="123456",
     )
 
@@ -4871,7 +4871,7 @@ def test_moratorium_emi_schedule(session: Session) -> None:
         txn_time=parse_date("2020-10-04 19:23:11"),
         amount=Decimal(2500),
         description="BigB.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_3",
         trace_no="123456",
     )
 
@@ -4972,7 +4972,7 @@ def test_moratorium_emi_schedule(session: Session) -> None:
         txn_time=parse_date("2020-11-04 19:23:11"),
         amount=Decimal(2500),
         description="BigB.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_4",
         trace_no="123456",
     )
 
