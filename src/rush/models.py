@@ -5,6 +5,7 @@ from typing import (
     Dict,
 )
 
+from dateutil.relativedelta import relativedelta
 from pendulum import Date as PythonDate
 from pendulum import DateTime
 from pydantic.dataclasses import dataclass as py_dataclass
@@ -19,6 +20,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    func,
 )
 from sqlalchemy.dialects.postgresql import (
     JSON,
@@ -32,21 +34,12 @@ from sqlalchemy.orm import (
     relationship,
 )
 from sqlalchemy.schema import Index
+from sqlalchemy.sql.elements import and_
 from sqlalchemy.util.langhelpers import hybridproperty
 
 from rush.utils import get_current_ist_time
 
 Base = declarative_base()  # type: Any
-
-
-class pg_json_property(index_property):
-    def __init__(self, attr_name, index, cast_type, default=None):
-        super(pg_json_property, self).__init__(attr_name, index, default=default)
-        self.cast_type = cast_type
-
-    def expr(self, model):
-        expr = super(pg_json_property, self).expr(model)
-        return expr.astext.cast(self.cast_type)
 
 
 class AuditMixin(Base):
@@ -66,44 +59,6 @@ class AuditMixin(Base):
         d = {c.name: getattr(self, c.name) for c in self.__table__.columns}
         return d
 
-    def as_dict_for_json(self):
-        d = {
-            c.name: getattr(self, c.name).isoformat()
-            if isinstance(getattr(self, c.name), datetime)
-            else getattr(self, c.name)
-            for c in self.__table__.columns
-        }
-        return d
-
-    @classmethod
-    def snapshot(
-        cls, session: Session, primary_key, new_data, skip_columns=("id", "created_at", "updated_at")
-    ):
-        assert hasattr(cls, "row_status") == True
-
-        old_row = (
-            session.query(cls)
-            .filter(
-                getattr(cls, primary_key) == new_data[primary_key],
-                getattr(cls, "row_status") == "active",
-            )
-            .with_for_update(skip_locked=True)
-            .one_or_none()
-        )
-        if old_row:
-            old_row.row_status = "inactive"
-            session.flush()
-
-        cls_keys = cls.__table__.columns.keys()
-        keys_to_skip = [key for key in new_data.keys() if key not in cls_keys]
-        new_skip_columns = keys_to_skip + list(skip_columns)
-        for column in new_skip_columns:
-            new_data.pop(column, None)
-
-        new_obj = cls.new(**new_data)
-        session.flush()
-        return new_obj
-
 
 def get_or_create(session: Session, model: Any, defaults: Dict[Any, Any] = None, **kwargs: str) -> Any:
     instance = session.query(model).filter_by(**kwargs).first()
@@ -118,40 +73,15 @@ def get_or_create(session: Session, model: Any, defaults: Dict[Any, Any] = None,
         return instance
 
 
-@py_dataclass
-class AuditMixinPy:
-    id: int
-    performed_by: int
-
-
 class Lenders(AuditMixin):
     __tablename__ = "rc_lenders"
     lender_name = Column(String(), nullable=False)
     row_status = Column(String(length=10), nullable=False, default="active")
 
 
-@py_dataclass
-class LenderPy(AuditMixinPy):
-    lender_name: str
-    row_status: str
-
-
-# class User(AuditMixin):
-#     __tablename__ = "users"
-#     name = Column(String(50))
-#     email = Column(String(100))
-#     fullname = Column(String(50))
-#     nickname = Column(String(12))
-
-
 class Product(AuditMixin):
     __tablename__ = "product"
     product_name = Column(String(), nullable=False, unique=True)
-
-
-@py_dataclass
-class ProductPy(AuditMixinPy):
-    product_name: str
 
 
 class UserData(AuditMixin):
@@ -226,8 +156,6 @@ class User(AuditMixin):
     __tablename__ = "v3_users"
 
     histories = relationship("UserData", foreign_keys=[UserData.user_id])
-    roles = relationship("UserRoles")
-    identities = relationship("UserIdentities", back_populates="user")
     latest = relationship(
         "UserData",
         lazy="joined",
@@ -271,80 +199,6 @@ class Loan(AuditMixin):
     }
 
 
-@py_dataclass
-class LoanPy(AuditMixinPy):
-    user_id: int
-    amortization_date: DateTime
-    loan_status: str
-    product_id: int
-
-
-class UserIdentities(AuditMixin):
-    __tablename__ = "v3_user_identities"
-
-    user_id = Column(Integer, ForeignKey(User.id), nullable=False)
-    identity = Column(String(length=255), nullable=False)
-    identity_type = Column(String(length=50), nullable=False)
-    row_status = Column(String(length=20), nullable=False)
-    comments = Column(Text, nullable=True)
-    user = relationship("User", back_populates="identities")
-    __table_args__ = (
-        Index("index_on_user_id_v3_user_identity", user_id),
-        Index(
-            "index_on_identity_v3_user_identity",
-            identity,
-            row_status,
-            unique=True,
-            postgresql_where=row_status == "active",
-        ),
-    )
-
-
-class Role(AuditMixin):
-    __tablename__ = "v3_roles"
-
-    name = Column(String(length=50), nullable=False)
-    data = Column(JSONB, server_default="{}", nullable=True)
-    comments = Column(Text)
-
-    __table_args__ = (Index("index_on_name_and_id_v3_roles", name, "id"),)
-
-
-class UserRoles(AuditMixin):
-    __tablename__ = "v3_user_roles"
-
-    user_id = Column(Integer, ForeignKey(User.id), nullable=False)
-    role_id = Column(Integer, ForeignKey(Role.id), nullable=False)
-    data = Column(JSONB, server_default="{}", nullable=True)
-    row_status = Column(String(20), default="active", nullable=False)
-
-    __table_args__ = (
-        Index("index_on_user_id_v3_user_roles", user_id),
-        Index(
-            "unique_index_on_user_id_role_id",
-            user_id,
-            role_id,
-            row_status,
-            unique=True,
-            postgresql_where=row_status == "active",
-        ),
-    )
-
-
-@py_dataclass
-class UserPy(AuditMixinPy):
-    name: str
-    email: str
-    fullname: str
-    nickname: str
-
-
-@py_dataclass
-class LedgerTriggerEventPy(AuditMixinPy):
-    name: str
-    extra_details: Dict[str, Any]
-
-
 class BookAccount(AuditMixin):
     __tablename__ = "book_account"
     identifier = Column(Integer)
@@ -354,39 +208,6 @@ class BookAccount(AuditMixin):
     balance = Column(DECIMAL, default=0)
 
 
-@py_dataclass
-class BookAccountPy(AuditMixinPy):
-    identifier: int
-    book_type: str
-    account_type: str
-
-
-@py_dataclass
-class LedgerEntryPy(AuditMixinPy):
-    event_id: int
-    debit_account: int
-    credit_account: int
-    amount: Decimal
-    business_date: DateTime
-    user_id = Column(Integer, ForeignKey(User.id), nullable=False)
-    is_deleted = Column(Boolean, nullable=True)
-
-
-class CardNames(AuditMixin):
-    __tablename__ = "v3_card_names"
-    name = Column(String(20), nullable=False, unique=True)
-
-
-class CardKitNumbers(AuditMixin):
-    __tablename__ = "v3_card_kit_numbers"
-    kit_number = Column(String(12), unique=True, nullable=False)
-    card_name_id = Column(Integer, ForeignKey(CardNames.id), nullable=False)
-    card_type = Column(String(12), nullable=True)
-    last_5_digits = Column(String(5), nullable=False)
-    status = Column(String(15), nullable=False)
-    extra_details = Column(JSONB, nullable=False, default={})
-
-
 class LedgerTriggerEvent(AuditMixin):
     __tablename__ = "ledger_trigger_event"
     name = Column(String(50))
@@ -394,8 +215,6 @@ class LedgerTriggerEvent(AuditMixin):
     post_date = Column(TIMESTAMP)
     amount: Decimal = Column(Numeric)
     extra_details = Column(JSON, default={})
-
-    payment_type = pg_json_property("extra_details", "payment_type", String, default=None)
 
 
 class LedgerEntry(Base):
@@ -422,13 +241,6 @@ class LoanData(AuditMixin):
     principal: Decimal = Column(Numeric, nullable=True)
     principal_instalment: Decimal = Column(Numeric, nullable=True)
     interest_to_charge: Decimal = Column(Numeric, nullable=True)
-
-
-@py_dataclass
-class LoanDataPy(AuditMixinPy):
-    user_id: int
-    bill_start_date: DateTime
-    bill_generation_date: DateTime
 
 
 class CardTransaction(AuditMixin):
@@ -475,6 +287,40 @@ class LoanSchedule(AuditMixin):
     def remaining_amount(self):
         return self.total_due_amount - self.payment_received
 
+    def interest_to_accrue(self, session: Session):
+        loan_moratorium = (
+            session.query(LoanMoratorium)
+            .filter(
+                LoanMoratorium.loan_id == self.loan_id,
+            )
+            .order_by(LoanMoratorium.start_date.desc())
+            .first()
+        )
+        if not loan_moratorium or self.due_date > loan_moratorium.due_date_after_moratorium:
+            return self.interest_due
+
+        moratorium_interest_for_this_emi = (
+            session.query(MoratoriumInterest.interest)
+            .filter(
+                MoratoriumInterest.loan_schedule_id == self.id,
+            )
+            .scalar()
+        )
+        if moratorium_interest_for_this_emi:  # if emi is present in moratorium table then return that.
+            return moratorium_interest_for_this_emi
+
+        # Now emi can either be from the bill right after moratorium or bills before/during moratorium period.
+        # For former we return the schedule's interest due. For later we reduce the total moratorium interest of the
+        # bill from the schedule's interest due.
+        total_bill_moratorium_interest = MoratoriumInterest.get_bill_total_moratorium_interest(
+            session=session, loan_id=self.loan_id, bill_id=self.bill_id
+        )
+        if not total_bill_moratorium_interest:  # if nothing comes then emi is from non moratorium bill.
+            return self.interest_due
+
+        emi_interest_without_moratorium = self.interest_due - total_bill_moratorium_interest
+        return emi_interest_without_moratorium
+
     def make_emi_unpaid(self):
         self.payment_received = 0
         self.payment_status = "UnPaid"
@@ -482,6 +328,57 @@ class LoanSchedule(AuditMixin):
 
     def can_mark_emi_paid(self) -> bool:
         return self.remaining_amount <= Decimal(1)
+
+
+class LoanMoratorium(AuditMixin):
+    __tablename__ = "loan_moratorium"
+
+    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+    due_date_after_moratorium = Column(Date, nullable=False)
+
+    @classmethod
+    def is_in_moratorium(cls, session: Session, loan_id: int, date_to_check_against: PythonDate) -> bool:
+        if not date_to_check_against:
+            date_to_check_against = get_current_ist_time()
+        v = (
+            session.query(cls)
+            .filter(
+                cls.loan_id == loan_id,
+                date_to_check_against >= cls.start_date,
+                date_to_check_against <= cls.end_date,
+            )
+            .one_or_none()
+        )
+        return v is not None
+
+
+class MoratoriumInterest(AuditMixin):
+    __tablename__ = "moratorium_interest"
+
+    moratorium_id = Column(Integer, ForeignKey(LoanMoratorium.id), nullable=False)
+    interest = Column(Numeric, nullable=False)
+    loan_schedule_id = Column(Integer, ForeignKey(LoanSchedule.id))
+
+    @classmethod
+    def get_bill_total_moratorium_interest(cls, session: Session, loan_id: int, bill_id: int) -> Decimal:
+        total_bill_moratorium_interest = (
+            session.query(func.sum(cls.interest))
+            .join(
+                LoanMoratorium,
+                and_(
+                    cls.moratorium_id == LoanMoratorium.id,
+                    LoanMoratorium.loan_id == loan_id,
+                ),
+            )
+            .filter(
+                LoanSchedule.bill_id == bill_id,
+                LoanSchedule.id == cls.loan_schedule_id,
+            )
+            .scalar()
+        )
+        return total_bill_moratorium_interest
 
 
 class PaymentMapping(AuditMixin):
@@ -508,29 +405,6 @@ class PaymentSplit(AuditMixin):
     component = Column(String(50), nullable=False)
     amount_settled: Decimal = Column(Numeric, nullable=False)
     loan_id = Column(Integer, ForeignKey(Loan.id), nullable=True)
-
-
-class LoanMoratorium(AuditMixin):
-    __tablename__ = "loan_moratorium"
-
-    loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
-    start_date = Column(Date, nullable=False)
-    end_date = Column(Date, nullable=False)
-
-    @classmethod
-    def is_in_moratorium(cls, session: Session, loan_id: int, date_to_check_against: PythonDate) -> bool:
-        if not date_to_check_against:
-            date_to_check_against = get_current_ist_time()
-        v = (
-            session.query(cls)
-            .filter(
-                cls.loan_id == loan_id,
-                date_to_check_against >= cls.start_date,
-                date_to_check_against <= cls.end_date,
-            )
-            .one_or_none()
-        )
-        return v is not None
 
 
 class Fee(AuditMixin):
