@@ -86,13 +86,7 @@ def bill_generate(
     session = user_loan.session
     bill = user_loan.get_latest_bill_to_generate()  # Get the first bill which is not generated.
     if not bill:
-        bill = get_or_create_bill_for_card_swipe(
-            user_loan=user_loan,
-            txn_time=creation_time
-            - relativedelta(
-                days=creation_time.day,
-            ),  # Setting this to the last day of the previous month.
-        )
+        bill = get_or_create_bill_for_card_swipe(user_loan=user_loan, txn_time=creation_time)
         if bill["result"] == "error":
             return bill
         bill = bill["bill"]
