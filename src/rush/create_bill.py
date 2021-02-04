@@ -1,10 +1,14 @@
 from calendar import monthrange
-from datetime import timedelta
+from datetime import (
+    datetime,
+    timedelta,
+)
 from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.functions import user
 
 from rush.accrue_financial_charges import create_bill_fee_entry
 from rush.card.base_card import (
@@ -32,19 +36,23 @@ def get_or_create_bill_for_card_swipe(user_loan: BaseLoan, txn_time: DateTime) -
     txn_date = txn_time.date()
     lender_id = user_loan.lender_id
     if last_bill:
-        does_swipe_belong_to_current_bill = txn_date < last_bill.bill_close_date
+        does_swipe_belong_to_current_bill = txn_date <= last_bill.bill_close_date
         if does_swipe_belong_to_current_bill:
             return {"result": "success", "bill": last_bill}
         new_bill_date = last_bill.bill_close_date + relativedelta(days=1)
     else:
-        new_bill_date = user_loan.amortization_date
+        new_bill_date = datetime(
+            user_loan.amortization_date.year,
+            user_loan.amortization_date.month,
+            user_loan.amortization_date.day,
+        ).date()
     new_closing_date = new_bill_date + relativedelta(
         days=monthrange(new_bill_date.year, new_bill_date.month)[1] - new_bill_date.day,
     )  # setting it to the last date of the month
     # Check if some months of bill generation were skipped and if they were then generate their bills
     months_diff = (txn_date.year - new_closing_date.year) * 12 + txn_date.month - new_closing_date.month
     if months_diff > 0:
-        for i in range(months_diff + 1):
+        for i in range(months_diff):
             new_bill = user_loan.create_bill(
                 bill_start_date=new_bill_date + relativedelta(months=i),
                 bill_close_date=new_bill_date
@@ -94,7 +102,11 @@ def bill_generate(
     bill = user_loan.get_latest_bill_to_generate()  # Get the first bill which is not generated.
     if not bill:
         bill = get_or_create_bill_for_card_swipe(
-            user_loan=user_loan, txn_time=creation_time
+            user_loan=user_loan,
+            txn_time=creation_time
+            - relativedelta(
+                days=monthrange(creation_time.year, creation_time.month)[1] - creation_time.day,
+            ),
         )  # TODO not sure about this
         if bill["result"] == "error":
             return bill

@@ -247,14 +247,14 @@ def test_closing_bill(session: Session) -> None:
     user_loan = create_user_product(
         session=session,
         user_id=user.id,
-        card_activation_date=parse_date("2019-01-02").date(),
+        card_activation_date=parse_date("2019-02-02").date(),
         card_type="ruby",
         rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
         tenure=12,
     )
 
-    swipe_date = parse_date("2019-02-02 19:23:11")
+    swipe_date = parse_date("2019-02-03 19:23:11")
     create_card_swipe(
         session=session,
         user_loan=user_loan,
@@ -3687,6 +3687,7 @@ def test_intermediate_bill_generation(session: Session) -> None:
     # check latest bill method
     latest_bill = user_loan.get_latest_bill()
     assert latest_bill is not None
+    assert latest_bill.bill_start_date == parse_date("2020-05-01").date()
     assert isinstance(latest_bill, BaseBill) == True
 
     # Interest event to be fired separately now
