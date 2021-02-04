@@ -23,6 +23,9 @@ def upgrade() -> None:
     op.create_index(
         "unique_index_on_txn_ref_no_card_transaction", "card_transaction", ["txn_ref_no"], unique=True
     )
+    op.add_column(
+        "v3_loans", sa.Column("can_close_early", sa.Boolean(), server_default="true", nullable=True)
+    ),
 
 
 def downgrade() -> None:
@@ -30,3 +33,4 @@ def downgrade() -> None:
     op.alter_column("card_transaction", "trace_no", nullable=False)
     op.alter_column("card_transaction", "txn_ref_no", nullable=False)
     op.alter_column("card_transaction", "status", nullable=False)
+    op.drop_column("v3_loans", "can_close_early")
