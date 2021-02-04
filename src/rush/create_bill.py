@@ -53,18 +53,10 @@ def get_or_create_bill_for_card_swipe(user_loan: BaseLoan, txn_time: DateTime) -
                 bill_start_date=new_bill_date + relativedelta(months=i),
                 bill_close_date=new_bill_date
                 + relativedelta(
-                    months=i,
+                    months=i + 1,
                     days=monthrange(new_bill_date.year, new_bill_date.month)[1] - new_bill_date.day,
                 ),  # Setting this to the last day of the month
-                bill_due_date=new_bill_date
-                + relativedelta(
-                    **(
-                        user_loan.bill_class.get_relative_delta_for_emi(
-                            emi_number=(1 if new_bill_date == user_loan.amortization_date else 2),
-                            amortization_date=user_loan.amortization_date,
-                        )
-                    )
-                ),
+                bill_due_date=new_bill_date + relativedelta(months=i + 1, day=15),
                 lender_id=lender_id,
                 is_generated=False,
             )
@@ -74,15 +66,7 @@ def get_or_create_bill_for_card_swipe(user_loan: BaseLoan, txn_time: DateTime) -
     new_bill = user_loan.create_bill(
         bill_start_date=new_bill_date,
         bill_close_date=new_closing_date,
-        bill_due_date=new_bill_date
-        + relativedelta(
-            **(
-                user_loan.bill_class.get_relative_delta_for_emi(
-                    emi_number=(1 if new_bill_date == user_loan.amortization_date else 2),
-                    amortization_date=user_loan.amortization_date,
-                )
-            )
-        ),
+        bill_due_date=new_bill_date + relativedelta(months=1, day=15),
         lender_id=lender_id,
         is_generated=False,
     )
