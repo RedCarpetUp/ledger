@@ -4700,6 +4700,7 @@ def test_moratorium_emi_schedule(session: Session) -> None:
         session.query(LoanMoratorium).filter(LoanMoratorium.loan_id == user_loan.loan_id).first()
     )
     assert loan_moratorium is not None
+    assert loan_moratorium.due_date_after_moratorium == parse_date("2020-12-15").date()
 
     moratorium_interest_for_sep = (
         session.query(MoratoriumInterest.interest)

@@ -25,14 +25,20 @@ def provide_moratorium(user_loan: BaseLoan, start_date: date, end_date: date):
         extra_details={"start_date": start_date.isoformat(), "end_date": end_date.isoformat()},
     )
 
+    next_due_date_after_moratorium_ends = (
+        user_loan.session.query(LoanSchedule.due_date)
+        .filter(LoanSchedule.due_date > end_date)
+        .order_by(LoanSchedule.due_date)
+        .limit(1)
+        .scalar()
+    )
+
     loan_moratorium = LoanMoratorium.new(
         user_loan.session,
         loan_id=user_loan.loan_id,
         start_date=start_date,
         end_date=end_date,
-        due_date_after_moratorium=LoanSchedule.get_next_emi_due_date(
-            session=user_loan.session, loan_id=user_loan.loan_id, current_due_date=end_date
-        ),
+        due_date_after_moratorium=next_due_date_after_moratorium_ends,
     )
 
     # Get future emis of all the bills

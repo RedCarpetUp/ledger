@@ -278,22 +278,6 @@ class LoanSchedule(AuditMixin):
     def remaining_amount(self):
         return self.total_due_amount - self.payment_received
 
-    @classmethod
-    def get_next_emi_due_date(cls, session: Session, loan_id: int, current_due_date: PythonDate):
-        current_emi = (
-            session.query(cls).filter(cls.bill_id.is_(None), cls.due_date == current_due_date).first()
-        )
-        next_emi = (
-            session.query(cls)
-            .filter(
-                cls.loan_id == loan_id,
-                cls.bill_id.is_(None),
-                cls.emi_number == current_emi.emi_number + 1,
-            )
-            .first()
-        )
-        return next_emi.due_date
-
     def interest_to_accrue(self, session: Session):
         loan_moratorium = (
             session.query(LoanMoratorium)
