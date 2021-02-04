@@ -22,8 +22,6 @@ from rush.create_bill import bill_generate
 from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import get_account_balance_from_str
 from rush.models import (
-    CardKitNumbers,
-    CardNames,
     CardTransaction,
     Lenders,
     Loan,
@@ -53,14 +51,7 @@ def create_products(session: Session) -> None:
 
 def card_db_updates(session: Session) -> None:
     create_products(session=session)
-
-    cn = CardNames(name="ruby")
-    session.add(cn)
-    session.flush()
-
-    ckn = CardKitNumbers(kit_number="10000", card_name_id=cn.id, last_5_digits="0000", status="active")
-    session.add(ckn)
-    session.flush()
+    pass
 
 
 def create_user(session: Session) -> None:
@@ -115,13 +106,13 @@ def test_medical_health_card_swipe(session: Session) -> None:
         amount=Decimal(700),
         description="Amazon.com",
         mcc="8011",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="a",
         trace_no="123456",
     )
     swipe_loan_id = swipe["data"].loan_id
 
     transaction = session.query(CardTransaction).filter(CardTransaction.mcc == "8011").first()
-
+    assert transaction is not None
     assert transaction.amount == Decimal(700)
     assert transaction.description == "Amazon.com"
 
@@ -153,7 +144,7 @@ def test_mixed_health_card_swipe(session: Session) -> None:
         amount=Decimal(1500),
         description="Max Hospital",
         mcc="8011",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="b",
         trace_no="123456",
     )
     medical_swipe_loan_id = medical_swipe["data"].loan_id
@@ -164,7 +155,7 @@ def test_mixed_health_card_swipe(session: Session) -> None:
         txn_time=parse_date("2020-07-11 18:30:10"),
         amount=Decimal(700),
         description="Amazon.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="c",
         trace_no="123456",
     )
     non_medical_swipe_loan_id = non_medical_swipe["data"].loan_id
@@ -202,7 +193,7 @@ def test_generate_health_card_bill_1(session: Session) -> None:
         amount=Decimal(1000),
         description="Amazon.com",
         mcc="8011",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="d",
         trace_no="123456",
     )
     bill_id = swipe["data"].loan_id
@@ -259,7 +250,7 @@ def test_generate_health_card_bill_2(session: Session) -> None:
         txn_time=parse_date("2020-07-08 19:23:11"),
         amount=Decimal(1000),
         description="Amazon.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="e",
         trace_no="123456",
     )
     bill_id = swipe["data"].loan_id
@@ -317,7 +308,7 @@ def test_generate_health_card_bill_3(session: Session) -> None:
         amount=Decimal(1000),
         description="Apollo Hospital",
         mcc="8011",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="f",
         trace_no="123456",
     )
     medical_bill_id = medical_swipe["data"].loan_id
@@ -328,7 +319,7 @@ def test_generate_health_card_bill_3(session: Session) -> None:
         txn_time=parse_date("2020-07-09 19:23:11"),
         amount=Decimal(1500),
         description="Amazon.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="g",
         trace_no="123456",
     )
     non_medical_bill_id = non_medical_swipe["data"].loan_id
@@ -390,7 +381,7 @@ def test_mixed_payment_received(session: Session) -> None:
         amount=Decimal(1000),
         description="Apollo Hospital",
         mcc="8011",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="h",
         trace_no="123456",
     )
     medical_bill_id = medical_swipe["data"].loan_id
@@ -401,7 +392,7 @@ def test_mixed_payment_received(session: Session) -> None:
         txn_time=parse_date("2020-07-09 19:23:11"),
         amount=Decimal(1500),
         description="Amazon.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="i",
         trace_no="123456",
     )
     non_medical_bill_id = non_medical_swipe["data"].loan_id
@@ -506,7 +497,7 @@ def test_medical_payment_received(session: Session) -> None:
         amount=Decimal(1000),
         description="Apollo Hospital",
         mcc="8011",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="j",
         trace_no="123456",
     )
     bill_id = medical_swipe["data"].loan_id
@@ -606,7 +597,7 @@ def test_non_medical_payment_received(session: Session) -> None:
         txn_time=parse_date("2020-07-09 19:23:11"),
         amount=Decimal(1500),
         description="Amazon.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="k",
         trace_no="123456",
     )
     bill_id = non_medical_swipe["data"].loan_id

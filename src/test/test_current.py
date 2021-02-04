@@ -53,16 +53,15 @@ from rush.lender_funds import (
 from rush.loan_schedule.extension import extend_schedule
 from rush.loan_schedule.moratorium import provide_moratorium
 from rush.models import (
-    CardKitNumbers,
-    CardNames,
     EventDpd,
     Fee,
     JournalEntry,
     LedgerTriggerEvent,
-    LenderPy,
     Lenders,
     LoanData,
     LoanMoratorium,
+    LoanSchedule,
+    MoratoriumInterest,
     PaymentMapping,
     PaymentSplit,
     Product,
@@ -100,17 +99,7 @@ def create_products(session: Session) -> None:
 
 def card_db_updates(session: Session) -> None:
     create_products(session=session)
-
-    cn = CardNames(name="ruby")
-    session.add(cn)
-    session.flush()
-    ckn = CardKitNumbers(kit_number="00000", card_name_id=cn.id, last_5_digits="0000", status="active")
-    session.add(ckn)
-    session.flush()
-
-    ckn = CardKitNumbers(kit_number="11111", card_name_id=cn.id, last_5_digits="0000", status="active")
-    session.add(ckn)
-    session.flush()
+    pass
 
 
 def test_user2(session: Session) -> None:
@@ -143,7 +132,6 @@ def test_lenders(session: Session) -> None:
     session.flush()
     lender = session.query(Lenders).first()
     assert isinstance(lender, Lenders) == True
-    LenderPy(id=lender.id, performed_by=123, lender_name="DMI", row_status="active")
 
 
 def test_lender_disbursal(session: Session) -> None:
@@ -182,7 +170,7 @@ def test_card_swipe_and_reversal(session: Session) -> None:
         txn_time=parse_date("2020-05-01 14:23:11"),
         amount=Decimal(700),
         description="Amazon.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_1",
         trace_no="123456",
     )
 
@@ -192,7 +180,7 @@ def test_card_swipe_and_reversal(session: Session) -> None:
         txn_time=parse_date("2020-05-02 11:22:11"),
         amount=Decimal(200),
         description="Flipkart.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_2",
         trace_no="123456",
     )
 
@@ -226,7 +214,7 @@ def test_card_swipe_and_reversal(session: Session) -> None:
         txn_time=parse_date("2020-05-02 17:22:11"),
         amount=Decimal(200),
         description="Flipkart.com",
-        txn_ref_no="dummy_txn_ref_no_2",
+        txn_ref_no="dummy_txn_ref_no_3",
         trace_no="123452",
     )
 
@@ -261,7 +249,7 @@ def test_closing_bill(session: Session) -> None:
         txn_time=swipe_date,
         amount=Decimal(3000),
         description="BigB.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_4",
         trace_no="123456",
     )
 
@@ -400,7 +388,7 @@ def test_closing_bill(session: Session) -> None:
         txn_time=parse_date("2019-05-20 19:23:11"),
         amount=Decimal(3000),
         description="BigB.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_5",
         trace_no="123456",
     )
 
@@ -448,7 +436,7 @@ def test_generate_bill_1(session: Session) -> None:
         txn_time=parse_date("2020-04-08 19:23:11"),
         amount=Decimal(1000),
         description="BigB.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_6",
         trace_no="123456",
     )
     bill_id = swipe["data"].loan_id
@@ -525,7 +513,7 @@ def test_generate_bill_reducing_interest_1(session: Session) -> None:
         txn_time=parse_date("2020-04-08 19:23:11"),
         amount=Decimal(1200),
         description="BigB.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_7",
         trace_no="123456",
     )
     bill_id = swipe["data"].loan_id
@@ -633,7 +621,7 @@ def test_min_multiplier(session: Session) -> None:
         txn_time=parse_date("2020-04-08 19:23:11"),
         amount=Decimal(12000),
         description="BigB.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_8",
         trace_no="123456",
     )
     bill_id = swipe["data"].loan_id
@@ -699,7 +687,7 @@ def test_min_tenure(session: Session) -> None:
         txn_time=parse_date("2020-04-08 19:23:11"),
         amount=Decimal(12000),
         description="BigB.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_9",
         trace_no="123456",
     )
     bill_id = swipe["data"].loan_id
@@ -839,6 +827,7 @@ def _accrue_late_fine_bill_1(session: Session) -> None:
         .filter(Fee.identifier_id == bill.id, Fee.identifier == "bill", Fee.name == "late_fee")
         .one_or_none()
     )
+    assert fee_due is not None
     assert fee_due.net_amount == Decimal(100)
     assert fee_due.gross_amount == Decimal(118)
 
@@ -859,6 +848,7 @@ def _accrue_late_fine_bill_2(session: Session) -> None:
         .order_by(Fee.id.desc())
         .one_or_none()
     )
+    assert fee_due is not None
     assert fee_due.net_amount == Decimal(100)
     assert fee_due.gross_amount == Decimal(118)
 
@@ -928,6 +918,7 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
     assert min_due == Decimal(0)
 
     bill_fee = session.query(Fee).filter_by(id=fee_id).one_or_none()
+    assert bill_fee is not None
     assert bill_fee.fee_status == "PAID"
     assert bill_fee.net_amount_paid == Decimal(100)
     assert bill_fee.sgst_paid == Decimal(9)
@@ -1025,6 +1016,7 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
         .filter(Fee.identifier_id == bill.id, Fee.identifier == "bill", Fee.name == "late_fee")
         .one_or_none()
     )
+    assert fee_due is not None
     assert fee_due.fee_status == "PAID"
 
     _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine/r")
@@ -1168,7 +1160,7 @@ def _generate_bill_2(session: Session) -> None:
         txn_time=parse_date("2020-05-08 19:23:11"),
         amount=Decimal(2000),
         description="BigBasket.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_10",
         trace_no="123456",
     )
 
@@ -1280,7 +1272,7 @@ def test_generate_bill_3(session: Session) -> None:
         txn_time=parse_date("2020-05-08 20:23:11"),
         amount=Decimal(1500),
         description="Flipkart.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_11",
         trace_no="123456",
     )
 
@@ -1339,7 +1331,7 @@ def test_emi_creation(session: Session) -> None:
         txn_time=parse_date("2020-04-08 19:23:11"),
         amount=Decimal(6000),
         description="BigBasket.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_12",
         trace_no="123456",
     )
 
@@ -1392,7 +1384,7 @@ def test_subsequent_emi_creation(session: Session) -> None:
         txn_time=parse_date("2020-04-08 19:23:11"),
         amount=Decimal(6000),
         description="BigBasket.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_13",
         trace_no="123456",
     )
 
@@ -1412,7 +1404,7 @@ def test_subsequent_emi_creation(session: Session) -> None:
         txn_time=parse_date("2020-05-08 19:23:11"),
         amount=Decimal(6000),
         description="BigBasket.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_14",
         trace_no="123456",
     )
 
@@ -1474,7 +1466,7 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
         txn_time=parse_date("2020-05-08 19:23:11"),
         amount=Decimal(6000),
         description="BigBasket.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_17",
         trace_no="123456",
     )
 
@@ -1627,7 +1619,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-20 17:23:01"),
         amount=Decimal(129),
         description="PAYTM                  Noida         IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_18",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1636,7 +1628,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-22 09:33:18"),
         amount=Decimal(115),
         description="TPL*UDIO               MUMBAI        IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_19",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1645,7 +1637,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-22 09:50:46"),
         amount=Decimal(500),
         description="AIRTELMONEY            MUMBAI        IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_20",
         trace_no="123456",
     )
     refunded_swipe = create_card_swipe(
@@ -1654,7 +1646,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-22 12:50:05"),
         amount=Decimal(2),
         description="PHONEPE RECHARGE.      GURGAON       IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_21",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1663,7 +1655,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-23 01:18:54"),
         amount=Decimal(100),
         description="WWW YESBANK IN         GURGAON       IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_22",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1672,7 +1664,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-23 01:42:51"),
         amount=Decimal(54),
         description="WWW YESBANK IN         GURGAON       IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_23",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1681,7 +1673,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-23 01:49:44"),
         amount=Decimal(1100),
         description="Payu Payments Pvt ltd  Gurgaon       IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_24",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1690,7 +1682,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-23 13:12:33"),
         amount=Decimal(99),
         description="ULLU DIGITAL PRIVATE L MUMBAI        IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_25",
         trace_no="123456",
     )
 
@@ -1717,7 +1709,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         amount=Decimal(2500),
         description="WWW YESBANK IN         GURGAON       IND",
         source="ATM",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_26",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1726,7 +1718,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-24 22:09:42"),
         amount=Decimal(99),
         description="PayTM*KookuDigitalPriP Mumbai        IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_27",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1735,7 +1727,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-25 08:33:40"),
         amount=Decimal(1400),
         description="WWW YESBANK IN         GURGAON       IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_28",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1744,7 +1736,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-25 10:26:12"),
         amount=Decimal(380),
         description="WWW YESBANK IN         GURGAON       IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_29",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1753,7 +1745,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-25 11:40:05"),
         amount=Decimal(199),
         description="PAYTM                  Noida         IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_30",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1762,7 +1754,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-25 11:57:15"),
         amount=Decimal(298),
         description="PAYTM                  Noida         IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_31",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1771,7 +1763,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-25 12:25:57"),
         amount=Decimal(298),
         description="PAYTM                  Noida         IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_32",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1780,7 +1772,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-26 08:04:47"),
         amount=Decimal(1450),
         description="WWW YESBANK IN         GURGAON       IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_33",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1789,7 +1781,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-26 14:47:41"),
         amount=Decimal(110),
         description="TPL*UDIO               MUMBAI        IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_34",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1798,7 +1790,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-26 16:37:27"),
         amount=Decimal(700),
         description="WWW YESBANK IN         GURGAON       IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_35",
         trace_no="123456",
     )
     one_sixty_rupee = create_card_swipe(
@@ -1807,7 +1799,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-26 22:10:58"),
         amount=Decimal(160),
         description="Linkyun Technology Pri Gurgaon       IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_36",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1816,7 +1808,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-27 12:25:25"),
         amount=Decimal(299),
         description="PAYTM                  Noida         IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_37",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1825,7 +1817,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-28 20:38:02"),
         amount=Decimal(199),
         description="Linkyun Technology Pri Gurgaon       IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_38",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1834,7 +1826,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-28 21:45:55"),
         amount=Decimal(800),
         description="WWW YESBANK IN         GURGAON       IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_39",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1843,7 +1835,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-29 10:05:58"),
         amount=Decimal(525),
         description="Payu Payments Pvt ltd  Gurgaon       IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_40",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1852,7 +1844,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-05-30 16:04:21"),
         amount=Decimal(1400),
         description="WWW YESBANK IN         GURGAON       IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_41",
         trace_no="123456",
     )
 
@@ -1870,6 +1862,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         .filter(Fee.identifier_id == bill_may.id, Fee.identifier == "bill", Fee.name == "atm_fee")
         .one_or_none()
     )
+    assert atm_fee_due is not None
     assert atm_fee_due.gross_amount == 59
 
     create_card_swipe(
@@ -1878,7 +1871,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-03 13:20:40"),
         amount=Decimal("150"),
         description="JUNE",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_42",
         trace_no="123456",
     )
     one_rupee_1 = create_card_swipe(
@@ -1887,7 +1880,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-07 17:09:57"),
         amount=Decimal("1"),
         description="JUNE",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_43",
         trace_no="123456",
     )
     one_rupee_2 = create_card_swipe(
@@ -1896,7 +1889,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-07 17:12:01"),
         amount=Decimal("1"),
         description="JUNE",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_44",
         trace_no="123456",
     )
     one_rupee_3 = create_card_swipe(
@@ -1905,7 +1898,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-07 17:26:54"),
         amount=Decimal("1"),
         description="JUNE",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_45",
         trace_no="123456",
     )
     one_rupee_4 = create_card_swipe(
@@ -1914,7 +1907,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-07 18:02:08"),
         amount=Decimal("1"),
         description="JUNE",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_46",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1923,7 +1916,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-08 20:03:37"),
         amount=Decimal("281.52"),
         description="JUNE",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_47",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1932,7 +1925,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-09 14:58:57"),
         amount=Decimal("810"),
         description="JUNE",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_48",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1941,7 +1934,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-09 15:02:50"),
         amount=Decimal("939.96"),
         description="JUNE",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_49",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1950,7 +1943,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-09 15:43:12"),
         amount=Decimal("240.54"),
         description="JUNE",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_50",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1959,7 +1952,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-09 15:51:18"),
         amount=Decimal("240.08"),
         description="JUNE",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_51",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1968,7 +1961,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-10 09:37:59"),
         amount=Decimal("10"),
         description="JUNE",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_52",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1977,7 +1970,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-10 15:21:01"),
         amount=Decimal("1700.84"),
         description="JUNE",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_53",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1986,7 +1979,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-10 23:27:06"),
         amount=Decimal("273.39"),
         description="JUNE",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_54",
         trace_no="123456",
     )
     create_card_swipe(
@@ -1995,7 +1988,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-10 23:31:55"),
         amount=Decimal("273.39"),
         description="JUNE",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_55",
         trace_no="123456",
     )
     create_card_swipe(
@@ -2004,7 +1997,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-12 17:11:11"),
         amount=Decimal("1254.63"),
         description="JUNE",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_56",
         trace_no="123456",
     )
     create_card_swipe(
@@ -2013,7 +2006,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-13 11:59:50"),
         amount=Decimal("281.52"),
         description="JUNE",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_57",
         trace_no="123456",
     )
     create_card_swipe(
@@ -2022,7 +2015,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-13 12:06:56"),
         amount=Decimal("281.52"),
         description="JUNE",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_58",
         trace_no="123456",
     )
     create_card_swipe(
@@ -2031,7 +2024,7 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         txn_time=parse_date("2020-06-13 12:17:49"),
         amount=Decimal("1340.64"),
         description="JUNE",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_59",
         trace_no="123456",
     )
 
@@ -2595,6 +2588,7 @@ def _pay_minimum_amount_bill_2(session: Session) -> None:
         .filter(LedgerTriggerEvent.name == "payment_received")
         .first()
     )
+    assert balance_paid is not None
     assert balance_paid.amount == Decimal(110)
 
 
@@ -2631,7 +2625,7 @@ def test_refund_1(session: Session) -> None:
         txn_time=parse_date("2020-05-10 19:23:11"),
         amount=Decimal(1500),
         description="BigBB.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_61",
         trace_no="123456",
     )
     refund_date = parse_date("2020-05-15 15:24:34")
@@ -2682,7 +2676,7 @@ def test_lender_incur(session: Session) -> None:
         txn_time=parse_date("2020-06-08 19:23:11"),
         amount=Decimal(1000),
         description="BigBasket.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_63",
         trace_no="123456",
     )
     bill_id = swipe["data"].loan_id
@@ -2707,7 +2701,7 @@ def test_lender_incur(session: Session) -> None:
         txn_time=parse_date("2020-06-29 19:23:11"),
         amount=Decimal(1500),
         description="BigBasket.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_62",
         trace_no="123456",
     )
     bill = bill_generate(user_loan)
@@ -2736,7 +2730,7 @@ def test_lender_incur(session: Session) -> None:
         txn_time=parse_date("2020-07-29 19:23:11"),
         amount=Decimal(1500),
         description="Flipkart.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_65",
         trace_no="123456",
     )
     lender_interest_incur(
@@ -2775,7 +2769,7 @@ def test_lender_incur_two(session: Session) -> None:
         txn_time=parse_date("2020-07-29 19:23:11"),
         amount=Decimal(500),
         description="BigBasket.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_66",
         trace_no="123456",
     )
     swipe = create_card_swipe(
@@ -2784,7 +2778,7 @@ def test_lender_incur_two(session: Session) -> None:
         txn_time=parse_date("2020-07-29 10:23:11"),
         amount=Decimal(500),
         description="BigBasket.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_67",
         trace_no="123456",
     )
     user_loan = get_user_product(session, a.id)
@@ -2873,7 +2867,7 @@ def test_prepayment(session: Session) -> None:
         txn_time=parse_date("2020-05-08 19:23:11"),
         amount=Decimal(1000),
         description="BigBasket.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_68",
         trace_no="123456",
     )
     bill_id = swipe["data"].loan_id
@@ -3062,7 +3056,7 @@ def test_moratorium(session: Session) -> None:
         txn_time=parse_date("2020-01-24 16:29:25"),
         amount=Decimal(2500),
         description="WWW YESBANK IN         GURGAON       IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_69",
         trace_no="123456",
     )
 
@@ -3082,16 +3076,10 @@ def test_moratorium(session: Session) -> None:
         session, bill_may.table.bill_due_date + relativedelta(days=1), user_loan
     )
 
-    # Give moratorium
-    m = LoanMoratorium.new(
-        session,
-        loan_id=user_loan.loan_id,
-        start_date=parse_date("2020-03-01"),
-        end_date=parse_date("2020-06-01"),
-    )
-
-    # Apply moratorium\
-    provide_moratorium(user_loan, m.start_date.date(), m.end_date.date())
+    start_date = parse_date("2020-03-15").date()
+    end_date = parse_date("2020-05-15").date()
+    # Apply moratorium
+    provide_moratorium(user_loan, start_date, end_date)
 
     # Check if scehdule has been updated according to moratorium
     emis = user_loan.get_loan_schedule()
@@ -3140,7 +3128,7 @@ def test_moratorium_schedule(session: Session) -> None:
         txn_time=parse_date("2020-04-08 19:23:11"),
         amount=Decimal(6000),
         description="BigBasket.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="a",
         trace_no="123456",
     )
 
@@ -3203,7 +3191,7 @@ def test_moratorium_schedule(session: Session) -> None:
         txn_time=parse_date("2020-05-08 19:23:11"),
         amount=Decimal(6000),
         description="BigBasket.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="b",
         trace_no="123456",
     )
 
@@ -3227,16 +3215,10 @@ def test_moratorium_schedule(session: Session) -> None:
         session, bill_may.table.bill_due_date + relativedelta(days=1), user_loan
     )
 
-    # Give moratorium to user
-    m = LoanMoratorium.new(
-        session,
-        loan_id=uc.loan_id,
-        start_date=parse_date("2020-09-01"),
-        end_date=parse_date("2020-12-01"),
-    )
-
+    start_date = parse_date("2020-09-15").date()
+    end_date = parse_date("2020-11-15").date()
     # Apply moratorium
-    provide_moratorium(user_loan, m.start_date.date(), m.end_date.date())
+    provide_moratorium(user_loan, start_date, end_date)
 
     # Get list post refresh
     emis = uc.get_loan_schedule()
@@ -3293,7 +3275,7 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
         txn_time=parse_date("2020-01-24 16:29:25"),
         amount=Decimal(2500),
         description="WWW YESBANK IN         GURGAON       IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="e",
         trace_no="123456",
     )
 
@@ -3319,13 +3301,10 @@ def test_is_in_moratorium(session: Session, monkeypatch: MonkeyPatch) -> None:
 
     assert user_loan.get_remaining_min(parse_date("2020-02-01").date()) == 284
 
-    # Give moratorium
-    m = LoanMoratorium.new(
-        session,
-        loan_id=user_loan.loan_id,
-        start_date=parse_date("2020-01-20"),
-        end_date=parse_date("2020-03-20"),
-    )
+    start_date = parse_date("2020-01-15").date()
+    end_date = parse_date("2020-03-15").date()
+    # Apply moratorium
+    provide_moratorium(user_loan, start_date, end_date)
 
     assert (
         LoanMoratorium.is_in_moratorium(
@@ -3380,7 +3359,7 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
         txn_time=parse_date("2020-03-19 21:33:53"),
         amount=Decimal(10),
         description="TRUEBALANCE IO         GURGAON       IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="c",
         trace_no="123456",
     )
 
@@ -3390,7 +3369,7 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
         txn_time=parse_date("2020-03-24 14:01:35"),
         amount=Decimal(100),
         description="PAY*TRUEBALANCE IO     GURGAON       IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="d",
         trace_no="123456",
     )
 
@@ -3409,7 +3388,7 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
         txn_time=parse_date("2020-04-03 17:41:43"),
         amount=Decimal(4),
         description="TRUEBALANCE IO         GURGAON       IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="g",
         trace_no="123456",
     )
 
@@ -3419,7 +3398,7 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
         txn_time=parse_date("2020-04-12 22:02:47"),
         amount=Decimal(52),
         description="PAYU PAYMENTS PVT LTD  0001243054000 IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="f",
         trace_no="123456",
     )
 
@@ -3440,16 +3419,10 @@ def test_moratorium_live_user_1836540(session: Session) -> None:
         session, bill_april.table.bill_due_date + relativedelta(days=1), user_loan
     )
 
-    # Give moratorium
-    m = LoanMoratorium.new(
-        session,
-        loan_id=user_loan.loan_id,
-        start_date=parse_date("2020-04-01"),
-        end_date=parse_date("2020-06-01"),
-    )
-
+    start_date = parse_date("2020-04-15").date()
+    end_date = parse_date("2020-05-15").date()
     # Apply moratorium
-    provide_moratorium(user_loan, m.start_date.date(), m.end_date.date())
+    provide_moratorium(user_loan, start_date, end_date)
 
     # Get emi list post few bill creations
     emis = user_loan.get_loan_schedule()
@@ -3500,7 +3473,7 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
         txn_time=parse_date("2020-03-19 21:33:53"),
         amount=Decimal(10),
         description="TRUEBALANCE IO         GURGAON       IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="l",
         trace_no="123456",
     )
 
@@ -3510,7 +3483,7 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
         txn_time=parse_date("2020-03-24 14:01:35"),
         amount=Decimal(100),
         description="PAY*TRUEBALANCE IO     GURGAON       IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="i",
         trace_no="123456",
     )
 
@@ -3524,7 +3497,7 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
         txn_time=parse_date("2020-04-03 17:41:43"),
         amount=Decimal(4),
         description="TRUEBALANCE IO         GURGAON       IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="h",
         trace_no="123456",
     )
 
@@ -3534,7 +3507,7 @@ def test_moratorium_live_user_1836540_with_extension(session: Session) -> None:
         txn_time=parse_date("2020-04-12 22:02:47"),
         amount=Decimal(52),
         description="PAYU PAYMENTS PVT LTD  0001243054000 IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="m",
         trace_no="123456",
     )
 
@@ -3602,7 +3575,7 @@ def test_reducing_interest_with_extension(session: Session) -> None:
         txn_time=parse_date("2020-03-19 21:33:53"),
         amount=Decimal(10),
         description="TRUEBALANCE IO         GURGAON       IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="n",
         trace_no="123456",
     )
 
@@ -3612,7 +3585,7 @@ def test_reducing_interest_with_extension(session: Session) -> None:
         txn_time=parse_date("2020-03-24 14:01:35"),
         amount=Decimal(100),
         description="PAY*TRUEBALANCE IO     GURGAON       IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="k",
         trace_no="123456",
     )
 
@@ -3626,7 +3599,7 @@ def test_reducing_interest_with_extension(session: Session) -> None:
         txn_time=parse_date("2020-04-03 17:41:43"),
         amount=Decimal(4),
         description="TRUEBALANCE IO         GURGAON       IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="o",
         trace_no="123456",
     )
 
@@ -3636,7 +3609,7 @@ def test_reducing_interest_with_extension(session: Session) -> None:
         txn_time=parse_date("2020-04-12 22:02:47"),
         amount=Decimal(52),
         description="PAYU PAYMENTS PVT LTD  0001243054000 IND",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="j",
         trace_no="123456",
     )
 
@@ -3700,7 +3673,7 @@ def test_intermediate_bill_generation(session: Session) -> None:
         txn_time=parse_date("2020-10-02 11:22:11"),
         amount=Decimal(200),
         description="Flipkart.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="p",
         trace_no="123456",
     )
 
@@ -3756,7 +3729,7 @@ def test_transaction_before_activation(session: Session) -> None:
         txn_time=parse_date("2020-05-02 11:22:11"),
         amount=Decimal(200),
         description="Flipkart.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="q",
         trace_no="123456",
     )
 
@@ -3824,7 +3797,7 @@ def test_excess_payment_in_future_emis(session: Session) -> None:
         txn_time=parse_date("2020-05-08 19:23:11"),
         amount=Decimal(2000),
         description="BigBasket.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="r",
         trace_no="123456",
     )
 
@@ -3984,7 +3957,7 @@ def test_readjust_future_payment_with_new_swipe(session: Session) -> None:
         txn_time=parse_date("2020-05-08 19:23:11"),
         amount=Decimal(2000),
         description="BigBasket.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="s",
         trace_no="123456",
     )
 
@@ -4024,7 +3997,7 @@ def test_readjust_future_payment_with_extension(session: Session) -> None:
         txn_time=parse_date("2020-10-02 19:23:11"),
         amount=Decimal(1000),
         description="BigB.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="t",
         trace_no="123456",
     )
     assert swipe["result"] == "success"
@@ -4098,7 +4071,7 @@ def test_customer_fee_refund(session: Session) -> None:
         txn_time=parse_date("2020-11-04 19:23:11"),
         amount=Decimal(1000),
         description="BigB.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="u",
         trace_no="123456",
     )
 
@@ -4114,6 +4087,7 @@ def test_customer_fee_refund(session: Session) -> None:
         .filter(Fee.identifier_id == bill.id, Fee.identifier == "bill", Fee.name == "late_fee")
         .one_or_none()
     )
+    assert fee_due is not None
     assert fee_due.net_amount == Decimal(100)
     assert fee_due.gross_amount == Decimal(118)
 
@@ -4145,7 +4119,7 @@ def test_customer_fee_refund(session: Session) -> None:
     )
 
     bill_fee = session.query(Fee).filter_by(id=fee_due.id).one_or_none()
-
+    assert bill_fee is not None
     assert bill_fee.fee_status == "PAID"
     assert bill_fee.net_amount_paid == Decimal(100)
     assert bill_fee.gross_amount_paid == Decimal(118)
@@ -4161,7 +4135,7 @@ def test_customer_fee_refund(session: Session) -> None:
     assert status["result"] == "success"
 
     fee = session.query(Fee).filter_by(id=fee_due.id).one_or_none()
-
+    assert fee is not None
     assert fee.fee_status == "REFUND"
 
 
@@ -4191,7 +4165,7 @@ def test_customer_prepayment_refund(session: Session) -> None:
         txn_time=parse_date("2020-11-04 19:23:11"),
         amount=Decimal(1000),
         description="BigB.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="v",
         trace_no="123456",
     )
 
@@ -4286,7 +4260,7 @@ def test_find_split_to_slide_in_loan(session: Session) -> None:
         txn_time=parse_date("2020-11-04 19:23:11"),
         amount=Decimal(1000),
         description="BigB.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="w",
         trace_no="123456",
     )
     bill = bill_generate(user_loan=user_loan)
@@ -4302,7 +4276,7 @@ def test_find_split_to_slide_in_loan(session: Session) -> None:
         txn_time=parse_date("2020-12-04 19:23:11"),
         amount=Decimal(1200),
         description="BigB.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="x",
         trace_no="1234567",
     )
     bill = bill_generate(user_loan=user_loan)
@@ -4357,7 +4331,7 @@ def test_payment_split_for_multiple_fees_of_multiple_types(session: Session) -> 
         amount=Decimal(1200),
         description="WWW YESBANK IN         GURGAON       IND",
         source="ATM",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="y",
         trace_no="1234567",
     )
     create_card_swipe(
@@ -4367,7 +4341,7 @@ def test_payment_split_for_multiple_fees_of_multiple_types(session: Session) -> 
         amount=Decimal(2500),
         description="WWW YESBANK IN         GURGAON       IND",
         source="ATM",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="z",
         trace_no="1234567",
     )
     oct_bill = bill_generate(user_loan=user_loan, creation_time=parse_date("2020-11-01"))
@@ -4401,7 +4375,7 @@ def test_payment_split_for_multiple_fees_of_multiple_types(session: Session) -> 
         txn_time=parse_date("2020-11-04 19:23:11"),
         amount=Decimal(500),
         description="Flipkart.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dsa",
         trace_no="1234567",
     )
     create_card_swipe(
@@ -4410,7 +4384,7 @@ def test_payment_split_for_multiple_fees_of_multiple_types(session: Session) -> 
         txn_time=parse_date("2020-11-15 19:23:11"),
         amount=Decimal(800),
         description="Amazon.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dsad",
         trace_no="1234567",
     )
     create_card_swipe(
@@ -4420,7 +4394,7 @@ def test_payment_split_for_multiple_fees_of_multiple_types(session: Session) -> 
         amount=Decimal(1400),
         description="WWW YESBANK IN         GURGAON       IND",
         source="ATM",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="fsfsaf",
         trace_no="1234567",
     )
     nov_bill = bill_generate(user_loan=user_loan, creation_time=parse_date("2020-12-01"))
@@ -4493,7 +4467,7 @@ def test_updated_emi_payment_mapping_after_early_loan_close(session: Session) ->
         txn_time=parse_date("2020-11-04 19:23:11"),
         amount=Decimal(2000),
         description="BigB.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dsads",
         trace_no="123456",
     )
 
@@ -4660,3 +4634,611 @@ def test_updated_emi_payment_mapping_after_early_loan_close(session: Session) ->
 
     # This should be 1666.67 but we have an error of 0.01
     assert amount_settled[0][0] == Decimal("1666.66")
+
+
+def test_moratorium_emi_schedule(session: Session) -> None:
+    test_lenders(session)
+    card_db_updates(session)
+
+    user = User(
+        id=99,
+        performed_by=123,
+    )
+    session.add(user)
+    session.flush()
+
+    user_loan = create_user_product(
+        session=session,
+        user_id=user.id,
+        card_activation_date=parse_date("2020-08-02").date(),
+        card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
+        lender_id=62311,
+        tenure=12,
+    )
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-08-04 19:23:11"),
+        amount=Decimal(2500),
+        description="BigB.com",
+        txn_ref_no="dummy_txn_ref_no_1",
+        trace_no="123456",
+    )
+    bill_date = parse_date("2019-09-01").date()
+    bill_sep = bill_generate(user_loan=user_loan, creation_time=bill_date)
+
+    # check latest bill method
+    latest_bill = user_loan.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_sep.table.bill_due_date + relativedelta(days=1), user_loan
+    )
+
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_sep.id}/bill/interest_receivable/a"
+    )
+    assert interest_due == Decimal("75.67")
+
+    _, interest_accrued = get_account_balance_from_str(
+        session, book_string=f"{bill_sep.id}/bill/interest_accrued/r"
+    )
+    assert interest_accrued == Decimal("75.67")
+
+    interest_event = (
+        session.query(LedgerTriggerEvent)
+        .filter_by(loan_id=user_loan.loan_id, name="accrue_interest")
+        .order_by(LedgerTriggerEvent.post_date.desc())
+        .first()
+    )
+    assert interest_event is not None
+    assert interest_event.amount == Decimal("75.67")
+
+    start_date = parse_date("2020-09-15").date()
+    end_date = parse_date("2020-11-15").date()
+    # Apply moratorium
+    provide_moratorium(user_loan, start_date, end_date)
+
+    loan_moratorium = (
+        session.query(LoanMoratorium).filter(LoanMoratorium.loan_id == user_loan.loan_id).first()
+    )
+    assert loan_moratorium is not None
+    assert loan_moratorium.due_date_after_moratorium == parse_date("2020-12-15").date()
+
+    moratorium_interest_for_sep = (
+        session.query(MoratoriumInterest.interest)
+        .join(LoanSchedule, LoanSchedule.id == MoratoriumInterest.loan_schedule_id)
+        .filter(
+            LoanSchedule.bill_id == bill_sep.table.id,
+            LoanSchedule.due_date == bill_sep.table.bill_due_date,
+        )
+        .scalar()
+    )
+    assert moratorium_interest_for_sep is not None
+    assert moratorium_interest_for_sep == Decimal("75.67")
+
+    total_moratorium_interest_sep_bill = (
+        session.query(func.sum(MoratoriumInterest.interest))
+        .join(LoanSchedule, LoanSchedule.id == MoratoriumInterest.loan_schedule_id)
+        .filter(
+            LoanSchedule.bill_id == bill_sep.id,
+        )
+        .scalar()
+    )
+    assert total_moratorium_interest_sep_bill is not None
+    assert total_moratorium_interest_sep_bill == Decimal("227.01")
+
+    emis = user_loan.get_loan_schedule()
+
+    assert len(emis) == 15
+    assert emis[0].emi_number == 1
+    assert emis[0].total_due_amount == 0
+    assert emis[0].due_date == parse_date("2020-09-15").date()
+    assert emis[0].total_closing_balance == Decimal("2500.00")
+    assert emis[1].emi_number == 2
+    assert emis[1].total_due_amount == 0
+    assert emis[1].due_date == parse_date("2020-10-15").date()
+    assert emis[1].total_closing_balance == Decimal("2500.00")
+    assert emis[2].emi_number == 3
+    assert emis[2].total_due_amount == 0
+    assert emis[2].due_date == parse_date("2020-11-15").date()
+    assert emis[2].total_closing_balance == Decimal("2500.00")
+    assert emis[3].emi_number == 4
+    assert emis[3].principal_due == Decimal("208.33")
+    assert emis[3].interest_due == Decimal("302.68")  # Interest of 3 emis + this month's interest.
+    assert emis[3].total_due_amount == Decimal("511.01")
+    assert emis[3].due_date == parse_date("2020-12-15").date()
+    assert emis[3].total_closing_balance == Decimal("2500.00")
+    assert emis[4].emi_number == 5
+    assert emis[4].principal_due == Decimal("208.33")
+    assert emis[4].interest_due == Decimal("75.67")
+    assert emis[4].due_date == parse_date("2021-01-15").date()
+    assert emis[4].total_closing_balance == Decimal("2291.67")
+
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-09-04 19:23:11"),
+        amount=Decimal(2500),
+        description="BigB.com",
+        txn_ref_no="dummy_txn_ref_no_2",
+        trace_no="123456",
+    )
+
+    bill_date = parse_date("2019-10-01").date()
+    bill_oct = bill_generate(user_loan=user_loan, creation_time=bill_date)
+    # check latest bill method
+    latest_bill = user_loan.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_oct.table.bill_due_date + relativedelta(days=1), user_loan
+    )
+
+    _, sep_interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_sep.id}/bill/interest_receivable/a"
+    )
+    assert sep_interest_due == Decimal("151.34")
+
+    _, sep_interest_accrued = get_account_balance_from_str(
+        session, book_string=f"{bill_sep.id}/bill/interest_accrued/r"
+    )
+    assert sep_interest_accrued == Decimal("151.34")
+
+    _, oct_interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_oct.id}/bill/interest_receivable/a"
+    )
+    assert oct_interest_due == Decimal("75.67")
+
+    _, oct_interest_accrued = get_account_balance_from_str(
+        session, book_string=f"{bill_oct.id}/bill/interest_accrued/r"
+    )
+    assert oct_interest_accrued == Decimal("75.67")
+
+    interest_event = (
+        session.query(LedgerTriggerEvent)
+        .filter_by(loan_id=user_loan.loan_id, name="accrue_interest")
+        .order_by(LedgerTriggerEvent.post_date.desc())
+        .first()
+    )
+    assert interest_event is not None
+    assert interest_event.amount == Decimal("151.34")
+
+    moratorium_interest_for_oct = (
+        session.query(MoratoriumInterest.interest)
+        .join(LoanSchedule, LoanSchedule.id == MoratoriumInterest.loan_schedule_id)
+        .filter(
+            LoanSchedule.bill_id == bill_oct.table.id,
+            LoanSchedule.due_date == bill_oct.table.bill_due_date,
+        )
+        .scalar()
+    )
+    assert moratorium_interest_for_oct is not None
+    assert moratorium_interest_for_oct == Decimal("75.67")
+
+    total_moratorium_interest_oct_bill = (
+        session.query(func.sum(MoratoriumInterest.interest))
+        .join(LoanSchedule, LoanSchedule.id == MoratoriumInterest.loan_schedule_id)
+        .filter(
+            LoanSchedule.bill_id == bill_oct.id,
+        )
+        .scalar()
+    )
+    assert total_moratorium_interest_oct_bill is not None
+    assert total_moratorium_interest_oct_bill == Decimal("151.34")
+
+    total_moratorium_interest_accrued_till_oct = (
+        session.query(func.sum(MoratoriumInterest.interest))
+        .join(LoanSchedule, LoanSchedule.id == MoratoriumInterest.loan_schedule_id)
+        .filter(
+            MoratoriumInterest.moratorium_id == loan_moratorium.id,
+            LoanSchedule.due_date <= bill_oct.table.bill_due_date,
+        )
+        .scalar()
+    )
+    assert total_moratorium_interest_accrued_till_oct is not None
+    assert total_moratorium_interest_accrued_till_oct == Decimal("227.01")
+
+    emis = user_loan.get_loan_schedule()
+
+    assert len(emis) == 15
+    assert emis[0].emi_number == 1
+    assert emis[0].total_due_amount == 0
+    assert emis[0].due_date == parse_date("2020-09-15").date()
+    assert emis[0].total_closing_balance == Decimal("2500.00")
+    assert emis[1].emi_number == 2
+    assert emis[1].total_due_amount == 0
+    assert emis[1].due_date == parse_date("2020-10-15").date()
+    assert emis[1].total_closing_balance == Decimal("5000.00")
+    assert emis[2].emi_number == 3
+    assert emis[2].total_due_amount == 0
+    assert emis[2].due_date == parse_date("2020-11-15").date()
+    assert emis[2].total_closing_balance == Decimal("5000.00")
+    assert emis[3].emi_number == 4
+    assert emis[3].principal_due == Decimal("416.90")
+    assert emis[3].interest_due == Decimal("529.44")
+    assert emis[3].total_due_amount == Decimal("946.34")
+    assert emis[3].due_date == parse_date("2020-12-15").date()
+    assert emis[3].total_closing_balance == Decimal("5000.00")
+    assert emis[4].emi_number == 5
+    assert emis[4].principal_due == Decimal("416.90")
+    assert emis[4].interest_due == Decimal("151.10")
+    assert emis[4].due_date == parse_date("2021-01-15").date()
+    assert emis[4].total_closing_balance == Decimal("4583.10")
+
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-10-04 19:23:11"),
+        amount=Decimal(2500),
+        description="BigB.com",
+        txn_ref_no="dummy_txn_ref_no_3",
+        trace_no="123456",
+    )
+
+    bill_date = parse_date("2020-11-01").date()
+    bill_nov = bill_generate(user_loan=user_loan, creation_time=bill_date)
+    # check latest bill method
+    latest_bill = user_loan.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_nov.table.bill_due_date + relativedelta(days=1), user_loan
+    )
+
+    _, nov_interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_nov.id}/bill/interest_receivable/a"
+    )
+    assert nov_interest_due == Decimal("75.67")
+
+    _, nov_interest_accrued = get_account_balance_from_str(
+        session, book_string=f"{bill_nov.id}/bill/interest_accrued/r"
+    )
+    assert nov_interest_accrued == Decimal("75.67")
+
+    interest_event = (
+        session.query(LedgerTriggerEvent)
+        .filter_by(loan_id=user_loan.loan_id, name="accrue_interest")
+        .order_by(LedgerTriggerEvent.post_date.desc())
+        .first()
+    )
+    assert interest_event is not None
+    assert interest_event.amount == Decimal("227.01")
+
+    moratorium_interest_for_nov = (
+        session.query(MoratoriumInterest.interest)
+        .join(LoanSchedule, LoanSchedule.id == MoratoriumInterest.loan_schedule_id)
+        .filter(
+            LoanSchedule.bill_id == bill_nov.table.id,
+            LoanSchedule.due_date == bill_nov.table.bill_due_date,
+        )
+        .scalar()
+    )
+    assert moratorium_interest_for_nov is not None
+    assert moratorium_interest_for_nov == Decimal("75.67")
+
+    total_moratorium_interest_nov_bill = (
+        session.query(func.sum(MoratoriumInterest.interest))
+        .join(LoanSchedule, LoanSchedule.id == MoratoriumInterest.loan_schedule_id)
+        .filter(
+            LoanSchedule.bill_id == bill_nov.id,
+        )
+        .scalar()
+    )
+    assert total_moratorium_interest_nov_bill is not None
+    assert total_moratorium_interest_nov_bill == Decimal("75.67")
+
+    total_moratorium_interest_accrued_till_nov = (
+        session.query(func.sum(MoratoriumInterest.interest))
+        .join(LoanSchedule, LoanSchedule.id == MoratoriumInterest.loan_schedule_id)
+        .filter(
+            MoratoriumInterest.moratorium_id == loan_moratorium.id,
+            LoanSchedule.due_date <= bill_nov.table.bill_due_date,
+        )
+        .scalar()
+    )
+    assert total_moratorium_interest_accrued_till_nov is not None
+    assert total_moratorium_interest_accrued_till_nov == Decimal("454.02")
+
+    assert len(emis) == 15
+    assert emis[0].emi_number == 1
+    assert emis[0].total_due_amount == 0
+    assert emis[0].due_date == parse_date("2020-09-15").date()
+    assert emis[0].total_closing_balance == Decimal("2500.00")
+    assert emis[1].emi_number == 2
+    assert emis[1].total_due_amount == 0
+    assert emis[1].due_date == parse_date("2020-10-15").date()
+    assert emis[1].total_closing_balance == Decimal("5000.00")
+    assert emis[2].emi_number == 3
+    assert emis[2].total_due_amount == 0
+    assert emis[2].due_date == parse_date("2020-11-15").date()
+    assert emis[2].total_closing_balance == Decimal("7500.00")
+    assert emis[3].emi_number == 4
+    assert emis[3].principal_due == Decimal("625.21")
+    assert emis[3].interest_due == Decimal("680.80")
+    assert emis[3].total_due_amount == Decimal("1306.01")
+    assert emis[3].due_date == parse_date("2020-12-15").date()
+    assert emis[3].total_closing_balance == Decimal("7500.00")
+    assert emis[4].emi_number == 5
+    assert emis[4].principal_due == Decimal("625.21")
+    assert emis[4].interest_due == Decimal("226.79")
+    assert emis[4].due_date == parse_date("2021-01-15").date()
+    assert emis[4].total_closing_balance == Decimal("6874.79")
+
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-11-04 19:23:11"),
+        amount=Decimal(2500),
+        description="BigB.com",
+        txn_ref_no="dummy_txn_ref_no_4",
+        trace_no="123456",
+    )
+
+    bill_date = parse_date("2020-12-01").date()
+    bill_dec = bill_generate(user_loan=user_loan, creation_time=bill_date)
+    # check latest bill method
+    latest_bill = user_loan.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_dec.table.bill_due_date + relativedelta(days=1), user_loan
+    )
+
+    _, dec_interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_dec.id}/bill/interest_receivable/a"
+    )
+    assert dec_interest_due == Decimal("75.67")
+
+    _, dec_interest_accrued = get_account_balance_from_str(
+        session, book_string=f"{bill_dec.id}/bill/interest_accrued/r"
+    )
+    assert dec_interest_accrued == Decimal("75.67")
+
+    interest_event = (
+        session.query(LedgerTriggerEvent)
+        .filter_by(loan_id=user_loan.loan_id, name="accrue_interest")
+        .order_by(LedgerTriggerEvent.post_date.desc())
+        .first()
+    )
+    assert interest_event is not None
+    assert interest_event.amount == Decimal("302.45")
+
+    assert len(emis) == 15
+    assert emis[0].emi_number == 1
+    assert emis[0].total_due_amount == 0
+    assert emis[0].due_date == parse_date("2020-09-15").date()
+    assert emis[0].total_closing_balance == Decimal("2500.00")
+    assert emis[1].emi_number == 2
+    assert emis[1].total_due_amount == 0
+    assert emis[1].due_date == parse_date("2020-10-15").date()
+    assert emis[1].total_closing_balance == Decimal("5000.00")
+    assert emis[2].emi_number == 3
+    assert emis[2].total_due_amount == 0
+    assert emis[2].due_date == parse_date("2020-11-15").date()
+    assert emis[2].total_closing_balance == Decimal("7500.00")
+    assert emis[3].emi_number == 4
+    assert emis[3].principal_due == Decimal("833.54")
+    assert emis[3].interest_due == Decimal("756.47")
+    assert emis[3].total_due_amount == Decimal("1590.01")
+    assert emis[3].due_date == parse_date("2020-12-15").date()
+    assert emis[3].total_closing_balance == Decimal("10000.00")
+    assert emis[4].emi_number == 5
+    assert emis[4].principal_due == Decimal("833.54")
+    assert emis[4].interest_due == Decimal("302.46")
+    assert emis[4].due_date == parse_date("2021-01-15").date()
+    assert emis[4].total_closing_balance == Decimal("9166.46")
+
+
+def test_close_loan_in_moratorium(session: Session) -> None:
+    test_lenders(session)
+    card_db_updates(session)
+
+    user = User(
+        id=99,
+        performed_by=123,
+    )
+    session.add(user)
+    session.flush()
+
+    user_loan = create_user_product(
+        session=session,
+        user_id=user.id,
+        card_activation_date=parse_date("2020-08-02").date(),
+        card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
+        lender_id=62311,
+        tenure=12,
+    )
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-08-04 19:23:11"),
+        amount=Decimal(2500),
+        description="BigB.com",
+        txn_ref_no="dummy_txn_ref_no",
+        trace_no="123456",
+    )
+    bill_date = parse_date("2019-09-01").date()
+    bill_sep = bill_generate(user_loan=user_loan, creation_time=bill_date)
+
+    # check latest bill method
+    latest_bill = user_loan.get_latest_bill()
+    assert latest_bill is not None
+    assert isinstance(latest_bill, BaseBill) == True
+
+    # Interest event to be fired separately now
+    accrue_interest_on_all_bills(
+        session, bill_sep.table.bill_due_date + relativedelta(days=1), user_loan
+    )
+
+    _, interest_due = get_account_balance_from_str(
+        session, book_string=f"{bill_sep.id}/bill/interest_receivable/a"
+    )
+    assert interest_due == Decimal("75.67")
+
+    _, interest_accrued = get_account_balance_from_str(
+        session, book_string=f"{bill_sep.id}/bill/interest_accrued/r"
+    )
+    assert interest_accrued == Decimal("75.67")
+
+    interest_event = (
+        session.query(LedgerTriggerEvent)
+        .filter_by(loan_id=user_loan.loan_id, name="accrue_interest")
+        .order_by(LedgerTriggerEvent.post_date.desc())
+        .first()
+    )
+    assert interest_event is not None
+    assert interest_event.amount == Decimal("75.67")
+
+    start_date = parse_date("2020-09-15").date()
+    end_date = parse_date("2020-11-15").date()
+    # Apply moratorium
+    provide_moratorium(user_loan, start_date, end_date)
+
+    loan_moratorium = (
+        session.query(LoanMoratorium).filter(LoanMoratorium.loan_id == user_loan.loan_id).first()
+    )
+    assert loan_moratorium is not None
+
+    moratorium_interest_for_sep = (
+        session.query(MoratoriumInterest.interest)
+        .join(LoanSchedule, LoanSchedule.id == MoratoriumInterest.loan_schedule_id)
+        .filter(
+            LoanSchedule.bill_id == bill_sep.table.id,
+            LoanSchedule.due_date == bill_sep.table.bill_due_date,
+        )
+        .scalar()
+    )
+    assert moratorium_interest_for_sep is not None
+    assert moratorium_interest_for_sep == Decimal("75.67")
+
+    total_moratorium_interest_sep_bill = (
+        session.query(func.sum(MoratoriumInterest.interest))
+        .join(LoanSchedule, LoanSchedule.id == MoratoriumInterest.loan_schedule_id)
+        .filter(
+            LoanSchedule.bill_id == bill_sep.id,
+        )
+        .scalar()
+    )
+    assert total_moratorium_interest_sep_bill is not None
+    assert total_moratorium_interest_sep_bill == Decimal("227.01")
+
+    emis = user_loan.get_loan_schedule()
+
+    assert len(emis) == 15
+    assert emis[0].emi_number == 1
+    assert emis[0].total_due_amount == 0
+    assert emis[0].due_date == parse_date("2020-09-15").date()
+    assert emis[0].total_closing_balance == Decimal("2500.00")
+    assert emis[1].emi_number == 2
+    assert emis[1].total_due_amount == 0
+    assert emis[1].due_date == parse_date("2020-10-15").date()
+    assert emis[1].total_closing_balance == Decimal("2500.00")
+    assert emis[2].emi_number == 3
+    assert emis[2].total_due_amount == 0
+    assert emis[2].due_date == parse_date("2020-11-15").date()
+    assert emis[2].total_closing_balance == Decimal("2500.00")
+    assert emis[3].emi_number == 4
+    assert emis[3].principal_due == Decimal("208.33")
+    assert emis[3].interest_due == Decimal("302.68")  # Interest of 3 emis + this month's interest.
+    assert emis[3].total_due_amount == Decimal("511.01")
+    assert emis[3].due_date == parse_date("2020-12-15").date()
+    assert emis[3].total_closing_balance == Decimal("2500.00")
+    assert emis[4].emi_number == 5
+    assert emis[4].principal_due == Decimal("208.33")
+    assert emis[4].interest_due == Decimal("75.67")
+    assert emis[4].due_date == parse_date("2021-01-15").date()
+    assert emis[4].total_closing_balance == Decimal("2291.67")
+
+    payment_date = parse_date("2020-09-20")
+    payment_request_id = "a12319"
+    amount = Decimal(2575.67)
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=user.id,
+        payment_request_id=payment_request_id,
+    )
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
+    payment_received(session=session, user_loan=user_loan, payment_request_data=payment_requests_data)
+
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
+    )
+
+    bill = (
+        session.query(LoanData)
+        .filter(LoanData.user_id == user_loan.user_id)
+        .order_by(LoanData.bill_start_date.desc())
+        .first()
+    )
+
+    is_sep_bill_closed = is_bill_closed(session, bill)
+    assert is_sep_bill_closed is True
+
+    future_moratorium_interest_emis = (
+        session.query(MoratoriumInterest)
+        .filter(
+            MoratoriumInterest.moratorium_id == loan_moratorium.id,
+            LoanSchedule.id == MoratoriumInterest.loan_schedule_id,
+            LoanSchedule.due_date > payment_date,
+        )
+        .all()
+    )
+
+    for moratorium_interest_emi in future_moratorium_interest_emis:
+        assert moratorium_interest_emi.interest == Decimal("0")
+
+    emis = user_loan.get_loan_schedule()
+
+    assert len(emis) == 15
+    assert emis[0].emi_number == 1
+    assert emis[0].total_due_amount == 0
+    assert emis[0].due_date == parse_date("2020-09-15").date()
+    assert emis[0].total_closing_balance == Decimal("2500.00")
+    assert emis[0].payment_status == "UnPaid"
+    assert emis[1].emi_number == 2
+    assert emis[1].principal_due == Decimal("2500")
+    assert emis[1].interest_due == Decimal("75.67")
+    assert emis[1].total_due_amount == Decimal("2575.67")
+    assert emis[1].due_date == parse_date("2020-10-15").date()
+    assert emis[1].total_closing_balance == Decimal("2500.00")
+    assert emis[1].payment_status == "Paid"
+    assert emis[1].payment_received == Decimal("2500.00")
+    assert emis[1].last_payment_date == payment_date
+    assert emis[2].emi_number == 3
+    assert emis[2].total_due_amount == 0
+    assert emis[2].due_date == parse_date("2020-11-15").date()
+    assert emis[2].total_closing_balance == Decimal("2500.00")
+    assert emis[2].payment_status == "UnPaid"
+    assert emis[3].emi_number == 4
+    assert emis[3].principal_due == Decimal("0")
+    assert emis[3].interest_due == Decimal("0")
+    assert emis[3].total_due_amount == Decimal("0")
+    assert emis[3].due_date == parse_date("2020-12-15").date()
+    assert emis[3].total_closing_balance == Decimal("2500.00")
+    assert emis[3].payment_status == "UnPaid"
+    assert emis[4].emi_number == 5
+    assert emis[4].principal_due == Decimal("0")
+    assert emis[4].interest_due == Decimal("0")
+    assert emis[4].due_date == parse_date("2021-01-15").date()
+    assert emis[4].total_closing_balance == Decimal("2291.67")
+    assert emis[4].payment_status == "UnPaid"

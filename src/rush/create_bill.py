@@ -4,6 +4,10 @@ from datetime import (
     timedelta,
 )
 from decimal import Decimal
+from typing import (
+    List,
+    Union,
+)
 
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
@@ -15,15 +19,21 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
+from rush.card.transaction_loan import TransactionLoan
 from rush.create_emi import update_journal_entry
 from rush.ledger_events import (
     add_max_amount_event,
+    add_min_amount_event,
     bill_generate_event,
 )
 from rush.ledger_utils import get_account_balance_from_str
 from rush.loan_schedule.loan_schedule import create_bill_schedule
 from rush.min_payment import add_min_to_all_bills
-from rush.models import LedgerTriggerEvent
+from rush.models import (
+    CardTransaction,
+    LedgerTriggerEvent,
+    LoanSchedule,
+)
 from rush.utils import (
     get_current_ist_time,
     mul,
@@ -111,6 +121,26 @@ def bill_generate(
 
     # Update the bill row here.
     bill.table.principal = billed_amount
+
+    # Handling child loan emis for this bill.
+    child_loans: List[BaseLoan] = user_loan.get_child_loans()
+    for child_loan in child_loans:
+        child_loan_bill: BaseBill = child_loan.get_all_bills()[0]
+        amount = child_loan_bill.get_min_amount_to_add()
+        if amount:
+            CardTransaction.new(
+                session=session,
+                loan_id=bill.id,
+                txn_time=min(child_loan.amortization_date.date(), bill.bill_start_date),
+                amount=amount,
+                source="LEDGER",
+                description=f"Transaction Loan Rs. {child_loan_bill.table.principal} EMI",
+            )
+
+            # Calling the min generation event on all child loans
+            add_min_to_all_bills(
+                session=session, post_date=bill.table.bill_close_date, user_loan=child_loan
+            )
 
     # Add to max amount to pay account.
     add_max_amount_event(session, bill, lt, billed_amount)

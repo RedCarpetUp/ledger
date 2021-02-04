@@ -44,6 +44,10 @@ def create_lenders(session: Session) -> None:
 def create_products(session: Session) -> None:
     hc_product = Product(product_name="term_loan")
     session.add(hc_product)
+    txn_loan_product = Product(product_name="transaction_loan")
+    session.add(txn_loan_product)
+    rebel_product = Product(product_name="rebel")
+    session.add(rebel_product)
     session.flush()
 
 
@@ -228,6 +232,10 @@ def test_create_term_loan(session: Session) -> None:
         session=session, book_string=f"{loan.loan_id}/loan/lender_payable/l"
     )
     assert loan_lender_payable == Decimal("7090.5")
+
+    assert loan.get_remaining_min() == Decimal("0")
+
+    assert loan.get_remaining_max() == Decimal("10000")
 
     all_emis = user_loan.get_loan_schedule()
 

@@ -16,8 +16,6 @@ from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import get_account_balance_from_str
 from rush.lender_funds import lender_interest_incur
 from rush.models import (
-    CardKitNumbers,
-    CardNames,
     Lenders,
     Product,
     User,
@@ -37,17 +35,7 @@ def create_products(session: Session) -> None:
 
 def card_db_updates(session: Session) -> None:
     create_products(session=session)
-
-    cn = CardNames(name="ruby")
-    session.add(cn)
-    session.flush()
-    ckn = CardKitNumbers(kit_number="00000", card_name_id=cn.id, last_5_digits="0000", status="active")
-    session.add(ckn)
-    session.flush()
-
-    ckn = CardKitNumbers(kit_number="11111", card_name_id=cn.id, last_5_digits="0000", status="active")
-    session.add(ckn)
-    session.flush()
+    pass
 
 
 def test_lenders(session: Session) -> None:
@@ -91,7 +79,7 @@ def _create_user_raghav_and_do_swipes(session: Session) -> BaseLoan:
         txn_time=parse_date("2020-01-01 14:23:11"),
         amount=Decimal(700),
         description="Amazon.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="fsas",
         trace_no="123456",
     )
     swipe_2_raghav = create_card_swipe(
@@ -100,7 +88,7 @@ def _create_user_raghav_and_do_swipes(session: Session) -> BaseLoan:
         txn_time=parse_date("2020-01-02 11:22:11"),
         amount=Decimal(200),
         description="Flipkart.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dsad",
         trace_no="123456",
     )
     swipe_3_raghav = create_card_swipe(
@@ -109,7 +97,7 @@ def _create_user_raghav_and_do_swipes(session: Session) -> BaseLoan:
         txn_time=parse_date("2020-01-15 11:22:11"),
         amount=Decimal(200),
         description="Flipkart.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="a",
         trace_no="123456",
     )
     assert (
@@ -161,7 +149,7 @@ def _create_user_ananth_and_do_swipes(session: Session) -> BaseLoan:
         txn_time=parse_date("2020-01-15 14:23:11"),
         amount=Decimal(1000),
         description="Amazon.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="b",
         trace_no="123456",
     )
     swipe_2_ananth = create_card_swipe(
@@ -170,7 +158,7 @@ def _create_user_ananth_and_do_swipes(session: Session) -> BaseLoan:
         txn_time=parse_date("2020-01-12 11:22:11"),
         amount=Decimal(5000),
         description="Flipkart.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="c",
         trace_no="123456",
     )
     swipe_3_ananth = create_card_swipe(
@@ -179,7 +167,7 @@ def _create_user_ananth_and_do_swipes(session: Session) -> BaseLoan:
         txn_time=parse_date("2020-01-25 11:22:11"),
         amount=Decimal("500.75"),
         description="Flipkart.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="d",
         trace_no="123456",
     )
     assert (
