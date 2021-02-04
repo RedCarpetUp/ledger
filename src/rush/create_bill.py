@@ -44,7 +44,7 @@ def get_or_create_bill_for_card_swipe(user_loan: BaseLoan, txn_time: DateTime) -
         new_bill_date = user_loan.amortization_date
     new_closing_date = new_bill_date + relativedelta(
         days=monthrange(new_bill_date.year, new_bill_date.month)[1] - new_bill_date.day,
-    )  # setting it to the last date of the month
+    )  # Setting this to the last day of the month
     # Check if some months of bill generation were skipped and if they were then generate their bills
     months_diff = (txn_date.year - new_closing_date.year) * 12 + txn_date.month - new_closing_date.month
     if months_diff > 0:
@@ -55,7 +55,7 @@ def get_or_create_bill_for_card_swipe(user_loan: BaseLoan, txn_time: DateTime) -
                 + relativedelta(
                     months=i,
                     days=monthrange(new_bill_date.year, new_bill_date.month)[1] - new_bill_date.day,
-                ),  # setting it to the last date of the month
+                ),  # Setting this to the last day of the month
                 bill_due_date=new_bill_date
                 + relativedelta(
                     **(
@@ -101,8 +101,8 @@ def bill_generate(
             user_loan=user_loan,
             txn_time=creation_time
             - relativedelta(
-                days=monthrange(creation_time.year, creation_time.month)[1] - creation_time.day,
-            ),
+                days=creation_time.day,
+            ),  # Setting this to the last day of the previous month.
         )
         if bill["result"] == "error":
             return bill
