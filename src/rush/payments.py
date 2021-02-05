@@ -4,7 +4,11 @@ from typing import Optional
 from pendulum import DateTime
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from sqlalchemy.sql.expression import case
+from sqlalchemy.sql.expression import (
+    and_,
+    case,
+    or_,
+)
 
 from rush.anomaly_detection import run_anomaly
 from rush.card import BaseLoan
@@ -17,7 +21,6 @@ from rush.ledger_events import (
     _adjust_bill,
     _adjust_for_prepayment,
     adjust_for_revenue,
-    adjust_non_bill_payments,
     reduce_revenue_for_fee_refund,
 )
 from rush.ledger_utils import (
@@ -151,21 +154,6 @@ def payment_received_event(
             credit_book_str=f"{user_loan.loan_id}/loan/downpayment/l",
             amount=amount_to_adjust,
         )
-    elif payment_type in (
-        "card_reload_fees",
-        "reset_joining_fees",
-        "card_activation_fees",
-        "card_upgrade_fees",
-    ):
-        adjust_non_bill_payments(
-            session=session,
-            event=event,
-            amount=amount_to_adjust,
-            payment_type=payment_type,
-            identifier="loan",
-            identifier_id=user_loan.loan_id,
-            debit_book_str=debit_book_str,
-        )
     else:
         remaining_amount = adjust_payment(session, user_loan, event, amount_to_adjust, debit_book_str)
 
@@ -191,42 +179,64 @@ def payment_received_event(
 
 
 def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amount_to_slide: Decimal):
-    # slide late fee.
     unpaid_bills = user_loan.get_unpaid_bills()
     unpaid_bill_ids = [unpaid_bill.table.id for unpaid_bill in unpaid_bills]
+
     split_info = []
 
     # higher priority is first
-    fees_priority = ["atm_fee", "late_fee"]
+    fees_priority = [
+        # Loan level
+        "card_activation_fees",
+        "card_reload_fees",
+        "reset_joining_fees",
+        "card_upgrade_fees",
+        # Bill level
+        "atm_fee",
+        "late_fee",
+    ]
 
     priority_case_expression = []
     for index, fee in enumerate(fees_priority):
         priority_case_expression.append((Fee.name == fee, index + 1))
 
+    # This includes bill-level and loan-level fees
     all_fees = (
         session.query(Fee)
         .filter(
             Fee.user_id == user_loan.user_id,
             Fee.name.in_(fees_priority),
-            Fee.identifier_id.in_(unpaid_bill_ids),
+            or_(
+                and_(Fee.identifier_id.in_(unpaid_bill_ids), Fee.identifier == "bill"),
+                and_(Fee.identifier_id == user_loan.id, Fee.identifier == "loan"),
+            ),
             Fee.fee_status == "UNPAID",
-            Fee.identifier == "bill",
         )
         .order_by(case(priority_case_expression))
         .all()
     )
 
     if all_fees:
+        # Group fees by type
         all_fees_by_type = {}
         for fee in all_fees:
             all_fees_by_type.setdefault(fee.name, []).append(fee)
 
-        # Slide fees type-by-type
+        # Slide fees type-by-type, following the priority order
         for fee_type, fees in all_fees_by_type.items():
             total_fee_amount = sum(fee.remaining_fee_amount for fee in fees)
             total_amount_to_be_adjusted_in_fee = min(total_fee_amount, total_amount_to_slide)
 
             for fee in fees:
+                # For non-bill aka loan-level fees
+                # Thus, they are not slid into bills and simply get added to the split info
+                # to be adjusted into the loan later
+                if fee.identifier is "loan":
+                    x = {"type": "fee", "fee": fee, "amount_to_adjust": fee.gross_amount}
+                    split_info.append(x)
+                    continue
+
+                # Bill-level fees are slid here and added to split info
                 bill = next(bill for bill in unpaid_bills if bill.table.id == fee.identifier_id)
                 amount_to_slide_based_on_ratio = mul(
                     fee.remaining_fee_amount / total_fee_amount,
@@ -312,7 +322,9 @@ def adjust_payment(
     split_data = find_split_to_slide_in_loan(session, user_loan, amount_to_adjust)
 
     for data in split_data:
-        adjust_for_min_max_accounts(data["bill"], data["amount_to_adjust"], event.id)
+        if "bill" in data:
+            adjust_for_min_max_accounts(data["bill"], data["amount_to_adjust"], event.id)
+
         if data["type"] == "fee":
             adjust_for_revenue(
                 session=session,

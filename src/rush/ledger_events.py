@@ -397,37 +397,6 @@ def adjust_for_revenue(
     return payment_to_adjust_from - fee_to_adjust
 
 
-def adjust_non_bill_payments(
-    session: Session,
-    event: LedgerTriggerEvent,
-    amount: Decimal,
-    identifier_id: int,
-    payment_type: str,
-    identifier: str,
-    debit_book_str: str,
-) -> None:
-    # obvious problem here is why there are multiple fees of same payment_type
-    non_bill_fees = (
-        session.query(Fee)
-        .filter(
-            Fee.fee_status == "UNPAID",
-            Fee.identifier_id == identifier_id,
-            Fee.name == payment_type,
-            Fee.identifier == identifier,
-        )
-        .all()
-    )
-
-    for fee in non_bill_fees:
-        amount = adjust_for_revenue(
-            session=session,
-            event_id=event.id,
-            payment_to_adjust_from=amount,
-            debit_str=debit_book_str,
-            fee=fee,
-        )
-
-
 def reduce_revenue_for_fee_refund(
     session: Session,
     credit_book_str: str,
