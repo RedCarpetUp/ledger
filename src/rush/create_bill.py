@@ -1,4 +1,9 @@
+from calendar import monthrange
 from decimal import Decimal
+from typing import (
+    List,
+    Union,
+)
 
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
@@ -9,15 +14,21 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
+from rush.card.transaction_loan import TransactionLoan
 from rush.create_emi import update_journal_entry
 from rush.ledger_events import (
     add_max_amount_event,
+    add_min_amount_event,
     bill_generate_event,
 )
 from rush.ledger_utils import get_account_balance_from_str
 from rush.loan_schedule.loan_schedule import create_bill_schedule
 from rush.min_payment import add_min_to_all_bills
-from rush.models import LedgerTriggerEvent
+from rush.models import (
+    CardTransaction,
+    LedgerTriggerEvent,
+    LoanSchedule,
+)
 from rush.utils import (
     get_current_ist_time,
     mul,
@@ -30,30 +41,36 @@ def get_or_create_bill_for_card_swipe(user_loan: BaseLoan, txn_time: DateTime) -
     txn_date = txn_time.date()
     lender_id = user_loan.lender_id
     if last_bill:
-        does_swipe_belong_to_current_bill = txn_date < last_bill.bill_close_date
+        does_swipe_belong_to_current_bill = txn_date <= last_bill.bill_close_date
         if does_swipe_belong_to_current_bill:
             return {"result": "success", "bill": last_bill}
-        new_bill_date = last_bill.bill_close_date
+        new_bill_date = last_bill.bill_close_date + relativedelta(days=1)
     else:
         new_bill_date = user_loan.amortization_date
-    new_closing_date = new_bill_date + relativedelta(months=1)
+    new_closing_date = new_bill_date + relativedelta(
+        days=monthrange(new_bill_date.year, new_bill_date.month)[1] - new_bill_date.day,
+    )  # Setting this to the last day of the month
     # Check if some months of bill generation were skipped and if they were then generate their bills
     months_diff = (txn_date.year - new_closing_date.year) * 12 + txn_date.month - new_closing_date.month
     if months_diff > 0:
-        for i in range(months_diff + 1):
+        for i in range(months_diff):
             new_bill = user_loan.create_bill(
-                bill_start_date=new_bill_date + relativedelta(months=i, day=1),
-                bill_close_date=new_bill_date + relativedelta(months=i + 1, day=1),
+                bill_start_date=new_bill_date + relativedelta(months=i),
+                bill_close_date=new_bill_date
+                + relativedelta(
+                    months=i + 1,
+                    days=monthrange(new_bill_date.year, new_bill_date.month)[1] - new_bill_date.day,
+                ),  # Setting this to the last day of the month
                 bill_due_date=new_bill_date + relativedelta(months=i + 1, day=15),
                 lender_id=lender_id,
                 is_generated=False,
             )
             bill_generate(user_loan)
         last_bill = user_loan.get_latest_bill()
-        new_bill_date = last_bill.bill_close_date
+        new_bill_date = last_bill.bill_close_date + relativedelta(days=1)
     new_bill = user_loan.create_bill(
         bill_start_date=new_bill_date,
-        bill_close_date=new_bill_date + relativedelta(months=1, day=1),
+        bill_close_date=new_closing_date,
         bill_due_date=new_bill_date + relativedelta(months=1, day=15),
         lender_id=lender_id,
         is_generated=False,
@@ -69,9 +86,7 @@ def bill_generate(
     session = user_loan.session
     bill = user_loan.get_latest_bill_to_generate()  # Get the first bill which is not generated.
     if not bill:
-        bill = get_or_create_bill_for_card_swipe(
-            user_loan=user_loan, txn_time=creation_time
-        )  # TODO not sure about this
+        bill = get_or_create_bill_for_card_swipe(user_loan=user_loan, txn_time=creation_time)
         if bill["result"] == "error":
             return bill
         bill = bill["bill"]
@@ -95,6 +110,26 @@ def bill_generate(
 
     # Update the bill row here.
     bill.table.principal = billed_amount
+
+    # Handling child loan emis for this bill.
+    child_loans: List[BaseLoan] = user_loan.get_child_loans()
+    for child_loan in child_loans:
+        child_loan_bill: BaseBill = child_loan.get_all_bills()[0]
+        amount = child_loan_bill.get_min_amount_to_add()
+        if amount:
+            CardTransaction.new(
+                session=session,
+                loan_id=bill.id,
+                txn_time=min(child_loan.amortization_date.date(), bill.bill_start_date),
+                amount=amount,
+                source="LEDGER",
+                description=f"Transaction Loan Rs. {child_loan_bill.table.principal} EMI",
+            )
+
+            # Calling the min generation event on all child loans
+            add_min_to_all_bills(
+                session=session, post_date=bill.table.bill_close_date, user_loan=child_loan
+            )
 
     # Add to max amount to pay account.
     add_max_amount_event(session, bill, lt, billed_amount)

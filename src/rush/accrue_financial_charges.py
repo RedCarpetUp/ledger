@@ -3,6 +3,7 @@ from typing import Optional
 
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from rush.card.base_card import (
@@ -28,7 +29,9 @@ from rush.models import (
     LedgerEntry,
     LedgerTriggerEvent,
     LoanData,
+    LoanMoratorium,
     LoanSchedule,
+    MoratoriumInterest,
 )
 from rush.utils import (
     add_gst_split_to_amount,
@@ -72,9 +75,10 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loa
     )
     session.add(accrue_event)
     session.flush()
+
     for bill in unpaid_bills:
-        interest_to_accrue = (
-            session.query(LoanSchedule.interest_due)
+        loan_schedule = (
+            session.query(LoanSchedule)
             .filter(
                 LoanSchedule.bill_id == bill.id,
                 LoanSchedule.due_date < post_date,
@@ -84,8 +88,8 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loa
             .limit(1)
             .scalar()
         )
-
-        if interest_to_accrue:
+        if loan_schedule:
+            interest_to_accrue = loan_schedule.interest_to_accrue(session)
             accrue_event.amount += interest_to_accrue
             accrue_interest_event(session, bill, accrue_event, interest_to_accrue)
             add_max_amount_event(session, bill, accrue_event, interest_to_accrue)

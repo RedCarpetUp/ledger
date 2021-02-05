@@ -1,5 +1,6 @@
 from collections import defaultdict
 from datetime import date
+from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
 from pendulum import datetime
@@ -13,9 +14,12 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
+from rush.loan_schedule.moratorium import add_moratorium_emis
 from rush.models import (
     LedgerTriggerEvent,
+    LoanMoratorium,
     LoanSchedule,
+    MoratoriumInterest,
     PaymentMapping,
 )
 
@@ -66,7 +70,22 @@ def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
     instalment = bill.get_instalment_amount()
     opening_principal = bill.table.principal
     downpayment = bill.get_down_payment()
-    for emi_number in range(1, bill.table.bill_tenure + 1):
+    new_emi_number = 1
+    moratorium_interest_to_be_added = 0
+
+    if LoanMoratorium.is_in_moratorium(
+        session,
+        loan_id=user_loan.loan_id,
+        date_to_check_against=bill.table.bill_due_date,
+    ):
+        data_after_moratorium = add_moratorium_emis(session, user_loan, bill)
+        number_of_months_added = data_after_moratorium["number_of_months_added"]
+        due_date = data_after_moratorium["due_date"]
+        moratorium_interest_to_be_added = data_after_moratorium["moratorium_interest_to_be_added"]
+        new_emi_number = number_of_months_added + 1
+        bill.table.bill_tenure += number_of_months_added
+
+    for emi_number in range(new_emi_number, bill.table.bill_tenure + 1):
         if user_loan.interest_type == "reducing":
             interest_due = bill.get_interest_to_charge(principal=opening_principal)
         else:
@@ -81,10 +100,11 @@ def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
             bill_id=bill.table.id,
             emi_number=emi_number,
             due_date=due_date,
-            interest_due=round(interest_due, 2),
+            interest_due=round(interest_due + moratorium_interest_to_be_added, 2),
             principal_due=round(principal_due, 2),
             total_closing_balance=round(opening_principal, 2),
         )
+        moratorium_interest_to_be_added = 0
         opening_principal -= principal_due
         if emi_number == 1 and downpayment:  # add downpayment in first emi
             bill_schedule.principal_due = downpayment - bill_schedule.interest_due
@@ -94,18 +114,13 @@ def create_bill_schedule(session: Session, user_loan: BaseLoan, bill: BaseBill):
     readjust_future_payment(user_loan, bill.table.bill_close_date)
 
 
-def slide_payment_to_emis(user_loan: BaseLoan, payment_event: LedgerTriggerEvent):
+def slide_payment_to_emis(
+    user_loan: BaseLoan, payment_event: LedgerTriggerEvent, amount_to_slide: Decimal
+):
     """
     Settles a payment into loan's emi schedule.
     Also creates a payment split at emi level.
     """
-    from rush.payments import get_payment_split_from_event
-
-    payment_split = get_payment_split_from_event(user_loan.session, payment_event)
-
-    # Payment can get adjusted in late fee, gst etc. For emi, we only need to settle the principal
-    # and interest amount.
-    amount_to_slide = payment_split.get("principal", 0) + payment_split.get("interest", 0)
     unpaid_emis = user_loan.get_loan_schedule(only_unpaid_emis=True)
     for emi in unpaid_emis:
         if amount_to_slide <= 0:
@@ -116,17 +131,42 @@ def slide_payment_to_emis(user_loan: BaseLoan, payment_event: LedgerTriggerEvent
             emi.payment_status = "Paid"
         emi.last_payment_date = payment_event.post_date
         emi.dpd = (emi.last_payment_date.date() - emi.due_date).days
-        _ = PaymentMapping.new(
-            user_loan.session,
-            payment_request_id=payment_event.extra_details["payment_request_id"],
-            emi_id=emi.id,
-            amount_settled=amount_slid,
+
+        mapping: PaymentMapping = (
+            user_loan.session.query(PaymentMapping)
+            .filter(
+                PaymentMapping.emi_id == emi.id,
+                PaymentMapping.payment_request_id == payment_event.extra_details["payment_request_id"],
+            )
+            .scalar()
         )
+
+        if mapping:
+            mapping.amount_settled += amount_slid
+        else:
+            _ = PaymentMapping.new(
+                user_loan.session,
+                payment_request_id=payment_event.extra_details["payment_request_id"],
+                emi_id=emi.id,
+                amount_settled=amount_slid,
+            )
+
         amount_to_slide -= amount_slid
 
     # After doing the sliding we check if the loan can be closed.
-    if user_loan.get_remaining_max(event_id=payment_event.id) == 0:
+    if can_close_loan(user_loan, as_of_event_id=payment_event.id):
         close_loan(user_loan, payment_event.post_date)
+
+
+def can_close_loan(user_loan: BaseLoan, as_of_event_id: int = None) -> bool:
+    unpaid_emis = user_loan.get_loan_schedule(only_unpaid_emis=True)
+    if not unpaid_emis:  # If all emis are paid then can close. Term loan, Reset. Transaction Loan etc.
+        return True
+    max_remaining = user_loan.get_remaining_max(event_id=as_of_event_id, include_child_loans=False)
+    # If max amount is clear and the loan can be closed early. i.e. in case of credit card products.
+    if max_remaining == 0 and user_loan.can_close_early:
+        return True
+    return False
 
 
 def close_loan(user_loan: BaseLoan, last_payment_date: datetime):
@@ -169,6 +209,32 @@ def close_loan(user_loan: BaseLoan, last_payment_date: datetime):
             amount_settled=amount_settled,
         )
 
+    loan_moratorium = (
+        user_loan.session.query(LoanMoratorium)
+        .filter(
+            LoanMoratorium.loan_id == user_loan.loan_id,
+        )
+        .order_by(LoanMoratorium.start_date.desc())
+        .first()
+    )
+    got_closed_in_moratorium = (
+        loan_moratorium
+        and loan_moratorium.start_date <= last_payment_date.date() <= loan_moratorium.end_date
+    )
+
+    if got_closed_in_moratorium:
+        moratorium_interest_future_emis = (
+            user_loan.session.query(MoratoriumInterest)
+            .filter(
+                MoratoriumInterest.moratorium_id == loan_moratorium.id,
+                LoanSchedule.id == MoratoriumInterest.loan_schedule_id,
+                LoanSchedule.due_date >= last_payment_date.date(),
+            )
+            .all()
+        )
+        for moratorium_interest_emi in moratorium_interest_future_emis:
+            moratorium_interest_emi.interest = 0
+
     next_emi_due_date = future_emis[0].due_date
     for emi in future_emis:
         # set the received amount of first emi to closing balance as of that date.
@@ -191,12 +257,29 @@ def close_loan(user_loan: BaseLoan, last_payment_date: datetime):
         )
         .all()
     )
+
     for bill_emi in all_future_bill_emis:
         if bill_emi.due_date == next_emi_due_date:
             bill_emi.principal_due = bill_emi.total_closing_balance
+
+            if loan_moratorium and (
+                got_closed_in_moratorium
+                or bill_emi.due_date == loan_moratorium.due_date_after_moratorium
+            ):
+                total_bill_moratorium_interest = MoratoriumInterest.get_bill_total_moratorium_interest(
+                    session=user_loan.session,
+                    loan_id=user_loan.loan_id,
+                    bill_id=bill_emi.bill_id,
+                )
+                if not total_bill_moratorium_interest:
+                    bill_emi.interest_due = 0  # means bill is new and wasn't part of moratorium.
+                else:
+                    bill_emi.interest_due = total_bill_moratorium_interest
+            else:
+                bill_emi.interest_due = 0
         else:
             bill_emi.principal_due = 0
-        bill_emi.interest_due = 0
+            bill_emi.interest_due = 0
 
     # Refresh the due amounts of loan schedule after altering bill's schedule.
     group_bills(user_loan)

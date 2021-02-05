@@ -16,13 +16,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.create_index(
-        None,
-        "card_emis",
-        ["loan_id", "bill_id", "emi_number", "row_status"],
-        unique=True,
-        postgresql_where=sa.text("row_status = 'active'"),
-    )
+    pass
 
 
 def downgrade() -> None:

@@ -81,13 +81,14 @@ def test_rubpro_user(session: Session) -> None:
     assert unbilled_amount == 1200
     user_loan = get_user_product(session, 4369, card_type="rebel")
     assert user_loan is not None
-    bill_date = parse_date("2020-12-01 00:00:00")
+    bill_date = parse_date("2020-11-30 00:00:00")
     bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
     latest_bill = user_loan.get_latest_bill()
     assert latest_bill is not None
     assert isinstance(latest_bill, BaseBill) == True
 
     assert bill.bill_start_date == parse_date("2020-11-01").date()
+    assert bill.table.bill_close_date == parse_date("2020-11-30").date()
     assert bill.table.is_generated is True
 
     _, unbilled_amount = get_account_balance_from_str(
