@@ -4491,7 +4491,7 @@ def test_payment_split_for_multiple_loan_and_bill_fees(session: Session) -> None
         amount=Decimal(2500),
         description="WWW YESBANK IN         GURGAON       IND",
         source="ATM",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no_1",
         trace_no="1234567",
     )
     oct_bill = bill_generate(user_loan=user_loan, creation_time=parse_date("2020-11-01"))
@@ -4525,7 +4525,7 @@ def test_payment_split_for_multiple_loan_and_bill_fees(session: Session) -> None
         txn_time=parse_date("2020-11-04 19:23:11"),
         amount=Decimal(500),
         description="Flipkart.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no2",
         trace_no="1234567",
     )
     create_card_swipe(
@@ -4534,7 +4534,7 @@ def test_payment_split_for_multiple_loan_and_bill_fees(session: Session) -> None
         txn_time=parse_date("2020-11-15 19:23:11"),
         amount=Decimal(800),
         description="Amazon.com",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no3",
         trace_no="1234567",
     )
     create_card_swipe(
@@ -4544,7 +4544,7 @@ def test_payment_split_for_multiple_loan_and_bill_fees(session: Session) -> None
         amount=Decimal(1400),
         description="WWW YESBANK IN         GURGAON       IND",
         source="ATM",
-        txn_ref_no="dummy_txn_ref_no",
+        txn_ref_no="dummy_txn_ref_no4",
         trace_no="1234567",
     )
     nov_bill = bill_generate(user_loan=user_loan, creation_time=parse_date("2020-12-01"))
