@@ -11,6 +11,7 @@ from _pytest.monkeypatch import MonkeyPatch
 from alembic.command import current as alembic_current
 from dateutil.relativedelta import relativedelta
 from pendulum import parse as parse_date  # type: ignore
+from pendulum.parser import parse
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
 
@@ -234,14 +235,14 @@ def test_closing_bill(session: Session) -> None:
     user_loan = create_user_product(
         session=session,
         user_id=user.id,
-        card_activation_date=parse_date("2019-01-02").date(),
+        card_activation_date=parse_date("2019-02-02").date(),
         card_type="ruby",
         rc_rate_of_interest_monthly=Decimal(3),
         lender_id=62311,
         tenure=12,
     )
 
-    swipe_date = parse_date("2019-02-02 19:23:11")
+    swipe_date = parse_date("2019-02-03 19:23:11")
     create_card_swipe(
         session=session,
         user_loan=user_loan,
@@ -273,9 +274,6 @@ def test_closing_bill(session: Session) -> None:
     accrue_interest_on_all_bills(
         session=session, post_date=bill.table.bill_due_date + relativedelta(days=1), user_loan=user_loan
     )
-
-    bill_date = parse_date("2019-03-01 00:00:00")
-    bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
 
     accrue_interest_on_all_bills(
         session=session, post_date=bill.table.bill_due_date + relativedelta(days=1), user_loan=user_loan
@@ -312,7 +310,7 @@ def test_closing_bill(session: Session) -> None:
         user_loan=user_loan,
     )
 
-    bill_date = parse_date("2019-04-01 00:00:00")
+    bill_date = parse_date("2019-03-31 00:00:00")
     bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
 
     accrue_interest_on_all_bills(
@@ -347,7 +345,7 @@ def test_closing_bill(session: Session) -> None:
         user_loan=user_loan,
     )
 
-    bill_date = parse_date("2019-05-01 00:00:00")
+    bill_date = parse_date("2019-04-30 00:00:00")
     bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
 
     accrue_interest_on_all_bills(
@@ -396,7 +394,7 @@ def test_closing_bill(session: Session) -> None:
     )
     assert daily_txn_2 == 1
 
-    bill_date = parse_date("2019-06-01 00:00:00")
+    bill_date = parse_date("2019-05-31 00:00:00")
     bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
 
     accrue_interest_on_all_bills(
@@ -454,6 +452,7 @@ def test_generate_bill_1(session: Session) -> None:
     assert isinstance(latest_bill, BaseBill) == True
 
     assert bill.bill_start_date == parse_date("2020-04-02").date()
+    assert bill.table.bill_close_date == parse_date("2020-04-30").date()
     assert bill.table.is_generated is True
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
@@ -530,6 +529,7 @@ def test_generate_bill_reducing_interest_1(session: Session) -> None:
     assert isinstance(latest_bill, BaseBill) == True
 
     assert bill.bill_start_date == parse_date("2020-04-02").date()
+    assert bill.table.bill_close_date == parse_date("2020-04-30").date()
     assert bill.table.is_generated is True
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
@@ -639,6 +639,7 @@ def test_min_multiplier(session: Session) -> None:
     )
 
     assert bill.bill_start_date == parse_date("2020-04-02").date()
+    assert bill.table.bill_close_date == parse_date("2020-04-30").date()
     assert bill.table.is_generated is True
 
     _, min_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/min/a")
@@ -704,6 +705,7 @@ def test_min_tenure(session: Session) -> None:
     )
 
     assert bill.bill_start_date == parse_date("2020-04-02").date()
+    assert bill.table.bill_close_date == parse_date("2020-04-30").date()
     assert bill.table.is_generated is True
 
     _, min_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/min/a")
@@ -3655,6 +3657,7 @@ def test_intermediate_bill_generation(session: Session) -> None:
     # check latest bill method
     latest_bill = user_loan.get_latest_bill()
     assert latest_bill is not None
+    assert latest_bill.bill_start_date == parse_date("2020-05-01").date()
     assert isinstance(latest_bill, BaseBill) == True
 
     # Interest event to be fired separately now
@@ -4338,7 +4341,7 @@ def test_payment_split_for_multiple_fees_of_multiple_types(session: Session) -> 
         txn_ref_no="z",
         trace_no="1234567",
     )
-    oct_bill = bill_generate(user_loan=user_loan, creation_time=parse_date("2020-11-01"))
+    oct_bill = bill_generate(user_loan=user_loan, creation_time=parse_date("2020-10-31"))
 
     accrue_interest_on_all_bills(
         session=session,
@@ -4391,7 +4394,7 @@ def test_payment_split_for_multiple_fees_of_multiple_types(session: Session) -> 
         txn_ref_no="fsfsaf",
         trace_no="1234567",
     )
-    nov_bill = bill_generate(user_loan=user_loan, creation_time=parse_date("2020-12-01"))
+    nov_bill = bill_generate(user_loan=user_loan, creation_time=parse_date("2020-11-30"))
 
     accrue_interest_on_all_bills(
         session=session,
@@ -4525,7 +4528,7 @@ def test_updated_emi_payment_mapping_after_early_loan_close(session: Session) ->
 
     assert pm.amount_settled == Decimal("227.00")
 
-    jan_bill = bill_generate(user_loan=user_loan, creation_time=parse_date("2021-01-01"))
+    jan_bill = bill_generate(user_loan=user_loan, creation_time=parse_date("2020-12-31"))
     assert jan_bill.table.bill_due_date == parse_date("2021-01-15").date()
 
     payment_request_id = "a12319"
@@ -4574,7 +4577,7 @@ def test_updated_emi_payment_mapping_after_early_loan_close(session: Session) ->
     assert pm[1].amount_settled == Decimal("227.00")
     assert pm[2].amount_settled == Decimal("46.00")
 
-    feb_bill = bill_generate(user_loan=user_loan, creation_time=parse_date("2021-02-01"))
+    feb_bill = bill_generate(user_loan=user_loan, creation_time=parse_date("2021-01-31"))
     assert feb_bill.table.bill_due_date == parse_date("2021-02-15").date()
 
     payment_request_id = "a12320"
@@ -4659,7 +4662,7 @@ def test_moratorium_emi_schedule(session: Session) -> None:
         txn_ref_no="dummy_txn_ref_no_1",
         trace_no="123456",
     )
-    bill_date = parse_date("2019-09-01").date()
+    bill_date = parse_date("2019-08-31").date()
     bill_sep = bill_generate(user_loan=user_loan, creation_time=bill_date)
 
     # check latest bill method
@@ -4762,7 +4765,7 @@ def test_moratorium_emi_schedule(session: Session) -> None:
         trace_no="123456",
     )
 
-    bill_date = parse_date("2019-10-01").date()
+    bill_date = parse_date("2019-09-30").date()
     bill_oct = bill_generate(user_loan=user_loan, creation_time=bill_date)
     # check latest bill method
     latest_bill = user_loan.get_latest_bill()
@@ -4875,7 +4878,7 @@ def test_moratorium_emi_schedule(session: Session) -> None:
         trace_no="123456",
     )
 
-    bill_date = parse_date("2020-11-01").date()
+    bill_date = parse_date("2020-10-31").date()
     bill_nov = bill_generate(user_loan=user_loan, creation_time=bill_date)
     # check latest bill method
     latest_bill = user_loan.get_latest_bill()
@@ -4976,7 +4979,7 @@ def test_moratorium_emi_schedule(session: Session) -> None:
         trace_no="123456",
     )
 
-    bill_date = parse_date("2020-12-01").date()
+    bill_date = parse_date("2020-11-30").date()
     bill_dec = bill_generate(user_loan=user_loan, creation_time=bill_date)
     # check latest bill method
     latest_bill = user_loan.get_latest_bill()
@@ -5062,7 +5065,7 @@ def test_close_loan_in_moratorium(session: Session) -> None:
         txn_ref_no="dummy_txn_ref_no",
         trace_no="123456",
     )
-    bill_date = parse_date("2019-09-01").date()
+    bill_date = parse_date("2019-08-31").date()
     bill_sep = bill_generate(user_loan=user_loan, creation_time=bill_date)
 
     # check latest bill method

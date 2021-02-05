@@ -212,6 +212,7 @@ def test_generate_health_card_bill_1(session: Session) -> None:
     accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), uc)
 
     assert bill.bill_start_date == parse_date("2020-07-01").date()
+    assert bill.table.bill_close_date == parse_date("2020-07-31").date()
     assert bill.table.is_generated is True
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
@@ -268,6 +269,7 @@ def test_generate_health_card_bill_2(session: Session) -> None:
     accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), uc)
 
     assert bill.bill_start_date == parse_date("2020-07-01").date()
+    assert bill.table.bill_close_date == parse_date("2020-07-31").date()
     assert bill.table.is_generated is True
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
@@ -340,6 +342,7 @@ def test_generate_health_card_bill_3(session: Session) -> None:
     accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), uc)
 
     assert bill.bill_start_date == parse_date("2020-07-01").date()
+    assert bill.table.bill_close_date == parse_date("2020-07-31").date()
     assert bill.table.is_generated is True
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
@@ -412,6 +415,7 @@ def test_mixed_payment_received(session: Session) -> None:
     accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), uc)
 
     assert bill.bill_start_date == parse_date("2020-07-01").date()
+    assert bill.table.bill_close_date == parse_date("2020-07-31").date()
     assert bill.table.is_generated is True
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
@@ -512,6 +516,7 @@ def test_medical_payment_received(session: Session) -> None:
     accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), uc)
 
     assert bill.bill_start_date == parse_date("2020-07-01").date()
+    assert bill.table.bill_close_date == parse_date("2020-07-31").date()
     assert bill.table.is_generated is True
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")
@@ -611,6 +616,7 @@ def test_non_medical_payment_received(session: Session) -> None:
     accrue_interest_on_all_bills(session, bill.table.bill_due_date + relativedelta(days=1), uc)
 
     assert bill.bill_start_date == parse_date("2020-07-01").date()
+    assert bill.table.bill_close_date == parse_date("2020-07-31").date()
     assert bill.table.is_generated is True
 
     _, unbilled_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/unbilled/a")

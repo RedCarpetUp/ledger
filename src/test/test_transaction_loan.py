@@ -133,7 +133,7 @@ def test_transaction_loan(session: Session) -> None:
     )
     assert principal_receivable == 1200
 
-    bill_date = parse_date("2020-12-01 00:00:00")
+    bill_date = parse_date("2020-11-30 00:00:00")
     bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
     latest_bill = user_loan.get_latest_bill()
     assert latest_bill is not None
@@ -187,7 +187,7 @@ def test_transaction_loan(session: Session) -> None:
     )
 
     # generating next month's bill
-    bill_date = parse_date("2021-01-01 00:00:00")
+    bill_date = parse_date("2020-12-31 00:00:00")
     bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
     latest_bill = user_loan.get_latest_bill()
     assert latest_bill is not None
@@ -270,7 +270,7 @@ def test_transaction_loan2(session: Session) -> None:
         interest_rate=Decimal(3),
     )["data"]
 
-    bill_date = parse_date("2020-12-01 00:00:00")
+    bill_date = parse_date("2020-11-30 00:00:00")
     bill_generate(user_loan=user_loan, creation_time=bill_date)
 
     statement_entries = session.query(CardTransaction).filter(CardTransaction.source == "LEDGER").all()
@@ -340,7 +340,7 @@ def test_transaction_loan2(session: Session) -> None:
     transaction_loan_schedule = transaction_loan_schedule[2:]
     assert all(emi.payment_status == "UnPaid" for emi in transaction_loan_schedule)
 
-    bill_date = parse_date("2021-01-01 00:00:00")
+    bill_date = parse_date("2020-12-31 00:00:00")
     bill_generate(user_loan=user_loan, creation_time=bill_date)
 
     statement_entries = session.query(CardTransaction).filter(CardTransaction.source == "LEDGER").all()
