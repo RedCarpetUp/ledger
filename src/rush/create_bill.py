@@ -70,7 +70,10 @@ def get_or_create_bill_for_card_swipe(user_loan: BaseLoan, txn_time: DateTime) -
         new_bill_date = last_bill.bill_close_date + relativedelta(days=1)
     new_bill = user_loan.create_bill(
         bill_start_date=new_bill_date,
-        bill_close_date=new_closing_date,
+        bill_close_date=new_bill_date
+        + relativedelta(
+            days=monthrange(new_bill_date.year, new_bill_date.month)[1] - new_bill_date.day,
+        ),
         bill_due_date=new_bill_date + relativedelta(months=1, day=15),
         lender_id=lender_id,
         is_generated=False,
