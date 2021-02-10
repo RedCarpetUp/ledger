@@ -2,6 +2,7 @@ from sqlalchemy import and_
 
 from rush.card import BaseLoan
 from rush.ledger_utils import create_ledger_entry_from_str
+from rush.create_emi import update_journal_entry
 from rush.models import (
     Fee,
     LedgerTriggerEvent,
@@ -22,6 +23,7 @@ def write_off_loan(user_loan: BaseLoan) -> None:
         amount=total_outstanding,
         post_date=get_current_ist_time(),
     )
+    update_journal_entry(user_loan=user_loan, event=event)
     write_off_event(user_loan=user_loan, event=event)
     # user_card.loan_status = 'WRITTEN_OFF'  # uncomment after user_loan PR is merged.
 

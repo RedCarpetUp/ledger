@@ -277,9 +277,9 @@ def get_journal_entry_narration(event_name) -> String:
         return "Payment Received From Merchant"
 
 
-def get_journal_entry_ptype(event_name) -> String:
+def get_journal_entry_ptype(event_name, is_term_loan=False) -> String:
     if event_name in ("charge_late_fine", "late_fine"):
-        return "Late Fee-Card TL-Customer"
+        return "Late Fee-Card TL-Customer" if not is_term_loan else "Late Fee-TL-Customer"
     elif event_name in ("atm_fee_added", "atm_fee"):
         return "CF ATM Fee-Customer"
     elif event_name in (
@@ -288,15 +288,15 @@ def get_journal_entry_ptype(event_name) -> String:
         "upgrade_fee_added",
         "card_upgrade_fees",
     ):
-        return "CF Reload Fee-Customer"
+        return "CF Reload Fee-Customer" if not is_term_loan else "Reload Fee-TL-Customer"
     elif event_name in (
         "pre_product_fee_added",
         "card_activation_fees",
         "reset_joining_fees",
     ):
-        return "CF Processing Fee-Customer"
+        return "CF Processing Fee-Customer" if not is_term_loan else "Processing Fee-TL-Customer"
     elif event_name == "payment_received":
-        return "Card TL-Customer"
+        return "Card TL-Customer" if not is_term_loan else "TL-Customer"
     elif event_name in ("payment_received-unbilled", "payment_received-pre_payment"):
         return "CF-Customer"
     elif event_name == "transaction_refund":
@@ -332,6 +332,9 @@ def update_journal_entry(
     user_id: Optional[int] = None,
     session: Optional[Session] = None,
 ) -> None:
+
+    from rush.card.utils import is_term_loan_subclass
+
     if not session:
         session = user_loan.session
     if not user_id:
@@ -347,7 +350,7 @@ def update_journal_entry(
         .filter(UserData.row_status == "active", UserData.user_id == user_id)
         .scalar()
     ) or "John Doe"
-
+    is_term_loan = is_term_loan_subclass(user_loan=user_loan)
     if event.name == "card_transaction":
         create_journal_entry(
             session,
@@ -361,7 +364,7 @@ def update_journal_entry(
             "RedCarpet Disbursement",
             event.post_date,
             1,
-            "Disbursal Card",
+            "Disbursal Card" + " TL" if is_term_loan else "",
             event.id,
             loan_id,
             user_id,
@@ -378,12 +381,16 @@ def update_journal_entry(
             "",
             event.post_date,
             2,
-            "Disbursal Card",
+            "Disbursal Card" + " TL" if is_term_loan else "",
             event.id,
             loan_id,
             user_id,
         )
-    elif event.name == "payment_received" or event.name == "transaction_refund":
+    elif (
+        event.name == "payment_received"
+        or event.name == "transaction_refund"
+        or event.name == "loan_written_off"
+    ):
         payment_request_data = (
             session.query(PaymentRequestsData)
             .filter(
@@ -402,6 +409,24 @@ def update_journal_entry(
             )
             .all()
         )
+
+        if (
+            is_term_loan
+            and event.name == "loan_written_off"
+            and payment_request_data.collection_by == "rc_lender_payment"
+        ):
+            p_type = "TL-Redcarpet"
+            payment_received_journal_entry(
+                session,
+                event,
+                settlement_date,
+                user_name,
+                gateway_expenses,
+                "Receipt-Import",
+                p_type,
+                loan_id,
+                user_id,
+            )
         prepayment_amount = 0
         for split_data in payment_split_data:
             if split_data[0] == "pre_payment":
@@ -411,13 +436,13 @@ def update_journal_entry(
             if count == len(payment_split_data):
                 event.amount = event_amount - prepayment_amount
                 gateway_expenses = gateway_expenses if gateway_expenses else 0
-                p_type = get_journal_entry_ptype(event.name)
+                p_type = get_journal_entry_ptype(event.name, is_term_loan=is_term_loan)
                 narration_name = get_journal_entry_narration(event.name)
             else:
                 event.amount = payment_split_data[count][1]
                 if event.name == "payment_received":
                     narration_name = "Receipt-Import"
-                    p_type = "CF-Customer"
+                    p_type = "TL-Customer" if is_term_loan else "CF-Customer"
                 elif event.name == "transaction_refund":
                     narration_name = "Payment Received From Merchant"
                     p_type = "CF-Merchant"
@@ -426,54 +451,14 @@ def update_journal_entry(
             if payment_request_data.type not in ("collection"):
                 loan_id = None
                 p_type = "CF-Customer"
-            create_journal_entry(
+            payment_received_journal_entry(
                 session,
-                "Receipt-Import",
-                settlement_date,
-                get_journal_entry_ledger_for_payment(event.name),
-                "",
-                "RedCarpet",
-                event.amount - (gateway_expenses if gateway_expenses else 0),
-                0,
-                narration_name,
-                settlement_date,
-                1,
-                p_type,
-                event.id,
-                loan_id,
-                user_id,
-            )
-            create_journal_entry(
-                session,
-                "",
-                settlement_date,
-                "Bank Charges (RC)",
-                "",
-                "RedCarpet",
-                gateway_expenses,
-                0,
-                "",
-                settlement_date,
-                2,
-                p_type,
-                event.id,
-                loan_id,
-                user_id,
-            )
-            create_journal_entry(
-                session,
-                "",
+                event,
                 settlement_date,
                 user_name,
-                "",
-                "RedCarpet",
-                0,
-                event.amount,
-                "",
-                settlement_date,
-                3,
+                gateway_expenses,
+                narration_name,
                 p_type,
-                event.id,
                 loan_id,
                 user_id,
             )
@@ -504,7 +489,7 @@ def update_journal_entry(
                     narration_name += f"{get_ledger_for_fee(settled_acc)} "
             narration_name = narration_name.strip()
             if fee_count == 1:
-                p_type = get_journal_entry_ptype(event_name)
+                p_type = get_journal_entry_ptype(event_name, is_term_loan=is_term_loan)
             else:
                 p_type = f"{narration_name} -Card TL-Customer"
             for sort_order, (settled_acc, amount) in enumerate(filtered_split_data.items(), 2):
@@ -577,3 +562,67 @@ def update_journal_entry(
             loan_id,
             user_id,
         )
+
+
+def payment_received_journal_entry(
+    session,
+    event,
+    settlement_date,
+    user_name,
+    gateway_expenses,
+    narration_name,
+    p_type,
+    loan_id,
+    user_id,
+) -> None:
+    create_journal_entry(
+        session,
+        "Receipt-Import",
+        settlement_date,
+        get_journal_entry_ledger_for_payment(event.name),
+        "",
+        "RedCarpet",
+        event.amount - (gateway_expenses if gateway_expenses else 0),
+        0,
+        narration_name,
+        settlement_date,
+        1,
+        p_type,
+        event.id,
+        loan_id,
+        user_id,
+    )
+    create_journal_entry(
+        session,
+        "",
+        settlement_date,
+        "Bank Charges (RC)",
+        "",
+        "RedCarpet",
+        gateway_expenses,
+        0,
+        "",
+        settlement_date,
+        2,
+        p_type,
+        event.id,
+        loan_id,
+        user_id,
+    )
+    create_journal_entry(
+        session,
+        "",
+        settlement_date,
+        user_name,
+        "",
+        "RedCarpet",
+        0,
+        event.amount,
+        "",
+        settlement_date,
+        3,
+        p_type,
+        event.id,
+        loan_id,
+        user_id,
+    )
