@@ -231,7 +231,7 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
                 # For non-bill aka loan-level fees
                 # Thus, they are not slid into bills and simply get added to the split info
                 # to be adjusted into the loan later
-                if fee.identifier is "loan":
+                if fee.identifier == "loan":
                     x = {"type": "fee", "fee": fee, "amount_to_adjust": fee.gross_amount}
                     split_info.append(x)
                     continue
