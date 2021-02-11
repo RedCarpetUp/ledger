@@ -271,7 +271,7 @@ def get_journal_entry_narration(event_name) -> String:
         return "Reload Fee"
     elif event_name == "card_activation_fees":
         return "Processing Fee"
-    elif event_name == "payment_received":
+    elif event_name in ("payment_received", "loan_written_off"):
         return "Receipt-Import"
     elif event_name == "transaction_refund":
         return "Payment Received From Merchant"
@@ -306,10 +306,12 @@ def get_journal_entry_ptype(event_name, is_term_loan=False) -> String:
         "transaction_refund-pre_payment",
     ):
         return "CF-Merchant" if not is_term_loan else "TL-Merchant"
+    elif event_name == "loan_written_off":
+        return "Card TL-Redcarpet" if not is_term_loan else "TL-Redcarpet"
 
 
 def get_journal_entry_ledger_for_payment(event_name) -> String:
-    if event_name == "payment_received":
+    if event_name in ("payment_received", "loan_written_off"):
         return "Axis Bank Ltd-Collections A/c"
     elif event_name == "transaction_refund":
         return "Cards Upload A/c"
@@ -351,7 +353,8 @@ def update_journal_entry(
         .scalar()
     ) or "John Doe"
     is_term_loan = is_term_loan_subclass(user_loan=user_loan)
-    if event.name == "card_transaction":
+    if event.name == "card_transaction" or event.name == "disbursal":
+        ptype = ("Disbursal" + (" TL" if is_term_loan else " Card"),)
         create_journal_entry(
             session,
             "Journal-Disbursement",
@@ -364,7 +367,7 @@ def update_journal_entry(
             "RedCarpet Disbursement",
             event.post_date,
             1,
-            "Disbursal Card" + " TL" if is_term_loan else "",
+            ptype,
             event.id,
             loan_id,
             user_id,
@@ -381,7 +384,7 @@ def update_journal_entry(
             "",
             event.post_date,
             2,
-            "Disbursal Card" + " TL" if is_term_loan else "",
+            ptype,
             event.id,
             loan_id,
             user_id,
@@ -409,24 +412,6 @@ def update_journal_entry(
             )
             .all()
         )
-
-        if (
-            is_term_loan
-            and event.name == "loan_written_off"
-            and payment_request_data.collection_by == "rc_lender_payment"
-        ):
-            p_type = "TL-Redcarpet"
-            payment_received_journal_entry(
-                event,
-                settlement_date,
-                user_name,
-                "Receipt-Import",
-                p_type,
-                session,
-                gateway_expenses,
-                loan_id,
-                user_id,
-            )
         prepayment_amount = 0
         for split_data in payment_split_data:
             if split_data[0] == "pre_payment":

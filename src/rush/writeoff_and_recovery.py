@@ -3,11 +3,7 @@ from sqlalchemy import and_
 from rush.card import BaseLoan
 from rush.ledger_utils import create_ledger_entry_from_str
 from rush.create_emi import update_journal_entry
-from rush.models import (
-    Fee,
-    LedgerTriggerEvent,
-    LoanData,
-)
+from rush.models import Fee, LedgerTriggerEvent, LoanData, PaymentRequestsData
 from rush.utils import get_current_ist_time
 
 
@@ -15,13 +11,17 @@ def write_off_all_loans_above_the_dpd(dpd: int = 30) -> None:
     pass
 
 
-def write_off_loan(user_loan: BaseLoan) -> None:
+def write_off_loan(user_loan: BaseLoan, payment_request_data: PaymentRequestsData) -> None:
     reverse_all_unpaid_fees(user_loan=user_loan)  # Remove all unpaid fees.
     total_outstanding = user_loan.get_total_outstanding()
-    event = LedgerTriggerEvent(
+    event = LedgerTriggerEvent.new(
+        session=user_loan.session,
         name="loan_written_off",
         amount=total_outstanding,
         post_date=get_current_ist_time(),
+        extra_details={
+            "payment_request_id": payment_request_data.payment_request_id,
+        },
     )
     update_journal_entry(user_loan=user_loan, event=event)
     write_off_event(user_loan=user_loan, event=event)
@@ -55,17 +55,16 @@ def recovery_event(user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
 
 def reverse_all_unpaid_fees(user_loan: BaseLoan) -> None:
     session = user_loan.session
-    fee = (
-        session.query(Fee)
-        .join(
-            LoanData,
-            and_(
-                LoanData.loan_id == user_loan.loan_id,
-                Fee.identifier_id == LoanData.id,
-                Fee.identifier == "bill",
-            ),
+    fees = (
+        session.query(Fee, LoanData)
+        .filter(
+            LoanData.loan_id == user_loan.loan_id,
+            Fee.identifier_id == LoanData.id,
+            Fee.identifier == "bill",
+            Fee.fee_status == "UNPAID",
         )
-        .filter(Fee.loan_id == user_loan.loan_id, Fee.fee_status == "UNPAID")
         .all()
     )
-    fee.fee_status = "REVERSED"
+    LoanData.loan_id == user_loan.loan_id
+    for fee, _ in fees:
+        fee.fee_status = "REVERSED"

@@ -96,6 +96,9 @@ class ResetCard(TermLoan):
             bill_id=loan_data.id,
         )
 
+        from rush.create_bill import update_journal_entry
+
+        update_journal_entry(user_loan=loan, event=event)
         # unlock some limit if required.
 
         # create emis for term loan.

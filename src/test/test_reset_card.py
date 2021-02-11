@@ -34,6 +34,7 @@ from rush.payments import (
     refund_payment,
     settle_payment_in_bank,
 )
+from rush.writeoff_and_recovery import write_off_loan
 
 
 def create_lenders(session: Session) -> None:
@@ -255,6 +256,17 @@ def test_reset_journal_entries(session: Session) -> None:
 
     # create loan
     loan = create_test_term_loan(session=session, **loan_creation_data)
+    entrys = (
+        session.query(JournalEntry)
+        .filter(
+            JournalEntry.loan_id == user_loan.loan_id,
+            JournalEntry.instrument_date == loan.amortization_date,
+        )
+        .all()
+    )
+    assert len(entrys) == 2
+    assert entrys[0].ptype == "Disbursal TL"
+    assert entrys[1].ptype == "Disbursal TL"
 
     # add min amount for months in between.
     add_min_to_all_bills(session=session, post_date=parse_date("2020-09-01"), user_loan=loan)
@@ -393,6 +405,45 @@ def test_reset_journal_entries(session: Session) -> None:
     assert entrys[0].ptype == "TL-Merchant"
     assert entrys[1].ptype == "TL-Merchant"
     assert entrys[2].ptype == "TL-Merchant"
+
+    amount = user_loan.get_total_outstanding()
+    assert amount == 7632
+
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=Decimal(1252),
+        user_id=6,
+        payment_request_id="reset_3_writeoff",
+        kwargs={"collection_by": "rc_lender_payment"},
+    )
+    payment_date = parse_date("2021-01-02")
+    payment_request_id = "reset_3_writeoff"
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_request_data=payment_requests_data,
+    )
+    write_off_loan(user_loan=loan, payment_request_data=payment_requests_data)
+    session.flush()
+    entrys = (
+        session.query(JournalEntry)
+        .filter(
+            JournalEntry.loan_id == user_loan.loan_id,
+            JournalEntry.instrument_date == payment_requests_data.payment_received_in_bank_date,
+        )
+        .all()
+    )
+    for entry in entrys:
+        with open("b.txt", "a") as f:
+            f.write(entry.ptype)
+    assert len(entrys) == 3
+    assert entrys[0].ptype == "TL-Redcarpet"
+    assert entrys[1].ptype == "TL-Redcarpet"
+    assert entrys[2].ptype == "TL-Redcarpet"
 
 
 def test_reset_loan_limit_unlock_success(session: Session) -> None:
