@@ -9,7 +9,7 @@ from sqlalchemy.orm import (
     aliased,
 )
 from sqlalchemy.sql import func
-from sqlalchemy.sql.sqltypes import String
+from sqlalchemy.sql.sqltypes import String, TIMESTAMP
 
 from rush.card.base_card import BaseLoan
 from rush.models import (
@@ -281,7 +281,7 @@ def get_journal_entry_ptype(event_name, is_term_loan=False) -> String:
     if event_name in ("charge_late_fine", "late_fine"):
         return "Late Fee-Card TL-Customer" if not is_term_loan else "Late Fee-TL-Customer"
     elif event_name in ("atm_fee_added", "atm_fee"):
-        return "CF ATM Fee-Customer"
+        return "CF ATM Fee-Customer" if not is_term_loan else "ATM Fee-TL-Customer"
     elif event_name in (
         "reload_fee_added",
         "card_reload_fees",
@@ -298,14 +298,14 @@ def get_journal_entry_ptype(event_name, is_term_loan=False) -> String:
     elif event_name == "payment_received":
         return "Card TL-Customer" if not is_term_loan else "TL-Customer"
     elif event_name in ("payment_received-unbilled", "payment_received-pre_payment"):
-        return "CF-Customer"
+        return "CF-Customer" if not is_term_loan else "TL-Customer"
     elif event_name == "transaction_refund":
-        return "Card TL-Merchant"
+        return "Card TL-Merchant" if not is_term_loan else "TL-Merchant"
     elif event_name in (
         "transaction_refund-unbilled",
         "transaction_refund-pre_payment",
     ):
-        return "CF-Merchant"
+        return "CF-Merchant" if not is_term_loan else "TL-Merchant"
 
 
 def get_journal_entry_ledger_for_payment(event_name) -> String:
@@ -417,13 +417,13 @@ def update_journal_entry(
         ):
             p_type = "TL-Redcarpet"
             payment_received_journal_entry(
-                session,
                 event,
                 settlement_date,
                 user_name,
-                gateway_expenses,
                 "Receipt-Import",
                 p_type,
+                session,
+                gateway_expenses,
                 loan_id,
                 user_id,
             )
@@ -450,15 +450,15 @@ def update_journal_entry(
                 continue
             if payment_request_data.type not in ("collection"):
                 loan_id = None
-                p_type = "CF-Customer"
+                p_type = "TL-Customer" if is_term_loan else "CF-Customer"
             payment_received_journal_entry(
-                session,
                 event,
                 settlement_date,
                 user_name,
-                gateway_expenses,
                 narration_name,
                 p_type,
+                session,
+                gateway_expenses,
                 loan_id,
                 user_id,
             )
@@ -565,15 +565,15 @@ def update_journal_entry(
 
 
 def payment_received_journal_entry(
-    session,
-    event,
-    settlement_date,
-    user_name,
-    gateway_expenses,
-    narration_name,
-    p_type,
-    loan_id,
-    user_id,
+    event: LedgerTriggerEvent,
+    settlement_date: TIMESTAMP,
+    user_name: String,
+    narration_name: str,
+    p_type: str,
+    session: Optional[Session] = None,
+    gateway_expenses: int = 0,
+    loan_id: int = None,
+    user_id: Optional[int] = None,
 ) -> None:
     create_journal_entry(
         session,
