@@ -1,6 +1,7 @@
 from calendar import monthrange
 from decimal import Decimal
 from typing import (
+    Any,
     Dict,
     Type,
 )
@@ -41,7 +42,7 @@ class TransactionLoanBill(TermLoanBill):
 class TransactionLoan(TermLoan):
     bill_class: Type[B] = TransactionLoanBill
 
-    def disburse(self, **kwargs):
+    def disburse(self, **kwargs) -> LedgerTriggerEvent:
         event = LedgerTriggerEvent(
             performed_by=kwargs["user_id"],
             name="transaction_to_loan",
@@ -72,11 +73,11 @@ class TransactionLoan(TermLoan):
 def transaction_to_loan(
     session: Session,
     transaction_id: int,
-    user_id: int,
+    user_loan: BaseLoan,
     post_date: DateTime,
     tenure: int,
     interest_rate: Decimal,
-) -> dict:
+) -> Dict[str, Any]:
     transaction: CardTransaction = (
         session.query(CardTransaction).filter(CardTransaction.id == transaction_id).scalar()
     )
@@ -90,13 +91,6 @@ def transaction_to_loan(
     if bill.is_generated:
         return {"result": "error", "message": "Bill for this transaction has already been generated."}
 
-    user_loan: BaseLoan = (
-        session.query(BaseLoan)
-        .join(LoanData, LoanData.loan_id == BaseLoan.id)
-        .filter(LoanData.id == bill.id)
-        .scalar()
-    )
-
     from rush.card import create_user_product
     from rush.card.utils import (
         create_loan,
@@ -104,14 +98,14 @@ def transaction_to_loan(
     )
 
     user_product = create_user_product_mapping(
-        session=session, user_id=user_id, product_type="transaction_loan"
+        session=session, user_id=user_loan.user_id, product_type="transaction_loan"
     )
     create_loan(session=session, user_product=user_product, lender_id=user_loan.lender_id)
 
     # Loan for transaction amount
     transaction_loan = create_user_product(
         session=session,
-        user_id=user_id,
+        user_id=user_loan.user_id,
         card_type="transaction_loan",
         interest_free_period_in_days=15,
         tenure=tenure,
