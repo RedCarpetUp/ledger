@@ -108,7 +108,7 @@ def test_transaction_loan(session: Session) -> None:
     transaction_loan: TransactionLoan = transaction_to_loan(
         session=session,
         transaction_id=swipe2emi["data"].id,
-        user_id=469,
+        user_loan=user_loan,
         post_date=parse_date("2020-11-05"),
         tenure=12,
         interest_rate=Decimal(3),
@@ -264,7 +264,7 @@ def test_transaction_loan2(session: Session) -> None:
     transaction_loan: TransactionLoan = transaction_to_loan(
         session=session,
         transaction_id=swipe2emi["data"].id,
-        user_id=469,
+        user_loan=user_loan,
         post_date=parse_date("2020-11-05"),
         tenure=12,
         interest_rate=Decimal(3),
