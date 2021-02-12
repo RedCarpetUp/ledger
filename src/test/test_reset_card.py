@@ -343,7 +343,6 @@ def test_reset_journal_entries(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
-    session.flush()
     entrys = (
         session.query(JournalEntry)
         .filter(

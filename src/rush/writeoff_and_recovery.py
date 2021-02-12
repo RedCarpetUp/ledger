@@ -14,8 +14,7 @@ def write_off_all_loans_above_the_dpd(dpd: int = 30) -> None:
 def write_off_loan(user_loan: BaseLoan, payment_request_data: PaymentRequestsData) -> None:
     reverse_all_unpaid_fees(user_loan=user_loan)  # Remove all unpaid fees.
     total_outstanding = user_loan.get_total_outstanding()
-    event = LedgerTriggerEvent.new(
-        session=user_loan.session,
+    event = LedgerTriggerEvent(
         name="loan_written_off",
         amount=total_outstanding,
         post_date=get_current_ist_time(),
@@ -23,6 +22,8 @@ def write_off_loan(user_loan: BaseLoan, payment_request_data: PaymentRequestsDat
             "payment_request_id": payment_request_data.payment_request_id,
         },
     )
+    user_loan.session.add(event)
+    user_loan.session.flush()
     write_off_event(user_loan=user_loan, event=event)
     update_journal_entry(user_loan=user_loan, event=event)
 
