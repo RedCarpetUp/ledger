@@ -290,7 +290,7 @@ class BaseLoan(Loan):
             loan=self,
             event=event,
             bill_id=kwargs["loan_data"].id,
-            downpayment_amount=kwargs["actual_downpayment_amount"],
+            downpayment_amount=kwargs.get("actual_downpayment_amount", None),
         )
 
         return event

@@ -430,12 +430,15 @@ def update_journal_entry(
                     p_type = "TL-Customer" if is_term_loan else "CF-Customer"
                 elif event.name == "transaction_refund":
                     narration_name = "Payment Received From Merchant"
-                    p_type = "CF-Merchant"
+                    p_type = "TL-Merchant" if is_term_loan else "CF-Customer"
+                elif event.name == "loan_written_off":
+                    p_type = get_journal_entry_ptype(event.name, is_term_loan=is_term_loan)
+                    narration_name = get_journal_entry_narration(event.name)
             if event.amount == 0:
                 continue
             if payment_request_data.type not in ("collection"):
                 loan_id = None
-                p_type = "TL-Customer" if is_term_loan else "CF-Customer"
+                p_type = "CF-Customer"
             payment_received_journal_entry(
                 event,
                 settlement_date,
@@ -474,7 +477,11 @@ def update_journal_entry(
                     narration_name += f"{get_ledger_for_fee(settled_acc)} "
             narration_name = narration_name.strip()
             if fee_count == 1:
+                if payment_request_data.type not in ("collection"):
+                    is_term_loan = False
                 p_type = get_journal_entry_ptype(event_name, is_term_loan=is_term_loan)
+                if event.name == "loan_written_off":
+                    p_type.replace("Customer", "Redcarpet")
             else:
                 p_type = f"{narration_name} -Card TL-Customer"
             for sort_order, (settled_acc, amount) in enumerate(filtered_split_data.items(), 2):

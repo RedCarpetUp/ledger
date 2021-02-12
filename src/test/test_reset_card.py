@@ -437,9 +437,6 @@ def test_reset_journal_entries(session: Session) -> None:
         )
         .all()
     )
-    for entry in entrys:
-        with open("b.txt", "a") as f:
-            f.write(entry.ptype)
     assert len(entrys) == 3
     assert entrys[0].ptype == "TL-Redcarpet"
     assert entrys[1].ptype == "TL-Redcarpet"

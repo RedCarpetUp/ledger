@@ -23,8 +23,9 @@ def write_off_loan(user_loan: BaseLoan, payment_request_data: PaymentRequestsDat
             "payment_request_id": payment_request_data.payment_request_id,
         },
     )
-    update_journal_entry(user_loan=user_loan, event=event)
     write_off_event(user_loan=user_loan, event=event)
+    update_journal_entry(user_loan=user_loan, event=event)
+
     # user_card.loan_status = 'WRITTEN_OFF'  # uncomment after user_loan PR is merged.
 
 

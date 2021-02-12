@@ -13,7 +13,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from rush.accrue_financial_charges import create_loan_fee_entry
-from rush.card import BaseLoan, ResetCard
+from rush.card import BaseLoan, TermLoan
 from rush.models import (
     CardTransaction,
     Fee,
@@ -296,4 +296,4 @@ def get_daily_total_transactions(
 
 
 def is_term_loan_subclass(user_loan: BaseLoan) -> bool:
-    return isinstance(user_loan, ResetCard)
+    return isinstance(user_loan, TermLoan)
