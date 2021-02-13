@@ -74,6 +74,7 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loa
     loan_schedule = (
         session.query(LoanSchedule)
         .filter(
+            LoanSchedule.loan_id == user_loan.loan_id,
             LoanSchedule.bill_id.is_(None),
             LoanSchedule.due_date < post_date,
             LoanSchedule.due_date > post_date - relativedelta(months=1),  # Should be within a month
