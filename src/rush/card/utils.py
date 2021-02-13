@@ -112,7 +112,7 @@ def create_loan_fee(
     }
 
     event = LedgerTriggerEvent(
-        name=fee_to_event_names[fee_name],
+        name=fee_to_event_names.get(fee_name, fee_name),  # defaults to fee_name
         post_date=post_date,
         loan_id=user_loan.loan_id,
         amount=gross_amount,
