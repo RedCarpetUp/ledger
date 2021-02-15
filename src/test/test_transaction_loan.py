@@ -27,6 +27,7 @@ from rush.ledger_utils import get_account_balance_from_str
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
     CardTransaction,
+    LedgerTriggerEvent,
     Lenders,
     LoanData,
     Product,
@@ -155,6 +156,14 @@ def test_transaction_loan(session: Session) -> None:
     statement_entries = session.query(CardTransaction).filter(CardTransaction.source == "LEDGER").all()
     assert len(statement_entries) == 1
 
+    event_amount = (
+        session.query(LedgerTriggerEvent.amount)
+        .filter(LedgerTriggerEvent.loan_id == user_loan.id, LedgerTriggerEvent.name == "bill_generate")
+        .order_by(LedgerTriggerEvent.created_at.desc())
+        .first()
+    )
+    assert event_amount[0] == 1340
+    
     # paying min amount for rebel loan
     payment_date = parse_date("2020-12-02")
     amount = Decimal(121)
