@@ -163,7 +163,7 @@ def test_transaction_loan(session: Session) -> None:
         .first()
     )
     assert event_amount[0] == 1340
-    
+
     # paying min amount for rebel loan
     payment_date = parse_date("2020-12-02")
     amount = Decimal(121)
