@@ -104,12 +104,12 @@ def bill_generate(
     _, billed_amount = get_account_balance_from_str(
         session=session, book_string=f"{bill.id}/bill/principal_receivable/a"
     )
-    lt.amount = billed_amount  # Set the amount for event
 
     # Update the bill row here.
     bill.table.principal = billed_amount
 
     # Handling child loan emis for this bill.
+    emi_amount = 0
     child_loans: List[BaseLoan] = user_loan.get_child_loans()
     for child_loan in child_loans:
         child_loan_bill: BaseBill = child_loan.get_all_bills()[0]
@@ -128,6 +128,9 @@ def bill_generate(
             add_min_to_all_bills(
                 session=session, post_date=bill.table.bill_close_date, user_loan=child_loan
             )
+            emi_amount += amount
+
+    lt.amount = billed_amount + emi_amount # Set the amount for event
 
     # Add to max amount to pay account.
     add_max_amount_event(session, bill, lt, billed_amount)
