@@ -130,7 +130,7 @@ def bill_generate(
             )
             emi_amount += amount
 
-    lt.amount = billed_amount + emi_amount # Set the amount for event
+    lt.amount = billed_amount + emi_amount  # Set the amount for event
 
     # Add to max amount to pay account.
     add_max_amount_event(session, bill, lt, billed_amount)
