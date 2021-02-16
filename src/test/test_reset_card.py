@@ -68,11 +68,11 @@ def create_test_term_loan(session: Session, **kwargs) -> ResetCard:  # type: ign
         lender_id=1756833,
         interest_free_period_in_days=15,
         tenure=12,
-        amount=Decimal(10000),
+        amount=kwargs.get("amount", Decimal(10000)),
         product_order_date=parse_date(date_str).date(),
         user_product_id=user_product_id,
         downpayment_percent=Decimal("0"),
-        interest_rate=Decimal(3),
+        interest_rate=kwargs.get("interest_rate", Decimal(3)),
     )
 
     return loan
@@ -220,7 +220,7 @@ def test_reset_journal_entries(session: Session) -> None:
         user_loan=user_loan,
         post_date=parse_date("2020-08-01 00:00:00"),
         gross_amount=Decimal("100"),
-        include_gst_from_gross_amount=False,
+        include_gst_from_gross_amount=True,
         fee_name="reset_joining_fees",
     )
 
@@ -411,22 +411,30 @@ def test_reset_journal_entries(session: Session) -> None:
     payment_request_data(
         session=session,
         type="collection",
-        payment_request_amount=Decimal(1252),
+        payment_request_amount=Decimal(amount),
         user_id=6,
         payment_request_id="reset_3_writeoff",
-        kwargs={"collection_by": "rc_lender_payment"},
+        collection_by="rc_lender_payment",
     )
     payment_date = parse_date("2021-01-02")
     payment_request_id = "reset_3_writeoff"
     payment_requests_data = pay_payment_request(
         session=session, payment_request_id=payment_request_id, payment_date=payment_date
     )
+    write_off_loan(user_loan=loan)
     payment_received(
         session=session,
         user_loan=user_loan,
         payment_request_data=payment_requests_data,
     )
-    write_off_loan(user_loan=loan, payment_request_data=payment_requests_data)
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
+    )
     session.flush()
     entrys = (
         session.query(JournalEntry)
@@ -440,6 +448,317 @@ def test_reset_journal_entries(session: Session) -> None:
     assert entrys[0].ptype == "TL-Redcarpet"
     assert entrys[1].ptype == "TL-Redcarpet"
     assert entrys[2].ptype == "TL-Redcarpet"
+
+
+def test_reset_journal_entries_kv(session: Session) -> None:
+    create_lenders(session=session)
+    create_products(session=session)
+    create_user(session=session)
+
+    user_product = create_user_product_mapping(
+        session=session, user_id=6, product_type="term_loan_reset"
+    )
+    create_loan(session=session, user_product=user_product, lender_id=1756833)
+    user_loan = get_user_product(
+        session=session, user_id=user_product.user_id, card_type="term_loan_reset"
+    )
+    assert isinstance(user_loan, ResetCard) == True
+
+    fee = create_activation_fee(
+        session=session,
+        user_loan=user_loan,
+        post_date=parse_date("2018-11-14 00:00:00"),
+        gross_amount=Decimal("200"),
+        include_gst_from_gross_amount=True,
+        fee_name="reset_joining_fees",
+    )
+
+    payment_date = parse_date("2018-11-14")
+    amount = fee.gross_amount
+    payment_request_id = "dummy_reset_fee_1"
+    payment_request_data(
+        session=session,
+        type="reset_joining_fees",
+        payment_request_amount=amount,
+        user_id=user_product.user_id,
+        payment_request_id=payment_request_id,
+    )
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
+    )
+    entrys = (
+        session.query(JournalEntry)
+        .filter(
+            JournalEntry.user_id == user_loan.user_id,
+            JournalEntry.instrument_date == payment_requests_data.payment_received_in_bank_date,
+        )
+        .all()
+    )
+
+    assert len(entrys) == 7
+    assert entrys[0].ptype == "CF-Customer"
+    assert entrys[1].ptype == "CF-Customer"
+    assert entrys[2].ptype == "CF-Customer"
+    assert entrys[3].ledger == "CGST" and entrys[3].ptype == "CF Processing Fee-Customer"
+    assert entrys[4].ledger == "Processing Fee" and entrys[4].ptype == "CF Processing Fee-Customer"
+    assert entrys[5].ledger == "SGST" and entrys[5].ptype == "CF Processing Fee-Customer"
+    assert entrys[6].narration == "Processing Fee" and entrys[6].ptype == "CF Processing Fee-Customer"
+
+    loan_creation_data = {
+        "date_str": "2018-11-14",
+        "user_product_id": user_product.id,
+        "amount": 12000,
+        "interest_rate": 12,
+    }
+
+    # create loan
+    loan = create_test_term_loan(session=session, **loan_creation_data)
+    entrys = (
+        session.query(JournalEntry)
+        .filter(
+            JournalEntry.loan_id == user_loan.loan_id,
+            JournalEntry.instrument_date == loan.amortization_date,
+        )
+        .all()
+    )
+
+    assert len(entrys) == 2
+    assert entrys[0].ptype == "Disbursal TL"
+    assert entrys[1].ptype == "Disbursal TL"
+
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=Decimal(2380),
+        user_id=6,
+        payment_request_id="reset_1",
+    )
+
+    payment_date = parse_date("2018-11-14")
+    payment_request_id = "reset_1"
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
+    )
+
+    session.flush()
+    entrys = (
+        session.query(JournalEntry)
+        .filter(
+            JournalEntry.loan_id == user_loan.loan_id,
+            JournalEntry.instrument_date == payment_requests_data.payment_received_in_bank_date,
+        )
+        .all()
+    )
+    assert len(entrys) == 3
+    assert entrys[0].ptype == "TL-Customer"
+    assert entrys[1].ptype == "TL-Customer"
+    assert entrys[2].ptype == "TL-Customer"
+    accrue_late_charges(session, loan, parse_date("2018-12-17"), Decimal(100))
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=Decimal(1280),
+        user_id=6,
+        payment_request_id="reset_2",
+    )
+    payment_date = parse_date("2018-12-17")
+    payment_request_id = "reset_2"
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_request_data=payment_requests_data,
+    )
+
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
+    )
+    session.flush()
+    entrys = (
+        session.query(JournalEntry)
+        .filter(
+            JournalEntry.loan_id == user_loan.loan_id,
+            JournalEntry.instrument_date == payment_requests_data.payment_received_in_bank_date,
+        )
+        .all()
+    )
+    assert len(entrys) == 7
+    assert entrys[0].ptype == "TL-Customer"
+    assert entrys[1].ptype == "TL-Customer"
+    assert entrys[2].ptype == "TL-Customer"
+    assert entrys[3].ledger == "CGST" and entrys[3].ptype == "Late Fee-TL-Customer"
+    assert entrys[4].ledger == "Late Fee" and entrys[4].ptype == "Late Fee-TL-Customer"
+    assert entrys[5].ledger == "SGST" and entrys[5].ptype == "Late Fee-TL-Customer"
+    assert entrys[6].narration == "Late Fee" and entrys[6].ptype == "Late Fee-TL-Customer"
+
+    accrue_late_charges(session, loan, parse_date("2020-03-25"), Decimal(100))
+
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=Decimal(617),
+        user_id=6,
+        payment_request_id="reset_3",
+    )
+    payment_date = parse_date("2019-03-25")
+    payment_request_id = "reset_3"
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_request_data=payment_requests_data,
+    )
+
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
+    )
+    session.flush()
+    entrys = (
+        session.query(JournalEntry)
+        .filter(
+            JournalEntry.loan_id == user_loan.loan_id,
+            JournalEntry.instrument_date == payment_requests_data.payment_received_in_bank_date,
+        )
+        .all()
+    )
+    assert len(entrys) == 7
+    assert entrys[0].ptype == "TL-Customer"
+    assert entrys[1].ptype == "TL-Customer"
+    assert entrys[2].ptype == "TL-Customer"
+    assert entrys[3].ledger == "CGST" and entrys[3].ptype == "Late Fee-TL-Customer"
+    assert entrys[4].ledger == "Late Fee" and entrys[4].ptype == "Late Fee-TL-Customer"
+    assert entrys[5].ledger == "SGST" and entrys[5].ptype == "Late Fee-TL-Customer"
+    assert entrys[6].narration == "Late Fee" and entrys[6].ptype == "Late Fee-TL-Customer"
+
+    accrue_late_charges(session, loan, parse_date("2019-04-12"), Decimal(120))
+    accrue_late_charges(session, loan, parse_date("2019-04-12"), Decimal(120))
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=Decimal(user_loan.get_total_outstanding()),
+        user_id=6,
+        payment_request_id="reset_3_writeoff",
+        collection_by="rc_lender_payment",
+    )
+    payment_date = parse_date("2019-04-14")
+    payment_request_id = "reset_3_writeoff"
+    write_off_loan(user_loan=user_loan)
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
+    )
+    session.flush()
+    entrys = (
+        session.query(JournalEntry)
+        .filter(
+            JournalEntry.loan_id == user_loan.loan_id,
+            JournalEntry.instrument_date == payment_requests_data.payment_received_in_bank_date,
+        )
+        .all()
+    )
+    assert user_loan.loan_status == "RECOVERED"
+    assert len(entrys) == 10
+    assert entrys[0].ptype == "TL-Redcarpet"
+    assert entrys[1].ptype == "TL-Redcarpet"
+    assert entrys[2].ptype == "TL-Redcarpet"
+    assert entrys[3].ptype == "TL-Redcarpet"
+    assert entrys[4].ptype == "TL-Redcarpet"
+    assert entrys[5].ptype == "TL-Redcarpet"
+    assert entrys[6].ptype == "Late Fee-TL-Redcarpet"
+    assert entrys[7].ptype == "Late Fee-TL-Redcarpet"
+    assert entrys[8].ptype == "Late Fee-TL-Redcarpet"
+    assert entrys[9].ptype == "Late Fee-TL-Redcarpet"
+
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=Decimal(2500),
+        user_id=6,
+        payment_request_id="reset_5",
+    )
+    payment_date = parse_date("2020-10-20")
+    payment_request_id = "reset_5"
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
+    )
+    session.flush()
+    entrys = (
+        session.query(JournalEntry)
+        .filter(
+            JournalEntry.loan_id == user_loan.loan_id,
+            JournalEntry.instrument_date == payment_requests_data.payment_received_in_bank_date,
+        )
+        .all()
+    )
+    assert len(entrys) == 3
+    assert entrys[0].ptype == "TL-Customer"
+    assert entrys[1].ptype == "TL-Customer"
+    assert entrys[2].ptype == "TL-Customer"
 
 
 def test_reset_loan_limit_unlock_success(session: Session) -> None:

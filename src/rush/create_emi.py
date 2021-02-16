@@ -402,6 +402,9 @@ def update_journal_entry(
             )
             .first()
         )
+        if payment_request_data.collection_by == "rc_lender_payment":
+            original_event = event.name
+            event.name = "loan_written_off"
         gateway_expenses = payment_request_data.payment_execution_charges
         settlement_date = payment_request_data.payment_received_in_bank_date
         payment_split_data = (
@@ -462,6 +465,7 @@ def update_journal_entry(
         )
         # if there is something else apart from principal and interest.
         if filtered_split_data and event.amount != principal_and_interest:
+            TL = " TL" if is_term_loan else ""
             sales_import_amount = event.amount - principal_and_interest
             narration_name = ""
             fee_count = 0
@@ -474,14 +478,14 @@ def update_journal_entry(
                 if settled_acc not in ("sgst", "cgst", "igst"):
                     fee_count += 1
                     event_name = settled_acc
-                    narration_name += f"{get_ledger_for_fee(settled_acc)} "
+                    narration_name += f"{get_ledger_for_fee(settled_acc)}"
             narration_name = narration_name.strip()
             if fee_count == 1:
                 if payment_request_data.type not in ("collection"):
                     is_term_loan = False
                 p_type = get_journal_entry_ptype(event_name, is_term_loan=is_term_loan)
                 if event.name == "loan_written_off":
-                    p_type.replace("Customer", "Redcarpet")
+                    p_type = p_type.replace("Customer", "Redcarpet")
             else:
                 p_type = f"{narration_name} -Card TL-Customer"
             for sort_order, (settled_acc, amount) in enumerate(filtered_split_data.items(), 2):
@@ -491,7 +495,7 @@ def update_journal_entry(
                     settlement_date,
                     get_ledger_for_fee(settled_acc),
                     "",
-                    "RedCarpet",
+                    "RedCarpet" + TL,
                     0,
                     amount,
                     "",
@@ -508,7 +512,7 @@ def update_journal_entry(
                 settlement_date,
                 user_name,
                 "",
-                "RedCarpet",
+                "RedCarpet" + TL,
                 sales_import_amount,
                 0,
                 narration_name,
@@ -519,6 +523,8 @@ def update_journal_entry(
                 loan_id,
                 user_id,
             )
+        if payment_request_data.collection_by == "rc_lender_payment":
+            event.name = original_event
     elif event.name == "bill_generate":
         create_journal_entry(
             session,

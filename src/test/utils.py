@@ -3,6 +3,7 @@ from decimal import Decimal
 from typing import (
     Any,
     Dict,
+    Union,
 )
 
 from dateutil.relativedelta import relativedelta
@@ -18,7 +19,7 @@ def payment_request_data(
     payment_request_amount: Decimal,
     user_id: int,
     payment_request_id: str,
-    **kwargs: Dict[str, Any],
+    **kwargs: Union[str, int, bool, Any],
 ) -> PaymentRequestsData:
     """
     populate v3_payment_requests_data table

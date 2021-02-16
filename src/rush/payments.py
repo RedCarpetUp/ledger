@@ -171,7 +171,13 @@ def payment_received_event(
         )
         if is_in_write_off:
             recovery_event(user_loan, event)
-            # TODO set loan status to recovered.
+            _, amount = get_account_balance_from_str(
+                session, f"{user_loan.loan_id}/loan/write_off_expenses/e"
+            )
+            if amount_to_adjust < amount:
+                user_loan.loan_status = "SETTLED"
+            else:
+                user_loan.loan_status = "RECOVERED"
 
         # We will either slide or close bills
         # slide_payment_to_emis(user_loan, event)
@@ -201,6 +207,7 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
         priority_case_expression.append((Fee.name == fee, index + 1))
 
     # This includes bill-level and loan-level fees
+    # if reversed not added then it add to prepayment as remaining_amount>0 during writeoff on outstanding amount
     all_fees = (
         session.query(Fee)
         .filter(
@@ -210,7 +217,7 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
                 and_(Fee.identifier_id.in_(unpaid_bill_ids), Fee.identifier == "bill"),
                 and_(Fee.identifier_id == user_loan.id, Fee.identifier == "loan"),
             ),
-            Fee.fee_status == "UNPAID",
+            Fee.fee_status.in_(["UNPAID", "REVERSED"]),
         )
         .order_by(case(priority_case_expression))
         .all()

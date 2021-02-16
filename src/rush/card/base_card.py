@@ -293,6 +293,10 @@ class BaseLoan(Loan):
             downpayment_amount=kwargs.get("actual_downpayment_amount", None),
         )
 
+        from rush.create_bill import update_journal_entry
+
+        update_journal_entry(user_loan=self, event=event)
+
         return event
 
     def reinstate_limit_on_payment(self, event: LedgerTriggerEvent, amount: Decimal) -> None:

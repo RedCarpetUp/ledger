@@ -2,7 +2,6 @@ from sqlalchemy import and_
 
 from rush.card import BaseLoan
 from rush.ledger_utils import create_ledger_entry_from_str
-from rush.create_emi import update_journal_entry
 from rush.models import Fee, LedgerTriggerEvent, LoanData, PaymentRequestsData
 from rush.utils import get_current_ist_time
 
@@ -11,23 +10,19 @@ def write_off_all_loans_above_the_dpd(dpd: int = 30) -> None:
     pass
 
 
-def write_off_loan(user_loan: BaseLoan, payment_request_data: PaymentRequestsData) -> None:
+def write_off_loan(user_loan: BaseLoan) -> None:
     reverse_all_unpaid_fees(user_loan=user_loan)  # Remove all unpaid fees.
     total_outstanding = user_loan.get_total_outstanding()
     event = LedgerTriggerEvent(
         name="loan_written_off",
+        loan_id=user_loan.loan_id,
         amount=total_outstanding,
         post_date=get_current_ist_time(),
-        extra_details={
-            "payment_request_id": payment_request_data.payment_request_id,
-        },
     )
     user_loan.session.add(event)
     user_loan.session.flush()
     write_off_event(user_loan=user_loan, event=event)
-    update_journal_entry(user_loan=user_loan, event=event)
-
-    # user_card.loan_status = 'WRITTEN_OFF'  # uncomment after user_loan PR is merged.
+    user_loan.loan_status = "WRITTEN_OFF"  # uncomment after user_loan PR is merged.
 
 
 def write_off_event(user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
