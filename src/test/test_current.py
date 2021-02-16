@@ -4762,7 +4762,7 @@ def test_payment_split_for_unknown_fee(session: Session) -> None:
         session=session,
         name="unknown_fee_payment",
         loan_id=user_loan.id,
-        amount=69,
+        amount=100,
         post_date=parse_date("2020-08-02 00:00:00"),
     )
     session.flush()
@@ -4771,7 +4771,7 @@ def test_payment_split_for_unknown_fee(session: Session) -> None:
         session=session,
         fee_name="unknown",
         user_loan=user_loan,
-        gross_fee_amount=Decimal(69),
+        gross_fee_amount=Decimal(100),
         event=dummy_fee_event,
     )
 
