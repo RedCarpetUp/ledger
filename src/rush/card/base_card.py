@@ -36,6 +36,7 @@ from rush.models import (
     LoanMoratorium,
     LoanSchedule,
 )
+from rush.utils import get_current_ist_time
 
 
 class BaseBill:
@@ -480,3 +481,13 @@ class BaseLoan(Loan):
 
     def get_child_loans(self) -> List["BaseLoan"]:
         return []
+
+    def close(self):
+        self.loan_status = "cancelled"
+        LedgerTriggerEvent.new(
+            self.session,
+            name="close_loan",
+            loan_id=self.loan_id,
+            post_date=get_current_ist_time(),
+        )
+        self.session.flush()
