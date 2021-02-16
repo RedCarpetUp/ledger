@@ -4639,7 +4639,7 @@ def test_payment_split_for_unknown_fee(session: Session) -> None:
         tenure=12,
     )
 
-    activation_fee = create_activation_fee(
+    activation_fee = create_loan_fee(
         session=session,
         user_loan=user_loan,
         post_date=parse_date("2020-08-01 00:00:00"),
@@ -4751,11 +4751,13 @@ def test_payment_split_for_unknown_fee(session: Session) -> None:
 
     assert nov_atm_fee.remaining_fee_amount == Decimal("33.04")
 
-    reload_fee = create_reload_fee(
+    reload_fee = create_loan_fee(
         session=session,
         user_loan=user_loan,
-        gross_fee_amount=Decimal("100"),
+        gross_amount=Decimal("100"),
         post_date=parse_date("2020-08-01 00:00:00"),
+        fee_name="card_reload_fees",
+        include_gst_from_gross_amount=True,
     )
 
     # Creating a new, unknown fee
