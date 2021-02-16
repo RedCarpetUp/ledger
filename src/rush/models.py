@@ -216,6 +216,15 @@ class LedgerTriggerEvent(AuditMixin):
     amount: Decimal = Column(Numeric)
     extra_details = Column(JSON, default={})
 
+    def __init__(self, **kwargs):
+        lender_event_names = ("lender_disbursal", "m2p_transfer", "incur_lender_interest")
+
+        # loan_id should not be null for all non-lender events
+        if kwargs["name"] not in lender_event_names:
+            assert kwargs["loan_id"] is not None
+
+        super().__init__(**kwargs)
+
 
 class LedgerEntry(Base):
     __tablename__ = "ledger_entry"
