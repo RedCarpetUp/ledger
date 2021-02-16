@@ -10,6 +10,7 @@ from sqlalchemy.sql.expression import (
     or_,
 )
 
+from rush.accrue_financial_charges import create_bill_fee_entry
 from rush.anomaly_detection import run_anomaly
 from rush.card import BaseLoan
 from rush.card.base_card import BaseBill
@@ -184,43 +185,43 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
 
     split_info = []
 
-    # higher priority is first
-    fees_priority = [
-        # Loan level
-        "card_activation_fees",
-        "card_reload_fees",
-        "reset_joining_fees",
-        "card_upgrade_fees",
-        # Bill level
-        "atm_fee",
-        "late_fee",
-    ]
-
-    priority_case_expression = []
-    for index, fee in enumerate(fees_priority):
-        priority_case_expression.append((Fee.name == fee, index + 1))
-
     # This includes bill-level and loan-level fees
     all_fees = (
         session.query(Fee)
         .filter(
             Fee.user_id == user_loan.user_id,
-            Fee.name.in_(fees_priority),
             or_(
                 and_(Fee.identifier_id.in_(unpaid_bill_ids), Fee.identifier == "bill"),
                 and_(Fee.identifier_id == user_loan.id, Fee.identifier == "loan"),
             ),
             Fee.fee_status == "UNPAID",
         )
-        .order_by(case(priority_case_expression))
         .all()
     )
 
     if all_fees:
+        # higher priority is first
+        fees_priority = [
+            # Loan level
+            "card_activation_fees",
+            "card_reload_fees",
+            "reset_joining_fees",
+            "card_upgrade_fees",
+            # Bill level
+            "atm_fee",
+            "late_fee",
+        ]
+
         # Group fees by type
         all_fees_by_type = {}
+        for fee_type in fees_priority:
+            all_fees_by_type.setdefault(fee_type, [])
+
         for fee in all_fees:
-            all_fees_by_type.setdefault(fee.name, []).append(fee)
+            if fee.name in all_fees_by_type:
+                all_fees_by_type[fee.name].append(fee)
+            else:
+                all_fees_by_type.setdefault(fee.name, []).append(fee)
 
         # Slide fees type-by-type, following the priority order
         for fee_type, fees in all_fees_by_type.items():
@@ -232,7 +233,8 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
                 # Thus, they are not slid into bills and simply get added to the split info
                 # to be adjusted into the loan later
                 if fee.identifier == "loan":
-                    x = {"type": "fee", "fee": fee, "amount_to_adjust": fee.gross_amount}
+                    amount_to_adjust = min(total_amount_to_be_adjusted_in_fee, fee.gross_amount)
+                    x = {"type": "fee", "fee": fee, "amount_to_adjust": amount_to_adjust}
                     split_info.append(x)
                     continue
 
