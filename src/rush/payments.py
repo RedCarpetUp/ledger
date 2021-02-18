@@ -525,7 +525,7 @@ def customer_refund(
 
     if refund_source == "payment_gateway":
         credit_book_str = f"{user_loan.lender_id}/lender/pg_account/a"
-    elif refund_source == "rc_cash":
+    else:
         credit_book_str = f"12345/redcarpet/rc_cash/a"
 
     create_ledger_entry_from_str(
@@ -565,7 +565,7 @@ def fee_refund(
 
     if refund_source == "payment_gateway":
         credit_book_str = f"{user_loan.lender_id}/lender/pg_account/a"
-    elif refund_source == "rc_cash":
+    else:
         credit_book_str = f"12345/redcarpet/rc_cash/a"
 
     reduce_revenue_for_fee_refund(
