@@ -56,6 +56,15 @@ def get_user_product(
     return user_product
 
 
+def get_user_loan(
+    session: Session,
+    loan_id: int,
+) -> BaseLoan:
+    user_loan = session.query(Loan).filter_by(id=loan_id).one()
+    user_loan.prepare(session)
+    return user_loan
+
+
 def create_user_product(session: Session, **kwargs) -> Loan:
     loan_cls = get_product_class(card_type=kwargs["card_type"])
     loan = loan_cls.create(session=session, **kwargs)

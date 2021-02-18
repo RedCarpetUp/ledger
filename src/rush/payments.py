@@ -377,7 +377,7 @@ def settle_payment_in_bank(
 
     create_ledger_entry_from_str(
         session=session,
-        event_id=payment_ledger_event.id,
+        event_id=event.id,
         debit_book_str=f"{user_loan.lender_id}/lender/gateway_expenses/e",
         credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
         amount=gateway_expenses,
