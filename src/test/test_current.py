@@ -4131,6 +4131,7 @@ def test_customer_fee_refund(session: Session) -> None:
         payment_date=parse_date("2020-11-16"),
         payment_request_id="s33234",
         fee=bill_fee,
+        refund_source="payment_gateway",
     )
     assert status["result"] == "success"
 
@@ -4213,6 +4214,7 @@ def test_customer_prepayment_refund(session: Session) -> None:
         payment_amount=Decimal(3000),
         payment_date=parse_date("2020-11-16"),
         payment_request_id="a12318",
+        refund_source="payment_gateway",
     )
 
     _, prepayment_amount = get_account_balance_from_str(
@@ -4226,6 +4228,7 @@ def test_customer_prepayment_refund(session: Session) -> None:
         payment_amount=Decimal(1000),
         payment_date=parse_date("2020-11-22"),
         payment_request_id="a12318",
+        refund_source="payment_gateway",
     )
 
     _, prepayment_amount = get_account_balance_from_str(

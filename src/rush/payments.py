@@ -509,6 +509,7 @@ def customer_refund(
     payment_amount: Decimal,
     payment_date: DateTime,
     payment_request_id: str,
+    refund_source: str,
 ):
     lt = LedgerTriggerEvent(
         name="customer_refund",
@@ -522,17 +523,22 @@ def customer_refund(
     session.add(lt)
     session.flush()
 
+    if refund_source == "payment_gateway":
+        credit_book_str = f"{user_loan.lender_id}/lender/pg_account/a"
+    elif refund_source == "rc_cash":
+        credit_book_str = f"12345/redcarpet/rc_cash/a"
+
     create_ledger_entry_from_str(
         session=session,
         event_id=lt.id,
         debit_book_str=f"{user_loan.loan_id}/loan/pre_payment/l",
-        credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
+        credit_book_str=credit_book_str,
         amount=payment_amount,
     )
 
     update_journal_entry(user_loan=user_loan, event=lt)
 
-    return {"result": "success", "message": "Prepayment Refund successfull"}
+    return {"result": "success", "message": "Prepayment Refund successful"}
 
 
 def fee_refund(
@@ -542,6 +548,7 @@ def fee_refund(
     payment_date: DateTime,
     payment_request_id: str,
     fee: Fee,
+    refund_source: str,
 ):
     lt = LedgerTriggerEvent(
         name="fee_refund",
@@ -556,12 +563,17 @@ def fee_refund(
     session.add(lt)
     session.flush()
 
+    if refund_source == "payment_gateway":
+        credit_book_str = f"{user_loan.lender_id}/lender/pg_account/a"
+    elif refund_source == "rc_cash":
+        credit_book_str = f"12345/redcarpet/rc_cash/a"
+
     reduce_revenue_for_fee_refund(
         session=session,
-        credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
+        credit_book_str=credit_book_str,
         fee=fee,
     )
 
     update_journal_entry(user_loan=user_loan, event=lt)
 
-    return {"result": "success", "message": "Fee Refund successfull"}
+    return {"result": "success", "message": "Fee Refund successful"}
