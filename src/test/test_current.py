@@ -761,7 +761,9 @@ def _partial_payment_bill_1(session: Session) -> None:
 
     bill = unpaid_bills[0]
     _, gateway_expenses = get_account_balance_from_str(
-        session, book_string=f"{user_loan.lender_id}/lender/gateway_expenses/e"
+        session,
+        book_string=f"{user_loan.lender_id}/lender/gateway_expenses/e",
+        to_date=payment_requests_data.payment_received_in_bank_date,
     )
     assert gateway_expenses == 0.5
 
