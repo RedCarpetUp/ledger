@@ -446,21 +446,12 @@ def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
         .group_by(BookAccount.book_name)
         .all()
     )
-    allowed_accounts = (
-        "cgst_payable",
-        "igst_payable",
-        "sgst_payable",
-        "interest_receivable",
-        "late_fine",
-        "principal_receivable",
-        "unbilled",
-        "atm_fee",
-        "card_activation_fees",
-        "card_reload_fees",
-        "downpayment",
-        "reset_joining_fees",
-        "pre_payment",
-        "card_upgrade_fees",
+    not_allowed_accounts = (
+        "refund_off_balance",
+        "min",
+        "max",
+        "health_limit",
+        "available_limit",
     )
     # unbilled and principal belong to same component.
     updated_component_names = {
@@ -473,7 +464,7 @@ def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
     }
     normalized_split_data = {}
     for book_name, amount in split_data:
-        if book_name not in allowed_accounts or amount == 0:
+        if book_name in not_allowed_accounts or amount == 0:
             continue
         if book_name in updated_component_names:
             book_name = updated_component_names[book_name]
