@@ -143,7 +143,19 @@ class BaseBill:
         return unbilled
 
     def is_bill_closed(self, to_date: Optional[DateTime] = None) -> bool:
-        return is_bill_closed(self.session, self.table, to_date)
+        if self.user_loan.can_close_early:
+            # Simply check if max balance is paid.
+            _, total_remaining_amount = get_account_balance_from_str(
+                self.session, book_string=f"{self.table.id}/bill/max/a", to_date=to_date
+            )
+        else:
+            # Check if no amount is left in closed.
+            total_remaining_amount = (
+                self.session.query(func.sum(LoanSchedule.total_due_amount))
+                .filter_by(loan_id=self.table.loan_id, bill_id=self.table.id)
+                .scalar()
+            )
+        return total_remaining_amount == 0
 
     def sum_of_atm_transactions(self):
         atm_transactions_sum = (

@@ -111,7 +111,6 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loa
     # Dpd calculation
     update_event_with_dpd(user_loan=user_loan, event=accrue_event)
 
-
 def is_late_fee_valid(session: Session, user_loan: BaseLoan) -> bool:
     """
     Late fee gets charged if user fails to pay the minimum due before the due date.
@@ -406,3 +405,35 @@ def reverse_incorrect_late_charges(
 
     # Update dpd
     update_event_with_dpd(user_loan=user_loan, event=event)
+
+
+def get_interest_left_to_accrue(session: Session, user_loan: BaseLoan) -> Decimal:
+    """
+    Used to get remaining interest left to accrue in case user wants to close loan early.
+    """
+    total_interest_due = (
+        session.query(func.sum(LoanSchedule.interest_due))
+        .filter(LoanSchedule.loan_id == user_loan.loan_id, LoanSchedule.bill_id.is_(None))
+        .scalar()
+    )
+    all_bills = user_loan.get_all_bills()
+    total_interest_accrued = sum(
+        get_account_balance_from_str(session, book_string=f"{bill.id}/bill/interest_receivable/r")[1]
+        for bill in all_bills
+    )
+    return total_interest_due - total_interest_accrued
+
+
+def add_early_close_charges(
+    session: Session, user_loan: BaseLoan, post_date: DateTime, amount: Decimal
+) -> None:
+    event = LedgerTriggerEvent(
+        name="early_close_charges",
+        loan_id=user_loan.loan_id,
+        post_date=post_date,
+        amount=amount,
+    )
+    session.add(event)
+    session.flush()
+
+    create_loan_fee_entry(session, user_loan, event, "early_close_fee", amount)

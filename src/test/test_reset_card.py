@@ -5,9 +5,11 @@ from test.utils import (
 )
 
 import pytest
+from dateutil.relativedelta import relativedelta
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
+from rush.accrue_financial_charges import accrue_interest_on_all_bills
 from rush.card import (
     create_user_product,
     get_user_product,
@@ -20,6 +22,7 @@ from rush.card.utils import (
 )
 from rush.ledger_utils import get_account_balance_from_str
 from rush.limit_unlock import limit_unlock
+from rush.loan_schedule.loan_schedule import is_payment_closing_schedule
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
     Lenders,
@@ -174,15 +177,58 @@ def test_create_term_loan(session: Session) -> None:
     assert all_emis[-1].interest_due == Decimal("300.67")
     assert all_emis[-1].total_due_amount == Decimal("1134")
 
+    payment_date = parse_date("2020-08-25")
+    amount = Decimal(11000)
+    payment_request_id = "dummy_reset_fee_2"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=user_product.user_id,
+        payment_request_id=payment_request_id,
+    )
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
+    )
+
+    _, principal_receivable = get_account_balance_from_str(
+        session=session, book_string=f"{loan_data.id}/bill/principal_receivable/a"
+    )
+    assert principal_receivable == Decimal(0)
+
+    _, pre_payment_balance = get_account_balance_from_str(
+        session=session, book_string=f"{loan.loan_id}/loan/pre_payment/l"
+    )
+    assert pre_payment_balance == Decimal("1000")
+
     # add min amount for months in between.
     add_min_to_all_bills(session=session, post_date=parse_date("2020-09-01"), user_loan=loan)
-    add_min_to_all_bills(session=session, post_date=parse_date("2020-10-01"), user_loan=loan)
+    accrue_interest_on_all_bills(
+        session=session, post_date=all_emis[0].due_date + relativedelta(days=1), user_loan=user_loan
+    )
 
-    min_amount = user_loan.get_remaining_min(date_to_check_against=parse_date("2020-11-01").date())
-    assert min_amount == Decimal("3402")
+    _, pre_payment_balance = get_account_balance_from_str(
+        session=session, book_string=f"{loan.loan_id}/loan/pre_payment/l"
+    )
+    assert pre_payment_balance == Decimal("699.33")  # interest got accrued and adjusted from prepayment.
+
+    assert is_payment_closing_schedule(session, user_loan, Decimal(2608)) is True
 
     max_amount = user_loan.get_remaining_max()
-    assert max_amount == Decimal("10000")
+    assert max_amount == Decimal("0")
 
     limit_unlock(session=session, loan=loan, amount=Decimal("1000"))
 
@@ -347,3 +393,7 @@ def test_reset_loan_limit_unlock_error(session: Session) -> None:
     # now trying to unlock more than 10000
     with pytest.raises(AssertionError):
         limit_unlock(session=session, loan=loan, amount=Decimal("10001"))
+
+
+def test_reset_loan_early_payment(session: Session) -> None:
+    pass

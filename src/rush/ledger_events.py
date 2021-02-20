@@ -185,6 +185,11 @@ def _adjust_bill(
     remaining_amount = adjust_for_receivable(
         remaining_amount,
         to_acc=debit_acc_str,
+        from_acc=f"{bill.id}/bill/interest_receivable/a",
+    )
+    remaining_amount = adjust_for_receivable(
+        remaining_amount,
+        to_acc=debit_acc_str,
         from_acc=f"{bill.id}/bill/unbilled/a",
     )
     remaining_amount = adjust_for_receivable(
@@ -329,13 +334,13 @@ def get_revenue_book_str_for_fee(fee: Fee) -> str:
     elif fee.name == "card_activation_fees":
         return f"{fee.identifier_id}/product/card_activation_fees/r"
     elif fee.name == "reset_joining_fees":
-        return f"{fee.identifier_id}/product/reset_joining_fees/r"
+        return f"{fee.identifier_id}/loan/reset_joining_fees/r"
     elif fee.name == "card_reload_fees":
         return f"{fee.identifier_id}/loan/card_reload_fees/r"
     elif fee.name == "card_upgrade_fees":
         return f"{fee.identifier_id}/loan/card_upgrade_fees/r"
     else:
-        raise Exception("InvalidCreditBookStringError")
+        return f"{fee.identifier_id}/{fee.identifier}/{fee.name}/r"
 
 
 def adjust_for_revenue(

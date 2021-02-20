@@ -10,6 +10,10 @@ from sqlalchemy.sql.expression import (
     or_,
 )
 
+from rush.accrue_financial_charges import (
+    add_early_close_charges,
+    get_interest_left_to_accrue,
+)
 from rush.anomaly_detection import run_anomaly
 from rush.card import BaseLoan
 from rush.card.base_card import BaseBill
@@ -27,7 +31,10 @@ from rush.ledger_utils import (
     create_ledger_entry_from_str,
     get_account_balance_from_str,
 )
-from rush.loan_schedule.loan_schedule import slide_payment_to_emis
+from rush.loan_schedule.loan_schedule import (
+    is_payment_closing_schedule,
+    slide_payment_to_emis,
+)
 from rush.models import (
     BookAccount,
     Fee,
@@ -90,7 +97,7 @@ def payment_received(
         run_anomaly(
             session=session,
             user_loan=loan,
-            event_date=payment_request_data.intermediary_payment_date,
+            event_date=event.post_date,
         )
         update_event_with_dpd(user_loan=loan, event=event)
 
@@ -318,7 +325,16 @@ def adjust_payment(
     event: LedgerTriggerEvent,
     amount_to_adjust: Decimal,
     debit_book_str: str,
+    slide_in_emis: bool = True,
 ) -> Decimal:
+    # for term loans, if loan is getting closed and interest is left to accrue then convert it into fee.
+    if not user_loan.can_close_early and is_payment_closing_schedule(
+        session, user_loan, amount_to_adjust
+    ):
+        interest_left_to_accure = get_interest_left_to_accrue(session, user_loan)
+        if interest_left_to_accure > 0:
+            add_early_close_charges(session, user_loan, event.post_date, interest_left_to_accure)
+
     split_data = find_split_to_slide_in_loan(session, user_loan, amount_to_adjust)
 
     for data in split_data:
@@ -343,7 +359,8 @@ def adjust_payment(
             )
             # The amount to adjust is computed for this bill. It should all settle.
             assert remaining_amount == 0
-            slide_payment_to_emis(user_loan, event, data["amount_to_adjust"])
+            if slide_in_emis:
+                slide_payment_to_emis(user_loan, event, data["amount_to_adjust"])
         amount_to_adjust -= data["amount_to_adjust"]
 
     return amount_to_adjust
@@ -488,7 +505,7 @@ def create_payment_split(session: Session, event: LedgerTriggerEvent):
                 "loan_id": event.loan_id,
             }
         )
-
+    # TODO assert if payment amount is equal to split amount.
     session.bulk_insert_mappings(PaymentSplit, new_ps_objects)
 
 
