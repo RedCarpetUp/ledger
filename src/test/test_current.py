@@ -5606,18 +5606,18 @@ def test_close_loan_in_moratorium(session: Session) -> None:
     assert emis[2].emi_number == 3
     assert emis[2].total_due_amount == 0
     assert emis[2].due_date == parse_date("2020-11-15").date()
-    assert emis[2].total_closing_balance == Decimal("2500.00")
+    assert emis[2].total_closing_balance == Decimal("0")
     assert emis[2].payment_status == "UnPaid"
     assert emis[3].emi_number == 4
     assert emis[3].principal_due == Decimal("0")
     assert emis[3].interest_due == Decimal("0")
     assert emis[3].total_due_amount == Decimal("0")
     assert emis[3].due_date == parse_date("2020-12-15").date()
-    assert emis[3].total_closing_balance == Decimal("2500.00")
+    assert emis[3].total_closing_balance == Decimal("0")
     assert emis[3].payment_status == "UnPaid"
     assert emis[4].emi_number == 5
     assert emis[4].principal_due == Decimal("0")
     assert emis[4].interest_due == Decimal("0")
     assert emis[4].due_date == parse_date("2021-01-15").date()
-    assert emis[4].total_closing_balance == Decimal("2291.67")
+    assert emis[4].total_closing_balance == Decimal("0")
     assert emis[4].payment_status == "UnPaid"

@@ -280,6 +280,7 @@ def close_loan(user_loan: BaseLoan, last_payment_date: datetime):
         else:
             bill_emi.principal_due = 0
             bill_emi.interest_due = 0
+            bill_emi.total_closing_balance = 0
 
     # Refresh the due amounts of loan schedule after altering bill's schedule.
     group_bills(user_loan)
