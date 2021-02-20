@@ -52,6 +52,9 @@ def get_user_product(
     elif _rows == "one_or_none":
         user_product = user_product_query.one_or_none()
 
+    if not user_product:
+        return None
+
     user_product.prepare(session=session)
     return user_product
 
