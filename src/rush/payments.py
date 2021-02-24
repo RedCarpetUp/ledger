@@ -508,7 +508,6 @@ def customer_refund(
     user_loan: BaseLoan,
     payment_amount: Decimal,
     payment_date: DateTime,
-    payment_request_id: str,
     refund_source: str,
 ):
     lt = LedgerTriggerEvent(
@@ -516,9 +515,6 @@ def customer_refund(
         loan_id=user_loan.loan_id,
         amount=payment_amount,
         post_date=payment_date,
-        extra_details={
-            "payment_request_id": payment_request_id,
-        },
     )
     session.add(lt)
     session.flush()

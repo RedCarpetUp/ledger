@@ -4213,7 +4213,6 @@ def test_customer_prepayment_refund(session: Session) -> None:
         user_loan=user_loan,
         payment_amount=Decimal(3000),
         payment_date=parse_date("2020-11-16"),
-        payment_request_id="a12318",
         refund_source="payment_gateway",
     )
 
@@ -4227,7 +4226,6 @@ def test_customer_prepayment_refund(session: Session) -> None:
         user_loan=user_loan,
         payment_amount=Decimal(1000),
         payment_date=parse_date("2020-11-22"),
-        payment_request_id="a12318",
         refund_source="payment_gateway",
     )
 
