@@ -82,19 +82,33 @@ class TermLoanBill(BaseBill):
 
 def get_down_payment_for_loan(loan: BaseLoan) -> Decimal:
     session = loan.session
-    total_downpayment = (
-        session.query(func.sum(LedgerTriggerEvent.amount))
+    payment_data = (
+        session.query(LedgerTriggerEvent)
         .filter(
             LedgerTriggerEvent.name == "payment_received",
             LedgerTriggerEvent.loan_id == loan.id,
             LedgerTriggerEvent.extra_details["payment_request_id"].astext
             == PaymentRequestsData.payment_request_id,
-            PaymentRequestsData.type == "downpayment",
+            PaymentRequestsData.type == "collection",
             PaymentRequestsData.row_status == "active",
+            PaymentRequestsData.collection_by != "rc_lender_payment",
         )
-        .scalar()
-    ) or 0
-    return total_downpayment
+        .order_by(LedgerTriggerEvent.id.asc())
+        .all()
+    )
+    loan_data = (
+        session.query(LoanData)
+        .filter(LoanData.loan_id == loan.id, LoanData.user_id == loan.user_id)
+        .one()
+    )
+    bill = loan.convert_to_bill_class(loan_data)
+    down_payment_due = bill.get_down_payment()
+    down_payment_paid = 0
+    for payment in payment_data:
+        down_payment_paid += payment.amount
+        if down_payment_due <= down_payment_paid:
+            return down_payment_due
+    return down_payment_paid
 
 
 class TermLoan(BaseLoan):

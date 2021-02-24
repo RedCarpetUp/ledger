@@ -10,19 +10,25 @@ def write_off_all_loans_above_the_dpd(dpd: int = 30) -> None:
     pass
 
 
-def write_off_loan(user_loan: BaseLoan) -> None:
-    reverse_all_unpaid_fees(user_loan=user_loan)  # Remove all unpaid fees.
-    total_outstanding = user_loan.get_total_outstanding()
+def write_off_loan(user_loan: BaseLoan, payment_request_data: PaymentRequestsData) -> None:
+    from rush.create_emi import update_journal_entry
+
     event = LedgerTriggerEvent(
         name="loan_written_off",
         loan_id=user_loan.loan_id,
-        amount=total_outstanding,
-        post_date=get_current_ist_time(),
+        post_date=payment_request_data.intermediary_payment_date,
+        extra_details={
+            "payment_request_id": payment_request_data.payment_request_id,
+        },
     )
     user_loan.session.add(event)
     user_loan.session.flush()
+    reverse_all_unpaid_fees(user_loan=user_loan, event=event)  # Remove all unpaid fees.
+    total_outstanding = user_loan.get_total_outstanding()
+    event.amount = total_outstanding
     write_off_event(user_loan=user_loan, event=event)
     user_loan.loan_status = "WRITTEN_OFF"  # uncomment after user_loan PR is merged.
+    update_journal_entry(user_loan=user_loan, event=event)
 
 
 def write_off_event(user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
@@ -50,7 +56,7 @@ def recovery_event(user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
     )
 
 
-def reverse_all_unpaid_fees(user_loan: BaseLoan) -> None:
+def reverse_all_unpaid_fees(user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
     session = user_loan.session
     fees = (
         session.query(Fee, LoanData)
@@ -62,6 +68,12 @@ def reverse_all_unpaid_fees(user_loan: BaseLoan) -> None:
         )
         .all()
     )
-    LoanData.loan_id == user_loan.loan_id
     for fee, _ in fees:
         fee.fee_status = "REVERSED"
+        create_ledger_entry_from_str(
+            user_loan.session,
+            event_id=event.id,
+            debit_book_str=f"{fee.identifier_id}/bill/max/l",
+            credit_book_str=f"{fee.identifier_id}/bill/max/a",
+            amount=fee.remaining_fee_amount,
+        )

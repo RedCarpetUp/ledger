@@ -144,13 +144,14 @@ def test_create_term_loan(session: Session) -> None:
         principal=Decimal("10000"),
         down_payment_percentage=Decimal("20"),
     )
+    assert _downpayment_amount == Decimal("2000")
 
     # downpayment
     payment_date = parse_date("2020-08-01")
     payment_request_id = "dummy_downpayment"
     payment_request_data(
         session=session,
-        type="downpayment",
+        type="collection",
         payment_request_amount=_downpayment_amount,
         user_id=user_product.user_id,
         payment_request_id=payment_request_id,
@@ -171,26 +172,6 @@ def test_create_term_loan(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
-
-    downpayment_event = (
-        session.query(LedgerTriggerEvent)
-        .filter(
-            LedgerTriggerEvent.name == "payment_received",
-            LedgerTriggerEvent.loan_id == user_loan.id,
-            LedgerTriggerEvent.extra_details["payment_request_id"].astext
-            == PaymentRequestsData.payment_request_id,
-            PaymentRequestsData.type == "downpayment",
-            PaymentRequestsData.row_status == "active",
-        )
-        .one()
-    )
-    assert downpayment_event.post_date.date() == parse_date("2020-08-01").date()
-    assert downpayment_event.amount == Decimal("2000")
-
-    _, downpayment_balance = get_account_balance_from_str(
-        session=session, book_string=f"{user_loan.id}/loan/downpayment/l"
-    )
-    assert downpayment_balance == Decimal("2000")
 
     _, product_lender_payable = get_account_balance_from_str(
         session=session, book_string=f"{user_loan.id}/loan/lender_payable/l"
@@ -255,13 +236,13 @@ def test_create_term_loan_2(session: Session) -> None:
         principal=Decimal("10000"),
         down_payment_percentage=Decimal("20"),
     )
-
+    assert _downpayment_amount == Decimal("2000")
     # downpayment
     payment_date = parse_date("2018-10-22")
     payment_request_id = "dummy_downpayment"
     payment_request_data(
         session=session,
-        type="downpayment",
+        type="collection",
         payment_request_amount=_downpayment_amount,
         user_id=user_product.user_id,
         payment_request_id=payment_request_id,
@@ -282,27 +263,6 @@ def test_create_term_loan_2(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
-
-    downpayment_event = (
-        session.query(LedgerTriggerEvent)
-        .filter(
-            LedgerTriggerEvent.name == "payment_received",
-            LedgerTriggerEvent.loan_id == user_loan.id,
-            LedgerTriggerEvent.extra_details["payment_request_id"].astext
-            == PaymentRequestsData.payment_request_id,
-            PaymentRequestsData.type == "downpayment",
-            PaymentRequestsData.row_status == "active",
-        )
-        .one()
-    )
-
-    assert downpayment_event.post_date.date() == parse_date("2018-10-22").date()
-    assert downpayment_event.amount == Decimal("2000")
-
-    _, downpayment_balance = get_account_balance_from_str(
-        session=session, book_string=f"{user_loan.id}/loan/downpayment/l"
-    )
-    assert downpayment_balance == Decimal("2000")
 
     _, product_lender_payable = get_account_balance_from_str(
         session=session, book_string=f"{user_loan.id}/loan/lender_payable/l"

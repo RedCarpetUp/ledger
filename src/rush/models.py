@@ -578,3 +578,17 @@ class PaymentRequestsData(AuditMixin):
     coupon_data = Column(JSONB, default=lambda: {})
     gross_request_amount: Decimal = Column(Numeric, nullable=True)
     extra_details = Column(JSONB, default=lambda: {})
+
+
+class CollectionOrders(AuditMixin):
+    __tablename__ = "v3_collection_order_mapping"
+
+    collection_request_id = Column(
+        String(length=32),
+        nullable=False,
+    )
+    batch_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
+    amount_to_pay = Column(Numeric, nullable=False)
+    amount_paid = Column(Numeric, nullable=False, default=0)
+    row_status = Column(String(length=20), default="active", nullable=False)
+    extra_details = Column(JSONB, server_default="{}", nullable=True)

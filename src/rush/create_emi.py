@@ -23,6 +23,7 @@ from rush.models import (
     PaymentRequestsData,
     PaymentSplit,
     UserData,
+    CollectionOrders,
 )
 
 
@@ -269,9 +270,9 @@ def get_journal_entry_narration(event_name) -> String:
         return "ATM Fee"
     elif event_name in ("card_reload_fees", "card_upgrade_fees"):
         return "Reload Fee"
-    elif event_name == "card_activation_fees":
+    elif event_name in ("card_activation_fees", "term_loan_fees"):
         return "Processing Fee"
-    elif event_name in ("payment_received", "loan_written_off"):
+    elif event_name in ("payment_received", "loan_written_off", "customer_refund"):
         return "Receipt-Import"
     elif event_name == "transaction_refund":
         return "Payment Received From Merchant"
@@ -293,6 +294,7 @@ def get_journal_entry_ptype(event_name, is_term_loan=False) -> String:
         "pre_product_fee_added",
         "card_activation_fees",
         "reset_joining_fees",
+        "term_loan_fees",
     ):
         return "CF Processing Fee-Customer" if not is_term_loan else "Processing Fee-TL-Customer"
     elif event_name == "payment_received":
@@ -308,10 +310,12 @@ def get_journal_entry_ptype(event_name, is_term_loan=False) -> String:
         return "CF-Merchant" if not is_term_loan else "TL-Merchant"
     elif event_name == "loan_written_off":
         return "Card TL-Redcarpet" if not is_term_loan else "TL-Redcarpet"
+    elif event_name == "customer_refund":
+        return "Card Refund TL-Customer" if not is_term_loan else "Refund TL-Customer"
 
 
 def get_journal_entry_ledger_for_payment(event_name) -> String:
-    if event_name in ("payment_received", "loan_written_off"):
+    if event_name in ("payment_received", "loan_written_off", "customer_refund"):
         return "Axis Bank Ltd-Collections A/c"
     elif event_name == "transaction_refund":
         return "Cards Upload A/c"
@@ -320,7 +324,7 @@ def get_journal_entry_ledger_for_payment(event_name) -> String:
 def get_ledger_for_fee(fee_acc) -> String:
     if fee_acc == "late_fine":
         return "Late Fee"
-    elif fee_acc in ("atm_fee", "reset_joining_fees", "card_activation_fees"):
+    elif fee_acc in ("atm_fee", "reset_joining_fees", "card_activation_fees", "term_loan_fees"):
         return "Processing Fee"
     elif fee_acc in ("card_reload_fees", "card_upgrade_fees"):
         return "Reload Fee"
@@ -376,7 +380,7 @@ def update_journal_entry(
             session,
             "",
             event.post_date,
-            "Cards Upload A/C",
+            "Cards Upload A/C" if not is_term_loan else "Axis Bank Ltd-Disbursement A/c",
             "",
             "RedCarpet",
             0,
@@ -389,11 +393,9 @@ def update_journal_entry(
             loan_id,
             user_id,
         )
-    elif (
-        event.name == "payment_received"
-        or event.name == "transaction_refund"
-        or event.name == "loan_written_off"
-    ):
+    elif event.name in ["payment_received", "transaction_refund", "loan_written_off", "customer_refund"]:
+        from rush.payments import get_payment_for_loan
+
         payment_request_data = (
             session.query(PaymentRequestsData)
             .filter(
@@ -402,9 +404,10 @@ def update_journal_entry(
             )
             .first()
         )
-        if payment_request_data.collection_by == "rc_lender_payment":
-            original_event = event.name
-            event.name = "loan_written_off"
+        if user_loan:
+            payment_request_data = get_payment_for_loan(
+                session=session, payment_request_data=payment_request_data, user_loan=user_loan
+            )
         gateway_expenses = payment_request_data.payment_execution_charges
         settlement_date = payment_request_data.payment_received_in_bank_date
         payment_split_data = (
@@ -434,9 +437,10 @@ def update_journal_entry(
                 elif event.name == "transaction_refund":
                     narration_name = "Payment Received From Merchant"
                     p_type = "TL-Merchant" if is_term_loan else "CF-Customer"
-                elif event.name == "loan_written_off":
+                else:
                     p_type = get_journal_entry_ptype(event.name, is_term_loan=is_term_loan)
                     narration_name = get_journal_entry_narration(event.name)
+
             if event.amount == 0:
                 continue
             if payment_request_data.type not in ("collection"):
@@ -483,6 +487,7 @@ def update_journal_entry(
             if fee_count == 1:
                 if payment_request_data.type not in ("collection"):
                     is_term_loan = False
+                    TL = ""
                 p_type = get_journal_entry_ptype(event_name, is_term_loan=is_term_loan)
                 if event.name == "loan_written_off":
                     p_type = p_type.replace("Customer", "Redcarpet")
@@ -523,8 +528,6 @@ def update_journal_entry(
                 loan_id,
                 user_id,
             )
-        if payment_request_data.collection_by == "rc_lender_payment":
-            event.name = original_event
     elif event.name == "bill_generate":
         create_journal_entry(
             session,
@@ -573,6 +576,9 @@ def payment_received_journal_entry(
     loan_id: int = None,
     user_id: Optional[int] = None,
 ) -> None:
+    actual_amount = event.amount - (gateway_expenses if gateway_expenses else 0)
+    if event.amount < gateway_expenses:
+        actual_amount = event.amount
     create_journal_entry(
         session,
         "Receipt-Import",
@@ -580,7 +586,7 @@ def payment_received_journal_entry(
         get_journal_entry_ledger_for_payment(event.name),
         "",
         "RedCarpet",
-        event.amount - (gateway_expenses if gateway_expenses else 0),
+        actual_amount,
         0,
         narration_name,
         settlement_date,
