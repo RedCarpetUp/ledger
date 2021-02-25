@@ -1,5 +1,6 @@
 from decimal import Decimal
 from test.utils import (
+    collection_request_data,
     pay_payment_request,
     payment_request_data,
 )
@@ -23,6 +24,7 @@ from rush.ledger_utils import get_account_balance_from_str
 from rush.limit_unlock import limit_unlock
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
+    CollectionOrders,
     JournalEntry,
     Lenders,
     LoanData,
@@ -415,6 +417,14 @@ def test_reset_journal_entries(session: Session) -> None:
         user_id=6,
         payment_request_id="reset_3_writeoff",
         collection_by="rc_lender_payment",
+        collection_request_id="reset_3_red",
+    )
+    collection_request_data(
+        session=session,
+        collection_request_id="reset_3_red",
+        amount_paid=Decimal(amount),
+        amount_to_pay=Decimal(amount),
+        batch_id=loan.id,
     )
     payment_date = parse_date("2021-01-02")
     payment_request_id = "reset_3_writeoff"
@@ -501,11 +511,6 @@ def test_reset_journal_entries_kv(session: Session) -> None:
         )
         .all()
     )
-    with open("a.txt", "a") as f:
-        for e in entrys:
-            f.write(str(e.as_dict()))
-            f.write("\n")
-
     assert len(entrys) == 7
     assert entrys[0].ptype == "CF-Customer"
     assert entrys[1].ptype == "CF-Customer"
@@ -532,10 +537,6 @@ def test_reset_journal_entries_kv(session: Session) -> None:
         )
         .all()
     )
-    with open("a.txt", "a") as f:
-        for e in entrys:
-            f.write(str(e.as_dict()))
-            f.write("\n")
 
     assert len(entrys) == 2
     assert entrys[0].ptype == "Disbursal TL"
@@ -586,11 +587,6 @@ def test_reset_journal_entries_kv(session: Session) -> None:
         )
         .all()
     )
-
-    with open("a.txt", "a") as f:
-        for e in entrys:
-            f.write(str(e.as_dict()))
-            f.write("\n")
     assert len(entrys) == 7
     assert entrys[0].ptype == "TL-Customer"
     assert entrys[1].ptype == "TL-Customer"
@@ -632,10 +628,6 @@ def test_reset_journal_entries_kv(session: Session) -> None:
         .all()
     )
 
-    with open("a.txt", "a") as f:
-        for e in entrys:
-            f.write(str(e.as_dict()))
-            f.write("\n")
     assert len(entrys) == 7
     assert entrys[0].ptype == "TL-Customer"
     assert entrys[1].ptype == "TL-Customer"
@@ -682,10 +674,6 @@ def test_reset_journal_entries_kv(session: Session) -> None:
         .all()
     )
 
-    with open("a.txt", "a") as f:
-        for e in entrys:
-            f.write(str(e.as_dict()))
-            f.write("\n")
     assert len(entrys) == 7
     assert entrys[0].ptype == "TL-Customer"
     assert entrys[1].ptype == "TL-Customer"
@@ -697,6 +685,7 @@ def test_reset_journal_entries_kv(session: Session) -> None:
 
     accrue_late_charges(session, loan, parse_date("2019-04-12"), Decimal(120))
     accrue_late_charges(session, loan, parse_date("2019-04-12"), Decimal(120))
+    CollectionOrders()
     payment_request_data(
         session=session,
         type="collection",
@@ -704,6 +693,14 @@ def test_reset_journal_entries_kv(session: Session) -> None:
         user_id=6,
         payment_request_id="reset_3_writeoff",
         collection_by="rc_lender_payment",
+        collection_request_id="reset_3_redcarpet",
+    )
+    collection_request_data(
+        session=session,
+        collection_request_id="reset_3_redcarpet",
+        amount_paid=Decimal(amount),
+        amount_to_pay=Decimal(amount),
+        batch_id=loan.id,
     )
     payment_date = parse_date("2019-04-14")
     payment_request_id = "reset_3_writeoff"
@@ -724,11 +721,6 @@ def test_reset_journal_entries_kv(session: Session) -> None:
         )
         .all()
     )
-
-    with open("a.txt", "a") as f:
-        for e in entrys:
-            f.write(str(e.as_dict()))
-            f.write("\n")
 
     assert user_loan.loan_status == "WRITTEN_OFF"
     assert len(entrys) == 3
@@ -770,10 +762,6 @@ def test_reset_journal_entries_kv(session: Session) -> None:
         )
         .all()
     )
-    with open("a.txt", "a") as f:
-        for e in entrys:
-            f.write(str(e.as_dict()))
-            f.write("\n")
     assert len(entrys) == 3
     assert entrys[0].ptype == "TL-Customer"
     assert entrys[1].ptype == "TL-Customer"

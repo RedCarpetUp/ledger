@@ -11,7 +11,7 @@ from sqlalchemy.sql.expression import (
 )
 
 from rush.anomaly_detection import run_anomaly
-from rush.card import BaseLoan
+from rush.card import BaseLoan, get_user_product
 from rush.card.base_card import BaseBill
 from rush.create_emi import (
     update_event_with_dpd,
@@ -47,74 +47,89 @@ def payment_received(
     payment_request_data: PaymentRequestsData,
     skip_closing: bool = False,
 ) -> None:
-    # TODO
-    # make support for multiple loans
-    if user_loan:
-        payment_request_data = get_payment_for_loan(
-            session=session, payment_request_data=payment_request_data, user_loan=user_loan
+    def create_payment_received_event():
+        event = LedgerTriggerEvent.new(
+            session,
+            name="payment_received",
+            loan_id=user_loan.loan_id if user_loan else None,
+            amount=payment_request_data.payment_request_amount,
+            post_date=payment_request_data.intermediary_payment_date,
+            extra_details={
+                "payment_request_id": payment_request_data.payment_request_id,
+            },
         )
+        session.flush()
+        remaining_payment_amount = payment_request_data.payment_request_amount
 
+        def call_payment_received_event(amount_to_adjust: Decimal) -> Decimal:
+            if amount_to_adjust <= 0:
+                return amount_to_adjust
+            remaining_amount = payment_received_event(
+                session=session,
+                user_loan=loan,
+                payment_request_data=payment_request_data,
+                amount_to_adjust=amount_to_adjust,
+                debit_book_str=f"{loan.lender_id}/lender/pg_account/a",
+                event=event,
+                skip_closing=skip_closing,
+            )
+            return remaining_amount
+
+        all_loans = [user_loan] + user_loan.get_child_loans()
+        if len(all_loans) > 1:  # if more than 2 loans then pay minimum of all loans first.
+            for loan in all_loans:
+                min_to_pay = loan.get_remaining_min(include_child_loans=False)
+                amount_to_actually_adjust = min(min_to_pay, remaining_payment_amount)
+                call_payment_received_event(amount_to_actually_adjust)
+                remaining_payment_amount -= amount_to_actually_adjust
+
+        # Settle whatever is remaining after it.
+        for loan in all_loans:
+            remaining_payment_amount = call_payment_received_event(remaining_payment_amount)
+
+        for loan in all_loans:
+            run_anomaly(
+                session=session,
+                user_loan=loan,
+                event_date=payment_request_data.intermediary_payment_date,
+            )
+            update_event_with_dpd(user_loan=loan, event=event)
+
+        if remaining_payment_amount > 0:  # if there's payment left to be adjusted.
+            _adjust_for_prepayment(
+                session=session,
+                loan_id=user_loan.loan_id,
+                event_id=event.id,
+                amount=remaining_payment_amount,
+                debit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
+            )
+
+        create_payment_split(session, event)
+
+    if payment_request_data.collection_request_id:
+        collection_data = get_payment_for_loan(
+            session=session,
+            payment_request_data=payment_request_data,
+            user_loan=user_loan if user_loan else None,
+        )
+    else:
+        create_payment_received_event()
+        collection_data = []
+    for collection in collection_data:
+        payment_data_dict = payment_request_data.as_dict()
+        payment_data_dict.pop("id")
+        payment_request_data = PaymentRequestsData(**payment_data_dict)
+        payment_request_data.payment_request_amount = collection.amount_paid
+        user_loan = get_user_product(
+            session=session,
+            loan_id=collection.batch_id,
+            user_id=user_loan.user_id,
+            card_type=user_loan.product_type,
+        )
         if payment_request_data.collection_by == "rc_lender_payment":
             write_off_loan(user_loan=user_loan, payment_request_data=payment_request_data)
             return
-
-    event = LedgerTriggerEvent.new(
-        session,
-        name="payment_received",
-        loan_id=user_loan.loan_id if user_loan else None,
-        amount=payment_request_data.payment_request_amount,
-        post_date=payment_request_data.intermediary_payment_date,
-        extra_details={
-            "payment_request_id": payment_request_data.payment_request_id,
-        },
-    )
-    session.flush()
-    remaining_payment_amount = payment_request_data.payment_request_amount
-
-    def call_payment_received_event(amount_to_adjust: Decimal) -> Decimal:
-        if amount_to_adjust <= 0:
-            return amount_to_adjust
-        remaining_amount = payment_received_event(
-            session=session,
-            user_loan=loan,
-            payment_request_data=payment_request_data,
-            amount_to_adjust=amount_to_adjust,
-            debit_book_str=f"{loan.lender_id}/lender/pg_account/a",
-            event=event,
-            skip_closing=skip_closing,
-        )
-        return remaining_amount
-
-    all_loans = [user_loan] + user_loan.get_child_loans()
-    if len(all_loans) > 1:  # if more than 2 loans then pay minimum of all loans first.
-        for loan in all_loans:
-            min_to_pay = loan.get_remaining_min(include_child_loans=False)
-            amount_to_actually_adjust = min(min_to_pay, remaining_payment_amount)
-            call_payment_received_event(amount_to_actually_adjust)
-            remaining_payment_amount -= amount_to_actually_adjust
-
-    # Settle whatever is remaining after it.
-    for loan in all_loans:
-        remaining_payment_amount = call_payment_received_event(remaining_payment_amount)
-
-    for loan in all_loans:
-        run_anomaly(
-            session=session,
-            user_loan=loan,
-            event_date=payment_request_data.intermediary_payment_date,
-        )
-        update_event_with_dpd(user_loan=loan, event=event)
-
-    if remaining_payment_amount > 0:  # if there's payment left to be adjusted.
-        _adjust_for_prepayment(
-            session=session,
-            loan_id=user_loan.loan_id,
-            event_id=event.id,
-            amount=remaining_payment_amount,
-            debit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
-        )
-
-    create_payment_split(session, event)
+        create_payment_received_event()
 
 
 def refund_payment(
@@ -185,22 +200,31 @@ def payment_received_event(
 
 
 def get_payment_for_loan(
-    session: Session, payment_request_data: PaymentRequestsData, user_loan: BaseLoan
+    session: Session, payment_request_data: PaymentRequestsData, user_loan: Optional[BaseLoan] = None
 ) -> PaymentRequestsData:
     if payment_request_data.collection_request_id:
-        collection_data_amount = (
-            session.query(CollectionOrders.amount_paid).filter(
-                CollectionOrders.row_status == "active",
-                CollectionOrders.batch_id == user_loan.loan_id,
-                CollectionOrders.collection_request_id == payment_request_data.collection_request_id,
+        if user_loan:
+            collection = (
+                session.query(CollectionOrders)
+                .filter(
+                    CollectionOrders.row_status == "active",
+                    CollectionOrders.collection_request_id == payment_request_data.collection_request_id,
+                    CollectionOrders.batch_id == user_loan.loan_id,
+                )
+                .one()
             )
-        ).one_or_none()
-        payment_data_dict = payment_request_data.as_dict()
-        payment_data_dict.pop("id")
-        payment_request_data = PaymentRequestsData(**payment_data_dict)
-        payment_request_data.payment_request_amount = collection_data_amount[0]
-
-    return payment_request_data
+            collection_data = [collection]
+        else:
+            collection_data = (
+                session.query(CollectionOrders)
+                .filter(
+                    CollectionOrders.row_status == "active",
+                    CollectionOrders.collection_request_id == payment_request_data.collection_request_id,
+                )
+                .all()
+            )
+        return collection_data
+    return []
 
 
 def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amount_to_slide: Decimal):
@@ -258,7 +282,7 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
                 # For non-bill aka loan-level fees
                 # Thus, they are not slid into bills and simply get added to the split info
                 # to be adjusted into the loan later
-                if fee.identifier is "loan":
+                if fee.identifier == "loan":
                     x = {"type": "fee", "fee": fee, "amount_to_adjust": fee.gross_amount}
                     split_info.append(x)
                     continue

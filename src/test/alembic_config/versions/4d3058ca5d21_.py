@@ -26,7 +26,10 @@ def upgrade() -> None:
         sa.Column("amount_to_pay", sa.Numeric(), nullable=False),
         sa.Column("amount_paid", sa.Numeric(), nullable=False, default=0),
         sa.Column("row_status", sa.String(20), nullable=False, default="active"),
-        sa.Column("extra_info", sa.JSON(), server_default="{}", nullable=True),
+        sa.Column("extra_details", sa.JSON(), server_default="{}", nullable=True),
+        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
+        sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["batch_id"], ["v3_loans.id"]),
     )

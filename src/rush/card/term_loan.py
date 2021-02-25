@@ -81,9 +81,11 @@ class TermLoanBill(BaseBill):
 
 
 def get_down_payment_for_loan(loan: BaseLoan) -> Decimal:
+    from rush.payments import get_payment_for_loan
+
     session = loan.session
     payment_data = (
-        session.query(LedgerTriggerEvent)
+        session.query(PaymentRequestsData)
         .filter(
             LedgerTriggerEvent.name == "payment_received",
             LedgerTriggerEvent.loan_id == loan.id,
@@ -93,7 +95,7 @@ def get_down_payment_for_loan(loan: BaseLoan) -> Decimal:
             PaymentRequestsData.row_status == "active",
             PaymentRequestsData.collection_by != "rc_lender_payment",
         )
-        .order_by(LedgerTriggerEvent.id.asc())
+        .order_by(PaymentRequestsData.id.asc())
         .all()
     )
     loan_data = (
@@ -105,7 +107,14 @@ def get_down_payment_for_loan(loan: BaseLoan) -> Decimal:
     down_payment_due = bill.get_down_payment()
     down_payment_paid = 0
     for payment in payment_data:
-        down_payment_paid += payment.amount
+        collection_data = get_payment_for_loan(
+            session=session, payment_request_data=payment, user_loan=loan
+        )
+        if collection_data:
+            amount = collection_data[0].amount_paid
+        else:
+            amount = payment.payment_request_amount
+        down_payment_paid += amount
         if down_payment_due <= down_payment_paid:
             return down_payment_due
     return down_payment_paid
