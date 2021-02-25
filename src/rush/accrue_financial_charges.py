@@ -375,9 +375,9 @@ def reverse_incorrect_late_charges(
         # Need to remove money from all these accounts and slide them back to the same bill.
         acc_info = [
             {"acc_to_remove_from": f"{bill.id}/bill/late_fine/r", "amount": fee.net_amount_paid},
-            {"acc_to_remove_from": "12345/redcarpet/cgst_payable/l", "amount": fee.cgst_paid},
-            {"acc_to_remove_from": "12345/redcarpet/sgst_payable/l", "amount": fee.sgst_paid},
-            {"acc_to_remove_from": "12345/redcarpet/igst_payable/l", "amount": fee.igst_paid},
+            {"acc_to_remove_from": f"{fee.user_id}/user/cgst_payable/l", "amount": fee.cgst_paid},
+            {"acc_to_remove_from": f"{fee.user_id}/user/sgst_payable/l", "amount": fee.sgst_paid},
+            {"acc_to_remove_from": f"{fee.user_id}/user/igst_payable/l", "amount": fee.igst_paid},
         ]
         for acc in acc_info:
             if acc["amount"] == 0:
