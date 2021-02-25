@@ -263,7 +263,7 @@ def create_journal_entry(
 
 
 def get_journal_entry_narration(event_name) -> String:
-    if event_name == "late_fine":
+    if event_name == "late_fee":
         return "Late Fee"
     elif event_name == "atm_fee":
         return "ATM Fee"
@@ -278,7 +278,7 @@ def get_journal_entry_narration(event_name) -> String:
 
 
 def get_journal_entry_ptype(event_name) -> String:
-    if event_name in ("charge_late_fine", "late_fine"):
+    if event_name in ("charge_late_fine", "late_fee"):
         return "Late Fee-Card TL-Customer"
     elif event_name in ("atm_fee_added", "atm_fee"):
         return "CF ATM Fee-Customer"
@@ -316,7 +316,7 @@ def get_journal_entry_ledger_for_payment(event_name) -> String:
 
 
 def get_ledger_for_fee(fee_acc) -> String:
-    if fee_acc == "late_fine":
+    if fee_acc == "late_fee":
         return "Late Fee"
     elif fee_acc in ("atm_fee", "reset_joining_fees", "card_activation_fees"):
         return "Processing Fee"

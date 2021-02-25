@@ -121,7 +121,7 @@ def is_late_fee_valid(session: Session, user_loan: BaseLoan) -> bool:
     # TODO get bill from event?
 
     # First check if there is even late fee accrued in the latest bill.
-    _, late_fee_accrued = get_account_balance_from_str(session, f"{latest_bill.id}/bill/late_fine/r")
+    _, late_fee_accrued = get_account_balance_from_str(session, f"{latest_bill.id}/bill/late_fee/r")
     if late_fee_accrued == 0:
         return True  # Nothing to remove.
 
@@ -374,7 +374,7 @@ def reverse_incorrect_late_charges(
     if fee.gross_amount_paid > 0:
         # Need to remove money from all these accounts and slide them back to the same bill.
         acc_info = [
-            {"acc_to_remove_from": f"{bill.id}/bill/late_fine/r", "amount": fee.net_amount_paid},
+            {"acc_to_remove_from": f"{bill.id}/bill/late_fee/r", "amount": fee.net_amount_paid},
             {"acc_to_remove_from": f"{fee.user_id}/user/cgst_payable/l", "amount": fee.cgst_paid},
             {"acc_to_remove_from": f"{fee.user_id}/user/sgst_payable/l", "amount": fee.sgst_paid},
             {"acc_to_remove_from": f"{fee.user_id}/user/igst_payable/l", "amount": fee.igst_paid},

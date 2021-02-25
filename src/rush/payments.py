@@ -453,7 +453,7 @@ def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
         "igst_payable",
         "sgst_payable",
         "interest_receivable",
-        "late_fine",
+        "late_fee",
         "principal_receivable",
         "unbilled",
         "atm_fee",

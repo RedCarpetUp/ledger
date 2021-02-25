@@ -323,7 +323,7 @@ def limit_unlock_event(
 
 def get_revenue_book_str_for_fee(fee: Fee) -> str:
     if fee.name == "late_fee":
-        return f"{fee.identifier_id}/bill/late_fine/r"
+        return f"{fee.identifier_id}/bill/late_fee/r"
     elif fee.name == "atm_fee":
         return f"{fee.identifier_id}/bill/atm_fee/r"
     elif fee.name == "card_activation_fees":

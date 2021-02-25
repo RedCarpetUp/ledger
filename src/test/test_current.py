@@ -925,7 +925,7 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
     assert bill_fee.cgst_paid == Decimal(9)
     assert bill_fee.gross_amount_paid == Decimal(118)
 
-    _, late_fine_earned = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine/r")
+    _, late_fine_earned = get_account_balance_from_str(session, f"{bill.id}/bill/late_fee/r")
     assert late_fine_earned == Decimal(100)
 
     _, sgst_balance = get_account_balance_from_str(session, f"{user_loan.user_id}/user/sgst_payable/l")
@@ -1019,7 +1019,7 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
     assert fee_due is not None
     assert fee_due.fee_status == "PAID"
 
-    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine/r")
+    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fee/r")
     assert late_fine_due == Decimal("100")
 
     _, principal_due = get_account_balance_from_str(
@@ -1062,7 +1062,7 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
     payment_splits = session.query(PaymentSplit).filter(PaymentSplit.payment_request_id == "a1239").all()
     assert len(payment_splits) == 4
     split = {ps.component: ps.amount_settled for ps in payment_splits}
-    assert split["late_fine"] == Decimal("100")
+    assert split["late_fee"] == Decimal("100")
     assert split["sgst"] == Decimal("9")
     assert split["cgst"] == Decimal("9")
     assert split["interest"] == Decimal("14")
