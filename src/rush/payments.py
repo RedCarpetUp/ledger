@@ -6,11 +6,9 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.expression import (
     and_,
-    case,
     or_,
 )
 
-from rush.accrue_financial_charges import create_bill_fee_entry
 from rush.anomaly_detection import run_anomaly
 from rush.card import BaseLoan
 from rush.card.base_card import BaseBill
@@ -27,6 +25,7 @@ from rush.ledger_events import (
 from rush.ledger_utils import (
     create_ledger_entry_from_str,
     get_account_balance_from_str,
+    reverse_event,
 )
 from rush.loan_schedule.loan_schedule import slide_payment_to_emis
 from rush.models import (
@@ -37,7 +36,10 @@ from rush.models import (
     PaymentRequestsData,
     PaymentSplit,
 )
-from rush.utils import mul
+from rush.utils import (
+    get_current_ist_time,
+    mul,
+)
 from rush.writeoff_and_recovery import recovery_event
 
 
@@ -143,7 +145,6 @@ def payment_received_event(
     amount_to_adjust: Decimal,
     skip_closing: bool = False,
 ) -> Decimal:
-
     remaining_amount = Decimal(0)
 
     payment_type = payment_request_data.type
@@ -573,3 +574,70 @@ def fee_refund(
     update_journal_entry(user_loan=user_loan, event=lt)
 
     return {"result": "success", "message": "Fee Refund successful"}
+
+
+def payment_refund(
+    session: Session,
+    payment_request_id: str,
+):
+    payment_request_data = (
+        session.query(PaymentRequestsData)
+        .filter(PaymentRequestsData.payment_request_id == payment_request_id)
+        .one_or_none()
+    )
+
+    if payment_request_data is None:
+        return {"result": "error", "message": "No such payment request"}
+
+    payment_received_lte = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .one()
+    )
+
+    refund_event = LedgerTriggerEvent.new(
+        session,
+        name="payment_refund",
+        loan_id=payment_received_lte.loan_id,
+        amount=payment_request_data.payment_request_amount,
+        post_date=get_current_ist_time(),
+        extra_details={
+            "payment_request_id": payment_request_data.payment_request_id,
+        },
+    )
+    session.flush()
+
+    reverse_event(session=session, event_to_reverse=payment_received_lte, event=refund_event)
+
+    # If any fees were settled during this payment, we need to mark those as refunded
+    # We can determine this by checking if any cgst was settled during this payment
+    # We check this from payment_split
+    fees_settled_in_payment_request = (
+        session.query(PaymentSplit)
+        .filter(PaymentSplit.component == "cgst", PaymentSplit.payment_request_id == payment_request_id)
+        .one_or_none()
+        is not None
+    )
+
+    if fees_settled_in_payment_request:
+        fees = (
+            session.query(Fee)
+            .join(
+                BookAccount,
+                BookAccount.book_name == Fee.name,
+                BookAccount.identifier == Fee.identifier_id,
+                BookAccount.identifier_type == Fee.identifier,
+            )
+            .join(LedgerEntry, LedgerEntry.credit_account == BookAccount.id)
+            .filter(LedgerEntry.event_id == payment_received_lte.id)
+            .all()
+        )
+
+        for fee in fees:
+            fee.fee_status = "REFUNDED"
+
+    session.flush()
+    return {"result": "success", "message": "Payment refunded"}
