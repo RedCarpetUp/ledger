@@ -211,7 +211,7 @@ def accrue_late_charges(
         # TODO get correct date here.
         # Adjust for rounding because total due amount has to be rounded
         event = LedgerTriggerEvent(
-            name="charge_late_fine", post_date=post_date, loan_id=user_loan.loan_id
+            name="charge_late_fee", post_date=post_date, loan_id=user_loan.loan_id
         )
         session.add(event)
         session.flush()

@@ -138,7 +138,7 @@ def update_event_with_dpd(
             ledger_trigger_event.name
             in [
                 "accrue_interest",
-                "charge_late_fine",
+                "charge_late_fee",
                 "atm_fee_added",
             ]
             and debit_account.identifier_type == "bill"
@@ -278,7 +278,7 @@ def get_journal_entry_narration(event_name) -> String:
 
 
 def get_journal_entry_ptype(event_name) -> String:
-    if event_name in ("charge_late_fine", "late_fee"):
+    if event_name in ("charge_late_fee", "late_fee"):
         return "Late Fee-Card TL-Customer"
     elif event_name in ("atm_fee_added", "atm_fee"):
         return "CF ATM Fee-Customer"
