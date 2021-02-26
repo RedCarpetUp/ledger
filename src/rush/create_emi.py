@@ -350,8 +350,17 @@ def update_journal_entry(
             GovtDocData.user_id == user_id,
             GovtDocData.type.like("%PAN%"),
         )
+        .order_by(GovtDocData.id.desc())
+        .limit(1)
         .scalar()
-    ) or "John Doe"
+    )
+
+    if not user_name:
+        user_name = (
+            session.query(func.upper(UserData.first_name))
+            .filter(UserData.row_status == "active", UserData.user_id == user_id)
+            .scalar()
+        ) or "John Doe"
 
     if event.name == "card_transaction":
         create_journal_entry(
