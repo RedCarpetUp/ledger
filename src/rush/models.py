@@ -587,3 +587,22 @@ class PaymentRequestsData(AuditMixin):
     coupon_data = Column(JSONB, default=lambda: {})
     gross_request_amount: Decimal = Column(Numeric, nullable=True)
     extra_details = Column(JSONB, default=lambda: {})
+
+
+class GovtDocData(AuditMixin):
+
+    __tablename__ = "v3_govt_doc_data"
+
+    response = Column(JSONB, server_default="{}", nullable=False)
+    id_number = Column(Text, nullable=False)
+    id_number_hash = Column(Text, nullable=False)
+    dob = Column(TIMESTAMP, nullable=True)
+    client_id = Column(String(75), nullable=True, server_default="")
+    name = Column(String(100), nullable=True)
+    type = Column(String(25), nullable=False)
+    status = Column(String(15), nullable=False)
+    row_status = Column(String(15), nullable=False, default="active", server_default="active")
+    gender = Column(String(1), nullable=True)
+    user_id = Column(Integer, ForeignKey(User.id), nullable=False)
+    request = Column(JSONB, server_default="{}", nullable=False)
+    api_type = Column(String(50), nullable=True)
