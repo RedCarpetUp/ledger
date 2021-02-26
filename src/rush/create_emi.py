@@ -15,6 +15,7 @@ from rush.card.base_card import BaseLoan
 from rush.models import (
     BookAccount,
     EventDpd,
+    GovtDocData,
     JournalEntry,
     LedgerEntry,
     LedgerTriggerEvent,
@@ -312,7 +313,7 @@ def get_journal_entry_ledger_for_payment(event_name) -> String:
     if event_name == "payment_received":
         return "Axis Bank Ltd-Collections A/c"
     elif event_name == "transaction_refund":
-        return "Cards Upload A/c"
+        return "Cards upload A/c"
 
 
 def get_ledger_for_fee(fee_acc) -> String:
@@ -343,8 +344,12 @@ def update_journal_entry(
     if not event.amount:  # Don't need 0 amount bills entries.
         return
     user_name = (
-        session.query(UserData.first_name)
-        .filter(UserData.row_status == "active", UserData.user_id == user_id)
+        session.query(GovtDocData.name)
+        .filter(
+            GovtDocData.row_status == "active",
+            GovtDocData.user_id == user_id,
+            GovtDocData.type.like("%PAN%"),
+        )
         .scalar()
     ) or "John Doe"
 
@@ -370,7 +375,7 @@ def update_journal_entry(
             session,
             "",
             event.post_date,
-            "Cards Upload A/C",
+            "Cards upload A/c",
             "",
             "RedCarpet",
             0,
@@ -447,7 +452,7 @@ def update_journal_entry(
                 session,
                 "",
                 settlement_date,
-                "Bank Charges (RC)",
+                "Bank Charges(RC)",
                 "",
                 "RedCarpet",
                 gateway_expenses,
