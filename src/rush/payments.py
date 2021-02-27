@@ -559,7 +559,7 @@ def fee_refund(session: Session, user_loan: BaseLoan, fee: Fee, strategy: str, r
 
         if strategy == "return":
             fee_return_event = LedgerTriggerEvent(
-                name="fee_return",
+                name="return_fee",
                 loan_id=user_loan.loan_id,
                 amount=fee.gross_amount,
                 post_date=get_current_ist_time(),
@@ -584,7 +584,7 @@ def fee_refund(session: Session, user_loan: BaseLoan, fee: Fee, strategy: str, r
             update_journal_entry(user_loan=user_loan, event=fee_return_event)
         elif strategy == "adjust":
             fee_adjust_event = LedgerTriggerEvent(
-                name="fee_adjust",
+                name="adjust_fee",
                 loan_id=user_loan.loan_id,
                 amount=fee.gross_amount,
                 post_date=get_current_ist_time(),
@@ -639,7 +639,7 @@ def fee_refund(session: Session, user_loan: BaseLoan, fee: Fee, strategy: str, r
             return {"result": "error", "message": "Cannot return or adjust unpaid fee"}
 
         fee_remove_event = LedgerTriggerEvent(
-            name="fee_remove",
+            name="remove_fee",
             loan_id=user_loan.loan_id,
             amount=fee.gross_amount,
             post_date=get_current_ist_time(),
