@@ -4127,11 +4127,9 @@ def test_customer_fee_refund(session: Session) -> None:
     status = fee_refund(
         session=session,
         user_loan=user_loan,
-        payment_amount=Decimal("118"),
-        payment_date=parse_date("2020-11-16"),
-        payment_request_id="s33234",
         fee=bill_fee,
-        refund_source="payment_gateway",
+        strategy="return",
+        refund_from="payment_gateway",
     )
     assert status["result"] == "success"
 
