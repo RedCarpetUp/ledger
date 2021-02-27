@@ -185,11 +185,6 @@ def _adjust_bill(
     remaining_amount = adjust_for_receivable(
         remaining_amount,
         to_acc=debit_acc_str,
-        from_acc=f"{bill.id}/bill/interest_receivable/a",
-    )
-    remaining_amount = adjust_for_receivable(
-        remaining_amount,
-        to_acc=debit_acc_str,
         from_acc=f"{bill.id}/bill/unbilled/a",
     )
     remaining_amount = adjust_for_receivable(
@@ -298,16 +293,6 @@ def loan_disbursement_event(
         amount=event.amount,
     )
 
-    # settling downpayment balance as well.
-    if downpayment_amount:
-        create_ledger_entry_from_str(
-            session=session,
-            event_id=event.id,
-            debit_book_str=f"{loan.loan_id}/loan/downpayment/l",
-            credit_book_str=f"{bill_id}/bill/principal_receivable/a",
-            amount=downpayment_amount,
-        )
-
 
 def limit_unlock_event(
     session: Session,
@@ -332,9 +317,11 @@ def get_revenue_book_str_for_fee(fee: Fee) -> str:
     elif fee.name == "atm_fee":
         return f"{fee.identifier_id}/bill/atm_fee/r"
     elif fee.name == "card_activation_fees":
-        return f"{fee.identifier_id}/product/card_activation_fees/r"
+        return f"{fee.identifier_id}/loan/card_activation_fees/r"
     elif fee.name == "reset_joining_fees":
         return f"{fee.identifier_id}/loan/reset_joining_fees/r"
+    elif fee.name == "term_loan_fees":
+        return f"{fee.identifier_id}/loan/term_loan_fees/r"
     elif fee.name == "card_reload_fees":
         return f"{fee.identifier_id}/loan/card_reload_fees/r"
     elif fee.name == "card_upgrade_fees":
