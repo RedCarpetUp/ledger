@@ -10,7 +10,7 @@ from pendulum import (
     Date,
     date,
 )
-from sqlalchemy import func
+from sqlalchemy import func, and_
 from sqlalchemy.orm import Session
 
 from rush.card.base_card import (
@@ -74,14 +74,19 @@ class TermLoanBill(BaseBill):
         return interest_to_accrue
 
 
-def get_down_payment_for_loan(loan: BaseLoan) -> Decimal:
-
+def is_down_payment_paid(loan: BaseLoan) -> bool:
     session = loan.session
-    loan_schedule_ids = session.query(LoanSchedule.id).filter(LoanSchedule.loan_id == loan.id).all()
-
     payment_amount = (
         session.query(func.sum(PaymentMapping.amount_settled))
-        .filter(PaymentMapping.emi_id.in_(loan_schedule_ids), PaymentMapping.row_status == "active")
+        .join(
+            LoanSchedule,
+            and_(
+                LoanSchedule.loan_id == loan.id,
+                LoanSchedule.emi_number == 1,
+                LoanSchedule.bill_id.is_(None),
+            ),
+        )
+        .filter(PaymentMapping.emi_id == LoanSchedule.id, PaymentMapping.row_status == "active")
         .scalar()
     ) or 0
 
@@ -94,8 +99,8 @@ def get_down_payment_for_loan(loan: BaseLoan) -> Decimal:
     bill = loan.convert_to_bill_class(loan_data)
     down_payment_due = bill.get_down_payment()
     if down_payment_due <= payment_amount:
-        return down_payment_due
-    return payment_amount
+        return True
+    return False
 
 
 class TermLoan(BaseLoan):

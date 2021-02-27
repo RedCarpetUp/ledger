@@ -13,7 +13,7 @@ from rush.card import (
 )
 from rush.card.term_loan import (
     TermLoan,
-    get_down_payment_for_loan,
+    is_down_payment_paid,
 )
 from rush.card.utils import (
     create_loan,
@@ -163,8 +163,7 @@ def test_create_term_loan(session: Session) -> None:
     assert _downpayment_amount == Decimal(2910)
 
     # downpayment
-
-    assert get_down_payment_for_loan(loan) == 0
+    assert is_down_payment_paid(loan) == False
     payment_date = parse_date("2020-08-01")
     payment_request_id = "dummy_downpayment"
     payment_request_data(
@@ -195,7 +194,8 @@ def test_create_term_loan(session: Session) -> None:
         session=session, book_string=f"12345/redcarpet/rc_cash/a"
     )
     assert rc_cash_balance == Decimal("-10000")
-    assert _downpayment_amount == get_down_payment_for_loan(loan)
+
+    assert is_down_payment_paid(loan) == True
     loan.loan_status = "Started"
 
     assert loan.product_type == "term_loan"
@@ -260,7 +260,7 @@ def test_create_term_loan_2(session: Session) -> None:
         include_first_emi_amount=True,
     )
 
-    assert get_down_payment_for_loan(loan) == 0
+    assert is_down_payment_paid(loan) == False
     assert _downpayment_amount == Decimal("2910")
 
     # downpayment
@@ -289,7 +289,7 @@ def test_create_term_loan_2(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
-    assert _downpayment_amount == get_down_payment_for_loan(loan)
+    assert is_down_payment_paid(loan) == True
 
     loan.loan_status = "Started"
 

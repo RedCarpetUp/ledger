@@ -11,7 +11,7 @@ from rush.card import (
     create_user_product,
     get_user_product,
 )
-from rush.card.term_loan import get_down_payment_for_loan
+from rush.card.term_loan import is_down_payment_paid
 from rush.card.term_loan_pro import TermLoanPro
 from rush.card.utils import (
     create_loan,
@@ -175,7 +175,8 @@ def test_create_term_loan(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
-    assert _downpayment_amount == get_down_payment_for_loan(loan)
+
+    assert is_down_payment_paid(loan) == True
     loan.loan_status = "Started"
 
     _, rc_cash_balance = get_account_balance_from_str(
@@ -262,7 +263,8 @@ def test_create_term_loan_2(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
-    assert _downpayment_amount == get_down_payment_for_loan(loan)
+
+    assert is_down_payment_paid(loan) == True
     loan.loan_status = "Started"
 
     _, rc_cash_balance = get_account_balance_from_str(

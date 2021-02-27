@@ -58,7 +58,7 @@ def payment_received(
     event = LedgerTriggerEvent.new(
         session,
         name="payment_received",
-        loan_id=user_loan.loan_id if user_loan else None,
+        loan_id=user_loan.loan_id,
         amount=payment_for_loan,
         post_date=payment_request_data.intermediary_payment_date,
         extra_details={
@@ -75,7 +75,6 @@ def payment_received(
         remaining_amount = payment_received_event(
             session=session,
             user_loan=loan,
-            payment_request_data=payment_request_data,
             amount_to_adjust=amount_to_adjust,
             debit_book_str=f"{loan.lender_id}/lender/pg_account/a",
             event=event,
@@ -141,7 +140,6 @@ def refund_payment(
 def payment_received_event(
     session: Session,
     user_loan: BaseLoan,
-    payment_request_data: PaymentRequestsData,
     debit_book_str: str,
     event: LedgerTriggerEvent,
     amount_to_adjust: Decimal,
@@ -180,18 +178,18 @@ def payment_received_event(
 
 def get_payment_for_loan(
     session: Session, payment_request_data: PaymentRequestsData, user_loan: BaseLoan
-) -> PaymentRequestsData:
-    if payment_request_data.collection_request_id:
-        collection_data_amount = (
-            session.query(CollectionOrders.amount_paid).filter(
-                CollectionOrders.row_status == "active",
-                CollectionOrders.batch_id == user_loan.loan_id,
-                CollectionOrders.collection_request_id == payment_request_data.collection_request_id,
-            )
-        ).one_or_none()
-        if collection_data_amount:
-            return collection_data_amount[0]
-    return payment_request_data.payment_request_amount
+) -> Decimal:
+    if not payment_request_data.collection_request_id:
+        return payment_request_data.payment_request_amount
+
+    collection_data_amount = (
+        session.query(CollectionOrders.amount_paid).filter(
+            CollectionOrders.row_status == "active",
+            CollectionOrders.batch_id == user_loan.loan_id,
+            CollectionOrders.collection_request_id == payment_request_data.collection_request_id,
+        )
+    ).scalar()
+    return collection_data_amount
 
 
 def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amount_to_slide: Decimal):
