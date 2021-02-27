@@ -23,12 +23,7 @@ from rush.ledger_events import (
     loan_disbursement_event,
 )
 from rush.min_payment import add_min_to_all_bills
-from rush.models import (
-    LedgerTriggerEvent,
-    Loan,
-    LoanData,
-    LoanSchedule,
-)
+from rush.models import LedgerTriggerEvent, Loan, LoanData, LoanSchedule, PaymentMapping
 
 
 class TermLoanBill(BaseBill):
