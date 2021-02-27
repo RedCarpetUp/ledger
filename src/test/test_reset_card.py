@@ -217,12 +217,12 @@ def test_reset_journal_entries(session: Session) -> None:
     )
     assert isinstance(user_loan, ResetCard) == True
 
-    fee = create_activation_fee(
+    fee = create_loan_fee(
         session=session,
         user_loan=user_loan,
         post_date=parse_date("2020-08-01 00:00:00"),
         gross_amount=Decimal("100"),
-        include_gst_from_gross_amount=True,
+        include_gst_from_gross_amount=False,
         fee_name="reset_joining_fees",
     )
 
@@ -468,7 +468,7 @@ def test_reset_journal_entries_kv(session: Session) -> None:
     )
     assert isinstance(user_loan, ResetCard) == True
 
-    fee = create_activation_fee(
+    fee = create_loan_fee(
         session=session,
         user_loan=user_loan,
         post_date=parse_date("2018-11-14 00:00:00"),
@@ -542,7 +542,7 @@ def test_reset_journal_entries_kv(session: Session) -> None:
     assert entrys[0].ptype == "Disbursal TL"
     assert entrys[1].ptype == "Disbursal TL"
 
-    fee = create_activation_fee(
+    fee = create_loan_fee(
         session=session,
         user_loan=user_loan,
         post_date=parse_date("2018-11-14 00:00:00"),

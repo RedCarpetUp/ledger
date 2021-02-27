@@ -12,7 +12,7 @@ from rush.models import Loan
 
 # revision identifiers, used by Alembic.
 revision = "4d3058ca5d21"
-down_revision = "72a5fc8c145c"
+down_revision = "6a86ce49ea3f"
 branch_labels = None
 depends_on = None
 
