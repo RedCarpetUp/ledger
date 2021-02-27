@@ -10,7 +10,10 @@ from pendulum import (
     Date,
     date,
 )
-from sqlalchemy import func
+from sqlalchemy import (
+    and_,
+    func,
+)
 from sqlalchemy.orm import Session
 
 from rush.card.base_card import (
@@ -28,7 +31,7 @@ from rush.models import (
     Loan,
     LoanData,
     LoanSchedule,
-    PaymentRequestsData,
+    PaymentMapping,
 )
 
 
@@ -80,21 +83,31 @@ class TermLoanBill(BaseBill):
         return interest_to_accrue
 
 
-def get_down_payment_for_loan(loan: BaseLoan) -> Decimal:
+def is_down_payment_paid(loan: BaseLoan) -> bool:
     session = loan.session
-    total_downpayment = (
-        session.query(func.sum(LedgerTriggerEvent.amount))
-        .filter(
-            LedgerTriggerEvent.name == "payment_received",
-            LedgerTriggerEvent.loan_id == loan.id,
-            LedgerTriggerEvent.extra_details["payment_request_id"].astext
-            == PaymentRequestsData.payment_request_id,
-            PaymentRequestsData.type == "downpayment",
-            PaymentRequestsData.row_status == "active",
+    payment_amount = (
+        session.query(func.sum(PaymentMapping.amount_settled))
+        .join(
+            LoanSchedule,
+            and_(
+                LoanSchedule.loan_id == loan.id,
+                LoanSchedule.emi_number == 1,
+                LoanSchedule.bill_id.is_(None),
+            ),
         )
+        .filter(PaymentMapping.emi_id == LoanSchedule.id, PaymentMapping.row_status == "active")
         .scalar()
     ) or 0
-    return total_downpayment
+
+    loan_data = (
+        session.query(LoanData)
+        .filter(LoanData.loan_id == loan.id, LoanData.user_id == loan.user_id)
+        .one()
+    )
+
+    bill = loan.convert_to_bill_class(loan_data)
+    down_payment_due = bill.get_down_payment()
+    return payment_amount >= down_payment_due
 
 
 class TermLoan(BaseLoan):
@@ -119,8 +132,9 @@ class TermLoan(BaseLoan):
         loan.min_tenure = kwargs.get("min_tenure")
         loan.min_multiplier = kwargs.get("min_multiplier")
         loan.interest_type = kwargs.get("interest_type", "flat")
-        loan.can_close_early = kwargs.get("can_close_early")
+        loan.can_close_early = kwargs.get("can_close_early", False)
         loan.tenure_in_months = kwargs.get("tenure")
+        loan.loan_status = "Not Started"
         # Don't want to overwrite default value in case of None.
         if kwargs.get("interest_free_period_in_days"):
             loan.interest_free_period_in_days = kwargs.get("interest_free_period_in_days")
@@ -148,12 +162,6 @@ class TermLoan(BaseLoan):
         kwargs["loan_data"] = loan_data
 
         bill = loan.convert_to_bill_class(loan_data)
-
-        down_payment_paid = get_down_payment_for_loan(loan)
-        down_payment_due = bill.get_down_payment()
-        assert down_payment_paid == down_payment_due
-
-        kwargs["actual_downpayment_amount"] = down_payment_paid
 
         event = loan.disburse(**kwargs)
 

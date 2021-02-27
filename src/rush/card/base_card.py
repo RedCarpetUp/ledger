@@ -290,8 +290,12 @@ class BaseLoan(Loan):
             loan=self,
             event=event,
             bill_id=kwargs["loan_data"].id,
-            downpayment_amount=kwargs["actual_downpayment_amount"],
+            downpayment_amount=kwargs.get("actual_downpayment_amount", None),
         )
+
+        from rush.create_bill import update_journal_entry
+
+        update_journal_entry(user_loan=self, event=event)
 
         return event
 
