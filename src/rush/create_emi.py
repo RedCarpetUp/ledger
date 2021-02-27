@@ -394,8 +394,6 @@ def update_journal_entry(
             user_id,
         )
     elif event.name in ["payment_received", "transaction_refund", "loan_written_off", "customer_refund"]:
-        from rush.payments import get_payment_for_loan
-
         payment_request_data = (
             session.query(PaymentRequestsData)
             .filter(
@@ -404,15 +402,6 @@ def update_journal_entry(
             )
             .first()
         )
-        if user_loan:
-            collection_data = get_payment_for_loan(
-                session=session, payment_request_data=payment_request_data, user_loan=user_loan
-            )
-            if collection_data:
-                payment_data_dict = payment_request_data.as_dict()
-                payment_data_dict.pop("id")
-                payment_request_data = PaymentRequestsData(**payment_data_dict)
-                payment_request_data.payment_request_amount = collection_data[0].amount_paid
         gateway_expenses = payment_request_data.payment_execution_charges
         settlement_date = payment_request_data.payment_received_in_bank_date
         payment_split_data = (

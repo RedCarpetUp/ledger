@@ -293,16 +293,6 @@ def loan_disbursement_event(
         amount=event.amount,
     )
 
-    # settling downpayment balance as well.
-    if downpayment_amount:
-        create_ledger_entry_from_str(
-            session=session,
-            event_id=event.id,
-            debit_book_str=f"{loan.loan_id}/loan/downpayment/l",
-            credit_book_str=f"{bill_id}/bill/principal_receivable/a",
-            amount=downpayment_amount,
-        )
-
 
 def limit_unlock_event(
     session: Session,

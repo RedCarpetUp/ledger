@@ -43,93 +43,72 @@ from rush.writeoff_and_recovery import recovery_event, write_off_loan
 
 def payment_received(
     session: Session,
-    user_loan: Optional[BaseLoan],
+    user_loan: BaseLoan,
     payment_request_data: PaymentRequestsData,
     skip_closing: bool = False,
 ) -> None:
-    def create_payment_received_event():
-        event = LedgerTriggerEvent.new(
-            session,
-            name="payment_received",
-            loan_id=user_loan.loan_id if user_loan else None,
-            amount=payment_request_data.payment_request_amount,
-            post_date=payment_request_data.intermediary_payment_date,
-            extra_details={
-                "payment_request_id": payment_request_data.payment_request_id,
-            },
-        )
-        session.flush()
-        remaining_payment_amount = payment_request_data.payment_request_amount
+    payment_for_loan = get_payment_for_loan(
+        session=session, payment_request_data=payment_request_data, user_loan=user_loan
+    )
 
-        def call_payment_received_event(amount_to_adjust: Decimal) -> Decimal:
-            if amount_to_adjust <= 0:
-                return amount_to_adjust
-            remaining_amount = payment_received_event(
-                session=session,
-                user_loan=loan,
-                payment_request_data=payment_request_data,
-                amount_to_adjust=amount_to_adjust,
-                debit_book_str=f"{loan.lender_id}/lender/pg_account/a",
-                event=event,
-                skip_closing=skip_closing,
-            )
-            return remaining_amount
+    if payment_request_data.collection_by == "rc_lender_payment":
+        write_off_loan(user_loan=user_loan, payment_request_data=payment_request_data)
+        return
 
-        all_loans = [user_loan] + user_loan.get_child_loans()
-        if len(all_loans) > 1:  # if more than 2 loans then pay minimum of all loans first.
-            for loan in all_loans:
-                min_to_pay = loan.get_remaining_min(include_child_loans=False)
-                amount_to_actually_adjust = min(min_to_pay, remaining_payment_amount)
-                call_payment_received_event(amount_to_actually_adjust)
-                remaining_payment_amount -= amount_to_actually_adjust
+    event = LedgerTriggerEvent.new(
+        session,
+        name="payment_received",
+        loan_id=user_loan.loan_id if user_loan else None,
+        amount=payment_for_loan,
+        post_date=payment_request_data.intermediary_payment_date,
+        extra_details={
+            "payment_request_id": payment_request_data.payment_request_id,
+        },
+    )
+    session.flush()
 
-        # Settle whatever is remaining after it.
-        for loan in all_loans:
-            remaining_payment_amount = call_payment_received_event(remaining_payment_amount)
+    remaining_payment_amount = payment_for_loan
 
-        for loan in all_loans:
-            run_anomaly(
-                session=session,
-                user_loan=loan,
-                event_date=payment_request_data.intermediary_payment_date,
-            )
-            update_event_with_dpd(user_loan=loan, event=event)
-
-        if remaining_payment_amount > 0:  # if there's payment left to be adjusted.
-            _adjust_for_prepayment(
-                session=session,
-                loan_id=user_loan.loan_id,
-                event_id=event.id,
-                amount=remaining_payment_amount,
-                debit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
-            )
-
-        create_payment_split(session, event)
-
-    if payment_request_data.collection_request_id:
-        collection_data = get_payment_for_loan(
+    def call_payment_received_event(amount_to_adjust: Decimal) -> Decimal:
+        if amount_to_adjust <= 0:
+            return amount_to_adjust
+        remaining_amount = payment_received_event(
             session=session,
+            user_loan=loan,
             payment_request_data=payment_request_data,
-            user_loan=user_loan if user_loan else None,
+            amount_to_adjust=amount_to_adjust,
+            debit_book_str=f"{loan.lender_id}/lender/pg_account/a",
+            event=event,
+            skip_closing=skip_closing,
         )
-    else:
-        create_payment_received_event()
-        collection_data = []
-    for collection in collection_data:
-        payment_data_dict = payment_request_data.as_dict()
-        payment_data_dict.pop("id")
-        payment_request_data = PaymentRequestsData(**payment_data_dict)
-        payment_request_data.payment_request_amount = collection.amount_paid
-        user_loan = get_user_product(
+        return remaining_amount
+
+    all_loans = [user_loan] + user_loan.get_child_loans()
+    if len(all_loans) > 1:  # if more than 2 loans then pay minimum of all loans first.
+        for loan in all_loans:
+            min_to_pay = loan.get_remaining_min(include_child_loans=False)
+            amount_to_actually_adjust = min(min_to_pay, remaining_payment_amount)
+            call_payment_received_event(amount_to_actually_adjust)
+            remaining_payment_amount -= amount_to_actually_adjust
+    # Settle whatever is remaining after it.
+    for loan in all_loans:
+        remaining_payment_amount = call_payment_received_event(remaining_payment_amount)
+    for loan in all_loans:
+        run_anomaly(
             session=session,
-            loan_id=collection.batch_id,
-            user_id=user_loan.user_id,
-            card_type=user_loan.product_type,
+            user_loan=loan,
+            event_date=payment_request_data.intermediary_payment_date,
         )
-        if payment_request_data.collection_by == "rc_lender_payment":
-            write_off_loan(user_loan=user_loan, payment_request_data=payment_request_data)
-            return
-        create_payment_received_event()
+        update_event_with_dpd(user_loan=loan, event=event)
+    if remaining_payment_amount > 0:  # if there's payment left to be adjusted.
+        _adjust_for_prepayment(
+            session=session,
+            loan_id=user_loan.loan_id,
+            event_id=event.id,
+            amount=remaining_payment_amount,
+            debit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
+        )
+    create_payment_split(session, event)
 
 
 def refund_payment(
@@ -200,31 +179,19 @@ def payment_received_event(
 
 
 def get_payment_for_loan(
-    session: Session, payment_request_data: PaymentRequestsData, user_loan: Optional[BaseLoan] = None
+    session: Session, payment_request_data: PaymentRequestsData, user_loan: BaseLoan
 ) -> PaymentRequestsData:
     if payment_request_data.collection_request_id:
-        if user_loan:
-            collection = (
-                session.query(CollectionOrders)
-                .filter(
-                    CollectionOrders.row_status == "active",
-                    CollectionOrders.collection_request_id == payment_request_data.collection_request_id,
-                    CollectionOrders.batch_id == user_loan.loan_id,
-                )
-                .one()
+        collection_data_amount = (
+            session.query(CollectionOrders.amount_paid).filter(
+                CollectionOrders.row_status == "active",
+                CollectionOrders.batch_id == user_loan.loan_id,
+                CollectionOrders.collection_request_id == payment_request_data.collection_request_id,
             )
-            collection_data = [collection]
-        else:
-            collection_data = (
-                session.query(CollectionOrders)
-                .filter(
-                    CollectionOrders.row_status == "active",
-                    CollectionOrders.collection_request_id == payment_request_data.collection_request_id,
-                )
-                .all()
-            )
-        return collection_data
-    return []
+        ).one_or_none()
+        if collection_data_amount:
+            return collection_data_amount[0]
+    return payment_request_data.payment_request_amount
 
 
 def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amount_to_slide: Decimal):

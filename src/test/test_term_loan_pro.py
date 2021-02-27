@@ -11,6 +11,7 @@ from rush.card import (
     create_user_product,
     get_user_product,
 )
+from rush.card.term_loan import get_down_payment_for_loan
 from rush.card.term_loan_pro import TermLoanPro
 from rush.card.utils import (
     create_loan,
@@ -139,6 +140,8 @@ def test_create_term_loan(session: Session) -> None:
     assert isinstance(user_loan, TermLoanPro) == True
 
     loan_creation_data = {"date_str": "2020-08-01", "user_product_id": user_product.id}
+    # create loan
+    loan = create_test_term_loan(session=session, **loan_creation_data)
 
     _downpayment_amount = get_down_payment(
         principal=Decimal("10000"),
@@ -172,14 +175,8 @@ def test_create_term_loan(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
-
-    _, product_lender_payable = get_account_balance_from_str(
-        session=session, book_string=f"{user_loan.id}/loan/lender_payable/l"
-    )
-    assert product_lender_payable == Decimal("-1999.5")
-
-    # create loan
-    loan = create_test_term_loan(session=session, **loan_creation_data)
+    assert _downpayment_amount == get_down_payment_for_loan(loan)
+    loan.loan_status = "Started"
 
     _, rc_cash_balance = get_account_balance_from_str(
         session=session, book_string=f"12345/redcarpet/rc_cash/a"
@@ -231,6 +228,8 @@ def test_create_term_loan_2(session: Session) -> None:
     assert isinstance(user_loan, TermLoanPro) == True
 
     loan_creation_data = {"date_str": "2018-10-22", "user_product_id": user_product.id}
+    # create loan
+    loan = create_test_term_loan(session=session, **loan_creation_data)
 
     _downpayment_amount = get_down_payment(
         principal=Decimal("10000"),
@@ -263,14 +262,8 @@ def test_create_term_loan_2(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
-
-    _, product_lender_payable = get_account_balance_from_str(
-        session=session, book_string=f"{user_loan.id}/loan/lender_payable/l"
-    )
-    assert product_lender_payable == Decimal("-1999.5")
-
-    # create loan
-    loan = create_test_term_loan(session=session, **loan_creation_data)
+    assert _downpayment_amount == get_down_payment_for_loan(loan)
+    loan.loan_status = "Started"
 
     _, rc_cash_balance = get_account_balance_from_str(
         session=session, book_string=f"12345/redcarpet/rc_cash/a"

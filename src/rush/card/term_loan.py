@@ -28,7 +28,6 @@ from rush.models import (
     Loan,
     LoanData,
     LoanSchedule,
-    PaymentRequestsData,
 )
 
 
@@ -81,43 +80,27 @@ class TermLoanBill(BaseBill):
 
 
 def get_down_payment_for_loan(loan: BaseLoan) -> Decimal:
-    from rush.payments import get_payment_for_loan
 
     session = loan.session
-    payment_data = (
-        session.query(PaymentRequestsData)
-        .filter(
-            LedgerTriggerEvent.name == "payment_received",
-            LedgerTriggerEvent.loan_id == loan.id,
-            LedgerTriggerEvent.extra_details["payment_request_id"].astext
-            == PaymentRequestsData.payment_request_id,
-            PaymentRequestsData.type == "collection",
-            PaymentRequestsData.row_status == "active",
-            PaymentRequestsData.collection_by != "rc_lender_payment",
-        )
-        .order_by(PaymentRequestsData.id.asc())
-        .all()
-    )
+    loan_schedule_ids = session.query(LoanSchedule.id).filter(LoanSchedule.loan_id == loan.id).all()
+
+    payment_amount = (
+        session.query(func.sum(PaymentMapping.amount_settled))
+        .filter(PaymentMapping.emi_id.in_(loan_schedule_ids), PaymentMapping.row_status == "active")
+        .scalar()
+    ) or 0
+
     loan_data = (
         session.query(LoanData)
         .filter(LoanData.loan_id == loan.id, LoanData.user_id == loan.user_id)
         .one()
     )
+
     bill = loan.convert_to_bill_class(loan_data)
     down_payment_due = bill.get_down_payment()
-    down_payment_paid = 0
-    for payment in payment_data:
-        collection_data = get_payment_for_loan(
-            session=session, payment_request_data=payment, user_loan=loan
-        )
-        if collection_data:
-            amount = collection_data[0].amount_paid
-        else:
-            amount = payment.payment_request_amount
-        down_payment_paid += amount
-        if down_payment_due <= down_payment_paid:
-            return down_payment_due
-    return down_payment_paid
+    if down_payment_due <= payment_amount:
+        return down_payment_due
+    return payment_amount
 
 
 class TermLoan(BaseLoan):
@@ -142,8 +125,9 @@ class TermLoan(BaseLoan):
         loan.min_tenure = kwargs.get("min_tenure")
         loan.min_multiplier = kwargs.get("min_multiplier")
         loan.interest_type = kwargs.get("interest_type", "flat")
-        loan.can_close_early = kwargs.get("can_close_early")
+        loan.can_close_early = kwargs.get("can_close_early", False)
         loan.tenure_in_months = kwargs.get("tenure")
+        loan.loan_status = "Not Started"
         # Don't want to overwrite default value in case of None.
         if kwargs.get("interest_free_period_in_days"):
             loan.interest_free_period_in_days = kwargs.get("interest_free_period_in_days")
@@ -171,12 +155,6 @@ class TermLoan(BaseLoan):
         kwargs["loan_data"] = loan_data
 
         bill = loan.convert_to_bill_class(loan_data)
-
-        down_payment_paid = get_down_payment_for_loan(loan)
-        down_payment_due = bill.get_down_payment()
-        assert down_payment_paid == down_payment_due
-
-        kwargs["actual_downpayment_amount"] = down_payment_paid
 
         event = loan.disburse(**kwargs)
 
