@@ -33,7 +33,7 @@ class RebelCard(BaseLoan):
     bill_class: Type[B] = RebelBill
 
     def get_child_loans(self) -> List[BaseLoan]:
-        child_loans = (
+        child_loans: List[BaseLoan] = (
             self.session.query(BaseLoan)
             .join(
                 LedgerTriggerEvent,
@@ -49,6 +49,9 @@ class RebelCard(BaseLoan):
             )
             .all()
         )
+
+        for child_loan in child_loans:
+            child_loan.prepare(session=self.session)
 
         return child_loans
 

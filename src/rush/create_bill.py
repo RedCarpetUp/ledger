@@ -55,23 +55,21 @@ def get_or_create_bill_for_card_swipe(user_loan: BaseLoan, txn_time: DateTime) -
     if months_diff > 0:
         for i in range(months_diff):
             new_bill = user_loan.create_bill(
-                bill_start_date=new_bill_date + relativedelta(months=i),
-                bill_close_date=new_bill_date
-                + relativedelta(
-                    months=i + 1,
-                    days=monthrange(new_bill_date.year, new_bill_date.month)[1] - new_bill_date.day,
-                ),  # Setting this to the last day of the month
-                bill_due_date=new_bill_date + relativedelta(months=i + 1, day=15),
+                bill_start_date=new_bill_date,
+                bill_close_date=new_closing_date,  # Setting this to the last day of the month
+                bill_due_date=new_bill_date + relativedelta(months=+1, day=15),
                 lender_id=lender_id,
                 is_generated=False,
             )
             bill_generate(user_loan)
-        last_bill = user_loan.get_latest_bill()
-        new_bill_date = last_bill.bill_close_date + relativedelta(days=1)
+            new_bill_date += relativedelta(months=+1, day=1)
+            new_closing_date += relativedelta(
+                days=monthrange(new_bill_date.year, new_bill_date.month)[1]
+            )
     new_bill = user_loan.create_bill(
         bill_start_date=new_bill_date,
         bill_close_date=new_closing_date,
-        bill_due_date=new_bill_date + relativedelta(months=1, day=15),
+        bill_due_date=new_bill_date + relativedelta(months=+1, day=15),
         lender_id=lender_id,
         is_generated=False,
     )
@@ -106,12 +104,12 @@ def bill_generate(
     _, billed_amount = get_account_balance_from_str(
         session=session, book_string=f"{bill.id}/bill/principal_receivable/a"
     )
-    lt.amount = billed_amount  # Set the amount for event
 
     # Update the bill row here.
     bill.table.principal = billed_amount
 
     # Handling child loan emis for this bill.
+    emi_amount = 0
     child_loans: List[BaseLoan] = user_loan.get_child_loans()
     for child_loan in child_loans:
         child_loan_bill: BaseBill = child_loan.get_all_bills()[0]
@@ -130,6 +128,9 @@ def bill_generate(
             add_min_to_all_bills(
                 session=session, post_date=bill.table.bill_close_date, user_loan=child_loan
             )
+            emi_amount += amount
+
+    lt.amount = billed_amount + emi_amount  # Set the amount for event
 
     # Add to max amount to pay account.
     add_max_amount_event(session, bill, lt, billed_amount)

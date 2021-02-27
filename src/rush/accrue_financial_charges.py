@@ -70,26 +70,38 @@ def can_remove_latest_accrued_interest(
 
 def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loan: BaseLoan) -> None:
     unpaid_bills = user_loan.get_unpaid_generated_bills()
+    # Find the emi number that's getting accrued at loan level.
+    loan_schedule = (
+        session.query(LoanSchedule)
+        .filter(
+            LoanSchedule.loan_id == user_loan.loan_id,
+            LoanSchedule.bill_id.is_(None),
+            LoanSchedule.due_date < post_date,
+            LoanSchedule.due_date > post_date - relativedelta(months=1),  # Should be within a month
+        )
+        .order_by(LoanSchedule.due_date.desc())
+        .limit(1)
+        .scalar()
+    )
     accrue_event = LedgerTriggerEvent(
-        name="accrue_interest", loan_id=user_loan.loan_id, post_date=post_date, amount=0
+        name="accrue_interest",
+        loan_id=user_loan.loan_id,
+        post_date=post_date,
+        amount=0,
+        extra_details={"emi_id": loan_schedule.id},
     )
     session.add(accrue_event)
     session.flush()
 
+    # accrual actually happens for each bill using bill's schedule.
     for bill in unpaid_bills:
-        loan_schedule = (
+        bill_schedule = (
             session.query(LoanSchedule)
-            .filter(
-                LoanSchedule.bill_id == bill.id,
-                LoanSchedule.due_date < post_date,
-                LoanSchedule.due_date > post_date - relativedelta(months=1),  # Should be within a month
-            )
-            .order_by(LoanSchedule.due_date.desc())
-            .limit(1)
+            .filter(LoanSchedule.bill_id == bill.id, LoanSchedule.due_date == loan_schedule.due_date)
             .scalar()
         )
-        if loan_schedule:
-            interest_to_accrue = loan_schedule.interest_to_accrue(session)
+        if bill_schedule:
+            interest_to_accrue = bill_schedule.interest_to_accrue(session)
             accrue_event.amount += interest_to_accrue
             accrue_interest_event(session, bill, accrue_event, interest_to_accrue)
             add_max_amount_event(session, bill, accrue_event, interest_to_accrue)

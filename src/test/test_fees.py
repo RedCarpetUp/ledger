@@ -9,9 +9,8 @@ from rush.card import (
 )
 from rush.card.health_card import HealthCard
 from rush.card.utils import (
-    create_activation_fee,
     create_loan,
-    create_reload_fee,
+    create_loan_fee,
     create_user_product_mapping,
 )
 from rush.models import (
@@ -83,11 +82,13 @@ def test_add_reload_fee(session: Session) -> None:
     user_loan = get_user_product(session=session, user_id=uc.user_id, card_type="health_card")
     assert isinstance(user_loan, HealthCard) == True
 
-    reload_fee = create_reload_fee(
+    reload_fee = create_loan_fee(
         session=session,
         user_loan=uc,
-        gross_fee_amount=Decimal("100"),
+        gross_amount=Decimal("100"),
         post_date=parse_date("2020-08-01 00:00:00"),
+        fee_name="card_reload_fees",
+        include_gst_from_gross_amount=True,
     )
 
     assert reload_fee.identifier_id == uc.loan_id
@@ -112,7 +113,7 @@ def test_reset_joining_fees(session: Session) -> None:
         user_product_id=user_product.id,
     )
 
-    card_activation_fee = create_activation_fee(
+    card_activation_fee = create_loan_fee(
         session=session,
         user_loan=user_loan,
         post_date=parse_date("2019-02-01 00:00:00"),

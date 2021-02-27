@@ -99,7 +99,7 @@ def get_product_type_from_user_product_id(session: Session, user_product_id: int
     return session.query(UserProduct.product_type).filter(UserProduct.id == user_product_id).scalar()
 
 
-def create_activation_fee(
+def create_loan_fee(
     session: Session,
     user_loan: BaseLoan,
     post_date: DateTime,
@@ -107,9 +107,18 @@ def create_activation_fee(
     include_gst_from_gross_amount: bool,
     fee_name: str,
 ) -> Fee:
+    fee_to_event_names = {
+        "card_activation_fees": "activation_fee",
+        "reset_joining_fees": "activation_fee",
+        "card_reload_fees": "reload_fee",
+        "card_upgrade_fees": "upgrade_fee",
+    }
+
     event = LedgerTriggerEvent(
-        name="activation_fee",
+        name=fee_to_event_names.get(fee_name, fee_name),  # defaults to fee_name
         post_date=post_date,
+        loan_id=user_loan.loan_id,
+        amount=gross_amount,
     )
     session.add(event)
     session.flush()
@@ -121,56 +130,6 @@ def create_activation_fee(
         fee_name=fee_name,
         gross_fee_amount=gross_amount,
         include_gst_from_gross_amount=include_gst_from_gross_amount,
-    )
-    event.amount = fee.gross_amount
-    return fee
-
-
-def create_reload_fee(
-    session: Session,
-    user_loan: BaseLoan,
-    post_date: DateTime,
-    gross_fee_amount: Decimal,
-) -> Fee:
-    event = LedgerTriggerEvent(
-        name="reload_fee",
-        post_date=post_date,
-    )
-    session.add(event)
-    session.flush()
-
-    fee = create_loan_fee_entry(
-        session=session,
-        user_loan=user_loan,
-        event=event,
-        fee_name="card_reload_fees",
-        gross_fee_amount=gross_fee_amount,
-        include_gst_from_gross_amount=True,
-    )
-    event.amount = fee.gross_amount
-    return fee
-
-
-def create_upgrade_fee(
-    session: Session,
-    user_loan: BaseLoan,
-    post_date: DateTime,
-    gross_fee_amount: Decimal,
-) -> Fee:
-    event = LedgerTriggerEvent(
-        name="upgrade_fee",
-        post_date=post_date,
-    )
-    session.add(event)
-    session.flush()
-
-    fee = create_loan_fee_entry(
-        session=session,
-        user_loan=user_loan,
-        event=event,
-        fee_name="card_upgrade_fees",
-        gross_fee_amount=gross_fee_amount,
-        include_gst_from_gross_amount=True,
     )
     event.amount = fee.gross_amount
     return fee
