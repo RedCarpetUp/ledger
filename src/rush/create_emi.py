@@ -15,7 +15,6 @@ from rush.card.base_card import BaseLoan
 from rush.models import (
     BookAccount,
     EventDpd,
-    GovtDocData,
     JournalEntry,
     LedgerEntry,
     LedgerTriggerEvent,
@@ -343,17 +342,20 @@ def update_journal_entry(
 
     if not event.amount:  # Don't need 0 amount bills entries.
         return
-    user_name = (
-        session.query(GovtDocData.name)
-        .filter(
-            GovtDocData.row_status == "active",
-            GovtDocData.user_id == user_id,
-            GovtDocData.type.like("%PAN%"),
-        )
-        .order_by(GovtDocData.id.desc())
-        .limit(1)
-        .scalar()
-    )
+    query = """
+        SELECT
+            UPPER(
+                CASE
+                    WHEN (v3_user_documents.text_details_json ->> 'address_type'::text) IS NOT NULL AND length(v3_user_documents.text_details_json ->> 'name'::text) > 3
+                    THEN v3_user_documents.text_details_json ->> 'name'::text
+                    ELSE NULL::text
+                END
+            ) AS aadhar_name
+        FROM v3_user_documents
+        WHERE v3_user_documents.user_id = :user_id AND v3_user_documents.row_status::text = 'active'::text AND v3_user_documents.document_type::text = 'Aadhar'::text
+        AND v3_user_documents.sequence = 1 AND v3_user_documents.verification_status::text = 'APPROVED'::text
+    """
+    user_name = session.execute(query, {"user_id": user_id}).scalar()
 
     if not user_name:
         user_name = (
