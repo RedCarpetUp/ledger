@@ -2,7 +2,12 @@ from sqlalchemy import and_
 
 from rush.card import BaseLoan
 from rush.ledger_utils import create_ledger_entry_from_str
-from rush.models import Fee, LedgerTriggerEvent, LoanData, PaymentRequestsData
+from rush.models import (
+    Fee,
+    LedgerTriggerEvent,
+    LoanData,
+    PaymentRequestsData,
+)
 from rush.utils import get_current_ist_time
 
 

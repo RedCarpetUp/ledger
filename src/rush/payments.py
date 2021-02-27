@@ -11,7 +11,10 @@ from sqlalchemy.sql.expression import (
 )
 
 from rush.anomaly_detection import run_anomaly
-from rush.card import BaseLoan, get_user_product
+from rush.card import (
+    BaseLoan,
+    get_user_product,
+)
 from rush.card.base_card import BaseBill
 from rush.create_emi import (
     update_event_with_dpd,
@@ -30,15 +33,18 @@ from rush.ledger_utils import (
 from rush.loan_schedule.loan_schedule import slide_payment_to_emis
 from rush.models import (
     BookAccount,
+    CollectionOrders,
     Fee,
     LedgerEntry,
     LedgerTriggerEvent,
     PaymentRequestsData,
     PaymentSplit,
-    CollectionOrders,
 )
 from rush.utils import mul
-from rush.writeoff_and_recovery import recovery_event, write_off_loan
+from rush.writeoff_and_recovery import (
+    recovery_event,
+    write_off_loan,
+)
 
 
 def payment_received(

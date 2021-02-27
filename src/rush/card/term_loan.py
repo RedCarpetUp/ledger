@@ -10,7 +10,10 @@ from pendulum import (
     Date,
     date,
 )
-from sqlalchemy import func, and_
+from sqlalchemy import (
+    and_,
+    func,
+)
 from sqlalchemy.orm import Session
 
 from rush.card.base_card import (
@@ -23,7 +26,13 @@ from rush.ledger_events import (
     loan_disbursement_event,
 )
 from rush.min_payment import add_min_to_all_bills
-from rush.models import LedgerTriggerEvent, Loan, LoanData, LoanSchedule, PaymentMapping
+from rush.models import (
+    LedgerTriggerEvent,
+    Loan,
+    LoanData,
+    LoanSchedule,
+    PaymentMapping,
+)
 
 
 class TermLoanBill(BaseBill):
@@ -98,9 +107,7 @@ def is_down_payment_paid(loan: BaseLoan) -> bool:
 
     bill = loan.convert_to_bill_class(loan_data)
     down_payment_due = bill.get_down_payment()
-    if down_payment_due <= payment_amount:
-        return True
-    return False
+    return payment_amount >= down_payment_due
 
 
 class TermLoan(BaseLoan):

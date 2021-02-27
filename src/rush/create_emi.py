@@ -9,11 +9,15 @@ from sqlalchemy.orm import (
     aliased,
 )
 from sqlalchemy.sql import func
-from sqlalchemy.sql.sqltypes import String, TIMESTAMP
+from sqlalchemy.sql.sqltypes import (
+    TIMESTAMP,
+    String,
+)
 
 from rush.card.base_card import BaseLoan
 from rush.models import (
     BookAccount,
+    CollectionOrders,
     EventDpd,
     JournalEntry,
     LedgerEntry,
@@ -23,7 +27,6 @@ from rush.models import (
     PaymentRequestsData,
     PaymentSplit,
     UserData,
-    CollectionOrders,
 )
 
 
