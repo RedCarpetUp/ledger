@@ -312,7 +312,7 @@ def get_journal_entry_ledger_for_payment(event_name) -> String:
     if event_name == "payment_received":
         return "Axis Bank Ltd-Collections A/c"
     elif event_name == "transaction_refund":
-        return "Cards Upload A/c"
+        return "Cards upload A/c"
 
 
 def get_ledger_for_fee(fee_acc) -> String:
@@ -342,11 +342,27 @@ def update_journal_entry(
 
     if not event.amount:  # Don't need 0 amount bills entries.
         return
-    user_name = (
-        session.query(UserData.first_name)
-        .filter(UserData.row_status == "active", UserData.user_id == user_id)
-        .scalar()
-    ) or "John Doe"
+    query = """
+        SELECT
+            UPPER(
+                CASE
+                    WHEN (v3_user_documents.text_details_json ->> 'address_type'::text) IS NOT NULL AND length(v3_user_documents.text_details_json ->> 'name'::text) > 3
+                    THEN v3_user_documents.text_details_json ->> 'name'::text
+                    ELSE NULL::text
+                END
+            ) AS aadhar_name
+        FROM v3_user_documents
+        WHERE v3_user_documents.user_id = :user_id AND v3_user_documents.row_status::text = 'active'::text AND v3_user_documents.document_type::text = 'Aadhar'::text
+        AND v3_user_documents.sequence = 1 AND v3_user_documents.verification_status::text = 'APPROVED'::text
+    """
+    user_name = session.execute(query, {"user_id": user_id}).scalar()
+
+    if not user_name:
+        user_name = (
+            session.query(func.upper(UserData.first_name))
+            .filter(UserData.row_status == "active", UserData.user_id == user_id)
+            .scalar()
+        ) or "John Doe"
 
     if event.name == "card_transaction":
         create_journal_entry(
@@ -370,7 +386,7 @@ def update_journal_entry(
             session,
             "",
             event.post_date,
-            "Cards Upload A/C",
+            "Cards upload A/c",
             "",
             "RedCarpet",
             0,
@@ -447,7 +463,7 @@ def update_journal_entry(
                 session,
                 "",
                 settlement_date,
-                "Bank Charges (RC)",
+                "Bank Charges(RC)",
                 "",
                 "RedCarpet",
                 gateway_expenses,

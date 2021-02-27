@@ -16,8 +16,8 @@ from rush.card import (
 )
 from rush.card.reset_card import ResetCard
 from rush.card.utils import (
-    create_activation_fee,
     create_loan,
+    create_loan_fee,
     create_user_product_mapping,
 )
 from rush.ledger_utils import get_account_balance_from_str
@@ -98,7 +98,7 @@ def test_create_term_loan(session: Session) -> None:
     )
     assert isinstance(user_loan, ResetCard) == True
 
-    fee = create_activation_fee(
+    fee = create_loan_fee(
         session=session,
         user_loan=user_loan,
         post_date=parse_date("2020-08-01 00:00:00"),
@@ -257,7 +257,7 @@ def test_reset_loan_limit_unlock_success(session: Session) -> None:
     )
     assert isinstance(user_loan, ResetCard) == True
 
-    fee = create_activation_fee(
+    fee = create_loan_fee(
         session=session,
         user_loan=user_loan,
         post_date=parse_date("2020-08-01 00:00:00"),
@@ -341,7 +341,7 @@ def test_reset_loan_limit_unlock_error(session: Session) -> None:
     )
     assert isinstance(user_loan, ResetCard) == True
 
-    fee = create_activation_fee(
+    fee = create_loan_fee(
         session=session,
         user_loan=user_loan,
         post_date=parse_date("2020-08-01 00:00:00"),

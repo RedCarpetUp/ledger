@@ -216,6 +216,15 @@ class LedgerTriggerEvent(AuditMixin):
     amount: Decimal = Column(Numeric)
     extra_details = Column(JSON, default={})
 
+    def __init__(self, **kwargs):
+        lender_event_names = ("lender_disbursal", "m2p_transfer", "incur_lender_interest")
+
+        # loan_id should not be null for all non-lender events
+        if kwargs["name"] not in lender_event_names:
+            assert kwargs["loan_id"] is not None
+
+        super().__init__(**kwargs)
+
 
 class LedgerEntry(Base):
     __tablename__ = "ledger_entry"
@@ -578,3 +587,27 @@ class PaymentRequestsData(AuditMixin):
     coupon_data = Column(JSONB, default=lambda: {})
     gross_request_amount: Decimal = Column(Numeric, nullable=True)
     extra_details = Column(JSONB, default=lambda: {})
+
+
+class UserDocuments(AuditMixin):
+    __tablename__ = "v3_user_documents"
+
+    user_id = Column(Integer, ForeignKey(User.id), nullable=False)
+    document_type = Column(String(length=50), nullable=False)
+    document_identification = Column(Text, nullable=True)
+    sequence = Column(Integer, server_default="1", nullable=False)
+    image_url = Column(String(length=255), nullable=False)
+    text_details_json = Column(JSONB, server_default="{}", nullable=False)
+    validity_date = Column(TIMESTAMP, nullable=True)
+    verification_date = Column(TIMESTAMP, nullable=True)
+    verification_status = Column(String(length=255), nullable=True)
+    reject_reason = Column(Text, nullable=True)
+    comments = Column(Text, nullable=True)
+    lender_id = Column(Integer, ForeignKey(User.id))
+    issue_date = Column(TIMESTAMP, nullable=True)
+    row_status = Column(String(length=20), server_default="active", nullable=False)
+    document_identification_hash = Column(Text, nullable=True)
+    original_created_at = Column(TIMESTAMP, nullable=True)
+    uid_token = Column(Text, nullable=True)
+    image_data = Column(JSONB, nullable=True)
+    image_match_data = Column(JSONB, nullable=True)
