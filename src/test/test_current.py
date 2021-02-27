@@ -4128,14 +4128,12 @@ def test_customer_fee_refund(session: Session) -> None:
         session=session,
         user_loan=user_loan,
         fee=bill_fee,
-        strategy="return",
-        refund_from="payment_gateway",
     )
     assert status["result"] == "success"
 
     fee = session.query(Fee).filter_by(id=fee_due.id).one_or_none()
     assert fee is not None
-    assert fee.fee_status == "REFUND"
+    assert fee.fee_status == "REMOVED"
 
 
 def test_customer_prepayment_refund(session: Session) -> None:

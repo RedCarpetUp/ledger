@@ -160,7 +160,7 @@ def update_event_with_dpd(
             ledger_trigger_event.name
             in [
                 "reverse_interest_charges",
-                "reverse_late_charges",
+                "fee_removed",
                 "payment_received",
                 "transaction_refund",
             ]

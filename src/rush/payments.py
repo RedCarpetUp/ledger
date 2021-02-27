@@ -540,152 +540,75 @@ def customer_refund(
     return {"result": "success", "message": "Prepayment Refund successful"}
 
 
-def fee_refund(session: Session, user_loan: BaseLoan, fee: Fee, strategy: str, refund_from: str = ""):
-    """
-    A fee can be in the following states depending on which we can
-    take various strategies to refund it:
-    - PAID
-        - return: return the amount to the user; in this case refund_from is needed
-        - adjust: adjust the amount in bill/pre_payment
-    - UNPAID
-        - remove: remove from the bill
-    """
+def fee_refund(session: Session, user_loan: BaseLoan, fee: Fee):
+    fee_removed_event = LedgerTriggerEvent(
+        name="fee_removed",
+        loan_id=user_loan.loan_id,
+        amount=fee.gross_amount,
+        post_date=get_current_ist_time(),
+        extra_details={
+            "fee_id": fee.id,
+        },
+    )
+    session.add(fee_removed_event)
+    session.flush()
 
-    assert strategy in ("return", "adjust", "remove")
+    # some amount paid
+    if fee.remaining_fee_amount > 0:
+        revenue_book_str = get_revenue_book_str_for_fee(fee)
 
-    if fee.fee_status == "PAID":
-        if strategy == "remove":
-            return {"result": "error", "message": "Cannot remove paid fee"}
+        accounts_to_adjust = [
+            {"account_str": revenue_book_str, "amount": fee.net_amount_paid},
+            {"account_str": f"{fee.user_id}/user/cgst_payable/l", "amount": fee.cgst_paid},
+            {"account_str": f"{fee.user_id}/user/sgst_payable/l", "amount": fee.sgst_paid},
+            {"account_str": f"{fee.user_id}/user/igst_payable/l", "amount": fee.igst_paid},
+        ]
 
-        if strategy == "return":
-            fee_return_event = LedgerTriggerEvent(
-                name="return_fee",
-                loan_id=user_loan.loan_id,
-                amount=fee.gross_amount,
-                post_date=get_current_ist_time(),
-                extra_details={
-                    "fee_id": fee.id,
-                },
-            )
-            session.add(fee_return_event)
-            session.flush()
-
-            if refund_from == "payment_gateway":
-                credit_book_str = f"{user_loan.lender_id}/lender/pg_account/a"
-            else:
-                credit_book_str = f"12345/redcarpet/rc_cash/a"
-
-            reduce_revenue_for_fee_refund(
+        for account in accounts_to_adjust:
+            if account["amount"] == 0:
+                continue
+            remaining_amount = adjust_payment(
                 session=session,
-                credit_book_str=credit_book_str,
-                fee=fee,
+                user_loan=user_loan,
+                event=fee_removed_event,
+                amount_to_adjust=account["amount"],
+                debit_book_str=account["account_str"],
             )
+            account["amount"] = remaining_amount
 
-            update_journal_entry(user_loan=user_loan, event=fee_return_event)
-        elif strategy == "adjust":
-            fee_adjust_event = LedgerTriggerEvent(
-                name="adjust_fee",
-                loan_id=user_loan.loan_id,
-                amount=fee.gross_amount,
-                post_date=get_current_ist_time(),
-                extra_details={
-                    "fee_id": fee.id,
-                },
-            )
-            session.add(fee_adjust_event)
-            session.flush()
+        # Check if there's still amount that's left. If yes, then we received extra prepayment.
+        is_payment_left = any(account["amount"] > 0 for account in accounts_to_adjust)
 
-            revenue_book_str = get_revenue_book_str_for_fee(fee)
-
-            accounts_to_adjust = [
-                {"account_str": revenue_book_str, "amount": fee.net_amount_paid},
-                {"account_str": f"{fee.user_id}/user/cgst_payable/l", "amount": fee.cgst_paid},
-                {"account_str": f"{fee.user_id}/user/sgst_payable/l", "amount": fee.sgst_paid},
-                {"account_str": f"{fee.user_id}/user/igst_payable/l", "amount": fee.igst_paid},
-            ]
-
+        if is_payment_left:
             for account in accounts_to_adjust:
                 if account["amount"] == 0:
                     continue
-                remaining_amount = adjust_payment(
+
+                _adjust_for_prepayment(
                     session=session,
-                    user_loan=user_loan,
-                    event=fee_adjust_event,
-                    amount_to_adjust=account["amount"],
+                    loan_id=user_loan.loan_id,
+                    event_id=fee_removed_event.id,
+                    amount=account["amount"],
                     debit_book_str=account["account_str"],
                 )
-                account["amount"] = remaining_amount
 
-            # Check if there's still amount that's left. If yes, then we received extra prepayment.
-            is_payment_left = any(account["amount"] > 0 for account in accounts_to_adjust)
-
-            if is_payment_left:
-                for account in accounts_to_adjust:
-                    if account["amount"] == 0:
-                        continue
-
-                    _adjust_for_prepayment(
-                        session=session,
-                        loan_id=user_loan.loan_id,
-                        event_id=fee_adjust_event.id,
-                        amount=account["amount"],
-                        debit_book_str=account["account_str"],
-                    )
-
-            fee.fee_status = "ADJUSTED"
-
-    elif fee.fee_status == "UNPAID":
-        if strategy in ("return", "adjust"):
-            return {"result": "error", "message": "Cannot return or adjust unpaid fee"}
-
-        fee_remove_event = LedgerTriggerEvent(
-            name="remove_fee",
-            loan_id=user_loan.loan_id,
-            amount=fee.gross_amount,
-            post_date=get_current_ist_time(),
-            extra_details={
-                "fee_id": fee.id,
-            },
-        )
-        session.add(fee_remove_event)
-        session.flush()
-
-        fee_to_event_names = {
-            "card_activation_fees": "activation_fee",
-            "reset_joining_fees": "activation_fee",
-            "card_reload_fees": "reload_fee",
-            "card_upgrade_fees": "upgrade_fee",
-            "late_fee": "charge_late_fee",
-            "atm_fee": "atm_fee_added",
-        }
-
+    if fee.remaining_fee_amount == 0:
         if fee.identifier == "bill":
-            bill = (
-                session.query(LoanData)
-                .join(LedgerTriggerEvent, LedgerTriggerEvent.loan_id == LoanData.loan_id)
-                .join(Fee, Fee.event_id == LedgerTriggerEvent.id, Fee.identifier_id == LoanData.id)
-                .filter(
-                    Fee.identifier == "bill",
-                    LedgerTriggerEvent.name == fee_to_event_names.get(fee.name, fee.name),
-                    LoanData.loan_id == user_loan.loan_id,
-                )
-                .one()
+            fee_event = (
+                session.query(LedgerTriggerEvent).filter(LedgerTriggerEvent.id == Fee.event_id).one()
             )
 
-            create_ledger_entry_from_str(
-                session,
-                event_id=fee_remove_event.id,
-                debit_book_str=f"{bill.id}/bill/min/l",
-                credit_book_str=f"{bill.id}/bill/min/a",
-                amount=fee.gross_amount - fee.gross_amount_paid,
-            )
+            reverse_event(session=session, event=fee_removed_event, event_to_reverse=fee_event)
 
-        fee.fee_status = "REMOVED"
+    update_journal_entry(session=session, user_loan=user_loan, event=fee_removed_event)
+    update_event_with_dpd(user_loan=user_loan, event=fee_removed_event)
+
+    fee.fee_status = "REMOVED"
 
     return {"result": "success", "message": "Fee refund successful"}
 
 
-def payment_refund(
+def refund_payment_to_customer(
     session: Session,
     payment_request_id: str,
 ):
