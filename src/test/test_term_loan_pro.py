@@ -175,6 +175,12 @@ def test_create_term_loan(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == _downpayment_amount
 
     assert is_down_payment_paid(loan) == True
     loan.loan_status = "Started"
@@ -263,6 +269,12 @@ def test_create_term_loan_2(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == _downpayment_amount
 
     assert is_down_payment_paid(loan) == True
     loan.loan_status = "Started"
