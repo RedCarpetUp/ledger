@@ -481,6 +481,7 @@ def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
         "min",
         "max",
         "health_limit",
+        "pg_account",
         "available_limit",
     )
     # unbilled and principal belong to same component.
@@ -493,12 +494,15 @@ def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
         "sgst_payable": "sgst",
     }
     normalized_split_data = {}
+    total_amount = 0
     for book_name, amount in split_data:
         if book_name in not_allowed_accounts or amount == 0:
             continue
         if book_name in updated_component_names:
             book_name = updated_component_names[book_name]
         normalized_split_data[book_name] = normalized_split_data.get(book_name, 0) + amount
+        total_amount += amount
+    assert event.amount == total_amount
     return normalized_split_data
 
 
@@ -518,7 +522,6 @@ def create_payment_split(session: Session, event: LedgerTriggerEvent):
                 "loan_id": event.loan_id,
             }
         )
-    # TODO assert if payment amount is equal to split amount.
     session.bulk_insert_mappings(PaymentSplit, new_ps_objects)
 
 
