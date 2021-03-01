@@ -400,7 +400,7 @@ def update_journal_entry(
             session,
             "",
             event.post_date,
-            "Cards Upload A/C" if not is_term_loan else "Axis Bank Ltd-Disbursement A/c",
+            "Cards upload A/c" if not is_term_loan else "Axis Bank Ltd-Disbursement A/c",
             "",
             "RedCarpet",
             0,
@@ -422,7 +422,10 @@ def update_journal_entry(
             )
             .first()
         )
-        gateway_expenses = payment_request_data.payment_execution_charges
+        gateway_expenses = payment_request_data.payment_execution_charges or 0
+        gateway_percentage = 0
+        if gateway_expenses:
+            gateway_percentage = gateway_expenses / event.amount
         settlement_date = payment_request_data.payment_received_in_bank_date
         payment_split_data = (
             session.query(PaymentSplit.component, PaymentSplit.amount_settled)
@@ -440,11 +443,12 @@ def update_journal_entry(
         for count in range(len(payment_split_data) + 1):
             if count == len(payment_split_data):
                 event.amount = event_amount - prepayment_amount
-                gateway_expenses = gateway_expenses if gateway_expenses else 0
+                gateway_expenses = round(event.amount * gateway_percentage, 2)
                 p_type = get_journal_entry_ptype(event.name, is_term_loan=is_term_loan)
                 narration_name = get_journal_entry_narration(event.name)
             else:
                 event.amount = payment_split_data[count][1]
+                gateway_expenses = round(event.amount * gateway_percentage, 2)
                 if event.name == "payment_received":
                     narration_name = "Receipt-Import"
                     p_type = "TL-Customer" if is_term_loan else "CF-Customer"
@@ -590,7 +594,7 @@ def payment_received_journal_entry(
     loan_id: int = None,
     user_id: Optional[int] = None,
 ) -> None:
-    actual_amount = event.amount - (gateway_expenses if gateway_expenses else 0)
+    actual_amount = event.amount - gateway_expenses
     if event.amount < gateway_expenses:
         actual_amount = event.amount
     create_journal_entry(
@@ -614,7 +618,7 @@ def payment_received_journal_entry(
         session,
         "",
         settlement_date,
-        "Bank Charges (RC)",
+        "Bank Charges(RC)",
         "",
         "RedCarpet",
         gateway_expenses,
