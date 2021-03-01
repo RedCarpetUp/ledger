@@ -422,10 +422,7 @@ def update_journal_entry(
             )
             .first()
         )
-        gateway_expenses = payment_request_data.payment_execution_charges or 0
-        gateway_percentage = 0
-        if gateway_expenses:
-            gateway_percentage = gateway_expenses / event.amount
+        actual_gateway_expenses = payment_request_data.payment_execution_charges or 0
         settlement_date = payment_request_data.payment_received_in_bank_date
         payment_split_data = (
             session.query(PaymentSplit.component, PaymentSplit.amount_settled)
@@ -439,16 +436,15 @@ def update_journal_entry(
         for split_data in payment_split_data:
             if split_data[0] == "pre_payment":
                 prepayment_amount = split_data[1]
-        event_amount = event.amount
         for count in range(len(payment_split_data) + 1):
             if count == len(payment_split_data):
-                event.amount = event_amount - prepayment_amount
-                gateway_expenses = round(event.amount * gateway_percentage, 2)
+                gateway_expenses = actual_gateway_expenses
+                amount = event.amount - gateway_expenses - prepayment_amount
                 p_type = get_journal_entry_ptype(event.name, is_term_loan=is_term_loan)
                 narration_name = get_journal_entry_narration(event.name)
             else:
-                event.amount = payment_split_data[count][1]
-                gateway_expenses = round(event.amount * gateway_percentage, 2)
+                amount = payment_split_data[count][1]
+                gateway_expenses = actual_gateway_expenses if event.amount == prepayment_amount else 0
                 if event.name == "payment_received":
                     narration_name = "Receipt-Import"
                     p_type = "TL-Customer" if is_term_loan else "CF-Customer"
@@ -459,7 +455,7 @@ def update_journal_entry(
                     p_type = get_journal_entry_ptype(event.name, is_term_loan=is_term_loan)
                     narration_name = get_journal_entry_narration(event.name)
 
-            if event.amount == 0:
+            if amount <= 0:
                 continue
             if payment_request_data.type not in ("collection"):
                 loan_id = None
@@ -471,6 +467,7 @@ def update_journal_entry(
                 narration_name,
                 p_type,
                 session,
+                amount,
                 gateway_expenses,
                 loan_id,
                 user_id,
@@ -585,18 +582,16 @@ def update_journal_entry(
 
 def payment_received_journal_entry(
     event: LedgerTriggerEvent,
-    settlement_date: TIMESTAMP,
-    user_name: String,
+    settlement_date: DateTime,
+    user_name: str,
     narration_name: str,
     p_type: str,
     session: Optional[Session] = None,
-    gateway_expenses: int = 0,
+    amount: Decimal = Decimal(0),
+    gateway_expenses: Decimal = Decimal(0),
     loan_id: int = None,
     user_id: Optional[int] = None,
 ) -> None:
-    actual_amount = event.amount - gateway_expenses
-    if event.amount < gateway_expenses:
-        actual_amount = event.amount
     create_journal_entry(
         session,
         "Receipt-Import",
@@ -604,7 +599,7 @@ def payment_received_journal_entry(
         get_journal_entry_ledger_for_payment(event.name),
         "",
         "RedCarpet",
-        actual_amount,
+        amount,
         0,
         narration_name,
         settlement_date,
@@ -639,7 +634,7 @@ def payment_received_journal_entry(
         "",
         "RedCarpet",
         0,
-        event.amount,
+        amount + gateway_expenses,
         "",
         settlement_date,
         3,
