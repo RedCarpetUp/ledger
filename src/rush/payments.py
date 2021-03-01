@@ -659,9 +659,11 @@ def refund_payment_to_customer(
             session.query(Fee)
             .join(
                 BookAccount,
-                BookAccount.book_name == Fee.name,
-                BookAccount.identifier == Fee.identifier_id,
-                BookAccount.identifier_type == Fee.identifier,
+                and_(
+                    BookAccount.book_name == Fee.name,
+                    BookAccount.identifier == Fee.identifier_id,
+                    BookAccount.identifier_type == Fee.identifier,
+                ),
             )
             .join(LedgerEntry, LedgerEntry.credit_account == BookAccount.id)
             .filter(LedgerEntry.event_id == payment_received_lte.id)
