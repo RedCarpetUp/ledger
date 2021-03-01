@@ -26,7 +26,6 @@ from rush.card.utils import (
 )
 from rush.ledger_utils import get_account_balance_from_str
 from rush.limit_unlock import limit_unlock
-from rush.loan_schedule.loan_schedule import is_payment_closing_schedule
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
     CollectionOrders,
@@ -228,14 +227,19 @@ def test_create_term_loan(session: Session) -> None:
     _, pre_payment_balance = get_account_balance_from_str(
         session=session, book_string=f"{loan.loan_id}/loan/pre_payment/l"
     )
-    assert pre_payment_balance == Decimal("1000")
+    assert pre_payment_balance == Decimal("0")
+
+    _, early_close_balance = get_account_balance_from_str(
+        session=session, book_string=f"{loan.loan_id}/loan/early_close_fee/r"
+    )
+    assert early_close_balance == Decimal("847.46")
 
     # add min amount for months in between.
     add_min_to_all_bills(session=session, post_date=parse_date("2020-09-01"), user_loan=loan)
     accrue_interest_on_all_bills(session=session, post_date=all_emis[0].due_date, user_loan=user_loan)
 
     max_amount = user_loan.get_remaining_max()
-    assert max_amount == Decimal("0")
+    assert max_amount == Decimal("300.67")
 
     limit_unlock(session=session, loan=loan, amount=Decimal("1000"))
 

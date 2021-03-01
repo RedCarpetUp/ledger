@@ -313,6 +313,8 @@ def get_journal_entry_ptype(event_name, is_term_loan=False) -> String:
         return "Card TL-Redcarpet" if not is_term_loan else "TL-Redcarpet"
     elif event_name == "customer_refund":
         return "Card Refund TL-Customer" if not is_term_loan else "Refund TL-Customer"
+    else:
+        return f"{event_name.title()}-" + ("Card TL-Customer" if not is_term_loan else "TL-Customer")
 
 
 def get_journal_entry_ledger_for_payment(event_name) -> String:
@@ -487,10 +489,8 @@ def update_journal_entry(
             narration_name = ""
             fee_count = 0
             event_name = ""
-            for (
-                settled_acc,
-                _,
-            ) in filtered_split_data.items():  # First loop to get narration name.
+            # First loop to get narration name.
+            for settled_acc, _, in filtered_split_data.items():
                 # So if there are more than one fee, it becomes "Late fee Reload fee".
                 if settled_acc not in ("sgst", "cgst", "igst"):
                     fee_count += 1

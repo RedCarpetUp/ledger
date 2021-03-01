@@ -29,10 +29,7 @@ from rush.ledger_utils import (
     create_ledger_entry_from_str,
     get_account_balance_from_str,
 )
-from rush.loan_schedule.loan_schedule import (
-    is_payment_closing_schedule,
-    slide_payment_to_emis,
-)
+from rush.loan_schedule.loan_schedule import slide_payment_to_emis
 from rush.models import (
     BookAccount,
     CollectionOrders,
@@ -341,13 +338,12 @@ def adjust_payment(
     amount_to_adjust: Decimal,
     debit_book_str: str,
 ) -> Decimal:
-    # for term loans, if loan is getting closed and interest is left to accrue then convert it into fee.
-    if not user_loan.can_close_early and is_payment_closing_schedule(
-        session, user_loan, amount_to_adjust
-    ):
+    # for term loans, if user has paid more than max and interest is left to accrue then convert it into fee.
+    if not user_loan.can_close_early and amount_to_adjust > user_loan.get_remaining_max():
         interest_left_to_accure = get_interest_left_to_accrue(session, user_loan)
         if interest_left_to_accure > 0:
-            add_early_close_charges(session, user_loan, event.post_date, interest_left_to_accure)
+            extra_amount = min(interest_left_to_accure, amount_to_adjust - user_loan.get_remaining_max())
+            add_early_close_charges(session, user_loan, event.post_date, extra_amount)
 
     split_data = find_split_to_slide_in_loan(session, user_loan, amount_to_adjust)
 
@@ -484,7 +480,7 @@ def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
         "pg_account",
         "available_limit",
         "lender_receivable",
-        "write_off_expenses"
+        "write_off_expenses",
     )
     # unbilled and principal belong to same component.
     updated_component_names = {

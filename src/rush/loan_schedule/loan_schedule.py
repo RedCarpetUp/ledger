@@ -169,18 +169,6 @@ def can_close_loan(user_loan: BaseLoan, as_of_event_id: int = None) -> bool:
     return False
 
 
-def is_payment_closing_schedule(session: Session, user_loan: BaseLoan, payment_amount: Decimal) -> bool:
-    total_remaining_amount = (
-        session.query(func.sum(LoanSchedule.remaining_amount))
-        .filter(
-            LoanSchedule.loan_id == user_loan.loan_id,
-            LoanSchedule.bill_id.is_(None),
-        )
-        .scalar()
-    )
-    return payment_amount >= total_remaining_amount
-
-
 def close_loan(user_loan: BaseLoan, last_payment_date: datetime):
     """
     Payment has come which has closed the loan.
