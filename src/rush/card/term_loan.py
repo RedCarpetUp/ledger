@@ -8,6 +8,7 @@ from typing import (
 from dateutil.relativedelta import relativedelta
 from pendulum import (
     Date,
+    DateTime,
     date,
 )
 from sqlalchemy import (
@@ -172,3 +173,15 @@ class TermLoan(BaseLoan):
         add_max_amount_event(session=session, bill=bill, event=event, amount=kwargs["amount"])
 
         return loan
+
+    def get_emi_to_accrue_interest(self, post_date: Date):
+        loan_schedule = (
+            self.session.query(LoanSchedule)
+            .filter(
+                LoanSchedule.loan_id == self.loan_id,
+                LoanSchedule.bill_id.is_(None),
+                LoanSchedule.due_date == post_date,
+            )
+            .scalar()
+        )
+        return loan_schedule

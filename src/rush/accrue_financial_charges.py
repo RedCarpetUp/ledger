@@ -69,18 +69,8 @@ def can_remove_latest_accrued_interest(
 def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loan: BaseLoan) -> None:
     unpaid_bills = user_loan.get_unpaid_generated_bills()
     # Find the emi number that's getting accrued at loan level.
-    loan_schedule = (
-        session.query(LoanSchedule)
-        .filter(
-            LoanSchedule.loan_id == user_loan.loan_id,
-            LoanSchedule.bill_id.is_(None),
-            LoanSchedule.due_date < post_date,
-            LoanSchedule.due_date > post_date - relativedelta(months=1),  # Should be within a month
-        )
-        .order_by(LoanSchedule.due_date.desc())
-        .limit(1)
-        .scalar()
-    )
+    loan_schedule = user_loan.get_emi_to_accrue_interest(post_date=post_date)
+    assert loan_schedule is not None
     accrue_event = LedgerTriggerEvent(
         name="accrue_interest",
         loan_id=user_loan.loan_id,
@@ -435,4 +425,6 @@ def add_early_close_charges(
     session.add(event)
     session.flush()
 
-    create_loan_fee_entry(session, user_loan, event, "early_close_fee", amount)
+    create_loan_fee_entry(
+        session, user_loan, event, "early_close_fee", amount, include_gst_from_gross_amount=True
+    )

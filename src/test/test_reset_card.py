@@ -232,16 +232,7 @@ def test_create_term_loan(session: Session) -> None:
 
     # add min amount for months in between.
     add_min_to_all_bills(session=session, post_date=parse_date("2020-09-01"), user_loan=loan)
-    accrue_interest_on_all_bills(
-        session=session, post_date=all_emis[0].due_date + relativedelta(days=1), user_loan=user_loan
-    )
-
-    _, pre_payment_balance = get_account_balance_from_str(
-        session=session, book_string=f"{loan.loan_id}/loan/pre_payment/l"
-    )
-    assert pre_payment_balance == Decimal("699.33")  # interest got accrued and adjusted from prepayment.
-
-    assert is_payment_closing_schedule(session, user_loan, Decimal(2608)) is True
+    accrue_interest_on_all_bills(session=session, post_date=all_emis[0].due_date, user_loan=user_loan)
 
     max_amount = user_loan.get_remaining_max()
     assert max_amount == Decimal("0")

@@ -492,3 +492,18 @@ class BaseLoan(Loan):
 
     def get_child_loans(self) -> List["BaseLoan"]:
         return []
+
+    def get_emi_to_accrue_interest(self, post_date: Date):
+        loan_schedule = (
+            self.session.query(LoanSchedule)
+            .filter(
+                LoanSchedule.loan_id == self.loan_id,
+                LoanSchedule.bill_id.is_(None),
+                LoanSchedule.due_date < post_date,
+                LoanSchedule.due_date > post_date - relativedelta(months=1),  # Should be within a month
+            )
+            .order_by(LoanSchedule.due_date.desc())
+            .limit(1)
+            .scalar()
+        )
+        return loan_schedule
