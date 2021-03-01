@@ -309,7 +309,7 @@ def get_journal_entry_ptype(event_name, is_term_loan=False) -> String:
         "transaction_refund-pre_payment",
     ):
         return "CF-Merchant" if not is_term_loan else "TL-Merchant"
-    elif event_name in ("loan_written_off", "'lender_receivable'"):
+    elif event_name == "loan_written_off":
         return "Card TL-Redcarpet" if not is_term_loan else "TL-Redcarpet"
     elif event_name == "customer_refund":
         return "Card Refund TL-Customer" if not is_term_loan else "Refund TL-Customer"

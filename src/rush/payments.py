@@ -483,6 +483,8 @@ def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
         "health_limit",
         "pg_account",
         "available_limit",
+        "lender_receivable",
+        "write_off_expenses"
     )
     # unbilled and principal belong to same component.
     updated_component_names = {
@@ -502,7 +504,8 @@ def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
             book_name = updated_component_names[book_name]
         normalized_split_data[book_name] = normalized_split_data.get(book_name, 0) + amount
         total_amount += amount
-    assert event.amount == total_amount
+    if normalized_split_data:
+        assert event.amount == total_amount
     return normalized_split_data
 
 
