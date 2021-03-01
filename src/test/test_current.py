@@ -5548,7 +5548,7 @@ def test_close_loan_in_moratorium(session: Session) -> None:
 
     payment_date = parse_date("2020-09-20")
     payment_request_id = "a12319"
-    amount = Decimal(2575.67)
+    amount = Decimal("2575.67")
     payment_request_data(
         session=session,
         type="collection",
