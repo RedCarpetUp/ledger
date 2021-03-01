@@ -478,7 +478,6 @@ def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
         "principal_receivable",
         "unbilled",
         "atm_fee",
-        "term_loan_fees",
         "card_activation_fees",
         "card_reload_fees",
         "downpayment",
