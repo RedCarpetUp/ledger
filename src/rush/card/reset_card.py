@@ -67,20 +67,12 @@ class ResetCard(TermLoan):
             bill_tenure=loan.tenure_in_months,
             principal=kwargs["amount"],
         )
+
         session.add(loan_data)
         session.flush()
-
-        event = LedgerTriggerEvent(
-            performed_by=kwargs["user_id"],
-            name="disbursal",
-            loan_id=loan.loan_id,
-            post_date=kwargs["product_order_date"],
-            amount=kwargs["amount"],
-        )
-
-        session.add(event)
-        session.flush()
-
+        kwargs["loan_id"] = loan.loan_id
+        kwargs["loan_data"] = loan_data
+        event = loan.disburse(**kwargs)
         create_ledger_entry_from_str(
             session=session,
             event_id=event.id,
@@ -88,14 +80,6 @@ class ResetCard(TermLoan):
             credit_book_str=f"{loan.id}/card/locked_limit/l",
             amount=kwargs["amount"],
         )
-
-        loan_disbursement_event(
-            session=session,
-            loan=loan,
-            event=event,
-            bill_id=loan_data.id,
-        )
-
         # unlock some limit if required.
 
         # create emis for term loan.

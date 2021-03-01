@@ -587,3 +587,41 @@ class PaymentRequestsData(AuditMixin):
     coupon_data = Column(JSONB, default=lambda: {})
     gross_request_amount: Decimal = Column(Numeric, nullable=True)
     extra_details = Column(JSONB, default=lambda: {})
+
+
+class CollectionOrders(AuditMixin):
+    __tablename__ = "v3_collection_order_mapping"
+
+    collection_request_id = Column(
+        String(length=32),
+        nullable=False,
+    )
+    batch_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
+    amount_to_pay = Column(Numeric, nullable=False)
+    amount_paid = Column(Numeric, nullable=False, default=0)
+    row_status = Column(String(length=20), default="active", nullable=False)
+    extra_details = Column(JSONB, server_default="{}", nullable=True)
+
+
+class UserDocuments(AuditMixin):
+    __tablename__ = "v3_user_documents"
+
+    user_id = Column(Integer, ForeignKey(User.id), nullable=False)
+    document_type = Column(String(length=50), nullable=False)
+    document_identification = Column(Text, nullable=True)
+    sequence = Column(Integer, server_default="1", nullable=False)
+    image_url = Column(String(length=255), nullable=False)
+    text_details_json = Column(JSONB, server_default="{}", nullable=False)
+    validity_date = Column(TIMESTAMP, nullable=True)
+    verification_date = Column(TIMESTAMP, nullable=True)
+    verification_status = Column(String(length=255), nullable=True)
+    reject_reason = Column(Text, nullable=True)
+    comments = Column(Text, nullable=True)
+    lender_id = Column(Integer, ForeignKey(User.id))
+    issue_date = Column(TIMESTAMP, nullable=True)
+    row_status = Column(String(length=20), server_default="active", nullable=False)
+    document_identification_hash = Column(Text, nullable=True)
+    original_created_at = Column(TIMESTAMP, nullable=True)
+    uid_token = Column(Text, nullable=True)
+    image_data = Column(JSONB, nullable=True)
+    image_match_data = Column(JSONB, nullable=True)

@@ -10,7 +10,10 @@ from sqlalchemy.sql.expression import (
 )
 
 from rush.anomaly_detection import run_anomaly
-from rush.card import BaseLoan
+from rush.card import (
+    BaseLoan,
+    get_user_product,
+)
 from rush.card.base_card import BaseBill
 from rush.create_emi import (
     update_event_with_dpd,
@@ -31,6 +34,7 @@ from rush.ledger_utils import (
 from rush.loan_schedule.loan_schedule import slide_payment_to_emis
 from rush.models import (
     BookAccount,
+    CollectionOrders,
     Fee,
     LedgerEntry,
     LedgerTriggerEvent,
@@ -43,19 +47,31 @@ from rush.utils import (
     mul,
 )
 from rush.writeoff_and_recovery import recovery_event
+from rush.writeoff_and_recovery import (
+    recovery_event,
+    write_off_loan,
+)
 
 
 def payment_received(
     session: Session,
-    user_loan: Optional[BaseLoan],
+    user_loan: BaseLoan,
     payment_request_data: PaymentRequestsData,
     skip_closing: bool = False,
 ) -> None:
+    payment_for_loan = get_payment_for_loan(
+        session=session, payment_request_data=payment_request_data, user_loan=user_loan
+    )
+
+    if payment_request_data.collection_by == "rc_lender_payment":
+        write_off_loan(user_loan=user_loan, payment_request_data=payment_request_data)
+        return
+
     event = LedgerTriggerEvent.new(
         session,
         name="payment_received",
-        loan_id=user_loan.loan_id if user_loan else None,
-        amount=payment_request_data.payment_request_amount,
+        loan_id=user_loan.loan_id,
+        amount=payment_for_loan,
         post_date=payment_request_data.intermediary_payment_date,
         extra_details={
             "payment_request_id": payment_request_data.payment_request_id,
@@ -63,7 +79,7 @@ def payment_received(
     )
     session.flush()
 
-    remaining_payment_amount = payment_request_data.payment_request_amount
+    remaining_payment_amount = payment_for_loan
 
     def call_payment_received_event(amount_to_adjust: Decimal) -> Decimal:
         if amount_to_adjust <= 0:
@@ -71,7 +87,6 @@ def payment_received(
         remaining_amount = payment_received_event(
             session=session,
             user_loan=loan,
-            payment_request_data=payment_request_data,
             amount_to_adjust=amount_to_adjust,
             debit_book_str=f"{loan.lender_id}/lender/pg_account/a",
             event=event,
@@ -86,11 +101,9 @@ def payment_received(
             amount_to_actually_adjust = min(min_to_pay, remaining_payment_amount)
             call_payment_received_event(amount_to_actually_adjust)
             remaining_payment_amount -= amount_to_actually_adjust
-
     # Settle whatever is remaining after it.
     for loan in all_loans:
         remaining_payment_amount = call_payment_received_event(remaining_payment_amount)
-
     for loan in all_loans:
         run_anomaly(
             session=session,
@@ -98,7 +111,6 @@ def payment_received(
             event_date=payment_request_data.intermediary_payment_date,
         )
         update_event_with_dpd(user_loan=loan, event=event)
-
     if remaining_payment_amount > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
             session=session,
@@ -107,7 +119,6 @@ def payment_received(
             amount=remaining_payment_amount,
             debit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
         )
-
     create_payment_split(session, event)
 
 
@@ -141,7 +152,6 @@ def refund_payment(
 def payment_received_event(
     session: Session,
     user_loan: BaseLoan,
-    payment_request_data: PaymentRequestsData,
     debit_book_str: str,
     event: LedgerTriggerEvent,
     amount_to_adjust: Decimal,
@@ -149,37 +159,48 @@ def payment_received_event(
 ) -> Decimal:
     remaining_amount = Decimal(0)
 
-    payment_type = payment_request_data.type
-    if payment_type == "downpayment":
-        create_ledger_entry_from_str(
-            session=session,
-            event_id=event.id,
-            debit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
-            credit_book_str=f"{user_loan.loan_id}/loan/downpayment/l",
-            amount=amount_to_adjust,
+    remaining_amount = adjust_payment(session, user_loan, event, amount_to_adjust, debit_book_str)
+
+    # Sometimes payments come in multiple decimal points.
+    # adjust_payment() handles this while sliding, but we do this
+    # for pre_payment
+    remaining_amount = round(remaining_amount, 2)
+
+    if user_loan.should_reinstate_limit_on_payment:
+        user_loan.reinstate_limit_on_payment(event=event, amount=amount_to_adjust)
+
+    is_in_write_off = (
+        get_account_balance_from_str(session, f"{user_loan.loan_id}/loan/write_off_expenses/e")[1] > 0
+    )
+    if is_in_write_off:
+        recovery_event(user_loan, event)
+        _, amount = get_account_balance_from_str(
+            session, f"{user_loan.loan_id}/loan/write_off_expenses/e"
         )
-    else:
-        remaining_amount = adjust_payment(session, user_loan, event, amount_to_adjust, debit_book_str)
+        if amount > 0:
+            user_loan.loan_status = "SETTLED"
+        else:
+            user_loan.loan_status = "RECOVERED"
 
-        # Sometimes payments come in multiple decimal points.
-        # adjust_payment() handles this while sliding, but we do this
-        # for pre_payment
-        remaining_amount = round(remaining_amount, 2)
-
-        if user_loan.should_reinstate_limit_on_payment:
-            user_loan.reinstate_limit_on_payment(event=event, amount=amount_to_adjust)
-
-        is_in_write_off = (
-            get_account_balance_from_str(session, f"{user_loan.loan_id}/loan/write_off_expenses/e")[1]
-            > 0
-        )
-        if is_in_write_off:
-            recovery_event(user_loan, event)
-            # TODO set loan status to recovered.
-
-        # We will either slide or close bills
-        # slide_payment_to_emis(user_loan, event)
+    # We will either slide or close bills
+    # slide_payment_to_emis(user_loan, event)
     return remaining_amount
+
+
+def get_payment_for_loan(
+    session: Session, payment_request_data: PaymentRequestsData, user_loan: BaseLoan
+) -> Decimal:
+    if not payment_request_data.collection_request_id:
+        return payment_request_data.payment_request_amount
+
+    collection_data_amount = (
+        session.query(CollectionOrders.amount_paid).filter(
+            CollectionOrders.row_status == "active",
+            CollectionOrders.batch_id == user_loan.loan_id,
+            CollectionOrders.collection_request_id == payment_request_data.collection_request_id,
+        )
+    ).scalar()
+    return collection_data_amount
 
 
 def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amount_to_slide: Decimal):
@@ -189,6 +210,7 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
     split_info = []
 
     # This includes bill-level and loan-level fees
+    # if reversed not added then it add to prepayment as remaining_amount>0 during writeoff on outstanding amount
     all_fees = (
         session.query(Fee)
         .filter(
@@ -382,7 +404,7 @@ def settle_payment_in_bank(
 
     create_ledger_entry_from_str(
         session=session,
-        event_id=payment_ledger_event.id,
+        event_id=event.id,
         debit_book_str=f"{user_loan.lender_id}/lender/gateway_expenses/e",
         credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
         amount=gateway_expenses,
@@ -460,6 +482,7 @@ def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
         "principal_receivable",
         "unbilled",
         "atm_fee",
+        "term_loan_fees",
         "card_activation_fees",
         "card_reload_fees",
         "downpayment",
