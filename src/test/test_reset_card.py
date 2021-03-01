@@ -31,6 +31,7 @@ from rush.min_payment import add_min_to_all_bills
 from rush.models import (
     CollectionOrders,
     JournalEntry,
+    LedgerTriggerEvent,
     Lenders,
     LoanData,
     Product,
@@ -142,6 +143,12 @@ def test_create_term_loan(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     session.flush()
 
@@ -301,6 +308,12 @@ def test_reset_journal_entries(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
     session.flush()
 
     loan_creation_data = {"date_str": "2020-08-01", "user_product_id": user_product.id}
@@ -348,6 +361,12 @@ def test_reset_journal_entries(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == Decimal(1134)
 
     session.flush()
     entrys = (
@@ -394,6 +413,12 @@ def test_reset_journal_entries(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == Decimal(1252)
     entrys = (
         session.query(JournalEntry)
         .filter(
@@ -552,6 +577,12 @@ def test_reset_journal_entries_kv(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
     entrys = (
         session.query(JournalEntry)
         .filter(
@@ -626,6 +657,12 @@ def test_reset_journal_entries_kv(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == Decimal(2380)
 
     session.flush()
     entrys = (
@@ -667,6 +704,12 @@ def test_reset_journal_entries_kv(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == Decimal(1280)
     session.flush()
     entrys = (
         session.query(JournalEntry)
@@ -713,6 +756,12 @@ def test_reset_journal_entries_kv(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == Decimal(617)
     session.flush()
     entrys = (
         session.query(JournalEntry)
@@ -777,10 +826,11 @@ def test_reset_journal_entries_kv(session: Session) -> None:
     assert entrys[1].ptype == "TL-Redcarpet"
     assert entrys[2].ptype == "TL-Redcarpet"
 
+    amount = user_loan.get_total_outstanding()
     payment_request_data(
         session=session,
         type="collection",
-        payment_request_amount=user_loan.get_total_outstanding(),
+        payment_request_amount=amount,
         user_id=6,
         payment_request_id="reset_5",
     )
@@ -802,6 +852,12 @@ def test_reset_journal_entries_kv(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
     session.flush()
     entrys = (
         session.query(JournalEntry)
@@ -868,6 +924,12 @@ def test_reset_loan_limit_unlock_success(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     session.flush()
 
@@ -952,6 +1014,12 @@ def test_reset_loan_limit_unlock_error(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     session.flush()
 
