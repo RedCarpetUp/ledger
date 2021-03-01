@@ -10,7 +10,10 @@ from dateutil.relativedelta import relativedelta
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
-from rush.accrue_financial_charges import accrue_interest_on_all_bills, accrue_late_charges
+from rush.accrue_financial_charges import (
+    accrue_interest_on_all_bills,
+    accrue_late_charges,
+)
 from rush.card import (
     create_user_product,
     get_user_product,
@@ -89,6 +92,7 @@ def test_product_amortization_1() -> None:
     assert amortization_date == parse_date("2020-09-01").date()
 
 
+@pytest.mark.run_these_please
 def test_create_term_loan(session: Session) -> None:
     create_lenders(session=session)
     create_products(session=session)

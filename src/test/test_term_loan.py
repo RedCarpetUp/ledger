@@ -4,9 +4,11 @@ from test.utils import (
     payment_request_data,
 )
 
+import pytest
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
+from rush.accrue_financial_charges import get_interest_left_to_accrue
 from rush.card import (
     create_user_product,
     get_user_product,
@@ -19,7 +21,10 @@ from rush.card.utils import (
     create_loan,
     create_user_product_mapping,
 )
-from rush.ledger_utils import get_account_balance_from_str
+from rush.ledger_utils import (
+    get_account_balance_from_str,
+    is_bill_closed,
+)
 from rush.loan_schedule.calculations import get_down_payment
 from rush.models import (
     LedgerTriggerEvent,
@@ -136,6 +141,7 @@ def test_calculate_downpayment_amount() -> None:
     assert downpayment_amount == Decimal("2910")
 
 
+@pytest.mark.run_these_please
 def test_create_term_loan(session: Session) -> None:
     create_lenders(session=session)
     create_products(session=session)
@@ -234,6 +240,30 @@ def test_create_term_loan(session: Session) -> None:
     assert all_emis[-1].interest_due == Decimal("243.33")
     assert all_emis[-1].total_due_amount == Decimal("910")
     assert all_emis[-1].total_due_amount % 10 == 0
+
+    # Make full payment now without accruing interest.
+    interest_left_to_accrue = get_interest_left_to_accrue(session, user_loan)
+    assert interest_left_to_accrue == Decimal("2919.96")
+
+    payment_date = parse_date("2020-08-02")
+    payment_request_id = "asdf234"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=Decimal("12919.96"),
+        user_id=user_product.user_id,
+        payment_request_id=payment_request_id,
+    )
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_request_data=payment_requests_data,
+    )
+    bill = user_loan.get_all_bills()[0]
+    assert bill.is_bill_closed() is True
 
 
 def test_create_term_loan_2(session: Session) -> None:

@@ -18,17 +18,13 @@ from sqlalchemy import func
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Session
 
-from rush.ledger_utils import (
-    get_account_balance_from_str,
-    is_bill_closed,
-)
+from rush.ledger_utils import get_account_balance_from_str
 from rush.loan_schedule.calculations import (
     get_down_payment,
     get_interest_for_integer_emi,
     get_monthly_instalment,
 )
 from rush.models import (
-    Base,
     CardTransaction,
     LedgerTriggerEvent,
     Loan,

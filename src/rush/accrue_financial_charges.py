@@ -29,9 +29,7 @@ from rush.models import (
     LedgerEntry,
     LedgerTriggerEvent,
     LoanData,
-    LoanMoratorium,
     LoanSchedule,
-    MoratoriumInterest,
 )
 from rush.utils import (
     add_gst_split_to_amount,
@@ -110,6 +108,7 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loa
 
     # Dpd calculation
     update_event_with_dpd(user_loan=user_loan, event=accrue_event)
+
 
 def is_late_fee_valid(session: Session, user_loan: BaseLoan) -> bool:
     """

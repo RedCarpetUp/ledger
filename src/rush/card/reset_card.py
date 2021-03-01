@@ -10,15 +10,11 @@ from rush.card.term_loan import (
     TermLoan,
     TermLoanBill,
 )
-from rush.ledger_events import (
-    add_max_amount_event,
-    loan_disbursement_event,
-)
+from rush.ledger_events import add_max_amount_event
 from rush.ledger_utils import create_ledger_entry_from_str
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
     Fee,
-    LedgerTriggerEvent,
     Loan,
     LoanData,
 )

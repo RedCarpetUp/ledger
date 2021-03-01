@@ -2,7 +2,6 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
 from sqlalchemy.orm import (
     Session,
@@ -17,7 +16,6 @@ from sqlalchemy.sql.sqltypes import (
 from rush.card.base_card import BaseLoan
 from rush.models import (
     BookAccount,
-    CollectionOrders,
     EventDpd,
     JournalEntry,
     LedgerEntry,

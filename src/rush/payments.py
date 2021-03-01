@@ -1,12 +1,10 @@
 from decimal import Decimal
-from typing import Optional
 
 from pendulum import DateTime
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.expression import (
     and_,
-    case,
     or_,
 )
 
@@ -14,12 +12,8 @@ from rush.accrue_financial_charges import (
     add_early_close_charges,
     get_interest_left_to_accrue,
 )
-from rush.accrue_financial_charges import create_bill_fee_entry
 from rush.anomaly_detection import run_anomaly
-from rush.card import (
-    BaseLoan,
-    get_user_product,
-)
+from rush.card import BaseLoan
 from rush.card.base_card import BaseBill
 from rush.create_emi import (
     update_event_with_dpd,

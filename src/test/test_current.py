@@ -20,6 +20,7 @@ from rush.accrue_financial_charges import (
     accrue_interest_on_all_bills,
     accrue_late_charges,
     create_loan_fee_entry,
+    get_interest_left_to_accrue,
 )
 from rush.card import (
     create_user_product,
@@ -472,6 +473,9 @@ def test_generate_bill_1(session: Session) -> None:
 
     dpd_events = session.query(EventDpd).filter_by(loan_id=uc.loan_id).all()
     assert dpd_events[0].balance == Decimal(1000)
+
+    interest_left_to_accrue = get_interest_left_to_accrue(session, user_loan)
+    assert interest_left_to_accrue == Decimal("368.04")
 
     emis = uc.get_loan_schedule()
     assert emis[0].total_due_amount == Decimal(114)
@@ -2918,7 +2922,8 @@ def test_prepayment(session: Session) -> None:
 #
 #     # assign card
 #     uc = create_user_product(
-#         session=session, user_id=a.id, card_activation_date=parse_date("2020-03-02"), card_type="ruby", rc_rate_of_interest_monthly=Decimal(3), lender_id = 62311,
+#         session=session, user_id=a.id, card_activation_date=parse_date("2020-03-02"), card_type="ruby",
+#         rc_rate_of_interest_monthly=Decimal(3), lender_id = 62311,
 #     )
 #
 #

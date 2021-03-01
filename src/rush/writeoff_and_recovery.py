@@ -1,5 +1,3 @@
-from sqlalchemy import and_
-
 from rush.card import BaseLoan
 from rush.ledger_utils import create_ledger_entry_from_str
 from rush.models import (
@@ -8,7 +6,6 @@ from rush.models import (
     LoanData,
     PaymentRequestsData,
 )
-from rush.utils import get_current_ist_time
 
 
 def write_off_all_loans_above_the_dpd(dpd: int = 30) -> None:
