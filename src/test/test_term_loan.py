@@ -8,7 +8,10 @@ import pytest
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
-from rush.accrue_financial_charges import get_interest_left_to_accrue
+from rush.accrue_financial_charges import (
+    accrue_interest_on_all_bills,
+    get_interest_left_to_accrue,
+)
 from rush.card import (
     create_user_product,
     get_user_product,
@@ -27,6 +30,7 @@ from rush.ledger_utils import (
 )
 from rush.loan_schedule.calculations import get_down_payment
 from rush.models import (
+    Fee,
     LedgerTriggerEvent,
     Lenders,
     LoanData,
@@ -240,6 +244,7 @@ def test_create_term_loan(session: Session) -> None:
     assert all_emis[0].interest_due == Decimal("243.33")
     assert all_emis[0].total_due_amount == Decimal("2910")
     assert all_emis[0].total_due_amount % 10 == 0
+    assert all_emis[0].payment_status == "Paid"
 
     assert all_emis[-1].due_date == parse_date("2021-07-01").date()
     assert all_emis[-1].emi_number == 12
@@ -247,10 +252,15 @@ def test_create_term_loan(session: Session) -> None:
     assert all_emis[-1].total_due_amount == Decimal("910")
     assert all_emis[-1].total_due_amount % 10 == 0
 
-    # Make full payment now without accruing interest.
     interest_left_to_accrue = get_interest_left_to_accrue(session, user_loan)
     assert interest_left_to_accrue == Decimal("2919.96")
 
+    accrue_interest_on_all_bills(session=session, post_date=all_emis[0].due_date, user_loan=user_loan)
+
+    interest_left_to_accrue = get_interest_left_to_accrue(session, user_loan)
+    assert interest_left_to_accrue == Decimal("2676.63")
+
+    # Doing extra payment of 2910
     payment_date = parse_date("2020-08-02")
     payment_request_id = "asdf234"
     payment_request_data(
@@ -268,8 +278,27 @@ def test_create_term_loan(session: Session) -> None:
         user_loan=user_loan,
         payment_request_data=payment_requests_data,
     )
+
+    early_closing_fee = (
+        session.query(Fee)
+        .filter(
+            Fee.identifier == "loan",
+            Fee.identifier_id == user_loan.loan_id,
+            Fee.name == "early_close_fee",
+        )
+        .one()
+    )
+    assert early_closing_fee.gross_amount == Decimal("2676.63")
+    assert early_closing_fee.fee_status == "PAID"
+
+    assert user_loan.loan_status == "COMPLETED"
     bill = user_loan.get_all_bills()[0]
     assert bill.is_bill_closed() is True
+
+    _, pre_payment_balance = get_account_balance_from_str(
+        session=session, book_string=f"{user_loan.loan_id}/loan/pre_payment/l"
+    )
+    assert pre_payment_balance == Decimal("2910")
 
 
 def test_create_term_loan_2(session: Session) -> None:

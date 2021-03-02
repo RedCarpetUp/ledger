@@ -407,7 +407,7 @@ def get_interest_left_to_accrue(session: Session, user_loan: BaseLoan) -> Decima
     )
     all_bills = user_loan.get_all_bills()
     total_interest_accrued = sum(
-        get_account_balance_from_str(session, book_string=f"{bill.id}/bill/interest_receivable/r")[1]
+        get_account_balance_from_str(session, book_string=f"{bill.id}/bill/interest_accrued/r")[1]
         for bill in all_bills
     )
     return total_interest_due - total_interest_accrued

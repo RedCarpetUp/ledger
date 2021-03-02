@@ -490,7 +490,10 @@ def update_journal_entry(
             fee_count = 0
             event_name = ""
             # First loop to get narration name.
-            for settled_acc, _, in filtered_split_data.items():
+            for (
+                settled_acc,
+                _,
+            ) in filtered_split_data.items():
                 # So if there are more than one fee, it becomes "Late fee Reload fee".
                 if settled_acc not in ("sgst", "cgst", "igst"):
                     fee_count += 1
