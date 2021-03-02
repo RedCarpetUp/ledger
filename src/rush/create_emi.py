@@ -505,7 +505,7 @@ def update_journal_entry(
                 if event.name == "loan_written_off":
                     p_type = p_type.replace("Customer", "Redcarpet")
             else:
-                p_type = f"{narration_name} -Card TL-Customer"
+                p_type = p_type = f"{narration_name} -TL-Customer" if is_term_loan f"{narration_name} -Card TL-Customer"  
             for sort_order, (settled_acc, amount) in enumerate(filtered_split_data.items(), 2):
                 create_journal_entry(
                     session,
