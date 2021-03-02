@@ -67,10 +67,13 @@ def can_remove_latest_accrued_interest(
 
 
 def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loan: BaseLoan) -> None:
+    interest_left_to_accrue = get_interest_left_to_accrue(session, user_loan)
+    if interest_left_to_accrue <= 0:
+        return
+
     unpaid_bills = user_loan.get_unpaid_generated_bills()
     # Find the emi number that's getting accrued at loan level.
     loan_schedule = user_loan.get_emi_to_accrue_interest(post_date=post_date)
-    assert loan_schedule is not None
     accrue_event = LedgerTriggerEvent(
         name="accrue_interest",
         loan_id=user_loan.loan_id,
@@ -83,16 +86,19 @@ def accrue_interest_on_all_bills(session: Session, post_date: DateTime, user_loa
 
     # accrual actually happens for each bill using bill's schedule.
     for bill in unpaid_bills:
+        if interest_left_to_accrue <= 0:
+            break
         bill_schedule = (
             session.query(LoanSchedule)
             .filter(LoanSchedule.bill_id == bill.id, LoanSchedule.due_date == loan_schedule.due_date)
             .scalar()
         )
         if bill_schedule:
-            interest_to_accrue = bill_schedule.interest_to_accrue(session)
+            interest_to_accrue = min(interest_left_to_accrue, bill_schedule.interest_to_accrue(session))
             accrue_event.amount += interest_to_accrue
             accrue_interest_event(session, bill, accrue_event, interest_to_accrue)
             add_max_amount_event(session, bill, accrue_event, interest_to_accrue)
+            interest_left_to_accrue -= interest_to_accrue
 
     from rush.create_emi import update_event_with_dpd
 
@@ -405,12 +411,22 @@ def get_interest_left_to_accrue(session: Session, user_loan: BaseLoan) -> Decima
         .filter(LoanSchedule.loan_id == user_loan.loan_id, LoanSchedule.bill_id.is_(None))
         .scalar()
     )
+    early_closing_fee = (
+        session.query(func.sum(Fee.gross_amount_paid))
+        .filter(
+            Fee.identifier == "loan",
+            Fee.identifier_id == user_loan.loan_id,
+            Fee.name == "early_close_fee",
+        )
+        .scalar()
+        or 0
+    )
     all_bills = user_loan.get_all_bills()
     total_interest_accrued = sum(
         get_account_balance_from_str(session, book_string=f"{bill.id}/bill/interest_accrued/r")[1]
         for bill in all_bills
     )
-    return total_interest_due - total_interest_accrued
+    return total_interest_due - total_interest_accrued - early_closing_fee
 
 
 def add_early_close_charges(

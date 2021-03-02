@@ -202,17 +202,4 @@ class TermLoan(BaseLoan):
         max_remaining = self.get_remaining_max(event_id=as_of_event_id, include_child_loans=False)
         interest_left_to_accrue = get_interest_left_to_accrue(self.session, self)
         total_remaining_amount = max_remaining + interest_left_to_accrue
-        if total_remaining_amount == 0:
-            return True
-        # If we have received any early closing fee in place of interest.
-        early_closing_fee = (
-            self.session.query(func.sum(Fee.gross_amount_paid))
-            .filter(
-                Fee.identifier == "loan",
-                Fee.identifier_id == self.loan_id,
-                Fee.name == "early_close_fee",
-            )
-            .scalar()
-            or 0
-        )
-        return (total_remaining_amount - early_closing_fee) <= 0
+        return total_remaining_amount <= 0

@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from rush.accrue_financial_charges import (
     accrue_interest_on_all_bills,
     accrue_late_charges,
+    get_interest_left_to_accrue,
 )
 from rush.card import (
     create_user_product,
@@ -29,6 +30,7 @@ from rush.limit_unlock import limit_unlock
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
     CollectionOrders,
+    Fee,
     JournalEntry,
     LedgerTriggerEvent,
     Lenders,
@@ -192,6 +194,9 @@ def test_create_term_loan(session: Session) -> None:
     assert all_emis[-1].interest_due == Decimal("300.67")
     assert all_emis[-1].total_due_amount == Decimal("1134")
 
+    interest_left_to_accrue = get_interest_left_to_accrue(session, user_loan)
+    assert interest_left_to_accrue == Decimal("3608.04")
+
     payment_date = parse_date("2020-08-25")
     amount = Decimal(11000)
     payment_request_id = "dummy_reset_fee_2"
@@ -234,12 +239,72 @@ def test_create_term_loan(session: Session) -> None:
     )
     assert early_close_balance == Decimal("847.46")
 
+    interest_left_to_accrue = get_interest_left_to_accrue(session, user_loan)
+    assert interest_left_to_accrue == Decimal("2608.04")
+
+    assert user_loan.get_remaining_max() == Decimal(0)
+
+    payment_date = parse_date("2020-08-30")
+    amount = Decimal(2000)
+    payment_request_id = "dummy_reset_fee_3"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=user_product.user_id,
+        payment_request_id=payment_request_id,
+    )
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
+    )
+
+    early_closing_fees = (
+        session.query(Fee)
+        .filter(
+            Fee.identifier == "loan",
+            Fee.identifier_id == user_loan.loan_id,
+            Fee.name == "early_close_fee",
+        )
+        .order_by(Fee.id)
+        .all()
+    )
+    assert early_closing_fees[0].gross_amount == Decimal("1000")
+    assert early_closing_fees[0].fee_status == "PAID"
+    assert early_closing_fees[1].gross_amount == Decimal("2000")
+    assert early_closing_fees[1].fee_status == "PAID"
+
+    interest_left_to_accrue = get_interest_left_to_accrue(session, user_loan)
+    assert interest_left_to_accrue == Decimal("608.04")
+
     # add min amount for months in between.
     add_min_to_all_bills(session=session, post_date=parse_date("2020-09-01"), user_loan=loan)
     accrue_interest_on_all_bills(session=session, post_date=all_emis[0].due_date, user_loan=user_loan)
 
     max_amount = user_loan.get_remaining_max()
     assert max_amount == Decimal("300.67")
+
+    accrue_interest_on_all_bills(session=session, post_date=all_emis[1].due_date, user_loan=user_loan)
+
+    max_amount = user_loan.get_remaining_max()
+    assert max_amount == Decimal("601.34")
+
+    accrue_interest_on_all_bills(session=session, post_date=all_emis[2].due_date, user_loan=user_loan)
+    # Only 6.7 rupee should get accrued because rest went to early charges.
+    max_amount = user_loan.get_remaining_max()
+    assert max_amount == Decimal("608.04")
 
     limit_unlock(session=session, loan=loan, amount=Decimal("1000"))
 
