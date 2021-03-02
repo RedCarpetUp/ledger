@@ -4207,10 +4207,21 @@ def test_customer_prepayment_refund(session: Session) -> None:
 
     assert prepayment_amount == Decimal(4000)
 
+    refund_payment_request_id = "a12319"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=Decimal(3000),
+        user_id=user_loan.user_id,
+        payment_request_id=refund_payment_request_id,
+        collection_by="customer_refund",
+        payment_received_in_bank_date=payment_date,
+    )
+
     customer_refund(
         session=session,
         user_loan=user_loan,
-        payment_request_id=payment_request_id,
+        payment_request_id=refund_payment_request_id,
         refund_source="payment_gateway",
     )
 
@@ -4219,11 +4230,22 @@ def test_customer_prepayment_refund(session: Session) -> None:
     )
     assert prepayment_amount == Decimal(1000)
 
+    refund_payment_request_id_2 = "a12320"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=Decimal(1000),
+        user_id=user_loan.user_id,
+        payment_request_id=refund_payment_request_id_2,
+        collection_by="customer_refund",
+        payment_received_in_bank_date=payment_date,
+    )
+
     customer_refund(
         session=session,
         user_loan=user_loan,
-        payment_request_id=payment_request_id,
-        refund_source="payment_gateway",
+        payment_request_id=refund_payment_request_id_2,
+        refund_source="NEFT",
     )
 
     _, prepayment_amount = get_account_balance_from_str(

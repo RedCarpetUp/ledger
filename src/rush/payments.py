@@ -46,7 +46,6 @@ from rush.utils import (
     get_current_ist_time,
     mul,
 )
-from rush.writeoff_and_recovery import recovery_event
 from rush.writeoff_and_recovery import (
     recovery_event,
     write_off_loan,
@@ -558,6 +557,9 @@ def customer_refund(
         loan_id=user_loan.loan_id,
         amount=refund_amount,
         post_date=get_current_ist_time(),
+        extra_details={
+            "payment_request_id": payment_request_id,
+        },
     )
     session.add(lt)
     session.flush()
