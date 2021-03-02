@@ -507,3 +507,7 @@ class BaseLoan(Loan):
             .scalar()
         )
         return loan_schedule
+
+    def can_close_loan(self, as_of_event_id: int) -> bool:
+        max_remaining = self.get_remaining_max(event_id=as_of_event_id, include_child_loans=False)
+        return max_remaining == 0

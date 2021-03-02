@@ -29,7 +29,10 @@ from rush.ledger_utils import (
     create_ledger_entry_from_str,
     get_account_balance_from_str,
 )
-from rush.loan_schedule.loan_schedule import slide_payment_to_emis
+from rush.loan_schedule.loan_schedule import (
+    close_loan,
+    slide_payment_to_emis,
+)
 from rush.models import (
     BookAccount,
     CollectionOrders,
@@ -371,6 +374,10 @@ def adjust_payment(
             assert remaining_amount == 0
             slide_payment_to_emis(user_loan, event, data["amount_to_adjust"])
         amount_to_adjust -= data["amount_to_adjust"]
+
+    # After doing the sliding we check if the loan can be closed.
+    if user_loan.can_close_loan(as_of_event_id=event.id):
+        close_loan(user_loan, event.post_date)
 
     return amount_to_adjust
 

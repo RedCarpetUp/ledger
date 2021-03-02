@@ -24,6 +24,7 @@ from rush.card.base_card import (
 )
 from rush.ledger_events import add_max_amount_event
 from rush.models import (
+    Fee,
     Loan,
     LoanData,
     LoanSchedule,
@@ -185,3 +186,29 @@ class TermLoan(BaseLoan):
             .scalar()
         )
         return loan_schedule
+
+    def can_close_loan(self, as_of_event_id: int) -> bool:
+        if (
+            not self.get_all_bills()
+        ):  # This func gets called even before schedule is created. So to avoid that.
+            return False
+        from rush.accrue_financial_charges import get_interest_left_to_accrue
+
+        # For term loans, we have to receive entire schedule amount so look there instead of max account.
+        max_remaining = self.get_remaining_max(event_id=as_of_event_id, include_child_loans=False)
+        interest_left_to_accrue = get_interest_left_to_accrue(self.session, self)
+        total_remaining_amount = max_remaining + interest_left_to_accrue
+        if total_remaining_amount == 0:
+            return True
+        # If we have received any early closing fee in place of interest.
+        early_closing_fee = (
+            self.session.query(func.sum(Fee.gross_amount_paid))
+            .filter(
+                Fee.identifier == "loan",
+                Fee.identifier_id == self.loan_id,
+                Fee.name == "early_close_fee",
+            )
+            .scalar()
+            or 0
+        )
+        return (total_remaining_amount - early_closing_fee) <= 0

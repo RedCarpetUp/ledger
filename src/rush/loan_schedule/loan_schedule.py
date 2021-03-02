@@ -153,21 +153,6 @@ def slide_payment_to_emis(
 
         amount_to_slide -= amount_slid
 
-    # After doing the sliding we check if the loan can be closed.
-    if can_close_loan(user_loan, as_of_event_id=payment_event.id):
-        close_loan(user_loan, payment_event.post_date)
-
-
-def can_close_loan(user_loan: BaseLoan, as_of_event_id: int = None) -> bool:
-    unpaid_emis = user_loan.get_loan_schedule(only_unpaid_emis=True)
-    if not unpaid_emis:  # If all emis are paid then can close. Term loan, Reset. Transaction Loan etc.
-        return True
-    max_remaining = user_loan.get_remaining_max(event_id=as_of_event_id, include_child_loans=False)
-    # If max amount is clear and the loan can be closed early. i.e. in case of credit card products.
-    if max_remaining == 0 and user_loan.can_close_early:
-        return True
-    return False
-
 
 def close_loan(user_loan: BaseLoan, last_payment_date: datetime):
     """
