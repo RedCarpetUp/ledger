@@ -532,15 +532,32 @@ def create_payment_split(session: Session, event: LedgerTriggerEvent):
 def customer_refund(
     session: Session,
     user_loan: BaseLoan,
-    payment_amount: Decimal,
-    payment_date: DateTime,
+    payment_request_id: str,
     refund_source: str,
 ):
+    payment_request_data = (
+        session.query(PaymentRequestsData)
+        .filter(PaymentRequestsData.payment_request_id == payment_request_id)
+        .one_or_none()
+    )
+
+    if payment_request_data is None:
+        return {"result": "error", "message": "Payment request not found"}
+
+    refund_amount = payment_request_data.payment_request_amount
+
+    _, prepayment_balance = get_account_balance_from_str(
+        session=session, book_string=f"{user_loan.loan_id}/loan/pre_payment/l"
+    )
+
+    if refund_amount > prepayment_balance:
+        return {"result": "error", "message": "Refund amount greater than pre-payment"}
+
     lt = LedgerTriggerEvent(
         name="customer_refund",
         loan_id=user_loan.loan_id,
-        amount=payment_amount,
-        post_date=payment_date,
+        amount=refund_amount,
+        post_date=get_current_ist_time(),
     )
     session.add(lt)
     session.flush()
@@ -555,7 +572,7 @@ def customer_refund(
         event_id=lt.id,
         debit_book_str=f"{user_loan.loan_id}/loan/pre_payment/l",
         credit_book_str=credit_book_str,
-        amount=payment_amount,
+        amount=refund_amount,
     )
 
     update_journal_entry(user_loan=user_loan, event=lt)
