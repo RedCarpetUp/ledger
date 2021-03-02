@@ -79,6 +79,10 @@ class TermLoanBill(BaseBill):
         )
         return interest_to_accrue
 
+    def is_bill_closed(self, to_date: DateTime = None) -> bool:
+        # Check if loan closed or not. Because for term loan there is only one bill.
+        return self.user_loan.loan_status == "COMPLETED"
+
 
 def is_down_payment_paid(loan: BaseLoan) -> bool:
     session = loan.session

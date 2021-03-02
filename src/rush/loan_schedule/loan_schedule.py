@@ -160,6 +160,7 @@ def close_loan(user_loan: BaseLoan, last_payment_date: datetime):
     In case of early payment, we need to nullify all future emis in schedule and set a new
     principal balance on the current emi.
     """
+    user_loan.loan_status = "COMPLETED"
     future_emis = user_loan.get_loan_schedule(only_emis_after_date=last_payment_date.date())
     if not future_emis:  # Loan has closed naturally.
         return
