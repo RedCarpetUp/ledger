@@ -313,6 +313,13 @@ def test_closing_bill(session: Session) -> None:
         user_loan=user_loan,
     )
 
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
+
     bill_date = parse_date("2019-03-31 00:00:00")
     bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
 
@@ -348,6 +355,13 @@ def test_closing_bill(session: Session) -> None:
         user_loan=user_loan,
     )
 
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
+
     bill_date = parse_date("2019-04-30 00:00:00")
     bill = bill_generate(user_loan=user_loan, creation_time=bill_date)
 
@@ -381,6 +395,13 @@ def test_closing_bill(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     create_card_swipe(
         session=session,
@@ -760,9 +781,18 @@ def _partial_payment_bill_1(session: Session) -> None:
         user_loan=user_loan,
     )
 
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
+
     bill = unpaid_bills[0]
     _, gateway_expenses = get_account_balance_from_str(
-        session, book_string=f"{user_loan.lender_id}/lender/gateway_expenses/e"
+        session,
+        book_string=f"{user_loan.lender_id}/lender/gateway_expenses/e",
+        to_date=payment_requests_data.payment_received_in_bank_date,
     )
     assert gateway_expenses == 0.5
 
@@ -913,6 +943,14 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
+
     # assert is_min_paid(session, bill) is True
     min_due = bill.get_remaining_min()
     assert min_due == Decimal(0)
@@ -1006,6 +1044,13 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
+
     bill = unpaid_bills[0]
     # assert is_min_paid(session, bill) is True
     min_due = bill.get_remaining_min()
@@ -1119,6 +1164,13 @@ def test_is_bill_paid_bill_1(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
+
     is_it_paid_now = is_bill_closed(session, bill)
     assert is_it_paid_now is True
 
@@ -1523,6 +1575,13 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     _, lender_amount = get_account_balance_from_str(
         session,
@@ -2182,6 +2241,12 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=uc,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
     # Do Partial Payment
     payment_date = parse_date("2020-08-02 14:11:06")
     amount = Decimal(1139)
@@ -2209,6 +2274,12 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=uc,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     # Check if amount is adjusted correctly in schedule
     # Get from table entries TODO
@@ -2282,6 +2353,12 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     emis = user_loan.get_loan_schedule()
     assert emis[0].payment_received == Decimal("114")
@@ -2344,6 +2421,12 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     _, lender_amount = get_account_balance_from_str(
         session,
@@ -2429,6 +2512,12 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     _, lender_amount = get_account_balance_from_str(
         session,
@@ -2506,6 +2595,12 @@ def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     _, lender_amount = get_account_balance_from_str(
         session,
@@ -2570,6 +2665,12 @@ def _pay_minimum_amount_bill_2(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     _, lender_amount = get_account_balance_from_str(
         session,
@@ -2841,6 +2942,12 @@ def test_prepayment(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     _, lender_amount = get_account_balance_from_str(
         session,
@@ -3173,6 +3280,12 @@ def test_moratorium_schedule(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     _, lender_amount = get_account_balance_from_str(
         session,
@@ -3767,6 +3880,12 @@ def test_excess_payment_in_future_emis(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     emis = user_loan.get_loan_schedule()
     assert emis[0].payment_status == "Paid"
@@ -3846,6 +3965,13 @@ def test_one_rupee_leniency(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
+
     emis = user_loan.get_loan_schedule()
     assert emis[0].payment_status == "Paid"
     assert emis[0].remaining_amount == Decimal("0.5")
@@ -3886,6 +4012,12 @@ def test_one_rupee_leniency(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     emis = user_loan.get_loan_schedule()
     assert emis[0].payment_status == "Paid"
@@ -3945,6 +4077,12 @@ def test_readjust_future_payment_with_new_swipe(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     emis = user_loan.get_loan_schedule()
     assert emis[0].payment_status == "Paid"
@@ -4030,6 +4168,12 @@ def test_readjust_future_payment_with_extension(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     emis = user_loan.get_loan_schedule()
     assert emis[0].payment_status == "Paid"
@@ -4117,6 +4261,12 @@ def test_customer_fee_refund(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     bill_fee = session.query(Fee).filter_by(id=fee_due.id).one_or_none()
     assert bill_fee is not None
@@ -4200,6 +4350,12 @@ def test_customer_prepayment_refund(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     _, prepayment_amount = get_account_balance_from_str(
         session, book_string=f"{user_loan.loan_id}/loan/pre_payment/l"
@@ -4864,10 +5020,11 @@ def test_updated_emi_payment_mapping_after_early_loan_close(session: Session) ->
     assert min_amount == 227
 
     payment_request_id = "a1231909"
+    amount = Decimal(227)
     payment_request_data(
         session=session,
         type="collection",
-        payment_request_amount=Decimal(227),
+        payment_request_amount=amount,
         user_id=user_loan.user_id,
         payment_request_id=payment_request_id,
     )
@@ -4887,6 +5044,12 @@ def test_updated_emi_payment_mapping_after_early_loan_close(session: Session) ->
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     accrue_interest_on_all_bills(
         session=session,
@@ -4937,6 +5100,12 @@ def test_updated_emi_payment_mapping_after_early_loan_close(session: Session) ->
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == Decimal(500)
 
     accrue_interest_on_all_bills(
         session=session,
@@ -4986,6 +5155,12 @@ def test_updated_emi_payment_mapping_after_early_loan_close(session: Session) ->
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == Decimal(1500)
 
     accrue_interest_on_all_bills(
         session=session,
@@ -5562,6 +5737,12 @@ def test_close_loan_in_moratorium(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     bill = (
         session.query(LoanData)
@@ -5606,18 +5787,18 @@ def test_close_loan_in_moratorium(session: Session) -> None:
     assert emis[2].emi_number == 3
     assert emis[2].total_due_amount == 0
     assert emis[2].due_date == parse_date("2020-11-15").date()
-    assert emis[2].total_closing_balance == Decimal("2500.00")
+    assert emis[2].total_closing_balance == Decimal("0")
     assert emis[2].payment_status == "UnPaid"
     assert emis[3].emi_number == 4
     assert emis[3].principal_due == Decimal("0")
     assert emis[3].interest_due == Decimal("0")
     assert emis[3].total_due_amount == Decimal("0")
     assert emis[3].due_date == parse_date("2020-12-15").date()
-    assert emis[3].total_closing_balance == Decimal("2500.00")
+    assert emis[3].total_closing_balance == Decimal("0")
     assert emis[3].payment_status == "UnPaid"
     assert emis[4].emi_number == 5
     assert emis[4].principal_due == Decimal("0")
     assert emis[4].interest_due == Decimal("0")
     assert emis[4].due_date == parse_date("2021-01-15").date()
-    assert emis[4].total_closing_balance == Decimal("2291.67")
+    assert emis[4].total_closing_balance == Decimal("0")
     assert emis[4].payment_status == "UnPaid"

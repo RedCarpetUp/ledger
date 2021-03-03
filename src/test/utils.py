@@ -3,13 +3,17 @@ from decimal import Decimal
 from typing import (
     Any,
     Dict,
+    Union,
 )
 
 from dateutil.relativedelta import relativedelta
 from pendulum import now as current_time
 from sqlalchemy.orm import Session
 
-from rush.models import PaymentRequestsData
+from rush.models import (
+    CollectionOrders,
+    PaymentRequestsData,
+)
 
 
 def payment_request_data(
@@ -18,7 +22,7 @@ def payment_request_data(
     payment_request_amount: Decimal,
     user_id: int,
     payment_request_id: str,
-    **kwargs: Dict[str, Any],
+    **kwargs: Union[str, int, bool, Any],
 ) -> PaymentRequestsData:
     """
     populate v3_payment_requests_data table
@@ -55,6 +59,25 @@ def payment_request_data(
         extra_details=kwargs.get("extra_details", {}),
     )
 
+    return data
+
+
+def collection_request_data(
+    session: Session,
+    collection_request_id: str,
+    amount_paid: Decimal,
+    amount_to_pay: Decimal,
+    batch_id: int,
+) -> CollectionOrders:
+    data = CollectionOrders.new(
+        session=session,
+        collection_request_id=collection_request_id,
+        amount_paid=amount_paid,
+        amount_to_pay=amount_to_pay,
+        batch_id=batch_id,
+        row_status="active",
+        extra_details={},
+    )
     return data
 
 

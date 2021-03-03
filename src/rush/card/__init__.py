@@ -52,8 +52,20 @@ def get_user_product(
     elif _rows == "one_or_none":
         user_product = user_product_query.one_or_none()
 
+    if not user_product:
+        return None
+
     user_product.prepare(session=session)
     return user_product
+
+
+def get_user_loan(
+    session: Session,
+    loan_id: int,
+) -> BaseLoan:
+    user_loan = session.query(Loan).filter_by(id=loan_id).one()
+    user_loan.prepare(session)
+    return user_loan
 
 
 def create_user_product(session: Session, **kwargs) -> Loan:
