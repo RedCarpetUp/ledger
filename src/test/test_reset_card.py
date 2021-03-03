@@ -312,9 +312,17 @@ def test_create_term_loan(session: Session) -> None:
         session=session, book_string=f"{loan.id}/card/locked_limit/l"
     )
     assert locked_limit == Decimal("9000")
+    _, locked_limit = get_account_balance_from_str(
+        session=session, book_string=f"{loan.id}/card/locked_limit/a"
+    )
+    assert locked_limit == Decimal("9000")
 
     _, available_limit = get_account_balance_from_str(
         session=session, book_string=f"{loan.id}/card/available_limit/l"
+    )
+    assert available_limit == Decimal("1000")
+    _, available_limit = get_account_balance_from_str(
+        session=session, book_string=f"{loan.id}/card/available_limit/a"
     )
     assert available_limit == Decimal("1000")
 

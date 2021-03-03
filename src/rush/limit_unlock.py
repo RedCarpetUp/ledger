@@ -4,7 +4,10 @@ from typing import Optional
 from pendulum import Date
 from sqlalchemy.orm import Session
 
-from rush.ledger_events import limit_unlock_event
+from rush.ledger_events import (
+    limit_assignment_event,
+    limit_unlock_event,
+)
 from rush.ledger_utils import get_account_balance_from_str
 from rush.models import (
     LedgerTriggerEvent,
@@ -14,16 +17,11 @@ from rush.utils import get_current_ist_time
 
 
 def limit_unlock(
-    session: Session,
-    loan: Loan,
-    amount: Decimal,
-    event_date: Optional[Date] = None,
-    locked_limit_str: str = "locked_limit",
-    unlock_limit_str: str = "available_limit",
+    session: Session, loan: Loan, amount: Decimal, event_date: Optional[Date] = None
 ) -> None:
-    # incase extra limit is unlocked, raise error.
+    # Can't unlock more than what's locked.
     _, locked_limit = get_account_balance_from_str(
-        session=session, book_string=f"{loan.id}/card/{locked_limit_str}/l"
+        session=session, book_string=f"{loan.id}/card/locked_limit/l"
     )
     assert locked_limit >= amount
 
@@ -38,11 +36,5 @@ def limit_unlock(
     session.add(event)
     session.flush()
 
-    limit_unlock_event(
-        session=session,
-        loan=loan,
-        event=event,
-        amount=amount,
-        locked_limit_str=locked_limit_str,
-        unlock_limit_str=unlock_limit_str,
-    )
+    limit_unlock_event(session=session, loan=loan, event=event, amount=amount)
+    limit_assignment_event(session, loan.id, event, amount)
