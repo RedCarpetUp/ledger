@@ -36,7 +36,6 @@ from rush.models import (
     LoanMoratorium,
     LoanSchedule,
 )
-from rush.utils import get_current_ist_time
 
 
 class BaseBill:
