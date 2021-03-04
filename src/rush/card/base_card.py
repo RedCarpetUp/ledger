@@ -143,6 +143,7 @@ class BaseBill:
         _, total_remaining_amount = get_account_balance_from_str(
             self.session, book_string=f"{self.table.id}/bill/max/a", to_date=to_date
         )
+        return total_remaining_amount == 0
 
     def sum_of_atm_transactions(self):
         atm_transactions_sum = (
