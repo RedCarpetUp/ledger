@@ -257,7 +257,10 @@ def test_dmi_recon_process_1(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -290,7 +293,10 @@ def test_dmi_recon_process_1(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -351,7 +357,10 @@ def test_dmi_recon_process_1(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -384,7 +393,10 @@ def test_dmi_recon_process_1(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
