@@ -342,10 +342,15 @@ def adjust_payment(
     debit_book_str: str,
 ) -> Decimal:
     # for term loans, if user has paid more than max and interest is left to accrue then convert it into fee.
-    if not user_loan.can_close_early and amount_to_adjust > user_loan.get_remaining_max():
+    if not user_loan.can_close_early and amount_to_adjust > user_loan.get_remaining_max(
+        event_id=event.id
+    ):
         interest_left_to_accure = get_interest_left_to_accrue(session, user_loan)
         if interest_left_to_accure > 0:
-            extra_amount = min(interest_left_to_accure, amount_to_adjust - user_loan.get_remaining_max())
+            extra_amount = min(
+                interest_left_to_accure,
+                amount_to_adjust - user_loan.get_remaining_max(event_id=event.id),
+            )
             add_early_close_charges(session, user_loan, event.post_date, extra_amount)
 
     split_data = find_split_to_slide_in_loan(session, user_loan, amount_to_adjust)
@@ -395,6 +400,7 @@ def settle_payment_in_bank(
         name="payment_settled",
         loan_id=user_loan.loan_id,
         amount=settled_amount,
+        extra_details={"payment_request_id": payment_request_id},
         post_date=settlement_date,
     )
     session.add(event)
@@ -404,8 +410,12 @@ def settle_payment_in_bank(
 
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
-        .first()
+        .filter(
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.loan_id == user_loan.loan_id,
+        )
+        .one()
     )
 
     create_ledger_entry_from_str(
