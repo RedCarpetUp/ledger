@@ -10,15 +10,11 @@ from rush.card.term_loan import (
     TermLoan,
     TermLoanBill,
 )
-from rush.ledger_events import (
-    add_max_amount_event,
-    loan_disbursement_event,
-)
+from rush.ledger_events import add_max_amount_event
 from rush.ledger_utils import create_ledger_entry_from_str
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
     Fee,
-    LedgerTriggerEvent,
     Loan,
     LoanData,
 )
@@ -51,6 +47,7 @@ class ResetCard(TermLoan):
         loan.tenure_in_months = kwargs.get("tenure")
         loan.interest_type = "flat"
         loan.downpayment_percent = Decimal(0)
+        loan.can_close_early = False
 
         bill_start_date, bill_close_date = cls.bill_class.calculate_bill_start_and_close_date(
             first_bill_date=cls.calculate_first_emi_date(product_order_date=loan.amortization_date),

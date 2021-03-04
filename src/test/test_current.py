@@ -20,6 +20,7 @@ from rush.accrue_financial_charges import (
     accrue_interest_on_all_bills,
     accrue_late_charges,
     create_loan_fee_entry,
+    get_interest_left_to_accrue,
 )
 from rush.card import (
     create_user_product,
@@ -315,7 +316,10 @@ def test_closing_bill(session: Session) -> None:
 
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -357,7 +361,10 @@ def test_closing_bill(session: Session) -> None:
 
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -398,7 +405,10 @@ def test_closing_bill(session: Session) -> None:
 
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -493,6 +503,9 @@ def test_generate_bill_1(session: Session) -> None:
 
     dpd_events = session.query(EventDpd).filter_by(loan_id=uc.loan_id).all()
     assert dpd_events[0].balance == Decimal(1000)
+
+    interest_left_to_accrue = get_interest_left_to_accrue(session, user_loan)
+    assert interest_left_to_accrue == Decimal("368.04")
 
     emis = uc.get_loan_schedule()
     assert emis[0].total_due_amount == Decimal(114)
@@ -783,7 +796,10 @@ def _partial_payment_bill_1(session: Session) -> None:
 
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -946,7 +962,10 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
 
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -1046,7 +1065,10 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -1166,7 +1188,10 @@ def test_is_bill_paid_bill_1(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -1578,7 +1603,10 @@ def test_schedule_for_interest_and_payment(session: Session) -> None:
 
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -1760,6 +1788,16 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         session=session, payment_request_id=payment_request_id, payment_date=refund_date
     )
     refund_payment(session, uc, payment_requests_data)
+
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "transaction_refund",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     create_card_swipe(
         session=session,
@@ -2105,6 +2143,15 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         session=session, payment_request_id=payment_request_id, payment_date=refund_date
     )
     refund_payment(session, uc, payment_requests_data)
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "transaction_refund",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
     # Merchant Refund
     refund_date = parse_date("2020-06-17 00:21:23")
     amount = Decimal(160)
@@ -2120,6 +2167,15 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         session=session, payment_request_id=payment_request_id, payment_date=refund_date
     )
     refund_payment(session, uc, payment_requests_data)
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "transaction_refund",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
     # Merchant Refund
     refund_date = parse_date("2020-06-18 06:54:58")
     amount = Decimal(1)
@@ -2135,6 +2191,15 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         session=session, payment_request_id=payment_request_id, payment_date=refund_date
     )
     refund_payment(session, uc, payment_requests_data)
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "transaction_refund",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
     # Merchant Refund
     refund_date = parse_date("2020-06-18 06:54:59")
     amount = Decimal(1)
@@ -2150,6 +2215,15 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         session=session, payment_request_id=payment_request_id, payment_date=refund_date
     )
     refund_payment(session, uc, payment_requests_data)
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "transaction_refund",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
     # Merchant Refund
     refund_date = parse_date("2020-06-18 06:54:59")
     amount = Decimal(1)
@@ -2165,6 +2239,15 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         session=session, payment_request_id=payment_request_id, payment_date=refund_date
     )
     refund_payment(session, uc, payment_requests_data)
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "transaction_refund",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
     # Merchant Refund
     refund_date = parse_date("2020-06-18 06:55:00")
     amount = Decimal(1)
@@ -2180,6 +2263,15 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
         session=session, payment_request_id=payment_request_id, payment_date=refund_date
     )
     refund_payment(session, uc, payment_requests_data)
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "transaction_refund",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     _, lender_payable = get_account_balance_from_str(
         session, book_string=f"{uc.loan_id}/loan/lender_payable/l"
@@ -2243,7 +2335,10 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -2276,7 +2371,10 @@ def test_with_live_user_loan_id_4134872(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -2355,7 +2453,10 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -2423,7 +2524,10 @@ def test_interest_reversal_interest_already_settled(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -2514,7 +2618,10 @@ def test_interest_reversal_multiple_bills(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -2597,7 +2704,10 @@ def test_failed_interest_reversal_multiple_bills(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -2667,7 +2777,10 @@ def _pay_minimum_amount_bill_2(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -2714,6 +2827,16 @@ def test_refund_1(session: Session) -> None:
     )
     refund_payment(session, user_loan, payment_requests_data)
 
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "transaction_refund",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
+
     _, merchant_refund_off_balance = get_account_balance_from_str(
         session, book_string=f"{user_loan.loan_id}/loan/refund_off_balance/l"
     )
@@ -2743,6 +2866,16 @@ def test_refund_1(session: Session) -> None:
         session=session, payment_request_id=payment_request_id, payment_date=refund_date
     )
     refund_payment(session, user_loan, payment_requests_data)
+
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "transaction_refund",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     _, merchant_refund_off_balance = get_account_balance_from_str(
         session, book_string=f"{user_loan.loan_id}/loan/refund_off_balance/l"
@@ -2944,7 +3077,10 @@ def test_prepayment(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -3023,7 +3159,8 @@ def test_prepayment(session: Session) -> None:
 #
 #     # assign card
 #     uc = create_user_product(
-#         session=session, user_id=a.id, card_activation_date=parse_date("2020-03-02"), card_type="ruby", rc_rate_of_interest_monthly=Decimal(3), lender_id = 62311,
+#         session=session, user_id=a.id, card_activation_date=parse_date("2020-03-02"), card_type="ruby",
+#         rc_rate_of_interest_monthly=Decimal(3), lender_id = 62311,
 #     )
 #
 #
@@ -3282,7 +3419,10 @@ def test_moratorium_schedule(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -3882,7 +4022,10 @@ def test_excess_payment_in_future_emis(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -3967,7 +4110,10 @@ def test_one_rupee_leniency(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -4014,7 +4160,10 @@ def test_one_rupee_leniency(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -4079,7 +4228,10 @@ def test_readjust_future_payment_with_new_swipe(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -4170,7 +4322,10 @@ def test_readjust_future_payment_with_extension(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -4263,7 +4418,10 @@ def test_customer_fee_refund(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -4352,7 +4510,10 @@ def test_customer_prepayment_refund(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -5046,7 +5207,10 @@ def test_updated_emi_payment_mapping_after_early_loan_close(session: Session) ->
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -5102,7 +5266,10 @@ def test_updated_emi_payment_mapping_after_early_loan_close(session: Session) ->
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == Decimal(500)
@@ -5157,7 +5324,10 @@ def test_updated_emi_payment_mapping_after_early_loan_close(session: Session) ->
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == Decimal(1500)
@@ -5716,7 +5886,7 @@ def test_close_loan_in_moratorium(session: Session) -> None:
 
     payment_date = parse_date("2020-09-20")
     payment_request_id = "a12319"
-    amount = Decimal(2575.67)
+    amount = Decimal("2575.67")
     payment_request_data(
         session=session,
         type="collection",
@@ -5739,7 +5909,10 @@ def test_close_loan_in_moratorium(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount

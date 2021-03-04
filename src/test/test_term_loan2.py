@@ -168,7 +168,10 @@ def test_create_term_loan(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == _downpayment_amount
@@ -267,7 +270,10 @@ def test_create_term_loan_2(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == _downpayment_amount
