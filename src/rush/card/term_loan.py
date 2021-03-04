@@ -189,12 +189,9 @@ class TermLoan(BaseLoan):
             downpayment_amount=kwargs.get("actual_downpayment_amount", None),
         )
 
-        from rush.card.reset_card import ResetCard
+        from rush.create_bill import update_journal_entry
 
-        if not isinstance(self, ResetCard):
-            from rush.create_bill import update_journal_entry
-
-            update_journal_entry(user_loan=self, event=event)
+        update_journal_entry(user_loan=self, event=event)
 
         return event
 
@@ -204,8 +201,6 @@ class TermLoan(BaseLoan):
         bill_id: int,
         downpayment_amount: Optional[Decimal] = None,
     ) -> None:
-        from rush.card.reset_card import ResetCard
-
         create_ledger_entry_from_str(
             session=self.session,
             event_id=event.id,
@@ -213,14 +208,13 @@ class TermLoan(BaseLoan):
             credit_book_str="12345/redcarpet/rc_cash/a",
             amount=event.amount,
         )
-        if not isinstance(self, ResetCard):
-            create_ledger_entry_from_str(
-                session=self.session,
-                event_id=event.id,
-                debit_book_str=f"{self.lender_id}/lender/lender_capital/l",
-                credit_book_str=f"{self.loan_id}/loan/lender_payable/l",
-                amount=event.amount,
-            )
+        create_ledger_entry_from_str(
+            session=self.session,
+            event_id=event.id,
+            debit_book_str=f"{self.lender_id}/lender/lender_capital/l",
+            credit_book_str=f"{self.loan_id}/loan/lender_payable/l",
+            amount=event.amount,
+        )
 
     def get_emi_to_accrue_interest(self, post_date: Date):
         loan_schedule = (
