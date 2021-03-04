@@ -487,11 +487,12 @@ class BaseLoan(Loan):
         return []
 
     def close(self):
-        self.loan_status = "cancelled"
-        LedgerTriggerEvent.new(
-            self.session,
-            name="close_loan",
-            loan_id=self.loan_id,
-            post_date=get_current_ist_time(),
-        )
-        self.session.flush()
+        if self.loan_status != "cancelled":
+            self.loan_status = "cancelled"
+            LedgerTriggerEvent.new(
+                self.session,
+                name="close_loan",
+                loan_id=self.loan_id,
+                post_date=get_current_ist_time(),
+            )
+            self.session.flush()
