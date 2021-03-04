@@ -288,7 +288,7 @@ def get_revenue_book_str_for_fee(fee: Fee) -> str:
     elif fee.name == "card_activation_fees":
         return f"{fee.identifier_id}/loan/card_activation_fees/r"
     elif fee.name == "reset_joining_fees":
-        return f"{fee.identifier_id}/product/reset_joining_fees/r"
+        return f"{fee.identifier_id}/loan/reset_joining_fees/r"
     elif fee.name == "card_reload_fees":
         return f"{fee.identifier_id}/loan/card_reload_fees/r"
     elif fee.name == "card_upgrade_fees":
