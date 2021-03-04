@@ -422,11 +422,13 @@ def update_journal_entry(
         if gateway_expenses:
             gateway_percentage = gateway_expenses / event.amount
         settlement_date = payment_request_data.payment_received_in_bank_date
+        # loan id to take prepayment from that loan only
         payment_split_data = (
             session.query(PaymentSplit.component, PaymentSplit.amount_settled)
             .filter(
                 PaymentSplit.payment_request_id == event.extra_details["payment_request_id"],
                 PaymentSplit.component.in_(["pre_payment", "unbilled"]),
+                PaymentSplit.loan_id == user_loan.loan_id,
             )
             .all()
         )
