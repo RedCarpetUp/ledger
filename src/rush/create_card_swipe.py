@@ -76,8 +76,7 @@ def create_card_swipe(
     session.add(lt)
     session.flush()  # need id. TODO Gotta use table relationships
 
-    if isinstance(user_loan, RubyCard):  # Need to load card balance at every swipe.
-        disburse_money_to_card(session=session, user_loan=user_loan, event=lt)
+    disburse_money_to_card(session=session, user_loan=user_loan, event=lt)
 
     card_transaction_event(session=session, user_loan=user_loan, event=lt, mcc=mcc)
 
