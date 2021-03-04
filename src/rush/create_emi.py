@@ -271,7 +271,7 @@ def get_journal_entry_narration(event_name) -> String:
         return "ATM Fee"
     elif event_name in ("card_reload_fees", "card_upgrade_fees"):
         return "Reload Fee"
-    elif event_name in ("card_activation_fees", "term_loan_fees"):
+    elif event_name == "card_activation_fees":
         return "Processing Fee"
     elif event_name in ("payment_received", "loan_written_off", "customer_refund"):
         return "Receipt-Import"
@@ -291,12 +291,7 @@ def get_journal_entry_ptype(event_name, is_term_loan=False) -> String:
         "card_upgrade_fees",
     ):
         return "CF Reload Fee-Customer" if not is_term_loan else "Reload Fee-TL-Customer"
-    elif event_name in (
-        "pre_product_fee_added",
-        "card_activation_fees",
-        "reset_joining_fees",
-        "term_loan_fees",
-    ):
+    elif event_name in ("pre_product_fee_added", "card_activation_fees", "reset_joining_fees"):
         return "CF Processing Fee-Customer" if not is_term_loan else "Processing Fee-TL-Customer"
     elif event_name == "payment_received":
         return "Card TL-Customer" if not is_term_loan else "TL-Customer"
@@ -327,7 +322,7 @@ def get_journal_entry_ledger_for_payment(event_name) -> String:
 def get_ledger_for_fee(fee_acc) -> String:
     if fee_acc == "late_fine":
         return "Late Fee"
-    elif fee_acc in ("atm_fee", "reset_joining_fees", "card_activation_fees", "term_loan_fees"):
+    elif fee_acc in ("atm_fee", "reset_joining_fees", "card_activation_fees"):
         return "Processing Fee"
     elif fee_acc in ("card_reload_fees", "card_upgrade_fees"):
         return "Reload Fee"
@@ -424,11 +419,13 @@ def update_journal_entry(
         )
         actual_gateway_expenses = payment_request_data.payment_execution_charges or 0
         settlement_date = payment_request_data.payment_received_in_bank_date
+        # loan id to take prepayment from that loan only
         payment_split_data = (
             session.query(PaymentSplit.component, PaymentSplit.amount_settled)
             .filter(
                 PaymentSplit.payment_request_id == event.extra_details["payment_request_id"],
                 PaymentSplit.component.in_(["pre_payment", "unbilled"]),
+                PaymentSplit.loan_id == user_loan.loan_id,
             )
             .all()
         )
@@ -508,7 +505,11 @@ def update_journal_entry(
                 if event.name == "loan_written_off":
                     p_type = p_type.replace("Customer", "Redcarpet")
             else:
-                p_type = f"{narration_name} -Card TL-Customer"
+                p_type = (
+                    f"{narration_name} -TL-Customer"
+                    if is_term_loan
+                    else f"{narration_name} -Card TL-Customer"
+                )
             for sort_order, (settled_acc, amount) in enumerate(filtered_split_data.items(), 2):
                 create_journal_entry(
                     session,
