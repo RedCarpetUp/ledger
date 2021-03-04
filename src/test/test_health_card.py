@@ -23,6 +23,7 @@ from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import get_account_balance_from_str
 from rush.models import (
     CardTransaction,
+    LedgerTriggerEvent,
     Lenders,
     Loan,
     Product,
@@ -474,6 +475,15 @@ def test_mixed_payment_received(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=uc,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")
     assert medical_limit_balance == Decimal(0)
@@ -575,6 +585,15 @@ def test_medical_payment_received(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=uc,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")
     assert medical_limit_balance == Decimal(-300)
@@ -675,6 +694,15 @@ def test_non_medical_payment_received(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=uc,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     _, medical_limit_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/health_limit/l")
     assert medical_limit_balance == Decimal(0)

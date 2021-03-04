@@ -1,13 +1,10 @@
 from decimal import Decimal
-from typing import (
-    Dict,
-    Tuple,
-    Type,
-)
+from typing import Dict, Tuple, Type, Optional
 
 from dateutil.relativedelta import relativedelta
 from pendulum import (
     Date,
+    DateTime,
     date,
 )
 from sqlalchemy import (
@@ -21,18 +18,10 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
-from rush.ledger_events import (
-    add_max_amount_event,
-    loan_disbursement_event,
-)
+from rush.ledger_events import add_max_amount_event
+from rush.ledger_utils import create_ledger_entry_from_str
 from rush.min_payment import add_min_to_all_bills
-from rush.models import (
-    LedgerTriggerEvent,
-    Loan,
-    LoanData,
-    LoanSchedule,
-    PaymentMapping,
-)
+from rush.models import Fee, Loan, LoanData, LoanSchedule, PaymentMapping, LedgerTriggerEvent
 
 
 class TermLoanBill(BaseBill):
@@ -81,6 +70,10 @@ class TermLoanBill(BaseBill):
             .scalar()
         )
         return interest_to_accrue
+
+    def is_bill_closed(self, to_date: DateTime = None) -> bool:
+        # Check if loan closed or not. Because for term loan there is only one bill.
+        return self.user_loan.loan_status == "COMPLETED"
 
 
 def is_down_payment_paid(loan: BaseLoan) -> bool:
@@ -132,7 +125,7 @@ class TermLoan(BaseLoan):
         loan.min_tenure = kwargs.get("min_tenure")
         loan.min_multiplier = kwargs.get("min_multiplier")
         loan.interest_type = kwargs.get("interest_type", "flat")
-        loan.can_close_early = kwargs.get("can_close_early", False)
+        loan.can_close_early = kwargs.get("can_close_early") or False
         loan.tenure_in_months = kwargs.get("tenure")
         loan.loan_status = "Not Started"
         # Don't want to overwrite default value in case of None.
@@ -177,3 +170,73 @@ class TermLoan(BaseLoan):
         add_max_amount_event(session=session, bill=bill, event=event, amount=kwargs["amount"])
 
         return loan
+
+    def disburse(self, **kwargs):
+        event = LedgerTriggerEvent(
+            performed_by=kwargs["user_id"],
+            name="disbursal",
+            loan_id=kwargs["loan_id"],
+            post_date=kwargs["product_order_date"],
+            amount=kwargs["amount"],
+        )
+
+        self.session.add(event)
+        self.session.flush()
+
+        self.loan_disbursement_event(
+            event=event,
+            bill_id=kwargs["loan_data"].id,
+            downpayment_amount=kwargs.get("actual_downpayment_amount", None),
+        )
+
+        from rush.create_bill import update_journal_entry
+
+        update_journal_entry(user_loan=self, event=event)
+
+        return event
+
+    def loan_disbursement_event(
+        self,
+        event: LedgerTriggerEvent,
+        bill_id: int,
+        downpayment_amount: Optional[Decimal] = None,
+    ) -> None:
+        create_ledger_entry_from_str(
+            session=self.session,
+            event_id=event.id,
+            debit_book_str=f"{bill_id}/bill/principal_receivable/a",
+            credit_book_str="12345/redcarpet/rc_cash/a",
+            amount=event.amount,
+        )
+        create_ledger_entry_from_str(
+            session=self.session,
+            event_id=event.id,
+            debit_book_str=f"{self.lender_id}/lender/lender_capital/l",
+            credit_book_str=f"{self.loan_id}/loan/lender_payable/l",
+            amount=event.amount,
+        )
+
+    def get_emi_to_accrue_interest(self, post_date: Date):
+        loan_schedule = (
+            self.session.query(LoanSchedule)
+            .filter(
+                LoanSchedule.loan_id == self.loan_id,
+                LoanSchedule.bill_id.is_(None),
+                LoanSchedule.due_date == post_date,
+            )
+            .scalar()
+        )
+        return loan_schedule
+
+    def can_close_loan(self, as_of_event_id: int) -> bool:
+        if (
+            not self.get_all_bills()
+        ):  # This func gets called even before schedule is created. So to avoid that.
+            return False
+        from rush.accrue_financial_charges import get_interest_left_to_accrue
+
+        # For term loans, we have to receive entire schedule amount so look there instead of max account.
+        max_remaining = self.get_remaining_max(event_id=as_of_event_id, include_child_loans=False)
+        interest_left_to_accrue = get_interest_left_to_accrue(self.session, self)
+        total_remaining_amount = max_remaining + interest_left_to_accrue
+        return total_remaining_amount <= 0

@@ -2,7 +2,6 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
 from sqlalchemy.orm import (
     Session,
@@ -17,7 +16,6 @@ from sqlalchemy.sql.sqltypes import (
 from rush.card.base_card import BaseLoan
 from rush.models import (
     BookAccount,
-    CollectionOrders,
     EventDpd,
     JournalEntry,
     LedgerEntry,
@@ -310,6 +308,8 @@ def get_journal_entry_ptype(event_name, is_term_loan=False) -> String:
         return "Card TL-Redcarpet" if not is_term_loan else "TL-Redcarpet"
     elif event_name == "customer_refund":
         return "Card Refund TL-Customer" if not is_term_loan else "Refund TL-Customer"
+    else:
+        return f"{event_name.title()}-" + ("Card TL-Customer" if not is_term_loan else "TL-Customer")
 
 
 def get_journal_entry_ledger_for_payment(event_name) -> String:
@@ -417,10 +417,7 @@ def update_journal_entry(
             )
             .first()
         )
-        gateway_expenses = payment_request_data.payment_execution_charges or 0
-        gateway_percentage = 0
-        if gateway_expenses:
-            gateway_percentage = gateway_expenses / event.amount
+        actual_gateway_expenses = payment_request_data.payment_execution_charges or 0
         settlement_date = payment_request_data.payment_received_in_bank_date
         # loan id to take prepayment from that loan only
         payment_split_data = (
@@ -436,16 +433,15 @@ def update_journal_entry(
         for split_data in payment_split_data:
             if split_data[0] == "pre_payment":
                 prepayment_amount = split_data[1]
-        event_amount = event.amount
         for count in range(len(payment_split_data) + 1):
             if count == len(payment_split_data):
-                event.amount = event_amount - prepayment_amount
-                gateway_expenses = round(event.amount * gateway_percentage, 2)
+                gateway_expenses = actual_gateway_expenses
+                amount = event.amount - gateway_expenses - prepayment_amount
                 p_type = get_journal_entry_ptype(event.name, is_term_loan=is_term_loan)
                 narration_name = get_journal_entry_narration(event.name)
             else:
-                event.amount = payment_split_data[count][1]
-                gateway_expenses = round(event.amount * gateway_percentage, 2)
+                amount = payment_split_data[count][1]
+                gateway_expenses = actual_gateway_expenses if event.amount == prepayment_amount else 0
                 if event.name == "payment_received":
                     narration_name = "Receipt-Import"
                     p_type = "TL-Customer" if is_term_loan else "CF-Customer"
@@ -456,7 +452,7 @@ def update_journal_entry(
                     p_type = get_journal_entry_ptype(event.name, is_term_loan=is_term_loan)
                     narration_name = get_journal_entry_narration(event.name)
 
-            if event.amount == 0:
+            if amount <= 0:
                 continue
             if payment_request_data.type not in ("collection"):
                 loan_id = None
@@ -468,6 +464,7 @@ def update_journal_entry(
                 narration_name,
                 p_type,
                 session,
+                amount,
                 gateway_expenses,
                 loan_id,
                 user_id,
@@ -489,10 +486,11 @@ def update_journal_entry(
             narration_name = ""
             fee_count = 0
             event_name = ""
+            # First loop to get narration name.
             for (
                 settled_acc,
                 _,
-            ) in filtered_split_data.items():  # First loop to get narration name.
+            ) in filtered_split_data.items():
                 # So if there are more than one fee, it becomes "Late fee Reload fee".
                 if settled_acc not in ("sgst", "cgst", "igst"):
                     fee_count += 1
@@ -586,18 +584,16 @@ def update_journal_entry(
 
 def payment_received_journal_entry(
     event: LedgerTriggerEvent,
-    settlement_date: TIMESTAMP,
-    user_name: String,
+    settlement_date: DateTime,
+    user_name: str,
     narration_name: str,
     p_type: str,
     session: Optional[Session] = None,
-    gateway_expenses: int = 0,
+    amount: Decimal = Decimal(0),
+    gateway_expenses: Decimal = Decimal(0),
     loan_id: int = None,
     user_id: Optional[int] = None,
 ) -> None:
-    actual_amount = event.amount - gateway_expenses
-    if event.amount < gateway_expenses:
-        actual_amount = event.amount
     create_journal_entry(
         session,
         "Receipt-Import",
@@ -605,7 +601,7 @@ def payment_received_journal_entry(
         get_journal_entry_ledger_for_payment(event.name),
         "",
         "RedCarpet",
-        actual_amount,
+        amount,
         0,
         narration_name,
         settlement_date,
@@ -640,7 +636,7 @@ def payment_received_journal_entry(
         "",
         "RedCarpet",
         0,
-        event.amount,
+        amount + gateway_expenses,
         "",
         settlement_date,
         3,
