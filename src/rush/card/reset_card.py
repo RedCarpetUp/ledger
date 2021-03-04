@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import Type
+from typing import Type, Optional
 
 from dateutil.relativedelta import relativedelta
 from pendulum import Date
@@ -13,11 +13,7 @@ from rush.card.term_loan import (
 from rush.ledger_events import add_max_amount_event
 from rush.ledger_utils import create_ledger_entry_from_str
 from rush.min_payment import add_min_to_all_bills
-from rush.models import (
-    Fee,
-    Loan,
-    LoanData,
-)
+from rush.models import Fee, Loan, LoanData, LedgerTriggerEvent
 
 
 class ResetBill(TermLoanBill):
@@ -107,3 +103,37 @@ class ResetCard(TermLoan):
 
         add_min_to_all_bills(session=session, post_date=kwargs["product_order_date"], user_loan=loan)
         return loan
+
+    def disburse(self, **kwargs):
+        event = LedgerTriggerEvent(
+            performed_by=kwargs["user_id"],
+            name="disbursal",
+            loan_id=kwargs["loan_id"],
+            post_date=kwargs["product_order_date"],
+            amount=kwargs["amount"],
+        )
+
+        self.session.add(event)
+        self.session.flush()
+
+        self.loan_disbursement_event(
+            event=event,
+            bill_id=kwargs["loan_data"].id,
+            downpayment_amount=kwargs.get("actual_downpayment_amount", None),
+        )
+
+        return event
+
+    def loan_disbursement_event(
+        self,
+        event: LedgerTriggerEvent,
+        bill_id: int,
+        downpayment_amount: Optional[Decimal] = None,
+    ) -> None:
+        create_ledger_entry_from_str(
+            session=self.session,
+            event_id=event.id,
+            debit_book_str=f"{bill_id}/bill/principal_receivable/a",
+            credit_book_str="12345/redcarpet/rc_cash/a",
+            amount=event.amount,
+        )

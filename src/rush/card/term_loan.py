@@ -1,9 +1,5 @@
 from decimal import Decimal
-from typing import (
-    Dict,
-    Tuple,
-    Type,
-)
+from typing import Dict, Tuple, Type, Optional
 
 from dateutil.relativedelta import relativedelta
 from pendulum import (
@@ -23,13 +19,9 @@ from rush.card.base_card import (
     BaseLoan,
 )
 from rush.ledger_events import add_max_amount_event
-from rush.models import (
-    Fee,
-    Loan,
-    LoanData,
-    LoanSchedule,
-    PaymentMapping,
-)
+from rush.ledger_utils import create_ledger_entry_from_str
+from rush.min_payment import add_min_to_all_bills
+from rush.models import Fee, Loan, LoanData, LoanSchedule, PaymentMapping, LedgerTriggerEvent
 
 
 class TermLoanBill(BaseBill):
@@ -178,6 +170,51 @@ class TermLoan(BaseLoan):
         add_max_amount_event(session=session, bill=bill, event=event, amount=kwargs["amount"])
 
         return loan
+
+    def disburse(self, **kwargs):
+        event = LedgerTriggerEvent(
+            performed_by=kwargs["user_id"],
+            name="disbursal",
+            loan_id=kwargs["loan_id"],
+            post_date=kwargs["product_order_date"],
+            amount=kwargs["amount"],
+        )
+
+        self.session.add(event)
+        self.session.flush()
+
+        self.loan_disbursement_event(
+            event=event,
+            bill_id=kwargs["loan_data"].id,
+            downpayment_amount=kwargs.get("actual_downpayment_amount", None),
+        )
+
+        from rush.create_bill import update_journal_entry
+
+        update_journal_entry(user_loan=self, event=event)
+
+        return event
+
+    def loan_disbursement_event(
+        self,
+        event: LedgerTriggerEvent,
+        bill_id: int,
+        downpayment_amount: Optional[Decimal] = None,
+    ) -> None:
+        create_ledger_entry_from_str(
+            session=self.session,
+            event_id=event.id,
+            debit_book_str=f"{bill_id}/bill/principal_receivable/a",
+            credit_book_str="12345/redcarpet/rc_cash/a",
+            amount=event.amount,
+        )
+        create_ledger_entry_from_str(
+            session=self.session,
+            event_id=event.id,
+            debit_book_str=f"{self.lender_id}/lender/lender_capital/l",
+            credit_book_str=f"{self.loan_id}/loan/lender_payable/l",
+            amount=event.amount,
+        )
 
     def get_emi_to_accrue_interest(self, post_date: Date):
         loan_schedule = (

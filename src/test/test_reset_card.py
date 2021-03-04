@@ -25,6 +25,7 @@ from rush.card.utils import (
     create_loan_fee,
     create_user_product_mapping,
 )
+from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import get_account_balance_from_str
 from rush.limit_unlock import limit_unlock
 from rush.min_payment import add_min_to_all_bills
@@ -179,11 +180,6 @@ def test_create_term_loan(session: Session) -> None:
     )
     assert principal_receivable == Decimal("10000")
 
-    _, loan_lender_payable = get_account_balance_from_str(
-        session=session, book_string=f"{loan.loan_id}/loan/lender_payable/l"
-    )
-    assert loan_lender_payable == Decimal("9882.50")
-
     all_emis = user_loan.get_loan_schedule()
 
     assert len(all_emis) == 12
@@ -199,6 +195,21 @@ def test_create_term_loan(session: Session) -> None:
 
     interest_left_to_accrue = get_interest_left_to_accrue(session, user_loan)
     assert interest_left_to_accrue == Decimal("3608.04")
+
+    swipe2 = create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-08-01 11:22:11"),
+        amount=Decimal(1000),
+        description="Flipkart.com",
+        txn_ref_no="dummy_txn_ref_no_2",
+        trace_no="123456",
+    )
+    session.flush()
+    _, loan_lender_payable = get_account_balance_from_str(
+        session=session, book_string=f"{user_loan.loan_id}/loan/lender_payable/l"
+    )
+    assert loan_lender_payable == Decimal("882.50")
 
     payment_date = parse_date("2020-08-25")
     amount = Decimal(11000)
@@ -240,7 +251,7 @@ def test_create_term_loan(session: Session) -> None:
     _, principal_receivable = get_account_balance_from_str(
         session=session, book_string=f"{loan_data.id}/bill/principal_receivable/a"
     )
-    assert principal_receivable == Decimal(0)
+    assert principal_receivable == Decimal(1000)
 
     _, pre_payment_balance = get_account_balance_from_str(
         session=session, book_string=f"{loan.loan_id}/loan/pre_payment/l"
@@ -342,11 +353,7 @@ def test_create_term_loan(session: Session) -> None:
     _, available_limit = get_account_balance_from_str(
         session=session, book_string=f"{loan.id}/card/available_limit/l"
     )
-    assert available_limit == Decimal("1000")
-    _, available_limit = get_account_balance_from_str(
-        session=session, book_string=f"{loan.id}/card/available_limit/a"
-    )
-    assert available_limit == Decimal("1000")
+    assert available_limit == Decimal("0")
 
 
 def test_reset_journal_entries(session: Session) -> None:
@@ -413,17 +420,6 @@ def test_reset_journal_entries(session: Session) -> None:
 
     # create loan
     loan = create_test_term_loan(session=session, **loan_creation_data)
-    entrys = (
-        session.query(JournalEntry)
-        .filter(
-            JournalEntry.loan_id == user_loan.loan_id,
-            JournalEntry.instrument_date == loan.amortization_date,
-        )
-        .all()
-    )
-    assert len(entrys) == 2
-    assert entrys[0].ptype == "Disbursal TL"
-    assert entrys[1].ptype == "Disbursal TL"
 
     # add min amount for months in between.
     add_min_to_all_bills(session=session, post_date=parse_date("2020-09-01"), user_loan=loan)
@@ -636,7 +632,6 @@ def test_reset_journal_entries(session: Session) -> None:
     assert user_loan.loan_status == "WRITTEN_OFF"
 
 
-# @pytest.mark.run_these_please
 def test_reset_journal_entries_kv(session: Session) -> None:
     create_lenders(session=session)
     create_products(session=session)
@@ -721,19 +716,6 @@ def test_reset_journal_entries_kv(session: Session) -> None:
 
     # create loan
     loan = create_test_term_loan(session=session, **loan_creation_data)
-    entrys = (
-        session.query(JournalEntry)
-        .filter(
-            JournalEntry.loan_id == user_loan.loan_id,
-            JournalEntry.instrument_date == loan.amortization_date,
-        )
-        .all()
-    )
-
-    assert len(entrys) == 2
-    assert entrys[0].ptype == "Disbursal TL"
-    assert entrys[1].ptype == "Disbursal TL"
-
     fee = create_loan_fee(
         session=session,
         user_loan=user_loan,

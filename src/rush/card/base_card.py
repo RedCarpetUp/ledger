@@ -271,34 +271,6 @@ class BaseLoan(Loan):
             loan.interest_free_period_in_days = kwargs.get("interest_free_period_in_days")
         return loan
 
-    def disburse(self, **kwargs):
-        event = LedgerTriggerEvent(
-            performed_by=kwargs["user_id"],
-            name="disbursal",
-            loan_id=kwargs["loan_id"],
-            post_date=kwargs["product_order_date"],
-            amount=kwargs["amount"],
-        )
-
-        self.session.add(event)
-        self.session.flush()
-
-        from rush.ledger_events import loan_disbursement_event
-
-        loan_disbursement_event(
-            session=self.session,
-            loan=self,
-            event=event,
-            bill_id=kwargs["loan_data"].id,
-            downpayment_amount=kwargs.get("actual_downpayment_amount", None),
-        )
-
-        from rush.create_bill import update_journal_entry
-
-        update_journal_entry(user_loan=self, event=event)
-
-        return event
-
     def reinstate_limit_on_payment(self, event: LedgerTriggerEvent, amount: Decimal) -> None:
         assert self.should_reinstate_limit_on_payment == True
 

@@ -270,30 +270,6 @@ def daily_dpd_event(session: Session, user_loan: BaseLoan) -> None:
     session.flush()
 
 
-def loan_disbursement_event(
-    session: Session,
-    loan: Loan,
-    event: LedgerTriggerEvent,
-    bill_id: int,
-    downpayment_amount: Optional[Decimal] = None,
-) -> None:
-    create_ledger_entry_from_str(
-        session,
-        event_id=event.id,
-        debit_book_str=f"{bill_id}/bill/principal_receivable/a",
-        credit_book_str="12345/redcarpet/rc_cash/a",
-        amount=event.amount,
-    )
-
-    create_ledger_entry_from_str(
-        session,
-        event_id=event.id,
-        debit_book_str=f"{loan.lender_id}/lender/lender_capital/l",
-        credit_book_str=f"{loan.loan_id}/loan/lender_payable/l",
-        amount=event.amount,
-    )
-
-
 def limit_unlock_event(session: Session, loan: Loan, event: LedgerTriggerEvent, amount: Decimal) -> None:
     create_ledger_entry_from_str(
         session=session,
