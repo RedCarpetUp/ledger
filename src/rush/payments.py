@@ -1,5 +1,4 @@
 from decimal import Decimal
-from typing import Optional
 
 from pendulum import DateTime
 from sqlalchemy import func
@@ -9,11 +8,12 @@ from sqlalchemy.sql.expression import (
     or_,
 )
 
-from rush.anomaly_detection import run_anomaly
-from rush.card import (
-    BaseLoan,
-    get_user_product,
+from rush.accrue_financial_charges import (
+    add_early_close_charges,
+    get_interest_left_to_accrue,
 )
+from rush.anomaly_detection import run_anomaly
+from rush.card import BaseLoan
 from rush.card.base_card import BaseBill
 from rush.create_emi import (
     update_event_with_dpd,
@@ -31,7 +31,10 @@ from rush.ledger_utils import (
     get_account_balance_from_str,
     reverse_event,
 )
-from rush.loan_schedule.loan_schedule import slide_payment_to_emis
+from rush.loan_schedule.loan_schedule import (
+    close_loan,
+    slide_payment_to_emis,
+)
 from rush.models import (
     BookAccount,
     CollectionOrders,
@@ -107,7 +110,7 @@ def payment_received(
         run_anomaly(
             session=session,
             user_loan=loan,
-            event_date=payment_request_data.intermediary_payment_date,
+            event_date=event.post_date,
         )
         update_event_with_dpd(user_loan=loan, event=event)
     if remaining_payment_amount > 0:  # if there's payment left to be adjusted.
@@ -181,8 +184,6 @@ def payment_received_event(
         else:
             user_loan.loan_status = "RECOVERED"
 
-    # We will either slide or close bills
-    # slide_payment_to_emis(user_loan, event)
     return remaining_amount
 
 
@@ -345,6 +346,18 @@ def adjust_payment(
     amount_to_adjust: Decimal,
     debit_book_str: str,
 ) -> Decimal:
+    # for term loans, if user has paid more than max and interest is left to accrue then convert it into fee.
+    if not user_loan.can_close_early and amount_to_adjust > user_loan.get_remaining_max(
+        event_id=event.id
+    ):
+        interest_left_to_accure = get_interest_left_to_accrue(session, user_loan)
+        if interest_left_to_accure > 0:
+            extra_amount = min(
+                interest_left_to_accure,
+                amount_to_adjust - user_loan.get_remaining_max(event_id=event.id),
+            )
+            add_early_close_charges(session, user_loan, event.post_date, extra_amount)
+
     split_data = find_split_to_slide_in_loan(session, user_loan, amount_to_adjust)
 
     for data in split_data:
@@ -372,6 +385,10 @@ def adjust_payment(
             slide_payment_to_emis(user_loan, event, data["amount_to_adjust"])
         amount_to_adjust -= data["amount_to_adjust"]
 
+    # After doing the sliding we check if the loan can be closed.
+    if user_loan.can_close_loan(as_of_event_id=event.id):
+        close_loan(user_loan, event.post_date)
+
     return amount_to_adjust
 
 
@@ -388,6 +405,7 @@ def settle_payment_in_bank(
         name="payment_settled",
         loan_id=user_loan.loan_id,
         amount=settled_amount,
+        extra_details={"payment_request_id": payment_request_id},
         post_date=settlement_date,
     )
     session.add(event)
@@ -397,8 +415,12 @@ def settle_payment_in_bank(
 
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
-        .first()
+        .filter(
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.loan_id == user_loan.loan_id,
+        )
+        .one()
     )
 
     create_ledger_entry_from_str(
@@ -472,22 +494,15 @@ def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
         .group_by(BookAccount.book_name)
         .all()
     )
-    allowed_accounts = (
-        "cgst_payable",
-        "igst_payable",
-        "sgst_payable",
-        "interest_receivable",
-        "late_fee",
-        "principal_receivable",
-        "unbilled",
-        "atm_fee",
-        "term_loan_fees",
-        "card_activation_fees",
-        "card_reload_fees",
-        "downpayment",
-        "reset_joining_fees",
-        "pre_payment",
-        "card_upgrade_fees",
+    not_allowed_accounts = (
+        "refund_off_balance",
+        "min",
+        "max",
+        "health_limit",
+        "pg_account",
+        "available_limit",
+        "lender_receivable",
+        "write_off_expenses",
     )
     # unbilled and principal belong to same component.
     updated_component_names = {
@@ -499,12 +514,16 @@ def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
         "sgst_payable": "sgst",
     }
     normalized_split_data = {}
+    total_amount = 0
     for book_name, amount in split_data:
-        if book_name not in allowed_accounts or amount == 0:
+        if book_name in not_allowed_accounts or amount == 0:
             continue
         if book_name in updated_component_names:
             book_name = updated_component_names[book_name]
         normalized_split_data[book_name] = normalized_split_data.get(book_name, 0) + amount
+        total_amount += amount
+    if normalized_split_data:
+        assert event.amount == total_amount
     return normalized_split_data
 
 
@@ -524,7 +543,6 @@ def create_payment_split(session: Session, event: LedgerTriggerEvent):
                 "loan_id": event.loan_id,
             }
         )
-
     session.bulk_insert_mappings(PaymentSplit, new_ps_objects)
 
 

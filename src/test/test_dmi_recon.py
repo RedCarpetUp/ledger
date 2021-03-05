@@ -16,6 +16,7 @@ from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import get_account_balance_from_str
 from rush.lender_funds import lender_interest_incur
 from rush.models import (
+    LedgerTriggerEvent,
     Lenders,
     Product,
     User,
@@ -254,6 +255,15 @@ def test_dmi_recon_process_1(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan_raghav,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     payment_date = parse_date("2020-02-13 15:23:20")
     payment_request_id = "r23gs24"
@@ -281,6 +291,15 @@ def test_dmi_recon_process_1(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan_ananth,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     # Got adjusted in principal because interest is not accrued yet.
     _, billed_amount_raghav = get_account_balance_from_str(
@@ -336,6 +355,15 @@ def test_dmi_recon_process_1(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan_raghav,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     payment_date = parse_date("2020-02-25 15:23:20")
     payment_request_id = "r23gs26"
@@ -363,6 +391,15 @@ def test_dmi_recon_process_1(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan_ananth,
     )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     _, interest_due_raghav = get_account_balance_from_str(
         session, book_string=f"{bill_raghav.id}/bill/interest_receivable/a"

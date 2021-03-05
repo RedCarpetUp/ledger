@@ -1,28 +1,16 @@
-from decimal import Decimal
-from operator import add
 from typing import (
     List,
-    Optional,
     Type,
 )
 
-from sqlalchemy.orm import session
-from sqlalchemy.sql.sqltypes import (
-    Boolean,
-    DateTime,
-    Integer,
-)
+from sqlalchemy.sql.sqltypes import Integer
 
 from rush.card.base_card import (
     B,
     BaseBill,
     BaseLoan,
 )
-from rush.card.transaction_loan import TransactionLoan
-from rush.models import (
-    Base,
-    LedgerTriggerEvent,
-)
+from rush.models import LedgerTriggerEvent
 
 
 class RebelBill(BaseBill):

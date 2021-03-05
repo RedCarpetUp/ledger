@@ -192,7 +192,7 @@ def test_transaction_loan(session: Session) -> None:
     )
 
     accrue_interest_on_all_bills(
-        session=session, post_date=parse_date("2020-12-17 00:00:00"), user_loan=transaction_loan
+        session=session, post_date=parse_date("2020-12-15 00:00:00"), user_loan=transaction_loan
     )
 
     # generating next month's bill
