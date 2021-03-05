@@ -204,7 +204,7 @@ class Loan(AuditMixin):
             LedgerTriggerEvent.new(
                 session,
                 name="close_loan",
-                loan_id=self.loan_id,
+                loan_id=self.id,
                 post_date=get_current_ist_time(),
             )
             session.flush()
