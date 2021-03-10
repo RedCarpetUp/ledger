@@ -198,6 +198,7 @@ class Loan(AuditMixin):
         "polymorphic_on": product_type,
     }
 
+
 class BookAccount(AuditMixin):
     __tablename__ = "book_account"
     identifier = Column(Integer)
