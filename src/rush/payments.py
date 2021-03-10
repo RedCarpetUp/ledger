@@ -258,6 +258,7 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
                         "fee": fee,
                         "amount_to_adjust": amount_to_adjust,
                     }
+                    fee_amount += amount_to_adjust
                     split_info.append(x)
                     continue
 
@@ -268,9 +269,6 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
                     total_amount_to_be_adjusted_in_fee,
                 )
                 fee_amount += amount_to_slide_based_on_ratio
-                difference = total_amount_to_slide - fee_amount
-                if difference < 0:
-                    amount_to_slide_based_on_ratio = amount_to_slide_based_on_ratio + difference
                 x = {
                     "type": "fee",
                     "bill": bill,
@@ -278,6 +276,10 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
                     "amount_to_adjust": amount_to_slide_based_on_ratio,
                 }
                 split_info.append(x)
+            difference = total_amount_to_slide - fee_amount
+            if difference < 0:
+                split_info[-1]["amount_to_adjust"] += difference
+
             total_amount_to_slide -= total_amount_to_be_adjusted_in_fee
 
     # slide interest.
@@ -291,9 +293,6 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
                 total_amount_to_be_adjusted_in_interest,
             )
             interest_amount += amount_to_slide_based_on_ratio
-            difference = total_amount_to_slide - interest_amount
-            if difference < 0:
-                amount_to_slide_based_on_ratio = amount_to_slide_based_on_ratio + difference
             if amount_to_slide_based_on_ratio > 0:  # will be 0 for 0 bill with late fee.
                 x = {
                     "type": "interest",
@@ -301,6 +300,9 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
                     "amount_to_adjust": amount_to_slide_based_on_ratio,
                 }
                 split_info.append(x)
+        difference = total_amount_to_slide - interest_amount
+        if difference < 0:
+            split_info[-1]["amount_to_adjust"] += difference
         total_amount_to_slide -= total_amount_to_be_adjusted_in_interest
 
     # slide principal.
@@ -314,10 +316,6 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
                 total_amount_to_be_adjusted_in_principal,
             )
             principal_amount += amount_to_slide_based_on_ratio
-            difference = total_amount_to_slide - principal_amount
-            if difference < 0:
-                amount_to_slide_based_on_ratio = amount_to_slide_based_on_ratio + difference
-
             if amount_to_slide_based_on_ratio > 0:
                 x = {
                     "type": "principal",
@@ -325,6 +323,10 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
                     "amount_to_adjust": amount_to_slide_based_on_ratio,
                 }
                 split_info.append(x)
+
+        difference = total_amount_to_slide - principal_amount
+        if difference < 0:
+            split_info[-1]["amount_to_adjust"] += difference
         total_amount_to_slide -= total_amount_to_be_adjusted_in_principal
     return split_info
 
