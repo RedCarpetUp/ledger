@@ -198,18 +198,6 @@ class Loan(AuditMixin):
         "polymorphic_on": product_type,
     }
 
-    def close(self, session: Session):
-        if self.loan_status != "CANCELLED":
-            self.loan_status = "CANCELLED"
-            LedgerTriggerEvent.new(
-                session,
-                name="close_loan",
-                loan_id=self.id,
-                post_date=get_current_ist_time(),
-            )
-            session.flush()
-
-
 class BookAccount(AuditMixin):
     __tablename__ = "book_account"
     identifier = Column(Integer)
