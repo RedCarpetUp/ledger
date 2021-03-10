@@ -62,7 +62,6 @@ def payment_received(
     if payment_request_data.collection_by == "rc_lender_payment":
         write_off_loan(user_loan=user_loan, payment_request_data=payment_request_data)
         return
-    payment_for_loan = round(payment_for_loan, 2)
     event = LedgerTriggerEvent.new(
         session,
         name="payment_received",
@@ -186,7 +185,7 @@ def get_payment_for_loan(
     session: Session, payment_request_data: PaymentRequestsData, user_loan: BaseLoan
 ) -> Decimal:
     if not payment_request_data.collection_request_id:
-        return payment_request_data.payment_request_amount
+        return round(payment_request_data.payment_request_amount, 2)
 
     collection_data_amount = (
         session.query(CollectionOrders.amount_paid).filter(
@@ -195,7 +194,7 @@ def get_payment_for_loan(
             CollectionOrders.collection_request_id == payment_request_data.collection_request_id,
         )
     ).scalar()
-    return collection_data_amount
+    return round(collection_data_amount, 2)
 
 
 def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amount_to_slide: Decimal):
