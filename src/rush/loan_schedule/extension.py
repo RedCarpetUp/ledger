@@ -8,7 +8,6 @@ from pendulum import date
 
 from rush.card import BaseLoan
 from rush.card.base_card import BaseBill
-from rush.loan_schedule.calculations import get_interest_to_charge
 from rush.loan_schedule.loan_schedule import (
     group_bills,
     readjust_future_payment,

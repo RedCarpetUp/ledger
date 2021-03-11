@@ -6,10 +6,15 @@ from test.utils import (
 )
 
 import pytest
+from dateutil.relativedelta import relativedelta
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
 
-from rush.accrue_financial_charges import accrue_late_charges
+from rush.accrue_financial_charges import (
+    accrue_interest_on_all_bills,
+    accrue_late_charges,
+    get_interest_left_to_accrue,
+)
 from rush.card import (
     create_user_product,
     get_user_product,
@@ -20,11 +25,13 @@ from rush.card.utils import (
     create_loan_fee,
     create_user_product_mapping,
 )
+from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import get_account_balance_from_str
 from rush.limit_unlock import limit_unlock
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
     CollectionOrders,
+    Fee,
     JournalEntry,
     LedgerTriggerEvent,
     Lenders,
@@ -88,6 +95,7 @@ def test_product_amortization_1() -> None:
     assert amortization_date == parse_date("2020-09-01").date()
 
 
+@pytest.mark.run_these_please
 def test_create_term_loan(session: Session) -> None:
     create_lenders(session=session)
     create_products(session=session)
@@ -139,7 +147,10 @@ def test_create_term_loan(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -169,11 +180,6 @@ def test_create_term_loan(session: Session) -> None:
     )
     assert principal_receivable == Decimal("10000")
 
-    _, loan_lender_payable = get_account_balance_from_str(
-        session=session, book_string=f"{loan.loan_id}/loan/lender_payable/l"
-    )
-    assert loan_lender_payable == Decimal("9882.50")
-
     all_emis = user_loan.get_loan_schedule()
 
     assert len(all_emis) == 12
@@ -187,15 +193,151 @@ def test_create_term_loan(session: Session) -> None:
     assert all_emis[-1].interest_due == Decimal("300.67")
     assert all_emis[-1].total_due_amount == Decimal("1134")
 
+    interest_left_to_accrue = get_interest_left_to_accrue(session, user_loan)
+    assert interest_left_to_accrue == Decimal("3608.04")
+
+    swipe2 = create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-08-01 11:22:11"),
+        amount=Decimal(1000),
+        description="Flipkart.com",
+        txn_ref_no="dummy_txn_ref_no_2",
+        trace_no="123456",
+    )
+    session.flush()
+    _, loan_lender_payable = get_account_balance_from_str(
+        session=session, book_string=f"{user_loan.loan_id}/loan/lender_payable/l"
+    )
+    assert loan_lender_payable == Decimal("882.50")
+
+    payment_date = parse_date("2020-08-25")
+    amount = Decimal(11000)
+    payment_request_id = "dummy_reset_fee_2"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=user_product.user_id,
+        payment_request_id=payment_request_id,
+    )
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
+    )
+
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
+
+    _, principal_receivable = get_account_balance_from_str(
+        session=session, book_string=f"{loan_data.id}/bill/principal_receivable/a"
+    )
+    assert principal_receivable == Decimal(1000)
+
+    _, pre_payment_balance = get_account_balance_from_str(
+        session=session, book_string=f"{loan.loan_id}/loan/pre_payment/l"
+    )
+    assert pre_payment_balance == Decimal("0")
+
+    _, early_close_balance = get_account_balance_from_str(
+        session=session, book_string=f"{loan.loan_id}/loan/early_close_fee/r"
+    )
+    assert early_close_balance == Decimal("847.46")
+
+    interest_left_to_accrue = get_interest_left_to_accrue(session, user_loan)
+    assert interest_left_to_accrue == Decimal("2608.04")
+
+    assert user_loan.get_remaining_max() == Decimal(0)
+
+    payment_date = parse_date("2020-08-30")
+    amount = Decimal(2000)
+    payment_request_id = "dummy_reset_fee_3"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=user_product.user_id,
+        payment_request_id=payment_request_id,
+    )
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
+    )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
+
+    early_closing_fees = (
+        session.query(Fee)
+        .filter(
+            Fee.identifier == "loan",
+            Fee.identifier_id == user_loan.loan_id,
+            Fee.name == "early_close_fee",
+        )
+        .order_by(Fee.id)
+        .all()
+    )
+    assert early_closing_fees[0].gross_amount == Decimal("1000")
+    assert early_closing_fees[0].fee_status == "PAID"
+    assert early_closing_fees[1].gross_amount == Decimal("2000")
+    assert early_closing_fees[1].fee_status == "PAID"
+
+    interest_left_to_accrue = get_interest_left_to_accrue(session, user_loan)
+    assert interest_left_to_accrue == Decimal("608.04")
+
     # add min amount for months in between.
     add_min_to_all_bills(session=session, post_date=parse_date("2020-09-01"), user_loan=loan)
-    add_min_to_all_bills(session=session, post_date=parse_date("2020-10-01"), user_loan=loan)
-
-    min_amount = user_loan.get_remaining_min(date_to_check_against=parse_date("2020-11-01").date())
-    assert min_amount == Decimal("3402")
+    accrue_interest_on_all_bills(session=session, post_date=all_emis[0].due_date, user_loan=user_loan)
 
     max_amount = user_loan.get_remaining_max()
-    assert max_amount == Decimal("10000")
+    assert max_amount == Decimal("300.67")
+
+    accrue_interest_on_all_bills(session=session, post_date=all_emis[1].due_date, user_loan=user_loan)
+
+    max_amount = user_loan.get_remaining_max()
+    assert max_amount == Decimal("601.34")
+
+    accrue_interest_on_all_bills(session=session, post_date=all_emis[2].due_date, user_loan=user_loan)
+    # Only 6.7 rupee should get accrued because rest went to early charges.
+    max_amount = user_loan.get_remaining_max()
+    assert max_amount == Decimal("608.04")
 
     limit_unlock(session=session, loan=loan, amount=Decimal("1000"))
 
@@ -203,11 +345,15 @@ def test_create_term_loan(session: Session) -> None:
         session=session, book_string=f"{loan.id}/card/locked_limit/l"
     )
     assert locked_limit == Decimal("9000")
+    _, locked_limit = get_account_balance_from_str(
+        session=session, book_string=f"{loan.id}/card/locked_limit/a"
+    )
+    assert locked_limit == Decimal("9000")
 
     _, available_limit = get_account_balance_from_str(
         session=session, book_string=f"{loan.id}/card/available_limit/l"
     )
-    assert available_limit == Decimal("1000")
+    assert available_limit == Decimal("0")
 
 
 def test_reset_journal_entries(session: Session) -> None:
@@ -261,7 +407,10 @@ def test_reset_journal_entries(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -271,17 +420,6 @@ def test_reset_journal_entries(session: Session) -> None:
 
     # create loan
     loan = create_test_term_loan(session=session, **loan_creation_data)
-    entrys = (
-        session.query(JournalEntry)
-        .filter(
-            JournalEntry.loan_id == user_loan.loan_id,
-            JournalEntry.instrument_date == loan.amortization_date,
-        )
-        .all()
-    )
-    assert len(entrys) == 2
-    assert entrys[0].ptype == "Disbursal TL"
-    assert entrys[1].ptype == "Disbursal TL"
 
     # add min amount for months in between.
     add_min_to_all_bills(session=session, post_date=parse_date("2020-09-01"), user_loan=loan)
@@ -314,7 +452,10 @@ def test_reset_journal_entries(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == Decimal(1134)
@@ -366,7 +507,10 @@ def test_reset_journal_entries(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == Decimal(1252)
@@ -412,6 +556,16 @@ def test_reset_journal_entries(session: Session) -> None:
         session=session, payment_request_id=payment_request_id, payment_date=refund_date
     )
     refund_payment(session, user_loan, payment_requests_data)
+
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "transaction_refund",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
 
     _, merchant_refund_off_balance = get_account_balance_from_str(
         session, book_string=f"{loan.loan_id}/loan/refund_off_balance/l"
@@ -478,7 +632,6 @@ def test_reset_journal_entries(session: Session) -> None:
     assert user_loan.loan_status == "WRITTEN_OFF"
 
 
-# @pytest.mark.run_these_please
 def test_reset_journal_entries_kv(session: Session) -> None:
     create_lenders(session=session)
     create_products(session=session)
@@ -530,7 +683,10 @@ def test_reset_journal_entries_kv(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -560,19 +716,6 @@ def test_reset_journal_entries_kv(session: Session) -> None:
 
     # create loan
     loan = create_test_term_loan(session=session, **loan_creation_data)
-    entrys = (
-        session.query(JournalEntry)
-        .filter(
-            JournalEntry.loan_id == user_loan.loan_id,
-            JournalEntry.instrument_date == loan.amortization_date,
-        )
-        .all()
-    )
-
-    assert len(entrys) == 2
-    assert entrys[0].ptype == "Disbursal TL"
-    assert entrys[1].ptype == "Disbursal TL"
-
     fee = create_loan_fee(
         session=session,
         user_loan=user_loan,
@@ -610,7 +753,10 @@ def test_reset_journal_entries_kv(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == Decimal(2380)
@@ -657,7 +803,10 @@ def test_reset_journal_entries_kv(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == Decimal(1280)
@@ -709,7 +858,10 @@ def test_reset_journal_entries_kv(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == Decimal(617)
@@ -805,7 +957,10 @@ def test_reset_journal_entries_kv(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -877,7 +1032,10 @@ def test_reset_loan_limit_unlock_success(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -967,7 +1125,10 @@ def test_reset_loan_limit_unlock_error(session: Session) -> None:
     )
     payment_ledger_event = (
         session.query(LedgerTriggerEvent)
-        .filter(LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
         .first()
     )
     assert payment_ledger_event.amount == amount
@@ -988,3 +1149,7 @@ def test_reset_loan_limit_unlock_error(session: Session) -> None:
     # now trying to unlock more than 10000
     with pytest.raises(AssertionError):
         limit_unlock(session=session, loan=loan, amount=Decimal("10001"))
+
+
+def test_reset_loan_early_payment(session: Session) -> None:
+    pass

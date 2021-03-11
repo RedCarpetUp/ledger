@@ -18,17 +18,13 @@ from sqlalchemy import func
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Session
 
-from rush.ledger_utils import (
-    get_account_balance_from_str,
-    is_bill_closed,
-)
+from rush.ledger_utils import get_account_balance_from_str
 from rush.loan_schedule.calculations import (
     get_down_payment,
     get_interest_for_integer_emi,
     get_monthly_instalment,
 )
 from rush.models import (
-    Base,
     CardTransaction,
     LedgerTriggerEvent,
     Loan,
@@ -144,7 +140,11 @@ class BaseBill:
         return unbilled
 
     def is_bill_closed(self, to_date: Optional[DateTime] = None) -> bool:
-        return is_bill_closed(self.session, self.table, to_date)
+        # Simply check if max balance is paid.
+        _, total_remaining_amount = get_account_balance_from_str(
+            self.session, book_string=f"{self.table.id}/bill/max/a", to_date=to_date
+        )
+        return total_remaining_amount == 0
 
     def sum_of_atm_transactions(self):
         atm_transactions_sum = (
@@ -271,34 +271,6 @@ class BaseLoan(Loan):
         if kwargs.get("interest_free_period_in_days"):
             loan.interest_free_period_in_days = kwargs.get("interest_free_period_in_days")
         return loan
-
-    def disburse(self, **kwargs):
-        event = LedgerTriggerEvent(
-            performed_by=kwargs["user_id"],
-            name="disbursal",
-            loan_id=kwargs["loan_id"],
-            post_date=kwargs["product_order_date"],
-            amount=kwargs["amount"],
-        )
-
-        self.session.add(event)
-        self.session.flush()
-
-        from rush.ledger_events import loan_disbursement_event
-
-        loan_disbursement_event(
-            session=self.session,
-            loan=self,
-            event=event,
-            bill_id=kwargs["loan_data"].id,
-            downpayment_amount=kwargs.get("actual_downpayment_amount", None),
-        )
-
-        from rush.create_bill import update_journal_entry
-
-        update_journal_entry(user_loan=self, event=event)
-
-        return event
 
     def reinstate_limit_on_payment(self, event: LedgerTriggerEvent, amount: Decimal) -> None:
         assert self.should_reinstate_limit_on_payment == True
@@ -496,3 +468,22 @@ class BaseLoan(Loan):
                 post_date=get_current_ist_time(),
             )
             self.session.flush()
+
+    def get_emi_to_accrue_interest(self, post_date: Date):
+        loan_schedule = (
+            self.session.query(LoanSchedule)
+            .filter(
+                LoanSchedule.loan_id == self.loan_id,
+                LoanSchedule.bill_id.is_(None),
+                LoanSchedule.due_date < post_date,
+                LoanSchedule.due_date > post_date - relativedelta(months=1),  # Should be within a month
+            )
+            .order_by(LoanSchedule.due_date.desc())
+            .limit(1)
+            .scalar()
+        )
+        return loan_schedule
+
+    def can_close_loan(self, as_of_event_id: int) -> bool:
+        max_remaining = self.get_remaining_max(event_id=as_of_event_id, include_child_loans=False)
+        return max_remaining == 0

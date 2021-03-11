@@ -1,9 +1,6 @@
 from calendar import monthrange
 from decimal import Decimal
-from typing import (
-    List,
-    Union,
-)
+from typing import List
 
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
@@ -14,11 +11,9 @@ from rush.card.base_card import (
     BaseBill,
     BaseLoan,
 )
-from rush.card.transaction_loan import TransactionLoan
 from rush.create_emi import update_journal_entry
 from rush.ledger_events import (
     add_max_amount_event,
-    add_min_amount_event,
     bill_generate_event,
 )
 from rush.ledger_utils import get_account_balance_from_str
@@ -27,7 +22,6 @@ from rush.min_payment import add_min_to_all_bills
 from rush.models import (
     CardTransaction,
     LedgerTriggerEvent,
-    LoanSchedule,
 )
 from rush.utils import (
     get_current_ist_time,
