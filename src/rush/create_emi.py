@@ -417,7 +417,11 @@ def update_journal_entry(
             )
             .first()
         )
-        actual_gateway_expenses = payment_request_data.payment_execution_charges or 0
+        total_gateway_expenses = payment_request_data.payment_execution_charges or 0
+        actual_gateway_expenses = (
+            event.amount / payment_request_data.payment_request_amount
+        ) * total_gateway_expenses
+        actual_gateway_expenses = round(actual_gateway_expenses, 2)
         settlement_date = payment_request_data.payment_received_in_bank_date
         # loan id to take prepayment from that loan only
         payment_split_data = (
