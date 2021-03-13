@@ -1,5 +1,10 @@
 from decimal import Decimal
-from typing import Dict, Tuple, Type, Optional
+from typing import (
+    Dict,
+    Optional,
+    Tuple,
+    Type,
+)
 
 from dateutil.relativedelta import relativedelta
 from pendulum import (
@@ -21,7 +26,14 @@ from rush.card.base_card import (
 from rush.ledger_events import add_max_amount_event
 from rush.ledger_utils import create_ledger_entry_from_str
 from rush.min_payment import add_min_to_all_bills
-from rush.models import Fee, Loan, LoanData, LoanSchedule, PaymentMapping, LedgerTriggerEvent
+from rush.models import (
+    Fee,
+    LedgerTriggerEvent,
+    Loan,
+    LoanData,
+    LoanSchedule,
+    PaymentMapping,
+)
 
 
 class TermLoanBill(BaseBill):
