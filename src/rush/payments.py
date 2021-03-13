@@ -674,12 +674,29 @@ def refund_payment_to_customer(
 ):
     payment_request_data = (
         session.query(PaymentRequestsData)
-        .filter(PaymentRequestsData.payment_request_id == payment_request_id)
+        .filter(
+            PaymentRequestsData.payment_request_id == payment_request_id,
+            PaymentRequestsData.payment_request_status == "Paid",
+            PaymentRequestsData.row_status == "active",
+        )
         .one_or_none()
     )
 
     if payment_request_data is None:
-        return {"result": "error", "message": "No such payment request"}
+        return {"result": "error", "message": "No such paid payment request"}
+
+    # check if already refunded, for idempotency
+    payment_refunded_lte = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "payment_refund",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .one_or_none()
+    )
+
+    if payment_refunded_lte:
+        return {"result": "error", "message": "Payment already refunded."}
 
     payment_received_lte = (
         session.query(LedgerTriggerEvent)
@@ -711,7 +728,6 @@ def refund_payment_to_customer(
         session.query(PaymentSplit)
         .filter(PaymentSplit.component == "cgst", PaymentSplit.payment_request_id == payment_request_id)
         .one_or_none()
-        is not None
     )
 
     if fees_settled_in_payment_request:
