@@ -299,24 +299,21 @@ def get_journal_entry_ptype(event_name, is_term_loan=False) -> String:
         return "CF-Customer" if not is_term_loan else "TL-Customer"
     elif event_name == "transaction_refund":
         return "Card TL-Merchant" if not is_term_loan else "TL-Merchant"
-    elif event_name in (
-        "transaction_refund-unbilled",
-        "transaction_refund-pre_payment",
-    ):
-        return "CF-Merchant" if not is_term_loan else "TL-Merchant"
     elif event_name == "loan_written_off":
         return "Card TL-Redcarpet" if not is_term_loan else "TL-Redcarpet"
     elif event_name == "customer_refund":
-        return "Card Refund TL-Customer" if not is_term_loan else "Refund TL-Customer"
+        return "Refund CF-Customer" if not is_term_loan else "Refund TL-Customer"
     else:
         return f"{event_name.title()}-" + ("Card TL-Customer" if not is_term_loan else "TL-Customer")
 
 
 def get_journal_entry_ledger_for_payment(event_name) -> String:
-    if event_name in ("payment_received", "loan_written_off", "customer_refund"):
+    if event_name in ("payment_received", "loan_written_off"):
         return "Axis Bank Ltd-Collections A/c"
     elif event_name == "transaction_refund":
         return "Cards upload A/c"
+    elif event_name == "customer_refund":
+        return "Axis Bank Ltd-Disbursement A/c"
 
 
 def get_ledger_for_fee(fee_acc) -> String:
@@ -451,7 +448,7 @@ def update_journal_entry(
                     p_type = "TL-Customer" if is_term_loan else "CF-Customer"
                 elif event.name == "transaction_refund":
                     narration_name = "Payment Received From Merchant"
-                    p_type = "TL-Merchant" if is_term_loan else "CF-Customer"
+                    p_type = "TL-Merchant" if is_term_loan else "CF-Merchant"
                 else:
                     p_type = get_journal_entry_ptype(event.name, is_term_loan=is_term_loan)
                     narration_name = get_journal_entry_narration(event.name)
@@ -486,7 +483,7 @@ def update_journal_entry(
         # if there is something else apart from principal and interest.
         if filtered_split_data and event.amount != principal_and_interest:
             TL = " TL" if is_term_loan else ""
-            sales_import_amount = event.amount - principal_and_interest
+            sales_import_amount = 0
             narration_name = ""
             fee_count = 0
             event_name = ""
@@ -515,6 +512,7 @@ def update_journal_entry(
                     else f"{narration_name} -Card TL-Customer"
                 )
             for sort_order, (settled_acc, amount) in enumerate(filtered_split_data.items(), 2):
+                sales_import_amount += amount
                 create_journal_entry(
                     session,
                     "",
