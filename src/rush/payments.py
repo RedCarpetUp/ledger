@@ -40,7 +40,7 @@ from rush.models import (
     Fee,
     LedgerEntry,
     LedgerTriggerEvent,
-    LoanData,
+    PaymentMapping,
     PaymentRequestsData,
     PaymentSplit,
 )
@@ -697,6 +697,19 @@ def refund_payment_to_customer(
 
     if payment_refunded_lte:
         return {"result": "error", "message": "Payment already refunded."}
+
+    # If this payment was slid into any EMIs, then they need to be adjusted
+    mappings_exist = (
+        session.query(PaymentMapping)
+        .filter(
+            PaymentMapping.payment_request_id == payment_request_id,
+            PaymentMapping.row_status == "active",
+        )
+        .all()
+    )
+
+    if mappings_exist:
+        return {"result": "error", "message": "Payments made against EMIs cannot be refunded."}
 
     payment_received_lte = (
         session.query(LedgerTriggerEvent)
