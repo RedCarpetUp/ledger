@@ -7,12 +7,10 @@ from test.utils import (
 )
 
 import alembic
-import pytest
 from _pytest.monkeypatch import MonkeyPatch
 from alembic.command import current as alembic_current
 from dateutil.relativedelta import relativedelta
 from pendulum import parse as parse_date  # type: ignore
-from pendulum.parser import parse
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
 
@@ -76,7 +74,6 @@ from rush.payments import (
     find_split_to_slide_in_loan,
     payment_received,
     refund_payment,
-    refund_payment_to_customer,
     remove_fee,
     settle_payment_in_bank,
 )
@@ -4567,161 +4564,6 @@ def test_customer_prepayment_refund(session: Session) -> None:
         session, book_string=f"{user_loan.loan_id}/loan/pre_payment/l"
     )
     assert prepayment_amount == Decimal(0)
-
-
-def test_refund_payment_to_customer(session: Session) -> None:
-    test_lenders(session)
-    card_db_updates(session)
-    user = User(
-        id=99,
-        performed_by=123,
-    )
-    session.add(user)
-    session.flush()
-
-    user_loan = create_user_product(
-        session=session,
-        user_id=user.id,
-        card_activation_date=parse_date("2020-11-02").date(),
-        card_type="ruby",
-        rc_rate_of_interest_monthly=Decimal(3),
-        lender_id=62311,
-        tenure=12,
-    )
-
-    create_card_swipe(
-        session=session,
-        user_loan=user_loan,
-        txn_time=parse_date("2020-11-04 19:23:11"),
-        amount=Decimal(1000),
-        description="BigB.com",
-        txn_ref_no="v",
-        trace_no="123456",
-    )
-
-    create_card_swipe(
-        session=session,
-        user_loan=user_loan,
-        txn_time=parse_date("2020-11-22 20:29:25"),
-        amount=Decimal(2500),
-        description="WWW YESBANK IN         GURGAON       IND",
-        source="ATM",
-        txn_ref_no="z",
-        trace_no="1234567",
-    )
-
-    bill_generate(user_loan=user_loan)
-
-    latest_bill = user_loan.get_latest_bill()
-    assert latest_bill is not None
-
-    accrue_interest_on_all_bills(
-        session=session,
-        post_date=latest_bill.table.bill_due_date + relativedelta(days=1),
-        user_loan=user_loan,
-    )
-    accrue_late_charges(session, user_loan, parse_date("2020-12-16"), Decimal(118))
-
-    payment_date = parse_date("2020-12-25")
-    amount = Decimal(3500)
-    payment_request_id = "a12318"
-    payment_request_data(
-        session=session,
-        type="collection",
-        payment_request_amount=amount,
-        user_id=user_loan.user_id,
-        payment_request_id=payment_request_id,
-    )
-    payment_requests_data = pay_payment_request(
-        session=session, payment_request_id=payment_request_id, payment_date=payment_date
-    )
-    payment_received(
-        session=session,
-        user_loan=user_loan,
-        payment_request_data=payment_requests_data,
-    )
-    settle_payment_in_bank(
-        session=session,
-        payment_request_id=payment_request_id,
-        gateway_expenses=payment_requests_data.payment_execution_charges,
-        gross_payment_amount=payment_requests_data.payment_request_amount,
-        settlement_date=payment_requests_data.payment_received_in_bank_date,
-        user_loan=user_loan,
-    )
-
-    def check_accounts(
-        atm_fee: Decimal,
-        late_fee: Decimal,
-        interest_accrued: Decimal,
-        interest_receivable: Decimal,
-        principal_receivable: Decimal,
-        cgst_payable: Decimal,
-        sgst_payable: Decimal,
-        igst_payable: Decimal,
-    ) -> None:
-        _, db_atm_fee = get_account_balance_from_str(
-            session, book_string=f"{latest_bill.id}/bill/atm_fee/r"
-        )
-        assert db_atm_fee == atm_fee
-
-        _, db_late_fee = get_account_balance_from_str(
-            session, book_string=f"{latest_bill.id}/bill/late_fee/r"
-        )
-        assert db_late_fee == late_fee
-
-        _, db_interest_accrued = get_account_balance_from_str(
-            session, book_string=f"{latest_bill.id}/bill/interest_accrued/r"
-        )
-        assert db_interest_accrued == interest_accrued
-
-        _, db_interest_receivable = get_account_balance_from_str(
-            session, book_string=f"{latest_bill.id}/bill/interest_receivable/a"
-        )
-        assert db_interest_receivable == interest_receivable
-
-        _, db_principal_receivable = get_account_balance_from_str(
-            session, book_string=f"{latest_bill.id}/bill/principal_receivable/a"
-        )
-        assert db_principal_receivable == principal_receivable
-
-        _, db_cgst_payable = get_account_balance_from_str(
-            session, book_string=f"{user_loan.user_id}/user/cgst_payable/l"
-        )
-        assert db_cgst_payable == cgst_payable
-
-        _, db_sgst_payable = get_account_balance_from_str(
-            session, book_string=f"{user_loan.user_id}/user/sgst_payable/l"
-        )
-        assert db_sgst_payable == sgst_payable
-
-        _, db_igst_payable = get_account_balance_from_str(
-            session, book_string=f"{user_loan.user_id}/user/igst_payable/l"
-        )
-        assert db_igst_payable == igst_payable
-
-    check_accounts(
-        atm_fee=Decimal(50),
-        late_fee=Decimal(100),
-        interest_accrued=Decimal("105.33"),
-        interest_receivable=Decimal("0"),
-        principal_receivable=Decimal("282.33"),
-        cgst_payable=Decimal("13.5"),
-        sgst_payable=Decimal("13.5"),
-        igst_payable=Decimal(0),
-    )
-
-    refund_payment_to_customer(session=session, payment_request_id=payment_request_id)
-
-    check_accounts(
-        atm_fee=Decimal(0),
-        late_fee=Decimal(0),
-        interest_accrued=Decimal("105.33"),
-        interest_receivable=Decimal("105.33"),
-        principal_receivable=Decimal(3500),
-        cgst_payable=Decimal(0),
-        sgst_payable=Decimal(0),
-        igst_payable=Decimal(0),
-    )
 
 
 def test_find_split_to_slide_in_loan(session: Session) -> None:

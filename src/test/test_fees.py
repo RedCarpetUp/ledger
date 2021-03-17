@@ -1,4 +1,8 @@
 from decimal import Decimal
+from test.utils import (
+    pay_payment_request,
+    payment_request_data,
+)
 
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
@@ -13,11 +17,13 @@ from rush.card.utils import (
     create_loan_fee,
     create_user_product_mapping,
 )
+from rush.ledger_utils import get_account_balance_from_str
 from rush.models import (
     Lenders,
     Product,
     User,
 )
+from rush.payments import payment_received
 
 
 def create_lenders(session: Session) -> None:
@@ -124,3 +130,99 @@ def test_reset_joining_fees(session: Session) -> None:
 
     assert card_activation_fee.fee_status == "UNPAID"
     assert card_activation_fee.gross_amount == Decimal(1180)
+
+
+def test_refund_fee_payment_to_customer(session: Session) -> None:
+    create_lenders(session=session)
+    create_products(session=session)
+    create_user(session=session)
+
+    user_product = create_user_product_mapping(
+        session=session, user_id=5, product_type="term_loan_reset"
+    )
+
+    create_loan(session=session, user_product=user_product, lender_id=1756833)
+    user_loan = get_user_product(
+        session=session,
+        user_id=user_product.user_id,
+        card_type="term_loan_reset",
+        user_product_id=user_product.id,
+    )
+
+    reset_joining_fees = create_loan_fee(
+        session=session,
+        user_loan=user_loan,
+        post_date=parse_date("2019-02-01 00:00:00"),
+        gross_amount=Decimal(100),
+        include_gst_from_gross_amount=False,
+        fee_name="reset_joining_fees",
+    )
+
+    assert reset_joining_fees.fee_status == "UNPAID"
+    assert reset_joining_fees.gross_amount == Decimal(118)
+
+    payment_date = parse_date("2020-10-03")
+    amount = Decimal(118)
+    payment_request_id = "refund_fee_payment_request_id"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=user_loan.user_id,
+        payment_request_id=payment_request_id,
+    )
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_request_data=payment_requests_data,
+    )
+
+    assert reset_joining_fees.fee_status == "PAID"
+
+    _, cgst_payable = get_account_balance_from_str(
+        session, book_string=f"{user_loan.user_id}/user/cgst_payable/l"
+    )
+    assert cgst_payable == Decimal(9)
+
+    _, sgst_payable = get_account_balance_from_str(
+        session, book_string=f"{user_loan.user_id}/user/sgst_payable/l"
+    )
+    assert sgst_payable == Decimal(9)
+
+    _, igst_payable = get_account_balance_from_str(
+        session, book_string=f"{user_loan.user_id}/user/igst_payable/l"
+    )
+    assert igst_payable == Decimal(0)
+
+    _, fees = get_account_balance_from_str(
+        session, book_string=f"{user_loan.loan_id}/loan/reset_joining_fees/r"
+    )
+    assert fees == Decimal(100)
+
+    from rush.payments import refund_payment_to_customer
+
+    resp = refund_payment_to_customer(session=session, payment_request_id=payment_request_id)
+    assert resp["result"] == "success"
+
+    _, cgst_payable = get_account_balance_from_str(
+        session, book_string=f"{user_loan.user_id}/user/cgst_payable/l"
+    )
+    assert cgst_payable == Decimal(0)
+
+    _, sgst_payable = get_account_balance_from_str(
+        session, book_string=f"{user_loan.user_id}/user/sgst_payable/l"
+    )
+    assert sgst_payable == Decimal(0)
+
+    _, igst_payable = get_account_balance_from_str(
+        session, book_string=f"{user_loan.user_id}/user/igst_payable/l"
+    )
+    assert igst_payable == Decimal(0)
+
+    _, fees = get_account_balance_from_str(
+        session, book_string=f"{user_loan.loan_id}/loan/reset_joining_fees/r"
+    )
+    assert fees == Decimal(0)
