@@ -72,7 +72,7 @@ from rush.models import (
     User,
 )
 from rush.payments import (
-    customer_refund,
+    customer_prepayment_refund,
     find_split_to_slide_in_loan,
     payment_received,
     refund_payment,
@@ -4533,7 +4533,7 @@ def test_customer_prepayment_refund(session: Session) -> None:
         payment_received_in_bank_date=payment_date,
     )
 
-    customer_refund(
+    customer_prepayment_refund(
         session=session,
         user_loan=user_loan,
         payment_request_id=refund_payment_request_id,
@@ -4556,7 +4556,7 @@ def test_customer_prepayment_refund(session: Session) -> None:
         payment_received_in_bank_date=payment_date,
     )
 
-    customer_refund(
+    customer_prepayment_refund(
         session=session,
         user_loan=user_loan,
         payment_request_id=refund_payment_request_id_2,

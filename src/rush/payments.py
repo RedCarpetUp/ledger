@@ -545,7 +545,7 @@ def create_payment_split(session: Session, event: LedgerTriggerEvent):
     session.bulk_insert_mappings(PaymentSplit, new_ps_objects)
 
 
-def customer_refund(
+def customer_prepayment_refund(
     session: Session,
     user_loan: BaseLoan,
     payment_request_id: str,
