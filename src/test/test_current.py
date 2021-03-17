@@ -73,11 +73,11 @@ from rush.models import (
 )
 from rush.payments import (
     customer_refund,
-    fee_refund,
     find_split_to_slide_in_loan,
     payment_received,
     refund_payment,
     refund_payment_to_customer,
+    remove_fee,
     settle_payment_in_bank,
 )
 from rush.recon.revenue_earned import get_revenue_earned_in_a_period
@@ -4433,7 +4433,7 @@ def test_customer_fee_refund(session: Session) -> None:
     assert bill_fee.net_amount_paid == Decimal(100)
     assert bill_fee.gross_amount_paid == Decimal(118)
 
-    status = fee_refund(
+    status = remove_fee(
         session=session,
         user_loan=user_loan,
         fee=bill_fee,

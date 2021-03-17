@@ -24,7 +24,6 @@ from rush.ledger_events import (
     _adjust_for_prepayment,
     adjust_for_revenue,
     get_revenue_book_str_for_fee,
-    reduce_revenue_for_fee_refund,
 )
 from rush.ledger_utils import (
     create_ledger_entry_from_str,
@@ -600,7 +599,7 @@ def customer_refund(
     return {"result": "success", "message": "Prepayment Refund successful"}
 
 
-def fee_refund(session: Session, user_loan: BaseLoan, fee: Fee):
+def remove_fee(session: Session, user_loan: BaseLoan, fee: Fee):
     fee_removed_event = LedgerTriggerEvent(
         name="fee_removed",
         loan_id=user_loan.loan_id,
@@ -613,8 +612,9 @@ def fee_refund(session: Session, user_loan: BaseLoan, fee: Fee):
     session.add(fee_removed_event)
     session.flush()
 
-    # some amount paid
-    if fee.remaining_fee_amount > 0:
+    # Adjust into bill and pre-payment if customer has paid some amount
+    # against the fee
+    if fee.gross_amount_paid > 0:
         revenue_book_str = get_revenue_book_str_for_fee(fee)
 
         accounts_to_adjust = [
@@ -652,13 +652,13 @@ def fee_refund(session: Session, user_loan: BaseLoan, fee: Fee):
                     debit_book_str=account["account_str"],
                 )
 
-    if fee.remaining_fee_amount == 0:
-        if fee.identifier == "bill":
-            fee_event = (
-                session.query(LedgerTriggerEvent).filter(LedgerTriggerEvent.id == Fee.event_id).one()
-            )
+        fee.net_amount_paid = fee.cgst_paid = fee.sgst_paid = fee.igst_paid = fee.gross_amount_paid = 0
 
-            reverse_event(session=session, event=fee_removed_event, event_to_reverse=fee_event)
+    # For updating the bill's min accounts
+    if fee.identifier == "bill":
+        fee_event = session.query(LedgerTriggerEvent).filter(LedgerTriggerEvent.id == Fee.event_id).one()
+
+        reverse_event(session=session, event_to_reverse=fee_event, event=fee_removed_event)
 
     update_journal_entry(session=session, user_loan=user_loan, event=fee_removed_event)
     update_event_with_dpd(user_loan=user_loan, event=fee_removed_event)
