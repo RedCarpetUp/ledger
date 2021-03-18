@@ -24,6 +24,7 @@ from rush.ledger_events import (
     _adjust_for_prepayment,
     adjust_for_revenue,
     reduce_revenue_for_fee_refund,
+    limit_assignment_event,
 )
 from rush.ledger_utils import (
     create_ledger_entry_from_str,
@@ -334,7 +335,7 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
 def transaction_refund_event(session: Session, user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
     m2p_pool_account = f"{user_loan.lender_id}/lender/pool_balance/a"
     refund_amount = adjust_payment(session, user_loan, event, event.amount, m2p_pool_account)
-
+    limit_assignment_event(session=session, loan_id=user_loan.loan_id, event=event, amount=event.amount)
     if refund_amount > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
             session=session,
