@@ -130,13 +130,24 @@ def refund_payment(
             "payment_request_id": payment_request_data.payment_request_id,
         },
     )
+    skip_limit_assignment = False
+    if payment_request_data.payment_reference_id:
+        if payment_request_data.payment_reference_id[:2].lower() == "rc":
+            skip_limit_assignment = True
+
     session.add(lt)
     session.flush()
-
     # Checking if bill is generated or not. if not then reduce from unbilled else treat as payment.
-    transaction_refund_event(session=session, user_loan=user_loan, event=lt)
+    transaction_refund_event(
+        session=session,
+        user_loan=user_loan,
+        event=lt,
+        skip_limit_assignment=skip_limit_assignment,
+    )
     run_anomaly(
-        session=session, user_loan=user_loan, event_date=payment_request_data.intermediary_payment_date
+        session=session,
+        user_loan=user_loan,
+        event_date=payment_request_data.intermediary_payment_date,
     )
 
     # Update dpd
@@ -332,10 +343,18 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
     return split_info
 
 
-def transaction_refund_event(session: Session, user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
+def transaction_refund_event(
+    session: Session,
+    user_loan: BaseLoan,
+    event: LedgerTriggerEvent,
+    skip_limit_assignment: bool,
+) -> None:
     m2p_pool_account = f"{user_loan.lender_id}/lender/pool_balance/a"
     refund_amount = adjust_payment(session, user_loan, event, event.amount, m2p_pool_account)
-    limit_assignment_event(session=session, loan_id=user_loan.loan_id, event=event, amount=event.amount)
+    if not skip_limit_assignment:
+        limit_assignment_event(
+            session=session, loan_id=user_loan.loan_id, event=event, amount=event.amount
+        )
     if refund_amount > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
             session=session,
