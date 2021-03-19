@@ -443,6 +443,7 @@ def update_journal_entry(
             else:
                 amount = payment_split_data[count][1]
                 gateway_expenses = actual_gateway_expenses if event.amount == prepayment_amount else 0
+                amount = amount - gateway_expenses
                 if event.name == "payment_received":
                     narration_name = "Receipt-Import"
                     p_type = "TL-Customer" if is_term_loan else "CF-Customer"
