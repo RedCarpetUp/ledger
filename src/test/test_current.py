@@ -28,7 +28,9 @@ from rush.card import (
 from rush.card.base_card import BaseBill
 from rush.card.ruby_card import RubyCard
 from rush.card.utils import (
+    create_loan,
     create_loan_fee,
+    create_user_product_mapping,
     get_daily_spend,
     get_daily_total_transactions,
     get_weekly_spend,
@@ -96,6 +98,8 @@ def test_current(get_alembic: alembic.config.Config) -> None:
 def create_products(session: Session) -> None:
     ruby_product = Product(product_name="ruby")
     session.add(ruby_product)
+    reset_product = Product(product_name="term_loan_reset")
+    session.add(reset_product)
     session.flush()
 
 
@@ -5150,6 +5154,107 @@ def test_payment_split_for_unknown_fee(session: Session) -> None:
     assert payment_split_info[6]["type"] == "fee"
     assert payment_split_info[6]["fee"].name == "unknown"
     assert payment_split_info[6]["amount_to_adjust"] == Decimal("25.64")
+
+
+def test_refund_fee_payment_to_customer(session: Session) -> None:
+    test_lenders(session)
+    card_db_updates(session)
+    user = User(
+        id=99,
+        performed_by=123,
+    )
+    session.add(user)
+    session.flush()
+
+    user_product = create_user_product_mapping(
+        session=session, user_id=user.id, product_type="term_loan_reset"
+    )
+
+    create_loan(session=session, user_product=user_product, lender_id=1756833)
+    user_loan = get_user_product(
+        session=session,
+        user_id=user_product.user_id,
+        card_type="term_loan_reset",
+        user_product_id=user_product.id,
+    )
+
+    reset_joining_fees = create_loan_fee(
+        session=session,
+        user_loan=user_loan,
+        post_date=parse_date("2019-02-01 00:00:00"),
+        gross_amount=Decimal(100),
+        include_gst_from_gross_amount=False,
+        fee_name="reset_joining_fees",
+    )
+
+    assert reset_joining_fees.fee_status == "UNPAID"
+    assert reset_joining_fees.gross_amount == Decimal(118)
+
+    payment_date = parse_date("2020-10-03")
+    amount = Decimal(118)
+    payment_request_id = "refund_fee_payment_request_id"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=user_loan.user_id,
+        payment_request_id=payment_request_id,
+    )
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_request_data=payment_requests_data,
+    )
+
+    assert reset_joining_fees.fee_status == "PAID"
+
+    _, cgst_payable = get_account_balance_from_str(
+        session, book_string=f"{user_loan.user_id}/user/cgst_payable/l"
+    )
+    assert cgst_payable == Decimal(9)
+
+    _, sgst_payable = get_account_balance_from_str(
+        session, book_string=f"{user_loan.user_id}/user/sgst_payable/l"
+    )
+    assert sgst_payable == Decimal(9)
+
+    _, igst_payable = get_account_balance_from_str(
+        session, book_string=f"{user_loan.user_id}/user/igst_payable/l"
+    )
+    assert igst_payable == Decimal(0)
+
+    _, fees = get_account_balance_from_str(
+        session, book_string=f"{user_loan.loan_id}/loan/reset_joining_fees/r"
+    )
+    assert fees == Decimal(100)
+
+    from rush.payments import refund_payment_to_customer
+
+    resp = refund_payment_to_customer(session=session, payment_request_id=payment_request_id)
+    assert resp["result"] == "success"
+
+    _, cgst_payable = get_account_balance_from_str(
+        session, book_string=f"{user_loan.user_id}/user/cgst_payable/l"
+    )
+    assert cgst_payable == Decimal(0)
+
+    _, sgst_payable = get_account_balance_from_str(
+        session, book_string=f"{user_loan.user_id}/user/sgst_payable/l"
+    )
+    assert sgst_payable == Decimal(0)
+
+    _, igst_payable = get_account_balance_from_str(
+        session, book_string=f"{user_loan.user_id}/user/igst_payable/l"
+    )
+    assert igst_payable == Decimal(0)
+
+    _, fees = get_account_balance_from_str(
+        session, book_string=f"{user_loan.loan_id}/loan/reset_joining_fees/r"
+    )
+    assert fees == Decimal(0)
 
 
 def test_updated_emi_payment_mapping_after_early_loan_close(session: Session) -> None:
