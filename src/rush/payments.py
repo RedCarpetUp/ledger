@@ -220,6 +220,7 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
             ),
             Fee.fee_status == "UNPAID",
         )
+        .order_by(Fee.id)
         .all()
     )
 
