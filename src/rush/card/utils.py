@@ -140,7 +140,7 @@ def add_card_to_loan(session: Session, loan: Loan, card_info: Dict[str, Any]) ->
         name="add_card",
         loan_id=loan.loan_id,
         amount=Decimal("0"),
-        post_date=get_current_ist_time().date(),
+        post_date=get_current_ist_time(),
         extra_details={},
     )
 
