@@ -666,7 +666,7 @@ def remove_fee(session: Session, user_loan: BaseLoan, fee: Fee):
 
     fee.fee_status = "REMOVED"
 
-    return {"result": "success", "message": "Fee refund successful"}
+    return {"result": "success", "message": "Fee removal successful"}
 
 
 def refund_payment_to_customer(
