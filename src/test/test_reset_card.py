@@ -95,7 +95,6 @@ def test_product_amortization_1() -> None:
     assert amortization_date == parse_date("2020-09-01").date()
 
 
-@pytest.mark.run_these_please
 def test_create_term_loan(session: Session) -> None:
     create_lenders(session=session)
     create_products(session=session)

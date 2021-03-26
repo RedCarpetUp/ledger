@@ -140,7 +140,7 @@ def update_event_with_dpd(
             ledger_trigger_event.name
             in [
                 "accrue_interest",
-                "charge_late_fine",
+                "charge_late_fee",
                 "atm_fee_added",
             ]
             and debit_account.identifier_type == "bill"
@@ -162,7 +162,7 @@ def update_event_with_dpd(
             ledger_trigger_event.name
             in [
                 "reverse_interest_charges",
-                "reverse_late_charges",
+                "fee_removed",
                 "payment_received",
                 "transaction_refund",
             ]
@@ -265,7 +265,7 @@ def create_journal_entry(
 
 
 def get_journal_entry_narration(event_name) -> String:
-    if event_name == "late_fine":
+    if event_name == "late_fee":
         return "Late Fee"
     elif event_name == "atm_fee":
         return "ATM Fee"
@@ -280,7 +280,7 @@ def get_journal_entry_narration(event_name) -> String:
 
 
 def get_journal_entry_ptype(event_name, is_term_loan=False) -> String:
-    if event_name in ("charge_late_fine", "late_fine"):
+    if event_name in ("charge_late_fee", "late_fee"):
         return "Late Fee-Card TL-Customer" if not is_term_loan else "Late Fee-TL-Customer"
     elif event_name in ("atm_fee_added", "atm_fee"):
         return "CF ATM Fee-Customer" if not is_term_loan else "ATM Fee-TL-Customer"
@@ -320,7 +320,7 @@ def get_journal_entry_ledger_for_payment(event_name) -> String:
 
 
 def get_ledger_for_fee(fee_acc) -> String:
-    if fee_acc == "late_fine":
+    if fee_acc == "late_fee":
         return "Late Fee"
     elif fee_acc in ("atm_fee", "reset_joining_fees", "card_activation_fees"):
         return "Processing Fee"

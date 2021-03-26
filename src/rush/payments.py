@@ -23,11 +23,12 @@ from rush.ledger_events import (
     _adjust_bill,
     _adjust_for_prepayment,
     adjust_for_revenue,
-    reduce_revenue_for_fee_refund,
+    get_revenue_book_str_for_fee,
 )
 from rush.ledger_utils import (
     create_ledger_entry_from_str,
     get_account_balance_from_str,
+    reverse_event,
 )
 from rush.loan_schedule.loan_schedule import (
     close_loan,
@@ -39,10 +40,14 @@ from rush.models import (
     Fee,
     LedgerEntry,
     LedgerTriggerEvent,
+    PaymentMapping,
     PaymentRequestsData,
     PaymentSplit,
 )
-from rush.utils import mul
+from rush.utils import (
+    get_current_ist_time,
+    mul,
+)
 from rush.writeoff_and_recovery import (
     recovery_event,
     write_off_loan,
@@ -153,7 +158,6 @@ def payment_received_event(
     amount_to_adjust: Decimal,
     skip_closing: bool = False,
 ) -> Decimal:
-
     remaining_amount = Decimal(0)
 
     remaining_amount = adjust_payment(session, user_loan, event, amount_to_adjust, debit_book_str)
@@ -216,6 +220,7 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
             ),
             Fee.fee_status == "UNPAID",
         )
+        .order_by(Fee.id)
         .all()
     )
 
@@ -541,65 +546,222 @@ def create_payment_split(session: Session, event: LedgerTriggerEvent):
     session.bulk_insert_mappings(PaymentSplit, new_ps_objects)
 
 
-def customer_refund(
+def customer_prepayment_refund(
     session: Session,
     user_loan: BaseLoan,
-    payment_amount: Decimal,
-    payment_date: DateTime,
     payment_request_id: str,
+    refund_source: str,
 ):
+    payment_request_data = (
+        session.query(PaymentRequestsData)
+        .filter(PaymentRequestsData.payment_request_id == payment_request_id)
+        .one_or_none()
+    )
+
+    if payment_request_data is None:
+        return {"result": "error", "message": "Payment request not found"}
+
+    refund_amount = payment_request_data.payment_request_amount
+
+    _, prepayment_balance = get_account_balance_from_str(
+        session=session, book_string=f"{user_loan.loan_id}/loan/pre_payment/l"
+    )
+
+    if refund_amount > prepayment_balance:
+        return {"result": "error", "message": "Refund amount greater than pre-payment"}
+
     lt = LedgerTriggerEvent(
         name="customer_refund",
         loan_id=user_loan.loan_id,
-        amount=payment_amount,
-        post_date=payment_date,
+        amount=refund_amount,
+        post_date=get_current_ist_time(),
         extra_details={
             "payment_request_id": payment_request_id,
         },
     )
     session.add(lt)
     session.flush()
+
+    if refund_source == "payment_gateway":
+        credit_book_str = f"{user_loan.lender_id}/lender/pg_account/a"
+    else:
+        credit_book_str = f"12345/redcarpet/rc_cash/a"
 
     create_ledger_entry_from_str(
         session=session,
         event_id=lt.id,
         debit_book_str=f"{user_loan.loan_id}/loan/pre_payment/l",
-        credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
-        amount=payment_amount,
+        credit_book_str=credit_book_str,
+        amount=refund_amount,
     )
 
     update_journal_entry(user_loan=user_loan, event=lt)
 
-    return {"result": "success", "message": "Prepayment Refund successfull"}
+    return {"result": "success", "message": "Prepayment Refund successful"}
 
 
-def fee_refund(
-    session: Session,
-    user_loan: BaseLoan,
-    payment_amount: Decimal,
-    payment_date: DateTime,
-    payment_request_id: str,
-    fee: Fee,
-):
-    lt = LedgerTriggerEvent(
-        name="fee_refund",
+def remove_fee(session: Session, user_loan: BaseLoan, fee: Fee):
+    fee_removed_event = LedgerTriggerEvent(
+        name="fee_removed",
         loan_id=user_loan.loan_id,
-        amount=payment_amount,
-        post_date=payment_date,
+        amount=fee.gross_amount,
+        post_date=get_current_ist_time(),
         extra_details={
             "fee_id": fee.id,
-            "payment_request_id": payment_request_id,
         },
     )
-    session.add(lt)
+    session.add(fee_removed_event)
     session.flush()
 
-    reduce_revenue_for_fee_refund(
-        session=session,
-        credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
-        fee=fee,
+    # Adjust into bill and pre-payment if customer has paid some amount
+    # against the fee
+    if fee.gross_amount_paid > 0:
+        revenue_book_str = get_revenue_book_str_for_fee(fee)
+
+        accounts_to_adjust = [
+            {"account_str": revenue_book_str, "amount": fee.net_amount_paid},
+            {"account_str": f"{fee.user_id}/user/cgst_payable/l", "amount": fee.cgst_paid},
+            {"account_str": f"{fee.user_id}/user/sgst_payable/l", "amount": fee.sgst_paid},
+            {"account_str": f"{fee.user_id}/user/igst_payable/l", "amount": fee.igst_paid},
+        ]
+
+        for account in accounts_to_adjust:
+            if account["amount"] == 0:
+                continue
+            remaining_amount = adjust_payment(
+                session=session,
+                user_loan=user_loan,
+                event=fee_removed_event,
+                amount_to_adjust=account["amount"],
+                debit_book_str=account["account_str"],
+            )
+            account["amount"] = remaining_amount
+
+        # Check if there's still amount that's left. If yes, then we received extra prepayment.
+        is_payment_left = any(account["amount"] > 0 for account in accounts_to_adjust)
+
+        if is_payment_left:
+            for account in accounts_to_adjust:
+                if account["amount"] == 0:
+                    continue
+
+                _adjust_for_prepayment(
+                    session=session,
+                    loan_id=user_loan.loan_id,
+                    event_id=fee_removed_event.id,
+                    amount=account["amount"],
+                    debit_book_str=account["account_str"],
+                )
+
+        fee.net_amount_paid = fee.cgst_paid = fee.sgst_paid = fee.igst_paid = fee.gross_amount_paid = 0
+
+    # For updating the bill's min accounts
+    if fee.identifier == "bill":
+        fee_event = session.query(LedgerTriggerEvent).filter(LedgerTriggerEvent.id == Fee.event_id).one()
+
+        reverse_event(session=session, event_to_reverse=fee_event, event=fee_removed_event)
+
+    update_journal_entry(session=session, user_loan=user_loan, event=fee_removed_event)
+    update_event_with_dpd(user_loan=user_loan, event=fee_removed_event)
+
+    fee.fee_status = "REMOVED"
+
+    return {"result": "success", "message": "Fee refund successful"}
+
+
+def refund_payment_to_customer(
+    session: Session,
+    payment_request_id: str,
+):
+    payment_request_data = (
+        session.query(PaymentRequestsData)
+        .filter(
+            PaymentRequestsData.payment_request_id == payment_request_id,
+            PaymentRequestsData.payment_request_status == "Paid",
+            PaymentRequestsData.row_status == "active",
+        )
+        .one_or_none()
     )
 
-    update_journal_entry(user_loan=user_loan, event=lt)
+    if payment_request_data is None:
+        return {"result": "error", "message": "No such paid payment request"}
 
-    return {"result": "success", "message": "Fee Refund successfull"}
+    # check if already refunded, for idempotency
+    payment_refunded_lte = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "payment_refund",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .one_or_none()
+    )
+
+    if payment_refunded_lte:
+        return {"result": "error", "message": "Payment already refunded."}
+
+    # If this payment was slid into any EMIs, then they need to be adjusted
+    mappings_exist = (
+        session.query(PaymentMapping)
+        .filter(
+            PaymentMapping.payment_request_id == payment_request_id,
+            PaymentMapping.row_status == "active",
+        )
+        .all()
+    )
+
+    if mappings_exist:
+        return {"result": "error", "message": "Payments made against EMIs cannot be refunded."}
+
+    payment_received_lte = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .one()
+    )
+
+    refund_event = LedgerTriggerEvent.new(
+        session,
+        name="payment_refund",
+        loan_id=payment_received_lte.loan_id,
+        amount=payment_request_data.payment_request_amount,
+        post_date=get_current_ist_time(),
+        extra_details={
+            "payment_request_id": payment_request_data.payment_request_id,
+        },
+    )
+    session.flush()
+
+    reverse_event(session=session, event_to_reverse=payment_received_lte, event=refund_event)
+
+    # If any fees were settled during this payment, we need to mark those as refunded
+    # We can determine this by checking if any cgst was settled during this payment
+    # We check this from payment_split
+    fees_settled_in_payment_request = (
+        session.query(PaymentSplit)
+        .filter(PaymentSplit.component == "cgst", PaymentSplit.payment_request_id == payment_request_id)
+        .one_or_none()
+    )
+
+    if fees_settled_in_payment_request:
+        fees = (
+            session.query(Fee)
+            .join(
+                BookAccount,
+                and_(
+                    BookAccount.book_name == Fee.name,
+                    BookAccount.identifier == Fee.identifier_id,
+                    BookAccount.identifier_type == Fee.identifier,
+                ),
+            )
+            .join(LedgerEntry, LedgerEntry.credit_account == BookAccount.id)
+            .filter(LedgerEntry.event_id == payment_received_lte.id)
+            .all()
+        )
+
+        for fee in fees:
+            fee.fee_status = "REFUNDED"
+
+    session.flush()
+    return {"result": "success", "message": "Payment refunded"}

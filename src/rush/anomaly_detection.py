@@ -13,7 +13,7 @@ from rush.accrue_financial_charges import (
 from rush.card.base_card import BaseLoan
 from rush.models import LedgerTriggerEvent
 
-PAYMENT_AFFECTED_EVENTS = ("accrue_interest", "charge_late_fine")
+PAYMENT_AFFECTED_EVENTS = ("accrue_interest", "charge_late_fee")
 
 
 def get_affected_events(session: Session, user_loan: BaseLoan) -> List[LedgerTriggerEvent]:
@@ -83,7 +83,7 @@ def run_anomaly(session: Session, user_loan: BaseLoan, event_date: DateTime) -> 
                 reverse_interest_charges(
                     session, event_to_reverse=event, user_loan=user_loan, payment_date=event_date
                 )
-        elif event.name == "charge_late_fine":
+        elif event.name == "charge_late_fee":
             # TODO this probably isn't tested.
             is_charge_valid = is_late_fee_valid(session=session, user_loan=user_loan)
             if not is_charge_valid:
