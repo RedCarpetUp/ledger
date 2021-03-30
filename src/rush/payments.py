@@ -571,7 +571,7 @@ def customer_prepayment_refund(
         return {"result": "error", "message": "Refund amount greater than pre-payment"}
 
     lt = LedgerTriggerEvent(
-        name="customer_refund",
+        name="customer_prepayment_refund",
         loan_id=user_loan.loan_id,
         amount=refund_amount,
         post_date=get_current_ist_time(),
