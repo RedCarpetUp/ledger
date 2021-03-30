@@ -145,7 +145,6 @@ def test_calculate_downpayment_amount() -> None:
     assert downpayment_amount == Decimal("2910")
 
 
-@pytest.mark.run_these_please
 def test_create_term_loan(session: Session) -> None:
     create_lenders(session=session)
     create_products(session=session)
