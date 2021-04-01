@@ -60,6 +60,7 @@ def create_loan(
         user_product_id=user_product.id,
         product_type=user_product.product_type,
         lender_id=lender_id,
+        loan_status="NOT STARTED",
     )
     session.flush()
 

@@ -267,6 +267,7 @@ class BaseLoan(Loan):
         loan.min_multiplier = kwargs.get("min_multiplier")
         loan.interest_type = kwargs.get("interest_type", "flat")
         loan.tenure_in_months = kwargs.get("tenure")
+        loan.loan_status = kwargs.get("loan_status", "NOT STARTED")
         # Don't want to overwrite default value in case of None.
         if kwargs.get("interest_free_period_in_days"):
             loan.interest_free_period_in_days = kwargs.get("interest_free_period_in_days")
