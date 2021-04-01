@@ -666,6 +666,9 @@ def remove_fee(session: Session, user_loan: BaseLoan, fee: Fee):
 
     fee.fee_status = "REMOVED"
 
+    if user_loan.loan_status == "FEE PAID":
+        user_loan.loan_status = "NOT STARTED"
+
     return {"result": "success", "message": "Fee removal successful"}
 
 

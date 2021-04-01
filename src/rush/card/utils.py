@@ -115,6 +115,9 @@ def create_loan_fee(
         "card_upgrade_fees": "upgrade_fee",
     }
 
+    if fee_to_event_names.get(fee_name) == "activation_fee":
+        user_loan.loan_status = "FEE PAID"
+
     event = LedgerTriggerEvent(
         name=fee_to_event_names.get(fee_name, fee_name),  # defaults to fee_name
         post_date=post_date,
