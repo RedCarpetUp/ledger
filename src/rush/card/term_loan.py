@@ -184,6 +184,8 @@ class TermLoan(BaseLoan):
         return loan
 
     def disburse(self, **kwargs):
+        self.loan_status = "DISBURSED"
+
         event = LedgerTriggerEvent(
             performed_by=kwargs["user_id"],
             name="disbursal",
