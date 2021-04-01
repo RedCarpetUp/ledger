@@ -458,12 +458,13 @@ class BaseLoan(Loan):
     def get_child_loans(self) -> List["BaseLoan"]:
         return []
 
-    def close(self):
-        if self.loan_status != "Cancelled":
-            self.loan_status = "Cancelled"
+    def cancel(self):
+        # TODO: Think about when a loan cannot be cancelled
+        if self.loan_status != "CANCELLED":
+            self.loan_status = "CANCELLED"
             LedgerTriggerEvent.new(
                 self.session,
-                name="close_loan",
+                name="cancel_loan",
                 loan_id=self.loan_id,
                 post_date=get_current_ist_time(),
             )
