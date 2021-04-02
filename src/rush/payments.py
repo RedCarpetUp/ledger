@@ -766,5 +766,8 @@ def refund_payment_to_customer(
         for fee in fees:
             fee.fee_status = "REFUNDED"
 
+        if user_loan.loan_status == "FEE PAID":
+            user_loan.loan_status = "NOT STARTED"
+
     session.flush()
     return {"result": "success", "message": "Payment refunded"}
