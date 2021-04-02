@@ -460,16 +460,16 @@ class BaseLoan(Loan):
         return []
 
     def cancel(self):
-        # TODO: Think about when a loan cannot be cancelled
-        if self.loan_status != "CANCELLED":
-            self.loan_status = "CANCELLED"
-            LedgerTriggerEvent.new(
-                self.session,
-                name="cancel_loan",
-                loan_id=self.loan_id,
-                post_date=get_current_ist_time(),
-            )
-            self.session.flush()
+        assert self.loan_status in ("NOT STARTED", "FEE PAID")
+
+        self.loan_status = "CANCELLED"
+        LedgerTriggerEvent.new(
+            self.session,
+            name="cancel_loan",
+            loan_id=self.loan_id,
+            post_date=get_current_ist_time(),
+        )
+        self.session.flush()
 
     def get_emi_to_accrue_interest(self, post_date: Date):
         loan_schedule = (
