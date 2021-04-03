@@ -55,7 +55,8 @@ def get_last_payment_event(session: Session, user_loan: BaseLoan) -> LedgerTrigg
             LedgerTriggerEvent.loan_id == user_loan.loan_id,
             LedgerTriggerEvent.name.in_(["payment_received"]),
         )
-        .order_by(LedgerTriggerEvent.id.desc()).first()
+        .order_by(LedgerTriggerEvent.id.desc())
+        .first()
     )
     return event
 
