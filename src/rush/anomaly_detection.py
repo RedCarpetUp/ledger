@@ -48,6 +48,18 @@ def get_payment_events(session: Session, user_loan: BaseLoan) -> List[LedgerTrig
     return events
 
 
+def get_last_payment_event(session: Session, user_loan: BaseLoan) -> LedgerTriggerEvent:
+    event = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.loan_id == user_loan.loan_id,
+            LedgerTriggerEvent.name.in_(["payment_received"]),
+        )
+        .order_by(LedgerTriggerEvent.id.desc()).first()
+    )
+    return event
+
+
 def has_payment_anomaly(session: Session, user_loan: BaseLoan, payment_date: DateTime) -> bool:
     """
     Assuming that a potential payment anomaly can only occur if last event's post date is greater than payment's date.
