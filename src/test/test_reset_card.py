@@ -1152,3 +1152,54 @@ def test_reset_loan_limit_unlock_error(session: Session) -> None:
 
 def test_reset_loan_early_payment(session: Session) -> None:
     pass
+
+
+@pytest.mark.run_these_please
+def test_blah(session: Session):
+    create_lenders(session=session)
+    create_products(session=session)
+    create_user(session=session)
+
+    user_product = create_user_product_mapping(
+        session=session, user_id=6, product_type="term_loan_reset"
+    )
+
+    create_loan(session=session, user_product=user_product, lender_id=1756833)
+
+    product_info = {
+        "upi": False,
+        "card": True,
+        "name": "Reset Card",
+        "ratio_on": "principal",
+        "card_type": "V",
+        "lender_id": 1756833,
+        "identifier": "96ff91a5caf24e9cac728ea917bf8bd0",
+        "description": "",
+        "joining_fee": 500,
+        "monthly_emi": 1510.0,
+        "principal_amount": 11700,
+        "task_reopen_date": "2021-04-06T19:06:30.978754",
+        "tenure_in_months": 9,
+        "total_plan_amount": 13590.0,
+        "limit_unlock_ratio": 0.8461000000000001,
+        "payment_request_type": "reset_joining_fees",
+        "current_disposition_code": "Closed",
+        "interest_rate_total_percent": 15.39,
+        "interest_rate_monthly_percent": 1.71
+    }
+
+    from rush.utils import get_current_ist_time
+
+    loan = create_user_product(
+        session=session,
+        user_id=69,
+        card_type="term_loan_reset",
+        lender_id=1756833,
+        interest_free_period_in_days=15,
+        tenure=product_info["tenure_in_months"],
+        amount=Decimal(product_info["principal_amount"]),
+        interest_rate=product_info["interest_rate_monthly_percent"],
+        product_order_date=get_current_ist_time(),
+        user_product_id=user_product.id,
+        downpayment_percent=Decimal("0"),
+    )

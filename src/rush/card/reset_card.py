@@ -130,10 +130,6 @@ class ResetCard(TermLoan):
             downpayment_amount=kwargs.get("actual_downpayment_amount", None),
         )
 
-        from rush.ledger_events import disburse_money_to_card
-
-        disburse_money_to_card(session=self.session, user_loan=self, event=event)
-
         return event
 
     def loan_disbursement_event(
