@@ -5,7 +5,6 @@ from typing import (
     Optional,
 )
 
-from card.reset_card_v2 import ResetCardV2
 from pendulum import (
     DateTime,
     datetime,
@@ -13,6 +12,7 @@ from pendulum import (
 from sqlalchemy.orm.session import Session
 
 from rush.card.base_card import BaseLoan
+from rush.card.reset_card_v2 import ResetCardV2
 from rush.card.ruby_card import RubyCard
 from rush.create_bill import get_or_create_bill_for_card_swipe
 from rush.create_emi import (
