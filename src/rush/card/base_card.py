@@ -422,9 +422,9 @@ class BaseLoan(Loan):
         event_id: int = None,
         include_child_loans: Optional[bool] = True,
     ) -> Decimal:
-        unpaid_bills = self.get_unpaid_generated_bills()
+        bills = self.get_all_bills()
         remaining_max_of_all_bills = sum(
-            bill.get_remaining_max(date_to_check_against, event_id) for bill in unpaid_bills
+            bill.get_remaining_max(date_to_check_against, event_id) for bill in bills
         )
 
         if include_child_loans:
