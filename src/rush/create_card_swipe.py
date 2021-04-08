@@ -5,6 +5,7 @@ from typing import (
     Optional,
 )
 
+from card.reset_card_v2 import ResetCardV2
 from pendulum import (
     DateTime,
     datetime,
@@ -76,7 +77,7 @@ def create_card_swipe(
     session.add(lt)
     session.flush()  # need id. TODO Gotta use table relationships
 
-    if user_loan.product_type != "term_loan_reset":
+    if not isinstance(user_loan, ResetCardV2):
         disburse_money_to_card(session=session, user_loan=user_loan, event=lt)
 
     card_transaction_event(session=session, user_loan=user_loan, event=lt, mcc=mcc)
