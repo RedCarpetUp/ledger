@@ -1,5 +1,5 @@
-from card import ResetCard
-from models import LedgerTriggerEvent
+from rush.card import ResetCard
+from rush.models import LedgerTriggerEvent
 
 
 class ResetCardV2(ResetCard):
