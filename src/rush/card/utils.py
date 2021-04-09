@@ -5,6 +5,7 @@ from typing import (
     Optional,
 )
 
+from card import ResetCard
 from pendulum import (
     Date,
     DateTime,
@@ -259,3 +260,11 @@ def get_daily_total_transactions(
 
 def is_term_loan_subclass(user_loan: BaseLoan) -> bool:
     return isinstance(user_loan, TermLoan)
+
+
+def is_reset_loan(user_loan: BaseLoan) -> bool:
+    return issubclass(type(user_loan), ResetCard)
+
+
+def is_reset_product_type(product_type: str) -> bool:
+    return product_type in ("term_loan_reset", "term_loan_reset_v2")

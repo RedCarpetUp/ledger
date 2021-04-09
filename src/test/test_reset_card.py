@@ -6,6 +6,7 @@ from test.utils import (
 )
 
 import pytest
+from card.reset_card_v2 import ResetCardV2
 from dateutil.relativedelta import relativedelta
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
@@ -24,6 +25,8 @@ from rush.card.utils import (
     create_loan,
     create_loan_fee,
     create_user_product_mapping,
+    is_reset_loan,
+    is_reset_product_type,
 )
 from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import get_account_balance_from_str
@@ -1152,3 +1155,13 @@ def test_reset_loan_limit_unlock_error(session: Session) -> None:
 
 def test_reset_loan_early_payment(session: Session) -> None:
     pass
+
+
+def test_reset_card_versions(session: Session) -> None:
+    v1 = ResetCard(session=session)
+    assert is_reset_loan(v1) is True
+    assert is_reset_product_type(v1.product_type) is True
+
+    v2 = ResetCardV2(session=session)
+    assert is_reset_loan(v2) is True
+    assert is_reset_product_type(v2.product_type) is True
