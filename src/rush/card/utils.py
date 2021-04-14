@@ -5,7 +5,6 @@ from typing import (
     Optional,
 )
 
-from card import ResetCard
 from pendulum import (
     Date,
     DateTime,
@@ -16,6 +15,7 @@ from sqlalchemy.orm import Session
 from rush.accrue_financial_charges import create_loan_fee_entry
 from rush.card import (
     BaseLoan,
+    ResetCard,
     TermLoan,
 )
 from rush.models import (
