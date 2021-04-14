@@ -603,6 +603,7 @@ class UserDocuments(AuditMixin):
 
     user_id = Column(Integer, ForeignKey(User.id), nullable=False)
     document_type = Column(String(length=50), nullable=False)
+    user_product_id = Column(Integer, ForeignKey(UserProduct.id), nullable=True)
     document_identification = Column(Text, nullable=True)
     sequence = Column(Integer, server_default="1", nullable=False)
     image_url = Column(String(length=255), nullable=False)
