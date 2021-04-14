@@ -7,12 +7,10 @@ from test.utils import (
 )
 
 import alembic
-import pytest
 from _pytest.monkeypatch import MonkeyPatch
 from alembic.command import current as alembic_current
 from dateutil.relativedelta import relativedelta
 from pendulum import parse as parse_date  # type: ignore
-from pendulum.parser import parse
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
 
@@ -30,7 +28,9 @@ from rush.card import (
 from rush.card.base_card import BaseBill
 from rush.card.ruby_card import RubyCard
 from rush.card.utils import (
+    create_loan,
     create_loan_fee,
+    create_user_product_mapping,
     get_daily_spend,
     get_daily_total_transactions,
     get_weekly_spend,
@@ -72,11 +72,11 @@ from rush.models import (
     User,
 )
 from rush.payments import (
-    customer_refund,
-    fee_refund,
+    customer_prepayment_refund,
     find_split_to_slide_in_loan,
     payment_received,
     refund_payment,
+    remove_fee,
     settle_payment_in_bank,
 )
 from rush.recon.revenue_earned import get_revenue_earned_in_a_period
@@ -98,6 +98,8 @@ def test_current(get_alembic: alembic.config.Config) -> None:
 def create_products(session: Session) -> None:
     ruby_product = Product(product_name="ruby")
     session.add(ruby_product)
+    reset_product = Product(product_name="term_loan_reset")
+    session.add(reset_product)
     session.flush()
 
 
@@ -581,7 +583,11 @@ def test_generate_bill_reducing_interest_1(session: Session) -> None:
     _, min_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/min/a")
     assert min_amount == Decimal("121")
 
-    update_event_with_dpd(user_loan=user_loan, to_date=parse_date("2020-05-21 00:05:00"))
+    post_date = parse_date("2020-05-21")
+    event = LedgerTriggerEvent(name="daily_dpd_update", loan_id=user_loan.loan_id, post_date=post_date)
+    session.add(event)
+
+    update_event_with_dpd(user_loan=user_loan, event=event)
 
     dpd_events = session.query(EventDpd).filter_by(loan_id=uc.loan_id).all()
     assert dpd_events[0].balance == Decimal(1200)
@@ -982,7 +988,7 @@ def _pay_minimum_amount_bill_1(session: Session) -> None:
     assert bill_fee.cgst_paid == Decimal(9)
     assert bill_fee.gross_amount_paid == Decimal(118)
 
-    _, late_fine_earned = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine/r")
+    _, late_fine_earned = get_account_balance_from_str(session, f"{bill.id}/bill/late_fee/r")
     assert late_fine_earned == Decimal(100)
 
     _, sgst_balance = get_account_balance_from_str(session, f"{user_loan.user_id}/user/sgst_payable/l")
@@ -1086,7 +1092,7 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
     assert fee_due is not None
     assert fee_due.fee_status == "PAID"
 
-    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fine/r")
+    _, late_fine_due = get_account_balance_from_str(session, f"{bill.id}/bill/late_fee/r")
     assert late_fine_due == Decimal("100")
 
     _, principal_due = get_account_balance_from_str(
@@ -1129,7 +1135,7 @@ def test_late_fee_reversal_bill_1(session: Session) -> None:
     payment_splits = session.query(PaymentSplit).filter(PaymentSplit.payment_request_id == "a1239").all()
     assert len(payment_splits) == 4
     split = {ps.component: ps.amount_settled for ps in payment_splits}
-    assert split["late_fine"] == Decimal("100")
+    assert split["late_fee"] == Decimal("100")
     assert split["sgst"] == Decimal("9")
     assert split["cgst"] == Decimal("9")
     assert split["interest"] == Decimal("14")
@@ -4432,19 +4438,16 @@ def test_customer_fee_refund(session: Session) -> None:
     assert bill_fee.net_amount_paid == Decimal(100)
     assert bill_fee.gross_amount_paid == Decimal(118)
 
-    status = fee_refund(
+    status = remove_fee(
         session=session,
         user_loan=user_loan,
-        payment_amount=Decimal("118"),
-        payment_date=parse_date("2020-11-16"),
-        payment_request_id="s33234",
         fee=bill_fee,
     )
     assert status["result"] == "success"
 
     fee = session.query(Fee).filter_by(id=fee_due.id).one_or_none()
     assert fee is not None
-    assert fee.fee_status == "REFUND"
+    assert fee.fee_status == "REMOVED"
 
 
 def test_customer_prepayment_refund(session: Session) -> None:
@@ -4524,12 +4527,22 @@ def test_customer_prepayment_refund(session: Session) -> None:
 
     assert prepayment_amount == Decimal(4000)
 
-    customer_refund(
+    refund_payment_request_id = "a12319"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=Decimal(3000),
+        user_id=user_loan.user_id,
+        payment_request_id=refund_payment_request_id,
+        collection_by="customer_refund",
+        payment_received_in_bank_date=payment_date,
+    )
+
+    customer_prepayment_refund(
         session=session,
         user_loan=user_loan,
-        payment_amount=Decimal(3000),
-        payment_date=parse_date("2020-11-16"),
-        payment_request_id="a12318",
+        payment_request_id=refund_payment_request_id,
+        refund_source="payment_gateway",
     )
 
     _, prepayment_amount = get_account_balance_from_str(
@@ -4537,12 +4550,22 @@ def test_customer_prepayment_refund(session: Session) -> None:
     )
     assert prepayment_amount == Decimal(1000)
 
-    customer_refund(
+    refund_payment_request_id_2 = "a12320"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=Decimal(1000),
+        user_id=user_loan.user_id,
+        payment_request_id=refund_payment_request_id_2,
+        collection_by="customer_refund",
+        payment_received_in_bank_date=payment_date,
+    )
+
+    customer_prepayment_refund(
         session=session,
         user_loan=user_loan,
-        payment_amount=Decimal(1000),
-        payment_date=parse_date("2020-11-22"),
-        payment_request_id="a12318",
+        payment_request_id=refund_payment_request_id_2,
+        refund_source="NEFT",
     )
 
     _, prepayment_amount = get_account_balance_from_str(
@@ -5135,6 +5158,107 @@ def test_payment_split_for_unknown_fee(session: Session) -> None:
     assert payment_split_info[6]["type"] == "fee"
     assert payment_split_info[6]["fee"].name == "unknown"
     assert payment_split_info[6]["amount_to_adjust"] == Decimal("25.64")
+
+
+def test_refund_fee_payment_to_customer(session: Session) -> None:
+    test_lenders(session)
+    card_db_updates(session)
+    user = User(
+        id=99,
+        performed_by=123,
+    )
+    session.add(user)
+    session.flush()
+
+    user_product = create_user_product_mapping(
+        session=session, user_id=user.id, product_type="term_loan_reset"
+    )
+
+    create_loan(session=session, user_product=user_product, lender_id=1756833)
+    user_loan = get_user_product(
+        session=session,
+        user_id=user_product.user_id,
+        card_type="term_loan_reset",
+        user_product_id=user_product.id,
+    )
+
+    reset_joining_fees = create_loan_fee(
+        session=session,
+        user_loan=user_loan,
+        post_date=parse_date("2019-02-01 00:00:00"),
+        gross_amount=Decimal(100),
+        include_gst_from_gross_amount=False,
+        fee_name="reset_joining_fees",
+    )
+
+    assert reset_joining_fees.fee_status == "UNPAID"
+    assert reset_joining_fees.gross_amount == Decimal(118)
+
+    payment_date = parse_date("2020-10-03")
+    amount = Decimal(118)
+    payment_request_id = "refund_fee_payment_request_id"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=user_loan.user_id,
+        payment_request_id=payment_request_id,
+    )
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_request_data=payment_requests_data,
+    )
+
+    assert reset_joining_fees.fee_status == "PAID"
+
+    _, cgst_payable = get_account_balance_from_str(
+        session, book_string=f"{user_loan.user_id}/user/cgst_payable/l"
+    )
+    assert cgst_payable == Decimal(9)
+
+    _, sgst_payable = get_account_balance_from_str(
+        session, book_string=f"{user_loan.user_id}/user/sgst_payable/l"
+    )
+    assert sgst_payable == Decimal(9)
+
+    _, igst_payable = get_account_balance_from_str(
+        session, book_string=f"{user_loan.user_id}/user/igst_payable/l"
+    )
+    assert igst_payable == Decimal(0)
+
+    _, fees = get_account_balance_from_str(
+        session, book_string=f"{user_loan.loan_id}/loan/reset_joining_fees/r"
+    )
+    assert fees == Decimal(100)
+
+    from rush.payments import refund_payment_to_customer
+
+    resp = refund_payment_to_customer(session=session, payment_request_id=payment_request_id)
+    assert resp["result"] == "success"
+
+    _, cgst_payable = get_account_balance_from_str(
+        session, book_string=f"{user_loan.user_id}/user/cgst_payable/l"
+    )
+    assert cgst_payable == Decimal(0)
+
+    _, sgst_payable = get_account_balance_from_str(
+        session, book_string=f"{user_loan.user_id}/user/sgst_payable/l"
+    )
+    assert sgst_payable == Decimal(0)
+
+    _, igst_payable = get_account_balance_from_str(
+        session, book_string=f"{user_loan.user_id}/user/igst_payable/l"
+    )
+    assert igst_payable == Decimal(0)
+
+    _, fees = get_account_balance_from_str(
+        session, book_string=f"{user_loan.loan_id}/loan/reset_joining_fees/r"
+    )
+    assert fees == Decimal(0)
 
 
 def test_updated_emi_payment_mapping_after_early_loan_close(session: Session) -> None:

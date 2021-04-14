@@ -13,7 +13,7 @@ def get_revenue_earned_in_a_period(session, from_date: Date, to_date: Date) -> D
       where 
         account_type = 'r' 
         and book_name in (
-          'interest_accrued', 'late_fine', 
+          'interest_accrued', 'late_fee', 
           'card_processing_fee', 'reload_fee'
         )
     ), 

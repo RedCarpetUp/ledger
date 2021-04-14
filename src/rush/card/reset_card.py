@@ -1,5 +1,8 @@
 from decimal import Decimal
-from typing import Type, Optional
+from typing import (
+    Optional,
+    Type,
+)
 
 from dateutil.relativedelta import relativedelta
 from pendulum import Date
@@ -13,7 +16,12 @@ from rush.card.term_loan import (
 from rush.ledger_events import add_max_amount_event
 from rush.ledger_utils import create_ledger_entry_from_str
 from rush.min_payment import add_min_to_all_bills
-from rush.models import Fee, Loan, LoanData, LedgerTriggerEvent
+from rush.models import (
+    Fee,
+    LedgerTriggerEvent,
+    Loan,
+    LoanData,
+)
 
 
 class ResetBill(TermLoanBill):

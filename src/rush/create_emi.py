@@ -2,6 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
+from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
 from sqlalchemy.orm import (
     Session,
@@ -140,7 +141,7 @@ def update_event_with_dpd(
             ledger_trigger_event.name
             in [
                 "accrue_interest",
-                "charge_late_fine",
+                "charge_late_fee",
                 "atm_fee_added",
             ]
             and debit_account.identifier_type == "bill"
@@ -162,7 +163,7 @@ def update_event_with_dpd(
             ledger_trigger_event.name
             in [
                 "reverse_interest_charges",
-                "reverse_late_charges",
+                "fee_removed",
                 "payment_received",
                 "transaction_refund",
             ]
@@ -176,11 +177,32 @@ def update_event_with_dpd(
 
     # Calculate card level dpd
     unpaid_emis = user_loan.get_loan_schedule(only_unpaid_emis=True)
-    if unpaid_emis:
+    if len(unpaid_emis) > 0:
         first_unpaid_emi = unpaid_emis[0]
-        user_loan.dpd = first_unpaid_emi.dpd
-        if not user_loan.ever_dpd or first_unpaid_emi.dpd > user_loan.ever_dpd:
-            user_loan.ever_dpd = first_unpaid_emi.dpd
+        # Exception case in which if future emis are paid we consider the due date to be
+        # the 15th of the next month rather than the actual due date of the first unpaid emi
+        # So essentially dpd will never go below -45 in any case. More like shouldn't go.
+        # ~Ananth
+        from rush.anomaly_detection import get_last_payment_event
+
+        last_payment_event = get_last_payment_event(session, user_loan)
+        if last_payment_event:
+            if isinstance(last_payment_event.post_date, datetime):
+                event_post_date = last_payment_event.post_date.date()
+            else:
+                event_post_date = last_payment_event.post_date
+        else:
+            if isinstance(event.post_date, datetime):
+                event_post_date = event.post_date.date()
+            else:
+                event_post_date = event.post_date
+        min_due_date = event_post_date + relativedelta(months=+1, day=15)
+        if first_unpaid_emi.due_date > min_due_date:
+            user_loan.dpd = (event_post_date - min_due_date).days
+        else:
+            user_loan.dpd = first_unpaid_emi.dpd
+        if not user_loan.ever_dpd or user_loan.dpd > user_loan.ever_dpd:
+            user_loan.ever_dpd = user_loan.dpd
 
     session.flush()
 
@@ -190,6 +212,10 @@ def daily_dpd_update(session, user_loan, post_date):
     loan_level_due_date = None
     event = LedgerTriggerEvent(name="daily_dpd_update", loan_id=user_loan.loan_id, post_date=post_date)
     session.add(event)
+    if isinstance(event.post_date, datetime):
+        daily_update_event_date = event.post_date.date()
+    else:
+        daily_update_event_date = event.post_date
     all_emis = user_loan.get_loan_schedule(only_unpaid_emis=True)
     for emi in all_emis:
         if not first_unpaid_mark:
@@ -218,11 +244,32 @@ def daily_dpd_update(session, user_loan, post_date):
 
     # Calculate card level dpd
     unpaid_emis = user_loan.get_loan_schedule(only_unpaid_emis=True)
-    if unpaid_emis:
+    if len(unpaid_emis) > 0:
         first_unpaid_emi = unpaid_emis[0]
-        user_loan.dpd = first_unpaid_emi.dpd
-        if not user_loan.ever_dpd or first_unpaid_emi.dpd > user_loan.ever_dpd:
-            user_loan.ever_dpd = first_unpaid_emi.dpd
+        # Exception case in which if future emis are paid we consider the due date to be
+        # the 15th of the next month rather than the actual due date of the first unpaid emi
+        # So essentially dpd will never go below -45 in any case. More like shouldn't go.
+        # ~Ananth
+        from rush.anomaly_detection import get_last_payment_event
+
+        last_payment_event = get_last_payment_event(session, user_loan)
+        if last_payment_event:
+            if isinstance(last_payment_event.post_date, datetime):
+                event_post_date = last_payment_event.post_date.date()
+            else:
+                event_post_date = last_payment_event.post_date
+        else:
+            if isinstance(event.post_date, datetime):
+                event_post_date = event.post_date.date()
+            else:
+                event_post_date = event.post_date
+        min_due_date = event_post_date + relativedelta(months=+1, day=15)
+        if first_unpaid_emi.due_date > min_due_date:
+            user_loan.dpd = (daily_update_event_date - min_due_date).days
+        else:
+            user_loan.dpd = first_unpaid_emi.dpd
+        if not user_loan.ever_dpd or user_loan.dpd > user_loan.ever_dpd:
+            user_loan.ever_dpd = user_loan.dpd
     session.flush()
 
 
@@ -265,7 +312,7 @@ def create_journal_entry(
 
 
 def get_journal_entry_narration(event_name) -> String:
-    if event_name == "late_fine":
+    if event_name == "late_fee":
         return "Late Fee"
     elif event_name == "atm_fee":
         return "ATM Fee"
@@ -280,7 +327,7 @@ def get_journal_entry_narration(event_name) -> String:
 
 
 def get_journal_entry_ptype(event_name, is_term_loan=False) -> String:
-    if event_name in ("charge_late_fine", "late_fine"):
+    if event_name in ("charge_late_fee", "late_fee"):
         return "Late Fee-Card TL-Customer" if not is_term_loan else "Late Fee-TL-Customer"
     elif event_name in ("atm_fee_added", "atm_fee"):
         return "CF ATM Fee-Customer" if not is_term_loan else "ATM Fee-TL-Customer"
@@ -317,7 +364,7 @@ def get_journal_entry_ledger_for_payment(event_name) -> String:
 
 
 def get_ledger_for_fee(fee_acc) -> String:
-    if fee_acc == "late_fine":
+    if fee_acc == "late_fee":
         return "Late Fee"
     elif fee_acc in ("atm_fee", "reset_joining_fees", "card_activation_fees"):
         return "Processing Fee"

@@ -100,7 +100,7 @@ def pay_payment_request(
         payment_data.payment_received_in_bank_date = payment_date + relativedelta(days=2)
     payment_data.payment_execution_charges = gateway_charges
     payment_data.payment_gateway_id = payment_gateway_id
-    payment_data.payment_request_status = "PAID"
+    payment_data.payment_request_status = "Paid"
     payment_data.payment_received_in_bank_date = current_time().replace(tzinfo=None)
     payment_data.gateway_response.update(
         {
