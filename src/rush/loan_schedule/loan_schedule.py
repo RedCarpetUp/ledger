@@ -270,6 +270,8 @@ def close_loan(user_loan: BaseLoan, last_payment_date: datetime):
 
     # Refresh the due amounts of loan schedule after altering bill's schedule.
     group_bills(user_loan)
+    # When loan is closed, dpd gets reset to -999
+    user_loan.dpd = -999
 
 
 def readjust_future_payment(user_loan: BaseLoan, date_to_check_after: date):

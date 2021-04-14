@@ -583,7 +583,11 @@ def test_generate_bill_reducing_interest_1(session: Session) -> None:
     _, min_amount = get_account_balance_from_str(session, book_string=f"{bill_id}/bill/min/a")
     assert min_amount == Decimal("121")
 
-    update_event_with_dpd(user_loan=user_loan, to_date=parse_date("2020-05-21 00:05:00"))
+    post_date = parse_date("2020-05-21")
+    event = LedgerTriggerEvent(name="daily_dpd_update", loan_id=user_loan.loan_id, post_date=post_date)
+    session.add(event)
+
+    update_event_with_dpd(user_loan=user_loan, event=event)
 
     dpd_events = session.query(EventDpd).filter_by(loan_id=uc.loan_id).all()
     assert dpd_events[0].balance == Decimal(1200)

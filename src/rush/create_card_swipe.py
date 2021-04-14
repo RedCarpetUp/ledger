@@ -12,6 +12,7 @@ from pendulum import (
 from sqlalchemy.orm.session import Session
 
 from rush.card.base_card import BaseLoan
+from rush.card.reset_card_v2 import ResetCardV2
 from rush.card.ruby_card import RubyCard
 from rush.create_bill import get_or_create_bill_for_card_swipe
 from rush.create_emi import (
@@ -82,7 +83,8 @@ def create_card_swipe(
 
     user_loan.loan_status = "ACTIVE"
 
-    disburse_money_to_card(session=session, user_loan=user_loan, event=lt)
+    if not isinstance(user_loan, ResetCardV2):
+        disburse_money_to_card(session=session, user_loan=user_loan, event=lt)
 
     card_transaction_event(session=session, user_loan=user_loan, event=lt, mcc=mcc)
 
