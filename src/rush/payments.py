@@ -40,6 +40,7 @@ from rush.models import (
     Fee,
     LedgerEntry,
     LedgerTriggerEvent,
+    Loan,
     PaymentMapping,
     PaymentRequestsData,
     PaymentSplit,
@@ -765,6 +766,8 @@ def refund_payment_to_customer(
 
         for fee in fees:
             fee.fee_status = "REFUNDED"
+
+        user_loan = session.query(Loan).filter(Loan.id == refund_event.loan_id).one()
 
         if user_loan.loan_status == "FEE PAID":
             user_loan.loan_status = "NOT STARTED"
