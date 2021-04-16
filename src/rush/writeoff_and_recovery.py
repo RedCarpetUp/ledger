@@ -22,12 +22,11 @@ def write_off_loan(user_loan: BaseLoan, payment_request_data: PaymentRequestsDat
         extra_details={
             "payment_request_id": payment_request_data.payment_request_id,
         },
+        amount=payment_request_data.payment_request_amount,
     )
     user_loan.session.add(event)
     user_loan.session.flush()
-    reverse_all_unpaid_fees(user_loan=user_loan, event=event)  # Remove all unpaid fees.
-    total_outstanding = user_loan.get_total_outstanding()
-    event.amount = total_outstanding
+    reverse_all_unpaid_fees(user_loan=user_loan, event=event)  # Remove all unpaid fees
     write_off_event(user_loan=user_loan, event=event)
     user_loan.loan_status = "WRITTEN_OFF"  # uncomment after user_loan PR is merged.
     update_journal_entry(user_loan=user_loan, event=event)
