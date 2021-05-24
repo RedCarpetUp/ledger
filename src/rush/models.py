@@ -602,6 +602,7 @@ class UserDocuments(AuditMixin):
     __tablename__ = "v3_user_documents"
 
     user_id = Column(Integer, ForeignKey(User.id), nullable=False)
+    user_product_id = Column(Integer, ForeignKey(UserProduct.id), nullable=True)
     document_type = Column(String(length=50), nullable=False)
     document_identification = Column(Text, nullable=True)
     sequence = Column(Integer, server_default="1", nullable=False)
