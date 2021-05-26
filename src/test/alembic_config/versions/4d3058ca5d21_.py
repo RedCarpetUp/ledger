@@ -8,8 +8,6 @@ Create Date: 2021-02-23 15:30:45.720199
 import sqlalchemy as sa
 from alembic import op
 
-from rush.models import Loan
-
 # revision identifiers, used by Alembic.
 revision = "4d3058ca5d21"
 down_revision = "6a86ce49ea3f"

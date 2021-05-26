@@ -237,7 +237,7 @@ def test_create_term_loan(session: Session) -> None:
     assert loan.get_remaining_min() == Decimal("0")
 
     assert loan.get_remaining_max() == Decimal("7090")
-
+    assert loan.sub_product_type == "tenure_loan"
     all_emis = user_loan.get_loan_schedule()
 
     assert len(all_emis) == 12
