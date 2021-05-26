@@ -731,7 +731,7 @@ def test_reset_journal_entries_kv(session: Session) -> None:
         user_id=6,
         payment_request_id="reset_1",
     )
-
+    assert loan.sub_product_type == "tenure_loan"
     payment_date = parse_date("2018-11-14")
     payment_request_id = "reset_1"
     payment_requests_data = pay_payment_request(

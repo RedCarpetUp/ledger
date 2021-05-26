@@ -187,6 +187,7 @@ class Loan(AuditMixin):
     downpayment_percent: Decimal = Column(Numeric, nullable=True, default=Decimal(0))
     can_close_early = Column(Boolean, nullable=True, default=True)
     tenure_in_months = Column(Integer, nullable=True)
+    sub_product_type = Column(String(15), nullable=True)
 
     __mapper_args__ = {
         "polymorphic_identity": "v3_loans",
@@ -243,6 +244,7 @@ class LoanData(AuditMixin):
     loan_id = Column(Integer, ForeignKey(Loan.id))
     is_generated = Column(Boolean, nullable=False, server_default="false")
     principal: Decimal = Column(Numeric, nullable=True)
+    gross_principal: Decimal = Column(Numeric, nullable=True)
     principal_instalment: Decimal = Column(Numeric, nullable=True)
     interest_to_charge: Decimal = Column(Numeric, nullable=True)
 

@@ -52,6 +52,7 @@ class ResetCard(TermLoan):
         loan.interest_type = "flat"
         loan.downpayment_percent = Decimal(0)
         loan.can_close_early = False
+        loan.sub_product_type = "tenure_loan"
 
         bill_start_date, bill_close_date = cls.bill_class.calculate_bill_start_and_close_date(
             first_bill_date=cls.calculate_first_emi_date(product_order_date=loan.amortization_date),
