@@ -6101,3 +6101,162 @@ def test_close_loan_in_moratorium(session: Session) -> None:
     assert emis[4].due_date == parse_date("2021-01-15").date()
     assert emis[4].total_closing_balance == Decimal("0")
     assert emis[4].payment_status == "UnPaid"
+
+
+def test_late_fee_2_payments(session: Session) -> None:
+    test_lenders(session)
+    card_db_updates(session)
+    user = User(
+        id=99,
+        performed_by=123,
+    )
+    session.add(user)
+    session.flush()
+
+    user_loan = create_user_product(
+        session=session,
+        user_id=user.id,
+        card_activation_date=parse_date("2020-11-02").date(),
+        card_type="ruby",
+        rc_rate_of_interest_monthly=Decimal(3),
+        lender_id=62311,
+        tenure=12,
+    )
+
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-11-04 19:23:11"),
+        amount=Decimal(1000),
+        description="BigB.com",
+        txn_ref_no="u",
+        trace_no="123456",
+    )
+
+    bill = bill_generate(user_loan=user_loan)
+
+    latest_bill = user_loan.get_latest_bill()
+    assert latest_bill is not None
+
+    bill = accrue_late_charges(session, user_loan, parse_date("2020-12-15"), Decimal(118))
+
+    # First payment
+    fee_due = (
+        session.query(Fee)
+        .filter(Fee.identifier_id == bill.id, Fee.identifier == "bill", Fee.name == "late_fee")
+        .one_or_none()
+    )
+    assert fee_due is not None
+    assert fee_due.net_amount == Decimal(100)
+    assert fee_due.gross_amount == Decimal(118)
+
+    payment_date = parse_date("2020-12-15")
+    amount = Decimal(59)
+    payment_request_id = "s33234"
+
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=user_loan.user_id,
+        payment_request_id=payment_request_id,
+    )
+
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
+    )
+
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
+
+    bill_fee = session.query(Fee).filter_by(id=fee_due.id).one_or_none()
+    assert bill_fee is not None
+    assert bill_fee.fee_status == "UNPAID"
+    assert bill_fee.net_amount_paid == Decimal(50)
+    assert bill_fee.gross_amount_paid == Decimal(59)
+
+    # Second payment
+    fee_due = (
+        session.query(Fee)
+        .filter(Fee.identifier_id == bill.id, Fee.identifier == "bill", Fee.name == "late_fee")
+        .one_or_none()
+    )
+    assert fee_due is not None
+    assert fee_due.net_amount == Decimal(50)
+    assert fee_due.gross_amount == Decimal(59)
+
+    payment_date = parse_date("2020-12-16")
+    amount = Decimal(59)
+    payment_request_id = "s33235"
+
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=user_loan.user_id,
+        payment_request_id=payment_request_id,
+    )
+
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
+    )
+
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
+
+    bill_fee = session.query(Fee).filter_by(id=fee_due.id).one_or_none()
+    assert bill_fee is not None
+    assert bill_fee.fee_status == "PAID"
+    assert bill_fee.net_amount_paid == Decimal(50)
+    assert bill_fee.gross_amount_paid == Decimal(59)
+
+    status = remove_fee(
+        session=session,
+        user_loan=user_loan,
+        fee=bill_fee,
+    )
+    assert status["result"] == "success"
+
+    fee = session.query(Fee).filter_by(id=fee_due.id).one_or_none()
+    assert fee is not None
+    assert fee.fee_status == "REMOVED"
