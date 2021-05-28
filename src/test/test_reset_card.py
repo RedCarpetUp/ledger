@@ -6,7 +6,6 @@ from test.utils import (
 )
 
 import pytest
-from card.reset_card_v2 import ResetCardV2
 from dateutil.relativedelta import relativedelta
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
@@ -21,6 +20,7 @@ from rush.card import (
     get_user_product,
 )
 from rush.card.reset_card import ResetCard
+from rush.card.reset_card_v2 import ResetCardV2
 from rush.card.utils import (
     create_loan,
     create_loan_fee,
