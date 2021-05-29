@@ -1,4 +1,4 @@
-from rush.card import ResetCard
+from rush.card.reset_card import ResetCard
 from rush.models import LedgerTriggerEvent
 
 

@@ -1,26 +1,14 @@
+import inspect
 from decimal import Decimal
 from typing import (
     Any,
-    Generator,
     Optional,
 )
 
 from pendulum import Date
 from sqlalchemy.orm import Session
 
-# for now, these imports are required by get_product_class method to fetch all class within card module.
 from rush.card.base_card import BaseLoan
-from rush.card.health_card import HealthCard
-from rush.card.rebel_card import RebelCard
-from rush.card.reset_card import ResetCard
-from rush.card.reset_card_v2 import ResetCardV2
-from rush.card.ruby_card import RubyCard
-from rush.card.term_loan import TermLoan
-from rush.card.term_loan2 import TermLoan2
-from rush.card.term_loan_pro import TermLoanPro
-from rush.card.term_loan_pro2 import TermLoanPro2
-from rush.card.transaction_loan import TransactionLoan
-from rush.card.zeta_card import ZetaCard
 from rush.ledger_events import limit_assignment_event
 from rush.models import (
     LedgerTriggerEvent,
@@ -77,29 +65,42 @@ def create_user_product(session: Session, **kwargs) -> Loan:
 
 def get_product_class(card_type: str) -> Any:
     """
-    Only classes imported within this file will be listed here.
-    Make sure to import every Product class.
+    Returns the product class implementation based on card_type which
+    would be the same as the polymorphic_identity defined within the class.
+
+    The idea is to load all classes within the rush.card package and
+    then compare card_type to their polymorphic_identity.
+
+    This is done by:
+    - Resolving the absolute path of the rush.card package (package_path)
+    - Getting a list of all files in this package (for example, reset_card.py)
+    - Looping over all these files and dynamically importing them as a Python module
+    - Getting a list of all classes within each module using the inspect module
+    - And finally, comparing card_type with the class' polymorphic_identity
     """
 
-    def _subclasses(card_type: str) -> Generator[Any, Any, Any]:
-        for kls in BaseLoan.__subclasses__():
-            if (
-                hasattr(kls, "__mapper_args__")
-                and kls.__mapper_args__["polymorphic_identity"] == card_type
-            ):
-                yield kls
-                break
-            for sub_kls in kls.__subclasses__():
-                if (
-                    hasattr(sub_kls, "__mapper_args__")
-                    and sub_kls.__mapper_args__["polymorphic_identity"] == card_type
-                ):
-                    yield sub_kls
-                    break
-        else:
-            raise Exception("NoValidProductImplementation")
+    import importlib
+    from os import listdir
+    from os.path import (
+        dirname,
+        isfile,
+        join,
+        realpath,
+    )
 
-    return next(_subclasses(card_type=card_type))
+    package_path = dirname(realpath(__file__))
+    files = [file for file in listdir(package_path) if isfile(join(package_path, file))]
+
+    for file in files:
+        module = importlib.import_module(f"rush.card.{file[:-3]}")
+        for class_name, klass in inspect.getmembers(module, inspect.isclass):
+            if (
+                hasattr(klass, "__mapper_args__")
+                and klass.__mapper_args__["polymorphic_identity"] == card_type
+            ):
+                return klass
+
+    raise Exception("NoValidProductImplementation")
 
 
 def activate_card(
