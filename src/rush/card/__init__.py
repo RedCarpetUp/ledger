@@ -76,30 +76,9 @@ def create_user_product(session: Session, **kwargs) -> Loan:
 
 
 def get_product_class(card_type: str) -> Any:
-    """
-    Only classes imported within this file will be listed here.
-    Make sure to import every Product class.
-    """
-
-    def _subclasses(card_type: str) -> Generator[Any, Any, Any]:
-        for kls in BaseLoan.__subclasses__():
-            if (
-                hasattr(kls, "__mapper_args__")
-                and kls.__mapper_args__["polymorphic_identity"] == card_type
-            ):
-                yield kls
-                break
-            for sub_kls in kls.__subclasses__():
-                if (
-                    hasattr(sub_kls, "__mapper_args__")
-                    and sub_kls.__mapper_args__["polymorphic_identity"] == card_type
-                ):
-                    yield sub_kls
-                    break
-        else:
-            raise Exception("NoValidProductImplementation")
-
-    return next(_subclasses(card_type=card_type))
+    for subclass in BaseLoan.subclasses:
+        if subclass.__mapper_args__["polymorphic_identity"] == card_type:
+            return subclass
 
 
 def activate_card(
