@@ -26,15 +26,7 @@ from rush.card import (
     get_user_product,
 )
 from rush.card.base_card import BaseBill
-from rush.card.health_card import HealthCard
-from rush.card.rebel_card import RebelCard
-from rush.card.reset_card import ResetCard
-from rush.card.reset_card_v2 import ResetCardV2
 from rush.card.ruby_card import RubyCard
-from rush.card.term_loan import TermLoan
-from rush.card.term_loan2 import TermLoan2
-from rush.card.term_loan_pro import TermLoanPro
-from rush.card.term_loan_pro2 import TermLoanPro2
 from rush.card.utils import (
     create_loan,
     create_loan_fee,
@@ -101,18 +93,6 @@ def test_current(get_alembic: alembic.config.Config) -> None:
         alembic_current(get_alembic, {})
     assert stdout.getvalue() == ""
     # assert output == ""
-
-
-def test_product_classes() -> None:
-    assert get_product_class("ruby") == RubyCard
-    assert get_product_class("term_loan_reset") == ResetCard
-    assert get_product_class("term_loan_reset_v2") == ResetCardV2
-    assert get_product_class("rebel") == RebelCard
-    assert get_product_class("term_loan") == TermLoan
-    assert get_product_class("term_loan_2") == TermLoan2
-    assert get_product_class("term_loan_pro") == TermLoanPro
-    assert get_product_class("term_loan_pro_2") == TermLoanPro2
-    assert get_product_class("health_card") == HealthCard
 
 
 def create_products(session: Session) -> None:

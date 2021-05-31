@@ -13,9 +13,11 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from rush.accrue_financial_charges import create_loan_fee_entry
-from rush.card import BaseLoan
-from rush.card.reset_card import ResetCard
-from rush.card.term_loan import TermLoan
+from rush.card import (
+    BaseLoan,
+    ResetCard,
+    TermLoan,
+)
 from rush.models import (
     CardTransaction,
     Fee,
