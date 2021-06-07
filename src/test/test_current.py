@@ -1266,7 +1266,7 @@ def _generate_bill_2(session: Session) -> None:
         txn_ref_no="dummy_txn_ref_no_10",
         trace_no="123456",
     )
-
+    assert user_loan.sub_product_type == "card"
     _, user_loan_balance = get_account_balance_from_str(
         session=session, book_string=f"{user_loan.loan_id}/card/available_limit/a"
     )
@@ -3174,6 +3174,8 @@ def test_prepayment(session: Session) -> None:
     # run_anomaly is reversing interest charged entry and adding it into prepayment amount.
     # assert billed_amount == Decimal("30.67")
     assert billed_amount == Decimal("0")
+    assert latest_bill.gross_principal == Decimal(1000)
+    assert latest_bill.principal == Decimal(0)
 
 
 #

@@ -734,7 +734,7 @@ def test_reset_journal_entries_kv(session: Session) -> None:
         user_id=6,
         payment_request_id="reset_1",
     )
-
+    assert loan.sub_product_type == "tenure_loan"
     payment_date = parse_date("2018-11-14")
     payment_request_id = "reset_1"
     payment_requests_data = pay_payment_request(
@@ -888,11 +888,11 @@ def test_reset_journal_entries_kv(session: Session) -> None:
 
     accrue_late_charges(session, loan, parse_date("2019-04-12"), Decimal(120))
     accrue_late_charges(session, loan, parse_date("2019-04-12"), Decimal(120))
-    CollectionOrders()
+    # fee reversed for writeoff
     payment_request_data(
         session=session,
         type="collection",
-        payment_request_amount=Decimal(user_loan.get_total_outstanding()),
+        payment_request_amount=Decimal(user_loan.get_total_outstanding() - 240),
         user_id=6,
         payment_request_id="reset_3_writeoff",
         collection_by="rc_lender_payment",

@@ -91,6 +91,10 @@ def bill_generate(
     session.add(lt)
     session.flush()
 
+    # Set product price as unbilled amount.
+    unbilled_balance = bill.get_unbilled_amount()
+    bill.table.gross_principal = unbilled_balance
+
     bill_generate_event(session=session, bill=bill, user_loan=user_loan, event=lt)
 
     bill.table.is_generated = True
@@ -99,7 +103,7 @@ def bill_generate(
         session=session, book_string=f"{bill.id}/bill/principal_receivable/a"
     )
 
-    # Update the bill row here.
+    # set net product price after reducing prepayment if any.
     bill.table.principal = billed_amount
 
     # Handling child loan emis for this bill.
