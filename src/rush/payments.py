@@ -355,18 +355,29 @@ def transaction_refund_event(
     skip_limit_assignment: bool,
 ) -> None:
     m2p_pool_account = f"{user_loan.lender_id}/lender/pool_balance/a"
-    refund_amount = adjust_payment(session, user_loan, event, event.amount, m2p_pool_account)
+    if user_loan.sub_product_type == "tenure_loan":
+        latest_bill = user_loan.get_latest_generated_bill()
+        create_ledger_entry_from_str(
+            session=session,
+            event_id=event.id,
+            debit_book_str=m2p_pool_account,
+            credit_book_str=f"{latest_bill.table.id}/bill/unbilled/a",
+            amount=Decimal(event.amount),
+        )
+    else:
+        refund_amount = adjust_payment(session, user_loan, event, event.amount, m2p_pool_account)
+        if refund_amount > 0:  # if there's payment left to be adjusted.
+            _adjust_for_prepayment(
+                session=session,
+                loan_id=user_loan.loan_id,
+                event_id=event.id,
+                amount=refund_amount,
+                debit_book_str=m2p_pool_account,
+            )
+
     if not skip_limit_assignment:
         limit_assignment_event(
             session=session, loan_id=user_loan.loan_id, event=event, amount=event.amount
-        )
-    if refund_amount > 0:  # if there's payment left to be adjusted.
-        _adjust_for_prepayment(
-            session=session,
-            loan_id=user_loan.loan_id,
-            event_id=event.id,
-            amount=refund_amount,
-            debit_book_str=m2p_pool_account,
         )
 
     create_ledger_entry_from_str(
@@ -806,3 +817,32 @@ def refund_payment_to_customer(
 
     session.flush()
     return {"result": "success", "message": "Payment refunded"}
+
+
+def wrong_prepayment_reset(session: Session, user_loan: BaseLoan, amount: Decimal):
+    event = LedgerTriggerEvent(
+        performed_by=user_loan.user_id,
+        name="wrong_prepayment_reset",
+        loan_id=user_loan.loan_id,
+        post_date=get_current_ist_time().date(),
+        amount=amount,
+    )
+    session.add(event)
+    session.flush()
+
+    create_ledger_entry_from_str(
+        session,
+        event_id=event.id,
+        debit_book_str=f"{user_loan.loan_id}/loan/pre_payment/l",
+        credit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
+        amount=Decimal(event.amount),
+    )
+
+    latest_bill = user_loan.get_latest_generated_bill()
+    create_ledger_entry_from_str(
+        session=session,
+        event_id=event.id,
+        debit_book_str=f"{user_loan.lender_id}/lender/pool_balance/a",
+        credit_book_str=f"{latest_bill.table.id}/bill/unbilled/a",
+        amount=Decimal(event.amount),
+    )
