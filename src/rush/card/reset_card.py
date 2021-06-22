@@ -33,9 +33,9 @@ class ResetCard(TermLoan):
 
     __mapper_args__ = {"polymorphic_identity": "term_loan_reset"}
 
-    @staticmethod
-    def calculate_first_emi_date(product_order_date: Date) -> Date:
-        return product_order_date.add(months=1)
+    # @staticmethod
+    # def calculate_first_emi_date(product_order_date: Date) -> Date:
+    #     return product_order_date.add(months=1)
 
     @classmethod
     def create(cls, session: Session, **kwargs) -> Loan:
