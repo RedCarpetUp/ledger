@@ -92,7 +92,7 @@ def test_product_amortization_1() -> None:
     amortization_date = ResetCard.calculate_first_emi_date(
         product_order_date=parse_date("2020-08-01").date()
     )
-    assert amortization_date == parse_date("2020-09-01").date()
+    assert amortization_date == parse_date("2020-08-01").date()
 
 
 def test_create_term_loan(session: Session) -> None:
@@ -171,8 +171,8 @@ def test_create_term_loan(session: Session) -> None:
 
     loan_data = session.query(LoanData).filter(LoanData.loan_id == user_loan.loan_id).one()
 
-    assert loan_data.bill_start_date == parse_date("2020-09-01").date()
-    assert loan_data.bill_close_date == parse_date("2021-08-01").date()
+    assert loan_data.bill_start_date == parse_date("2020-08-01").date()
+    assert loan_data.bill_close_date == parse_date("2021-07-01").date()
 
     _, principal_receivable = get_account_balance_from_str(
         session=session, book_string=f"{loan_data.id}/bill/principal_receivable/a"
@@ -182,12 +182,12 @@ def test_create_term_loan(session: Session) -> None:
     all_emis = user_loan.get_loan_schedule()
 
     assert len(all_emis) == 12
-    assert all_emis[0].due_date == parse_date("2020-09-01").date()
+    assert all_emis[0].due_date == parse_date("2020-08-01").date()
     assert all_emis[0].emi_number == 1
     assert all_emis[0].interest_due == Decimal("300.67")
     assert all_emis[0].total_due_amount == Decimal("1134")
 
-    assert all_emis[-1].due_date == parse_date("2021-08-01").date()
+    assert all_emis[-1].due_date == parse_date("2021-07-01").date()
     assert all_emis[-1].emi_number == 12
     assert all_emis[-1].interest_due == Decimal("300.67")
     assert all_emis[-1].total_due_amount == Decimal("1134")
@@ -731,7 +731,7 @@ def test_reset_journal_entries_kv(session: Session) -> None:
         user_id=6,
         payment_request_id="reset_1",
     )
-
+    assert loan.sub_product_type == "tenure_loan"
     payment_date = parse_date("2018-11-14")
     payment_request_id = "reset_1"
     payment_requests_data = pay_payment_request(
@@ -885,11 +885,11 @@ def test_reset_journal_entries_kv(session: Session) -> None:
 
     accrue_late_charges(session, loan, parse_date("2019-04-12"), Decimal(120))
     accrue_late_charges(session, loan, parse_date("2019-04-12"), Decimal(120))
-    CollectionOrders()
+    # fee reversed for writeoff
     payment_request_data(
         session=session,
         type="collection",
-        payment_request_amount=Decimal(user_loan.get_total_outstanding()),
+        payment_request_amount=Decimal(user_loan.get_total_outstanding() - 240),
         user_id=6,
         payment_request_id="reset_3_writeoff",
         collection_by="rc_lender_payment",

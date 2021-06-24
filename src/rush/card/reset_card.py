@@ -33,9 +33,9 @@ class ResetCard(TermLoan):
 
     __mapper_args__ = {"polymorphic_identity": "term_loan_reset"}
 
-    @staticmethod
-    def calculate_first_emi_date(product_order_date: Date) -> Date:
-        return product_order_date.add(months=1)
+    # @staticmethod
+    # def calculate_first_emi_date(product_order_date: Date) -> Date:
+    #     return product_order_date.add(months=1)
 
     @classmethod
     def create(cls, session: Session, **kwargs) -> Loan:
@@ -53,6 +53,7 @@ class ResetCard(TermLoan):
         loan.downpayment_percent = Decimal(0)
         loan.can_close_early = False
         loan.loan_status = kwargs.get("loan_status", "NOT STARTED")
+        loan.sub_product_type = "tenure_loan"
 
         bill_start_date, bill_close_date = cls.bill_class.calculate_bill_start_and_close_date(
             first_bill_date=cls.calculate_first_emi_date(product_order_date=loan.amortization_date),

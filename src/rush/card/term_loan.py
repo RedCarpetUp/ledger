@@ -140,6 +140,7 @@ class TermLoan(BaseLoan):
         loan.can_close_early = kwargs.get("can_close_early") or False
         loan.tenure_in_months = kwargs.get("tenure")
         loan.loan_status = kwargs.get("loan_status", "NOT STARTED")
+        loan.sub_product_type = "tenure_loan"
         # Don't want to overwrite default value in case of None.
         if kwargs.get("interest_free_period_in_days"):
             loan.interest_free_period_in_days = kwargs.get("interest_free_period_in_days")

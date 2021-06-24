@@ -24,6 +24,7 @@ from rush.ledger_events import (
     _adjust_for_prepayment,
     adjust_for_revenue,
     get_revenue_book_str_for_fee,
+    limit_assignment_event,
 )
 from rush.ledger_utils import (
     create_ledger_entry_from_str,
@@ -68,7 +69,6 @@ def payment_received(
     if payment_request_data.collection_by == "rc_lender_payment":
         write_off_loan(user_loan=user_loan, payment_request_data=payment_request_data)
         return
-
     event = LedgerTriggerEvent.new(
         session,
         name="payment_received",
@@ -136,13 +136,24 @@ def refund_payment(
             "payment_request_id": payment_request_data.payment_request_id,
         },
     )
+    skip_limit_assignment = False
+    if payment_request_data.payment_reference_id:
+        if payment_request_data.payment_reference_id[:2].lower() == "rc":
+            skip_limit_assignment = True
+
     session.add(lt)
     session.flush()
-
     # Checking if bill is generated or not. if not then reduce from unbilled else treat as payment.
-    transaction_refund_event(session=session, user_loan=user_loan, event=lt)
+    transaction_refund_event(
+        session=session,
+        user_loan=user_loan,
+        event=lt,
+        skip_limit_assignment=skip_limit_assignment,
+    )
     run_anomaly(
-        session=session, user_loan=user_loan, event_date=payment_request_data.intermediary_payment_date
+        session=session,
+        user_loan=user_loan,
+        event_date=payment_request_data.intermediary_payment_date,
     )
 
     # Update dpd
@@ -191,7 +202,7 @@ def get_payment_for_loan(
     session: Session, payment_request_data: PaymentRequestsData, user_loan: BaseLoan
 ) -> Decimal:
     if not payment_request_data.collection_request_id:
-        return payment_request_data.payment_request_amount
+        return round(payment_request_data.payment_request_amount, 2)
 
     collection_data_amount = (
         session.query(CollectionOrders.amount_paid).filter(
@@ -200,7 +211,7 @@ def get_payment_for_loan(
             CollectionOrders.collection_request_id == payment_request_data.collection_request_id,
         )
     ).scalar()
-    return collection_data_amount
+    return round(collection_data_amount, 2)
 
 
 def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amount_to_slide: Decimal):
@@ -253,14 +264,19 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
         for fee_type, fees in all_fees_by_type.items():
             total_fee_amount = sum(fee.remaining_fee_amount for fee in fees)
             total_amount_to_be_adjusted_in_fee = min(total_fee_amount, total_amount_to_slide)
-
+            fee_amount = 0
             for fee in fees:
                 # For non-bill aka loan-level fees
                 # Thus, they are not slid into bills and simply get added to the split info
                 # to be adjusted into the loan later
                 if fee.identifier == "loan":
                     amount_to_adjust = min(total_amount_to_be_adjusted_in_fee, fee.gross_amount)
-                    x = {"type": "fee", "fee": fee, "amount_to_adjust": amount_to_adjust}
+                    x = {
+                        "type": "fee",
+                        "fee": fee,
+                        "amount_to_adjust": amount_to_adjust,
+                    }
+                    fee_amount += amount_to_adjust
                     split_info.append(x)
                     continue
 
@@ -270,6 +286,7 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
                     fee.remaining_fee_amount / total_fee_amount,
                     total_amount_to_be_adjusted_in_fee,
                 )
+                fee_amount += amount_to_slide_based_on_ratio
                 x = {
                     "type": "fee",
                     "bill": bill,
@@ -277,16 +294,23 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
                     "amount_to_adjust": amount_to_slide_based_on_ratio,
                 }
                 split_info.append(x)
+            difference = total_amount_to_slide - fee_amount
+            if difference < 0:
+                split_info[-1]["amount_to_adjust"] += difference
+
             total_amount_to_slide -= total_amount_to_be_adjusted_in_fee
 
     # slide interest.
     total_interest_amount = sum(bill.get_interest_due() for bill in unpaid_bills)
     if total_amount_to_slide > 0 and total_interest_amount > 0:
         total_amount_to_be_adjusted_in_interest = min(total_interest_amount, total_amount_to_slide)
+        interest_amount = 0
         for bill in unpaid_bills:
             amount_to_slide_based_on_ratio = mul(
-                bill.get_interest_due() / total_interest_amount, total_amount_to_be_adjusted_in_interest
+                bill.get_interest_due() / total_interest_amount,
+                total_amount_to_be_adjusted_in_interest,
             )
+            interest_amount += amount_to_slide_based_on_ratio
             if amount_to_slide_based_on_ratio > 0:  # will be 0 for 0 bill with late fee.
                 x = {
                     "type": "interest",
@@ -294,17 +318,22 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
                     "amount_to_adjust": amount_to_slide_based_on_ratio,
                 }
                 split_info.append(x)
+        difference = total_amount_to_slide - interest_amount
+        if difference < 0:
+            split_info[-1]["amount_to_adjust"] += difference
         total_amount_to_slide -= total_amount_to_be_adjusted_in_interest
 
     # slide principal.
     total_principal_amount = sum(bill.get_principal_due() for bill in unpaid_bills)
     if total_amount_to_slide > 0 and total_principal_amount > 0:
         total_amount_to_be_adjusted_in_principal = min(total_principal_amount, total_amount_to_slide)
+        principal_amount = 0
         for bill in unpaid_bills:
             amount_to_slide_based_on_ratio = mul(
                 bill.get_principal_due() / total_principal_amount,
                 total_amount_to_be_adjusted_in_principal,
             )
+            principal_amount += amount_to_slide_based_on_ratio
             if amount_to_slide_based_on_ratio > 0:
                 x = {
                     "type": "principal",
@@ -312,14 +341,26 @@ def find_split_to_slide_in_loan(session: Session, user_loan: BaseLoan, total_amo
                     "amount_to_adjust": amount_to_slide_based_on_ratio,
                 }
                 split_info.append(x)
+
+        difference = total_amount_to_slide - principal_amount
+        if difference < 0:
+            split_info[-1]["amount_to_adjust"] += difference
         total_amount_to_slide -= total_amount_to_be_adjusted_in_principal
     return split_info
 
 
-def transaction_refund_event(session: Session, user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
+def transaction_refund_event(
+    session: Session,
+    user_loan: BaseLoan,
+    event: LedgerTriggerEvent,
+    skip_limit_assignment: bool,
+) -> None:
     m2p_pool_account = f"{user_loan.lender_id}/lender/pool_balance/a"
     refund_amount = adjust_payment(session, user_loan, event, event.amount, m2p_pool_account)
-
+    if not skip_limit_assignment:
+        limit_assignment_event(
+            session=session, loan_id=user_loan.loan_id, event=event, amount=event.amount
+        )
     if refund_amount > 0:  # if there's payment left to be adjusted.
         _adjust_for_prepayment(
             session=session,
