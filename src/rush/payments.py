@@ -123,6 +123,9 @@ def payment_received(
         )
     create_payment_split(session, event)
 
+    if user_loan.sub_product_type == "tenure_loan":
+        user_loan.loan_status = "ACTIVE"
+
 
 def refund_payment(
     session: Session, user_loan: BaseLoan, payment_request_data: PaymentRequestsData
