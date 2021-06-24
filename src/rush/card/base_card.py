@@ -216,12 +216,17 @@ class BaseLoan(Loan):
     should_reinstate_limit_on_payment: bool = False
     bill_class: Type[B] = BaseBill
     session: Session = None
+    subclasses = []
 
     __mapper_args__ = {"polymorphic_identity": "base_loan"}
 
     def __init__(self, session: Session, **kwargs):
         self.session = session
         super().__init__(**kwargs)
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        cls.subclasses.append(cls)
 
     @hybrid_property
     def loan_id(self):
