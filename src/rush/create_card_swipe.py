@@ -81,8 +81,6 @@ def create_card_swipe(
     session.add(lt)
     session.flush()  # need id. TODO Gotta use table relationships
 
-    user_loan.loan_status = "ACTIVE"
-
     if not isinstance(user_loan, ResetCardV2):
         disburse_money_to_card(session=session, user_loan=user_loan, event=lt)
 
