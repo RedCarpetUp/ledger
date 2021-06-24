@@ -460,8 +460,9 @@ class BaseLoan(Loan):
     def get_child_loans(self) -> List["BaseLoan"]:
         return []
 
-    def cancel(self):
-        assert self.loan_status in ("NOT STARTED", "FEE PAID")
+    def cancel(self) -> bool:
+        if self.loan_status not in ("NOT STARTED", "FEE PAID"):
+            return False
 
         self.loan_status = "CANCELLED"
         LedgerTriggerEvent.new(
@@ -471,6 +472,7 @@ class BaseLoan(Loan):
             post_date=get_current_ist_time(),
         )
         self.session.flush()
+        return True
 
     def get_emi_to_accrue_interest(self, post_date: Date):
         loan_schedule = (
