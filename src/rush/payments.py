@@ -69,6 +69,10 @@ def payment_received(
     if payment_request_data.collection_by == "rc_lender_payment":
         write_off_loan(user_loan=user_loan, payment_request_data=payment_request_data)
         return
+
+    if user_loan.sub_product_type == "tenure_loan":
+        user_loan.loan_status = "ACTIVE"
+
     event = LedgerTriggerEvent.new(
         session,
         name="payment_received",
@@ -122,9 +126,6 @@ def payment_received(
             debit_book_str=f"{user_loan.lender_id}/lender/pg_account/a",
         )
     create_payment_split(session, event)
-
-    if user_loan.sub_product_type == "tenure_loan":
-        user_loan.loan_status = "ACTIVE"
 
 
 def refund_payment(
