@@ -103,6 +103,7 @@ class ResetCard(TermLoan):
                 Fee.identifier == "loan",
                 Fee.name == "reset_joining_fees",
                 Fee.fee_status == "PAID",
+                Fee.gross_amount > 0,
             )
             .scalar()
         )
