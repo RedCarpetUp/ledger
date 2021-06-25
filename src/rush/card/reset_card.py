@@ -7,6 +7,10 @@ from typing import (
 from dateutil.relativedelta import relativedelta
 from pendulum import Date
 from sqlalchemy.orm.session import Session
+from sqlalchemy.sql.expression import (
+    and_,
+    or_,
+)
 
 from rush.card.base_card import B
 from rush.card.term_loan import (
@@ -95,15 +99,16 @@ class ResetCard(TermLoan):
             bill=bill,
         )
 
-        # assert joining fees.
+        # If a zero amount fee was paid (with a 100% discount coupon),
+        # the zero payment won't be slid and the status shall remain UNPAID.
+        # Hence, the OR condition.
         joining_fees = (
             session.query(Fee.identifier_id)
             .filter(
                 Fee.identifier_id == loan.loan_id,
                 Fee.identifier == "loan",
                 Fee.name == "reset_joining_fees",
-                Fee.fee_status == "PAID",
-                Fee.gross_amount > 0,
+                or_(and_(Fee.gross_amount == 0, Fee.fee_status == "UNPAID"), Fee.fee_status == "PAID"),
             )
             .scalar()
         )
