@@ -14,6 +14,7 @@ from rush.card.health_card import HealthCard
 from rush.card.rebel_card import RebelCard
 from rush.card.reset_card import ResetCard
 from rush.card.reset_card_v2 import ResetCardV2
+from rush.card.rhythm_card import RhythmCard
 from rush.card.ruby_card import RubyCard
 from rush.card.term_loan import TermLoan
 from rush.card.term_loan2 import TermLoan2
