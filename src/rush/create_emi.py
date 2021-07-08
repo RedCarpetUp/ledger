@@ -472,7 +472,7 @@ def update_journal_entry(
             session.query(PaymentSplit.component, PaymentSplit.amount_settled)
             .filter(
                 PaymentSplit.payment_request_id == event.extra_details["payment_request_id"],
-                PaymentSplit.component.in_(["pre_payment", "unbilled"]),
+                PaymentSplit.component.in_(["pre_payment"]),
                 PaymentSplit.loan_id == user_loan.loan_id,
             )
             .all()
@@ -528,8 +528,9 @@ def update_journal_entry(
         principal_and_interest = filtered_split_data.pop("principal", 0) + filtered_split_data.pop(
             "interest", 0
         )
+        is_term_loan_unbilled = is_term_loan and filtered_split_data.get("unbilled", False)
         # if there is something else apart from principal and interest.
-        if filtered_split_data and event.amount != principal_and_interest:
+        if filtered_split_data and not is_term_loan_unbilled and event.amount != principal_and_interest:
             TL = " TL" if is_term_loan else ""
             sales_import_amount = 0
             narration_name = ""

@@ -589,7 +589,7 @@ def test_reset_journal_entries(session: Session) -> None:
     assert entrys[2].ptype == "TL-Merchant"
 
     amount = user_loan.get_total_outstanding()
-    assert amount == 7632
+    assert amount == 7732
 
     payment_request_data(
         session=session,
