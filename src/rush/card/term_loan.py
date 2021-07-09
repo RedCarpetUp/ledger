@@ -139,7 +139,7 @@ class TermLoan(BaseLoan):
         loan.interest_type = kwargs.get("interest_type", "flat")
         loan.can_close_early = kwargs.get("can_close_early") or False
         loan.tenure_in_months = kwargs.get("tenure")
-        loan.loan_status = "NOT STARTED"
+        loan.loan_status = kwargs.get("loan_status", "NOT STARTED")
         loan.sub_product_type = "tenure_loan"
         # Don't want to overwrite default value in case of None.
         if kwargs.get("interest_free_period_in_days"):
@@ -185,6 +185,8 @@ class TermLoan(BaseLoan):
         return loan
 
     def disburse(self, **kwargs):
+        self.loan_status = "DISBURSED"
+
         event = LedgerTriggerEvent(
             performed_by=kwargs["user_id"],
             name="disbursal",
