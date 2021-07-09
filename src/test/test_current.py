@@ -227,7 +227,7 @@ def test_card_swipe_and_reversal(session: Session) -> None:
 
     _, unbilled_balance = get_account_balance_from_str(session, f"{bill_id}/bill/unbilled/a")
     assert unbilled_balance == 700
-    # remaining card balance should be -900 because we've not loaded it yet and it's going in negative.
+    # remaining card balance should be -700(-900+200) because we've not loaded it yet and it's going in negative.
     _, card_balance = get_account_balance_from_str(session, f"{uc.loan_id}/card/available_limit/l")
     assert card_balance == -700
 
