@@ -566,6 +566,7 @@ def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
         "igst_payable": "igst",
         "cgst_payable": "cgst",
         "sgst_payable": "sgst",
+        "unbilled": "principal",
     }
     normalized_split_data = {}
     total_amount = 0
