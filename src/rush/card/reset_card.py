@@ -7,6 +7,10 @@ from typing import (
 from dateutil.relativedelta import relativedelta
 from pendulum import Date
 from sqlalchemy.orm.session import Session
+from sqlalchemy.sql.expression import (
+    and_,
+    or_,
+)
 
 from rush.card.base_card import B
 from rush.card.term_loan import (
@@ -33,9 +37,9 @@ class ResetCard(TermLoan):
 
     __mapper_args__ = {"polymorphic_identity": "term_loan_reset"}
 
-    @staticmethod
-    def calculate_first_emi_date(product_order_date: Date) -> Date:
-        return product_order_date.add(months=1)
+    # @staticmethod
+    # def calculate_first_emi_date(product_order_date: Date) -> Date:
+    #     return product_order_date.add(months=1)
 
     @classmethod
     def create(cls, session: Session, **kwargs) -> Loan:
@@ -52,6 +56,7 @@ class ResetCard(TermLoan):
         loan.interest_type = "flat"
         loan.downpayment_percent = Decimal(0)
         loan.can_close_early = False
+        loan.loan_status = kwargs.get("loan_status", "NOT STARTED")
         loan.sub_product_type = "tenure_loan"
 
         bill_start_date, bill_close_date = cls.bill_class.calculate_bill_start_and_close_date(
@@ -95,14 +100,16 @@ class ResetCard(TermLoan):
             bill=bill,
         )
 
-        # assert joining fees.
+        # If a zero amount fee was paid (with a 100% discount coupon),
+        # the zero payment won't be slid and the status shall remain UNPAID.
+        # Hence, the OR condition.
         joining_fees = (
             session.query(Fee.identifier_id)
             .filter(
                 Fee.identifier_id == loan.loan_id,
                 Fee.identifier == "loan",
                 Fee.name == "reset_joining_fees",
-                Fee.fee_status == "PAID",
+                or_(and_(Fee.gross_amount == 0, Fee.fee_status == "UNPAID"), Fee.fee_status == "PAID"),
             )
             .scalar()
         )
@@ -114,6 +121,8 @@ class ResetCard(TermLoan):
         return loan
 
     def disburse(self, **kwargs):
+        self.loan_status = "DISBURSED"
+
         event = LedgerTriggerEvent(
             performed_by=kwargs["user_id"],
             name="disbursal",

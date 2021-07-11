@@ -216,12 +216,17 @@ class BaseLoan(Loan):
     should_reinstate_limit_on_payment: bool = False
     bill_class: Type[B] = BaseBill
     session: Session = None
+    subclasses = []
 
     __mapper_args__ = {"polymorphic_identity": "base_loan"}
 
     def __init__(self, session: Session, **kwargs):
         self.session = session
         super().__init__(**kwargs)
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        cls.subclasses.append(cls)
 
     @hybrid_property
     def loan_id(self):
@@ -267,6 +272,7 @@ class BaseLoan(Loan):
         loan.min_multiplier = kwargs.get("min_multiplier")
         loan.interest_type = kwargs.get("interest_type", "flat")
         loan.tenure_in_months = kwargs.get("tenure")
+        loan.loan_status = kwargs.get("loan_status", "NOT STARTED")
         # Don't want to overwrite default value in case of None.
         if kwargs.get("interest_free_period_in_days"):
             loan.interest_free_period_in_days = kwargs.get("interest_free_period_in_days")
@@ -459,16 +465,19 @@ class BaseLoan(Loan):
     def get_child_loans(self) -> List["BaseLoan"]:
         return []
 
-    def close(self):
-        if self.loan_status != "Cancelled":
-            self.loan_status = "Cancelled"
-            LedgerTriggerEvent.new(
-                self.session,
-                name="close_loan",
-                loan_id=self.loan_id,
-                post_date=get_current_ist_time(),
-            )
-            self.session.flush()
+    def cancel(self) -> bool:
+        if self.loan_status not in ("NOT STARTED", "FEE PAID"):
+            return False
+
+        self.loan_status = "CANCELLED"
+        LedgerTriggerEvent.new(
+            self.session,
+            name="cancel_loan",
+            loan_id=self.loan_id,
+            post_date=get_current_ist_time(),
+        )
+        self.session.flush()
+        return True
 
     def get_emi_to_accrue_interest(self, post_date: Date):
         loan_schedule = (

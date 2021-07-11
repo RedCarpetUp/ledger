@@ -41,6 +41,7 @@ from rush.models import (
     Fee,
     LedgerEntry,
     LedgerTriggerEvent,
+    Loan,
     PaymentMapping,
     PaymentRequestsData,
     PaymentSplit,
@@ -68,6 +69,7 @@ def payment_received(
     if payment_request_data.collection_by == "rc_lender_payment":
         write_off_loan(user_loan=user_loan, payment_request_data=payment_request_data)
         return
+
     event = LedgerTriggerEvent.new(
         session,
         name="payment_received",
@@ -718,6 +720,9 @@ def remove_fee(session: Session, user_loan: BaseLoan, fee: Fee):
 
     fee.fee_status = "REMOVED"
 
+    if user_loan.loan_status == "FEE PAID":
+        user_loan.loan_status = "NOT STARTED"
+
     return {"result": "success", "message": "Fee removal successful"}
 
 
@@ -814,6 +819,11 @@ def refund_payment_to_customer(
 
         for fee in fees:
             fee.fee_status = "REFUNDED"
+
+        user_loan = session.query(Loan).filter(Loan.id == refund_event.loan_id).one()
+
+        if user_loan.loan_status == "FEE PAID":
+            user_loan.loan_status = "NOT STARTED"
 
     session.flush()
     return {"result": "success", "message": "Payment refunded"}

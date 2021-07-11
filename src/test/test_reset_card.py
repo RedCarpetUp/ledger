@@ -20,10 +20,13 @@ from rush.card import (
     get_user_product,
 )
 from rush.card.reset_card import ResetCard
+from rush.card.reset_card_v2 import ResetCardV2
 from rush.card.utils import (
     create_loan,
     create_loan_fee,
     create_user_product_mapping,
+    is_reset_loan,
+    is_reset_product_type,
 )
 from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import get_account_balance_from_str
@@ -92,7 +95,7 @@ def test_product_amortization_1() -> None:
     amortization_date = ResetCard.calculate_first_emi_date(
         product_order_date=parse_date("2020-08-01").date()
     )
-    assert amortization_date == parse_date("2020-09-01").date()
+    assert amortization_date == parse_date("2020-08-01").date()
 
 
 def test_create_term_loan(session: Session) -> None:
@@ -171,8 +174,8 @@ def test_create_term_loan(session: Session) -> None:
 
     loan_data = session.query(LoanData).filter(LoanData.loan_id == user_loan.loan_id).one()
 
-    assert loan_data.bill_start_date == parse_date("2020-09-01").date()
-    assert loan_data.bill_close_date == parse_date("2021-08-01").date()
+    assert loan_data.bill_start_date == parse_date("2020-08-01").date()
+    assert loan_data.bill_close_date == parse_date("2021-07-01").date()
 
     _, principal_receivable = get_account_balance_from_str(
         session=session, book_string=f"{loan_data.id}/bill/principal_receivable/a"
@@ -182,12 +185,12 @@ def test_create_term_loan(session: Session) -> None:
     all_emis = user_loan.get_loan_schedule()
 
     assert len(all_emis) == 12
-    assert all_emis[0].due_date == parse_date("2020-09-01").date()
+    assert all_emis[0].due_date == parse_date("2020-08-01").date()
     assert all_emis[0].emi_number == 1
     assert all_emis[0].interest_due == Decimal("300.67")
     assert all_emis[0].total_due_amount == Decimal("1134")
 
-    assert all_emis[-1].due_date == parse_date("2021-08-01").date()
+    assert all_emis[-1].due_date == parse_date("2021-07-01").date()
     assert all_emis[-1].emi_number == 12
     assert all_emis[-1].interest_due == Decimal("300.67")
     assert all_emis[-1].total_due_amount == Decimal("1134")
@@ -1152,3 +1155,13 @@ def test_reset_loan_limit_unlock_error(session: Session) -> None:
 
 def test_reset_loan_early_payment(session: Session) -> None:
     pass
+
+
+def test_reset_card_versions(session: Session) -> None:
+    v1 = ResetCard(session=session)
+    assert is_reset_loan(v1) is True
+    assert is_reset_product_type(v1.product_type) is True
+
+    v2 = ResetCardV2(session=session)
+    assert is_reset_loan(v2) is True
+    assert is_reset_product_type(v2.product_type) is True
