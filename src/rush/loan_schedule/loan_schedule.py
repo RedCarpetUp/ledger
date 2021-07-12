@@ -137,6 +137,7 @@ def slide_payment_to_emis(
             .filter(
                 PaymentMapping.emi_id == emi.id,
                 PaymentMapping.payment_request_id == payment_event.extra_details["payment_request_id"],
+                PaymentMapping.row_status == "active",
             )
             .scalar()
         )
