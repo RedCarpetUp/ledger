@@ -397,14 +397,14 @@ def reset_loan_schedule(loan_id: Loan.id, session: Session) -> None:
             .update({PaymentMapping.row_status: "inactive"}, synchronize_session=False)
         )
 
-    user_loan = get_user_loan(session=Session, loan_id=loan_id)
+    user_loan = get_user_loan(session=session, loan_id=loan_id)
 
-    reset_bill_emis(user_loan=user_loan)
+    reset_bill_emis(user_loan=user_loan,session=session)
     reset_emis(user_loan=user_loan)
     group_bills(user_loan)
-    make_emi_payment_mappings_inactive(user_loan)
+    make_emi_payment_mappings_inactive(user_loan,session=session)
 
-    payment_events = get_payment_events(user_loan)
+    payment_events = get_payment_events(user_loan,session=session)
 
     for payment_event in payment_events:
         amount_to_slide = (
