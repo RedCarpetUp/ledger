@@ -376,6 +376,7 @@ def transaction_refund_event(
                 amount=refund_amount,
                 debit_book_str=m2p_pool_account,
             )
+        create_payment_split(session, event)
 
     if not skip_limit_assignment:
         limit_assignment_event(
@@ -389,7 +390,6 @@ def transaction_refund_event(
         credit_book_str=f"{user_loan.loan_id}/loan/refund_off_balance/l",  # Couldn't find anything relevant.
         amount=Decimal(event.amount),
     )
-    create_payment_split(session, event)
     # slide_payment_to_emis(user_loan, event)
 
 
