@@ -19,7 +19,7 @@ from rush.models import (
     LoanSchedule,
     MoratoriumInterest,
     PaymentMapping,
-    PaymentRequestData,
+    PaymentRequestsData,
     PaymentSplit,
 )
 
@@ -365,12 +365,12 @@ def reset_loan_schedule(loan_id: Loan.id, session: Session) -> None:
 
     def get_payment_events(user_loan: Loan, session: Session) -> List[LedgerTriggerEvent]:
         reset_joining_fee_request_id = (
-            session.query(PaymentRequestData.payment_request_id)
+            session.query(PaymentRequestsData.payment_request_id)
             .filter(
-                PaymentRequestData.row_status == "active",
-                PaymentRequestData.payment_request_status == "Paid",
-                PaymentRequestData.type == "reset_joining_fees",
-                PaymentRequestData.user_id == user_loan.user_id,
+                PaymentRequestsData.row_status == "active",
+                PaymentRequestsData.payment_request_status == "Paid",
+                PaymentRequestsData.type == "reset_joining_fees",
+                PaymentRequestsData.user_id == user_loan.user_id,
             )
             .scalar()
         )
