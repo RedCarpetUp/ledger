@@ -336,6 +336,7 @@ def readjust_future_payment(user_loan: BaseLoan, date_to_check_after: date):
                 amount_settled=amount_slid,
             )
 
+
 def reset_loan_schedule(loan_id: Loan.id, session: Session) -> None:
     def reset_bill_emis(user_loan: Loan, session: Session) -> None:
         bill = user_loan.get_latest_bill()
