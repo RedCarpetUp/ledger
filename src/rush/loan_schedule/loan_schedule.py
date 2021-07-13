@@ -9,11 +9,9 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.orm import Session
-
-from rush.card.base_card import (
-    BaseBill,
-    BaseLoan,
-)
+from typing import List
+from rush.card import get_user_loan
+from rush.card.base_card import BaseBill, BaseLoan, Loan
 from rush.loan_schedule.moratorium import add_moratorium_emis
 from rush.models import (
     LedgerTriggerEvent,
@@ -21,6 +19,8 @@ from rush.models import (
     LoanSchedule,
     MoratoriumInterest,
     PaymentMapping,
+    PaymentRequestData,
+    PaymentSplit,
 )
 
 
@@ -334,3 +334,86 @@ def readjust_future_payment(user_loan: BaseLoan, date_to_check_after: date):
                 emi_id=emi_id,
                 amount_settled=amount_slid,
             )
+
+def reset_loan_schedule(loan_id: Loan.id, session: Session) -> None:
+    def reset_bill_emis(user_loan: Loan, session: Session) -> None:
+        bill = user_loan.get_latest_bill()
+        bill_emis = (
+            session.query(LoanSchedule)
+            .filter(LoanSchedule.loan_id == user_loan.loan_id, LoanSchedule.bill_id == bill.id)
+            .order_by(LoanSchedule.emi_number)
+            .all()
+        )
+        instalment = bill.get_instalment_amount()
+        opening_principal = bill.table.principal
+        interest_due = round(bill.get_interest_to_charge(), 2)
+        principal_due = round(instalment - interest_due, 2)
+        for bill_emi in bill_emis:
+            bill_emi.interest_due = interest_due
+            bill_emi.principal_due = principal_due
+            bill_emi.total_closing_balance = (round(opening_principal, 2),)
+            opening_principal -= principal_due
+
+    def reset_emis(user_loan: Loan) -> None:
+        emis = user_loan.get_loan_schedule()
+        for emi in emis:
+            emi.last_payment_date = None
+            emi.payment_received = 0
+            emi.dpd = -999
+            emi.payment_status = "UnPaid"
+
+    def get_payment_events(user_loan: Loan, session: Session) -> List[LedgerTriggerEvent]:
+        reset_joining_fee_request_id = (
+            session.query(PaymentRequestData.payment_request_id)
+            .filter(
+                PaymentRequestData.row_status == "active",
+                PaymentRequestData.payment_request_status == "Paid",
+                PaymentRequestData.type == "reset_joining_fees",
+                PaymentRequestData.user_id == user_loan.user_id,
+            )
+            .scalar()
+        )
+        payment_events = (
+            session.query(LedgerTriggerEvent)
+            .filter(
+                LedgerTriggerEvent.loan_id == user_loan.loan_id,
+                LedgerTriggerEvent.name == "payment_received",
+                LedgerTriggerEvent.extra_details["payment_request_id"].astext
+                != reset_joining_fee_request_id,
+            )
+            .order_by(LedgerTriggerEvent.post_date)
+            .all()
+        )
+        return payment_events
+
+    def make_emi_payment_mappings_inactive(user_loan: Loan, session: Session) -> None:
+        emis = user_loan.get_loan_schedule()
+        emi_ids = [emi.id for emi in emis]
+        (
+            session.query(PaymentMapping)
+            .filter(PaymentMapping.emi_id.in_(emi_ids), PaymentMapping.row_status == "active")
+            .update({PaymentMapping.row_status: "inactive"}, synchronize_session=False)
+        )
+
+    user_loan = get_user_loan(session=Session, loan_id=loan_id)
+
+    reset_bill_emis(user_loan=user_loan)
+    reset_emis(user_loan=user_loan)
+    group_bills(user_loan)
+    make_emi_payment_mappings_inactive(user_loan)
+
+    payment_events = get_payment_events(user_loan)
+
+    for payment_event in payment_events:
+        amount_to_slide = (
+            session.query(func.sum(PaymentSplit.amount_settled))
+            .filter(
+                PaymentSplit.payment_request_id == payment_event.extra_details["payment_request_id"],
+                PaymentSplit.component.in_(("principal", "interest", "unbilled")),
+            )
+            .scalar()
+        )
+        slide_payment_to_emis(user_loan, payment_event, amount_to_slide)
+        if user_loan.can_close_loan(as_of_event_id=payment_event.id):
+            close_loan(user_loan, payment_event.post_date)
+            break
