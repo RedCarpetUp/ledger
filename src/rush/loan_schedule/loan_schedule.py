@@ -1,6 +1,7 @@
 from collections import defaultdict
 from datetime import date
 from decimal import Decimal
+from typing import List
 
 from dateutil.relativedelta import relativedelta
 from pendulum import datetime
@@ -9,9 +10,13 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.orm import Session
-from typing import List
+
 from rush.card import get_user_loan
-from rush.card.base_card import BaseBill, BaseLoan, Loan
+from rush.card.base_card import (
+    BaseBill,
+    BaseLoan,
+    Loan,
+)
 from rush.loan_schedule.moratorium import add_moratorium_emis
 from rush.models import (
     LedgerTriggerEvent,
@@ -356,13 +361,15 @@ def reset_loan_schedule(loan_id: Loan.id, session: Session) -> None:
             bill_emi.total_closing_balance = (round(opening_principal, 2),)
             opening_principal -= principal_due
 
-    def reset_emis(user_loan: Loan) -> None:
+    def reset_emis(user_loan: Loan, session: Session) -> None:
         emis = user_loan.get_loan_schedule()
         for emi in emis:
             emi.last_payment_date = None
             emi.payment_received = 0
             emi.dpd = -999
             emi.payment_status = "UnPaid"
+            session.add(emi)
+        session.flush()
 
     def get_payment_events(user_loan: Loan, session: Session) -> List[LedgerTriggerEvent]:
         reset_joining_fee_request_id = (
@@ -399,12 +406,12 @@ def reset_loan_schedule(loan_id: Loan.id, session: Session) -> None:
 
     user_loan = get_user_loan(session=session, loan_id=loan_id)
 
-    reset_bill_emis(user_loan=user_loan,session=session)
-    reset_emis(user_loan=user_loan)
+    reset_bill_emis(user_loan=user_loan, session=session)
+    reset_emis(user_loan=user_loan, session=session)
     group_bills(user_loan)
-    make_emi_payment_mappings_inactive(user_loan,session=session)
+    make_emi_payment_mappings_inactive(user_loan, session=session)
 
-    payment_events = get_payment_events(user_loan,session=session)
+    payment_events = get_payment_events(user_loan, session=session)
 
     for payment_event in payment_events:
         amount_to_slide = (

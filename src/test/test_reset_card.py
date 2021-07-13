@@ -9,7 +9,7 @@ import pytest
 from dateutil.relativedelta import relativedelta
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
-from rush.loan_schedule.loan_schedule import reset_loan_schedule
+
 from rush.accrue_financial_charges import (
     accrue_interest_on_all_bills,
     accrue_late_charges,
@@ -31,6 +31,7 @@ from rush.card.utils import (
 from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import get_account_balance_from_str
 from rush.limit_unlock import limit_unlock
+from rush.loan_schedule.loan_schedule import reset_loan_schedule
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
     CollectionOrders,
@@ -1271,25 +1272,26 @@ def test_reset_loan_schedule(session: Session) -> None:
         settlement_date=payment_requests_data.payment_received_in_bank_date,
         user_loan=user_loan,
     )
-    
-    first_emi = (
-        session.query(LoanSchedule)
-        .filter(
-            LoanSchedule.bill_id == None, 
-        )
-        .order_by(id)
-        .first()
-    )
-    assert first_emi.payment_status == "Paid" 
-    
-    reset_loan_schedule(loan_id=user_loan.loan_id,session=session)
 
     first_emi = (
         session.query(LoanSchedule)
         .filter(
             LoanSchedule.bill_id == None, 
         )
-        .order_by(id)
+        .order_by(LoanSchedule.id)
+        .first()
+    )
+    assert first_emi.payment_status == "Paid" 
+
+    to_check_emi_id = first_emi.id
+    
+    reset_loan_schedule(loan_id=user_loan.loan_id,session=session)
+
+    first_emi = (
+        session.query(LoanSchedule)
+        .filter(
+            LoanSchedule.id == to_check_emi_id
+        )
         .first()
     )
     assert first_emi.payment_status == "UnPaid" 
