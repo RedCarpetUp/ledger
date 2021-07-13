@@ -198,21 +198,6 @@ def test_create_term_loan(session: Session) -> None:
     interest_left_to_accrue = get_interest_left_to_accrue(session, user_loan)
     assert interest_left_to_accrue == Decimal("3608.04")
 
-    swipe2 = create_card_swipe(
-        session=session,
-        user_loan=user_loan,
-        txn_time=parse_date("2020-08-01 11:22:11"),
-        amount=Decimal(1000),
-        description="Flipkart.com",
-        txn_ref_no="dummy_txn_ref_no_2",
-        trace_no="123456",
-    )
-    session.flush()
-    _, loan_lender_payable = get_account_balance_from_str(
-        session=session, book_string=f"{user_loan.loan_id}/loan/lender_payable/l"
-    )
-    assert loan_lender_payable == Decimal("882.50")
-
     payment_date = parse_date("2020-08-25")
     amount = Decimal(11000)
     payment_request_id = "dummy_reset_fee_2"
@@ -249,11 +234,6 @@ def test_create_term_loan(session: Session) -> None:
         .first()
     )
     assert payment_ledger_event.amount == amount
-
-    _, principal_receivable = get_account_balance_from_str(
-        session=session, book_string=f"{loan_data.id}/bill/principal_receivable/a"
-    )
-    assert principal_receivable == Decimal(1000)
 
     _, pre_payment_balance = get_account_balance_from_str(
         session=session, book_string=f"{loan.loan_id}/loan/pre_payment/l"
@@ -351,6 +331,35 @@ def test_create_term_loan(session: Session) -> None:
         session=session, book_string=f"{loan.id}/card/locked_limit/a"
     )
     assert locked_limit == Decimal("9000")
+
+    _, available_limit = get_account_balance_from_str(
+        session=session, book_string=f"{loan.id}/card/available_limit/l"
+    )
+    assert available_limit == Decimal("1000")
+
+    swipe1 = create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2020-10-01 11:22:11"),
+        amount=Decimal(500),
+        description="Flipkart.com",
+        txn_ref_no="dummy_txn_ref_no_1",
+        trace_no="123456",
+    )
+    card_transaction_1 = swipe1["data"]
+    assert card_transaction_1.loan_id == loan_data.id
+
+    swipe2 = create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2021-12-01 11:22:11"),
+        amount=Decimal(500),
+        description="Flipkart.com",
+        txn_ref_no="dummy_txn_ref_no_2",
+        trace_no="123456",
+    )
+    card_transaction_2 = swipe2["data"]
+    assert card_transaction_2.loan_id == loan_data.id
 
     _, available_limit = get_account_balance_from_str(
         session=session, book_string=f"{loan.id}/card/available_limit/l"

@@ -61,6 +61,7 @@ def create_loan(
         user_product_id=user_product.id,
         product_type=user_product.product_type,
         lender_id=lender_id,
+        loan_status="NOT STARTED",
     )
     session.flush()
 
@@ -115,6 +116,9 @@ def create_loan_fee(
         "card_upgrade_fees": "upgrade_fee",
     }
 
+    if fee_to_event_names.get(fee_name) == "activation_fee":
+        user_loan.loan_status = "FEE PAID"
+
     event = LedgerTriggerEvent(
         name=fee_to_event_names.get(fee_name, fee_name),  # defaults to fee_name
         post_date=post_date,
@@ -141,7 +145,7 @@ def add_card_to_loan(session: Session, loan: Loan, card_info: Dict[str, Any]) ->
         name="add_card",
         loan_id=loan.loan_id,
         amount=Decimal("0"),
-        post_date=get_current_ist_time().date(),
+        post_date=get_current_ist_time(),
         extra_details={},
     )
 

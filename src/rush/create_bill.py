@@ -1,6 +1,10 @@
 from calendar import monthrange
 from decimal import Decimal
-from typing import List
+from typing import (
+    Dict,
+    List,
+    Union,
+)
 
 from dateutil.relativedelta import relativedelta
 from pendulum import DateTime
@@ -29,14 +33,17 @@ from rush.utils import (
 )
 
 
-def get_or_create_bill_for_card_swipe(user_loan: BaseLoan, txn_time: DateTime) -> BaseBill:
+def get_or_create_bill_for_card_swipe(
+    user_loan: BaseLoan, txn_time: DateTime
+) -> Dict[str, Union[str, BaseBill]]:
     # Get the most recent bill
     last_bill = user_loan.get_latest_bill()
     txn_date = txn_time.date()
     lender_id = user_loan.lender_id
     if last_bill:
         does_swipe_belong_to_current_bill = txn_date <= last_bill.bill_close_date
-        if does_swipe_belong_to_current_bill:
+        # For tenure loan like Reset there should only be one bill.
+        if does_swipe_belong_to_current_bill or user_loan.sub_product_type == "tenure_loan":
             return {"result": "success", "bill": last_bill}
         new_bill_date = last_bill.bill_close_date + relativedelta(days=1)
     else:

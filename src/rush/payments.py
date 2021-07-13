@@ -41,6 +41,7 @@ from rush.models import (
     Fee,
     LedgerEntry,
     LedgerTriggerEvent,
+    Loan,
     PaymentMapping,
     PaymentRequestsData,
     PaymentSplit,
@@ -68,6 +69,7 @@ def payment_received(
     if payment_request_data.collection_by == "rc_lender_payment":
         write_off_loan(user_loan=user_loan, payment_request_data=payment_request_data)
         return
+
     event = LedgerTriggerEvent.new(
         session,
         name="payment_received",
@@ -374,6 +376,7 @@ def transaction_refund_event(
                 amount=refund_amount,
                 debit_book_str=m2p_pool_account,
             )
+        create_payment_split(session, event)
 
     if not skip_limit_assignment:
         limit_assignment_event(
@@ -387,7 +390,6 @@ def transaction_refund_event(
         credit_book_str=f"{user_loan.loan_id}/loan/refund_off_balance/l",  # Couldn't find anything relevant.
         amount=Decimal(event.amount),
     )
-    create_payment_split(session, event)
     # slide_payment_to_emis(user_loan, event)
 
 
@@ -564,6 +566,7 @@ def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
         "igst_payable": "igst",
         "cgst_payable": "cgst",
         "sgst_payable": "sgst",
+        "unbilled": "principal",
     }
     normalized_split_data = {}
     total_amount = 0
@@ -718,6 +721,9 @@ def remove_fee(session: Session, user_loan: BaseLoan, fee: Fee):
 
     fee.fee_status = "REMOVED"
 
+    if user_loan.loan_status == "FEE PAID":
+        user_loan.loan_status = "NOT STARTED"
+
     return {"result": "success", "message": "Fee removal successful"}
 
 
@@ -814,6 +820,11 @@ def refund_payment_to_customer(
 
         for fee in fees:
             fee.fee_status = "REFUNDED"
+
+        user_loan = session.query(Loan).filter(Loan.id == refund_event.loan_id).one()
+
+        if user_loan.loan_status == "FEE PAID":
+            user_loan.loan_status = "NOT STARTED"
 
     session.flush()
     return {"result": "success", "message": "Payment refunded"}

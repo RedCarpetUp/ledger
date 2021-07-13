@@ -43,6 +43,8 @@ class TransactionLoan(TermLoan):
     bill_class: Type[B] = TransactionLoanBill
 
     def disburse(self, **kwargs) -> LedgerTriggerEvent:
+        self.loan_status = "DISBURSED"
+
         event = LedgerTriggerEvent(
             performed_by=kwargs["user_id"],
             name="transaction_to_loan",

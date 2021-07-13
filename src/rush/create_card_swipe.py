@@ -48,6 +48,10 @@ def create_card_swipe(
 
     if not skip_activation_check and txn_time.date() < user_loan.amortization_date:
         return {"result": "error", "message": "Transaction cannot happen before activation"}
+
+    if user_loan.loan_status == "CANCELLED":
+        return {"result": "error", "message": "Card has been cancelled."}
+
     card_bill = get_or_create_bill_for_card_swipe(user_loan=user_loan, txn_time=txn_time)
     if card_bill["result"] == "error":
         return card_bill
