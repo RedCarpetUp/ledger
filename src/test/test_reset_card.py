@@ -1273,15 +1273,25 @@ def test_reset_loan_schedule(session: Session) -> None:
     )
 
     emis = user_loan.get_loan_schedule()
-
     assert emis[0].payment_status == "Paid"
     initial_payment_received = emis[0].payment_received
+    dpd = emis[0].dpd
 
     # changing data manually to check the reset_loan_schedule function.
     emis[0].payment_status = "UnPaid"
     emis[0].payment_received = Decimal("0")
+    emis[0].dpd = -999
 
     reset_loan_schedule(loan_id=user_loan.loan_id, session=session)
 
     assert emis[0].payment_status == "Paid"
     assert emis[0].payment_received == initial_payment_received
+    assert emis[0].dpd == dpd
+    
+    bill = user_loan.get_latest_bill()
+    bill_emis = (
+        session.query(LoanSchedule)
+        .filter(LoanSchedule.loan_id == user_loan.loan_id, LoanSchedule.bill_id == bill.id)
+        .order_by(LoanSchedule.emi_number)
+        .all()
+    )
