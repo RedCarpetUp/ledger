@@ -1167,6 +1167,7 @@ def test_reset_loan_limit_unlock_error(session: Session) -> None:
 def test_reset_loan_early_payment(session: Session) -> None:
     pass
 
+
 def test_reset_card_versions(session: Session) -> None:
     v1 = ResetCard(session=session)
     assert is_reset_loan(v1) is True
@@ -1278,7 +1279,7 @@ def test_reset_loan_schedule(session: Session) -> None:
 
     # changing data manually to check the reset_loan_schedule function.
     emis[0].payment_status = "UnPaid"
-    emis[0].payment_received = 0
+    emis[0].payment_received = Decimal("0")
 
     reset_loan_schedule(loan_id=user_loan.loan_id, session=session)
 
