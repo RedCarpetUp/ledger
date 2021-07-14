@@ -1174,3 +1174,233 @@ def test_reset_card_versions(session: Session) -> None:
     v2 = ResetCardV2(session=session)
     assert is_reset_loan(v2) is True
     assert is_reset_product_type(v2.product_type) is True
+
+
+def test_payment_not_adjusted_to_unbilled(session: Session) -> None:
+    create_lenders(session=session)
+    create_products(session=session)
+    create_user(session=session)
+
+    user_product = create_user_product_mapping(
+        session=session, user_id=6, product_type="term_loan_reset"
+    )
+    create_loan(session=session, user_product=user_product, lender_id=1756833)
+    user_loan = get_user_product(
+        session=session, user_id=user_product.user_id, card_type="term_loan_reset"
+    )
+    assert isinstance(user_loan, ResetCard) == True
+
+    fee = create_loan_fee(
+        session=session,
+        user_loan=user_loan,
+        post_date=parse_date("2021-08-01 00:00:00"),
+        gross_amount=Decimal("100"),
+        include_gst_from_gross_amount=False,
+        fee_name="reset_joining_fees",
+    )
+
+    payment_date = parse_date("2021-08-01")
+    amount = fee.gross_amount
+    payment_request_id = "dummy_reset_fee_1"
+    payment_request_data(
+        session=session,
+        type="reset_joining_fees",
+        payment_request_amount=amount,
+        user_id=user_product.user_id,
+        payment_request_id=payment_request_id,
+    )
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
+    )
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
+
+    session.flush()
+
+    loan_creation_data = {"date_str": "2021-08-01", "user_product_id": user_product.id}
+
+    # create loan
+    loan = create_test_term_loan(session=session, **loan_creation_data)
+
+    _, rc_cash_balance = get_account_balance_from_str(
+        session=session, book_string=f"12345/redcarpet/rc_cash/a"
+    )
+    assert rc_cash_balance == Decimal("-10000")
+
+    assert loan.product_type == "term_loan_reset"
+    assert loan.amortization_date == parse_date("2021-08-01").date()
+
+    loan_data = session.query(LoanData).filter(LoanData.loan_id == user_loan.loan_id).one()
+
+    assert loan_data.bill_start_date == parse_date("2021-08-01").date()
+    assert loan_data.bill_close_date == parse_date("2022-07-01").date()
+
+    _, principal_receivable = get_account_balance_from_str(
+        session=session, book_string=f"{loan_data.id}/bill/principal_receivable/a"
+    )
+    assert principal_receivable == Decimal("10000")
+
+    all_emis = user_loan.get_loan_schedule()
+
+    assert len(all_emis) == 12
+    assert all_emis[0].due_date == parse_date("2021-08-01").date()
+    assert all_emis[0].emi_number == 1
+    assert all_emis[0].interest_due == Decimal("300.67")
+    assert all_emis[0].total_due_amount == Decimal("1134")
+
+    assert all_emis[-1].due_date == parse_date("2022-07-01").date()
+    assert all_emis[-1].emi_number == 12
+    assert all_emis[-1].interest_due == Decimal("300.67")
+    assert all_emis[-1].total_due_amount == Decimal("1134")
+
+    interest_left_to_accrue = get_interest_left_to_accrue(session, user_loan)
+    assert interest_left_to_accrue == Decimal("3608.04")
+
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2021-08-01 11:22:11"),
+        amount=Decimal(1000),
+        description="Flipkart.com",
+        txn_ref_no="dummy_txn_ref_no_2",
+        trace_no="123456",
+    )
+    session.flush()
+    _, loan_lender_payable = get_account_balance_from_str(
+        session=session, book_string=f"{user_loan.loan_id}/loan/lender_payable/l"
+    )
+    assert loan_lender_payable == Decimal("882.50")
+
+    payment_date = parse_date("2021-08-25")
+    amount = Decimal(1134)
+    payment_request_id = "dummy_reset_fee_2"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=user_product.user_id,
+        payment_request_id=payment_request_id,
+    )
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
+    )
+
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
+
+    _, principal_receivable = get_account_balance_from_str(
+        session=session, book_string=f"{loan_data.id}/bill/principal_receivable/a"
+    )
+    assert principal_receivable == Decimal(8866)
+
+    _, unbilled = get_account_balance_from_str(
+        session=session, book_string=f"{loan_data.id}/bill/unbilled/a"
+    )
+    assert unbilled == Decimal(1000)
+
+    create_card_swipe(
+        session=session,
+        user_loan=user_loan,
+        txn_time=parse_date("2021-08-26 11:22:11"),
+        amount=Decimal(1000),
+        description="Flipkart.com",
+        txn_ref_no="dummy_txn_ref_no_3",
+        trace_no="123456",
+    )
+
+    _, unbilled = get_account_balance_from_str(
+        session=session, book_string=f"{loan_data.id}/bill/unbilled/a"
+    )
+    assert unbilled == Decimal(2000)
+
+    payment_date = parse_date("2021-08-25")
+    amount = Decimal(9866)
+    payment_request_id = "dummy_reset_fee_3"
+    payment_request_data(
+        session=session,
+        type="collection",
+        payment_request_amount=amount,
+        user_id=user_product.user_id,
+        payment_request_id=payment_request_id,
+    )
+    payment_requests_data = pay_payment_request(
+        session=session, payment_request_id=payment_request_id, payment_date=payment_date
+    )
+    payment_received(
+        session=session,
+        user_loan=user_loan,
+        payment_request_data=payment_requests_data,
+    )
+    settle_payment_in_bank(
+        session=session,
+        payment_request_id=payment_request_id,
+        gateway_expenses=payment_requests_data.payment_execution_charges,
+        gross_payment_amount=payment_requests_data.payment_request_amount,
+        settlement_date=payment_requests_data.payment_received_in_bank_date,
+        user_loan=user_loan,
+    )
+
+    payment_ledger_event = (
+        session.query(LedgerTriggerEvent)
+        .filter(
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.extra_details["payment_request_id"].astext == payment_request_id,
+        )
+        .first()
+    )
+    assert payment_ledger_event.amount == amount
+
+    _, principal_receivable = get_account_balance_from_str(
+        session=session, book_string=f"{loan_data.id}/bill/principal_receivable/a"
+    )
+    assert principal_receivable == Decimal(0)
+
+    _, unbilled = get_account_balance_from_str(
+        session=session, book_string=f"{loan_data.id}/bill/unbilled/a"
+    )
+    assert unbilled == Decimal(2000)
+
+    _, early_close_balance = get_account_balance_from_str(
+        session=session, book_string=f"{loan.loan_id}/loan/early_close_fee/r"
+    )
+    assert early_close_balance == Decimal("847.46")

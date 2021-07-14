@@ -355,6 +355,7 @@ def reverse_incorrect_late_charges(
         )
         .one_or_none()
     )
+    bill = user_loan.convert_to_bill_class(bill)
 
     if fee.fee_status == "UNPAID":
         # Remove from min. But only what's remaining. Rest doesn't matter.
