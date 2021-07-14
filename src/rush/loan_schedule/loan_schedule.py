@@ -358,7 +358,7 @@ def reset_loan_schedule(loan_id: Loan.id, session: Session) -> None:
         for bill_emi in bill_emis:
             bill_emi.interest_due = interest_due
             bill_emi.principal_due = principal_due
-            bill_emi.total_closing_balance = (round(opening_principal, 2),)
+            bill_emi.total_closing_balance = round(opening_principal, 2)
             opening_principal -= principal_due
 
     def reset_emis(user_loan: Loan, session: Session) -> None:

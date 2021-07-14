@@ -1167,7 +1167,6 @@ def test_reset_loan_limit_unlock_error(session: Session) -> None:
 def test_reset_loan_early_payment(session: Session) -> None:
     pass
 
-
 def test_reset_card_versions(session: Session) -> None:
     v1 = ResetCard(session=session)
     assert is_reset_loan(v1) is True
@@ -1176,6 +1175,7 @@ def test_reset_card_versions(session: Session) -> None:
     v2 = ResetCardV2(session=session)
     assert is_reset_loan(v2) is True
     assert is_reset_product_type(v2.product_type) is True
+
 
 def test_reset_loan_schedule(session: Session) -> None:
 
@@ -1203,7 +1203,7 @@ def test_reset_loan_schedule(session: Session) -> None:
 
     payment_date = parse_date("2020-08-01")
     amount = fee.gross_amount
-    payment_request_id = "dummy_reset_fee_2"
+    payment_request_id = "dummy_reset_fee_1"
     payment_request_data(
         session=session,
         type="reset_joining_fees",
@@ -1244,11 +1244,9 @@ def test_reset_loan_schedule(session: Session) -> None:
     # create loan
     loan = create_test_term_loan(session=session, **loan_creation_data)
 
-    loan_data = session.query(LoanData).filter(LoanData.loan_id == user_loan.loan_id).one()
-
     payment_date = parse_date("2020-08-25")
     amount = Decimal(11000)
-    payment_request_id = "dummy_reset_fee_3"
+    payment_request_id = "dummy_reset_fee_2"
     payment_request_data(
         session=session,
         type="collection",
@@ -1273,25 +1271,16 @@ def test_reset_loan_schedule(session: Session) -> None:
         user_loan=user_loan,
     )
 
-    first_emi = (
-        session.query(LoanSchedule)
-        .filter(
-            LoanSchedule.bill_id == None, 
-        )
-        .order_by(LoanSchedule.id)
-        .first()
-    )
-    assert first_emi.payment_status == "Paid" 
+    emis = user_loan.get_loan_schedule()
 
-    to_check_emi_id = first_emi.id
-    
-    reset_loan_schedule(loan_id=user_loan.loan_id,session=session)
+    assert emis[0].payment_status == "Paid"
+    initial_payment_received = emis[0].payment_received
 
-    first_emi = (
-        session.query(LoanSchedule)
-        .filter(
-            LoanSchedule.id == to_check_emi_id
-        )
-        .first()
-    )
-    assert first_emi.payment_status == "UnPaid" 
+    # changing data manually to check the reset_loan_schedule function.
+    emis[0].payment_status = "UnPaid"
+    emis[0].payment_received = 0
+
+    reset_loan_schedule(loan_id=user_loan.loan_id, session=session)
+
+    assert emis[0].payment_status == "Paid"
+    assert emis[0].payment_received == initial_payment_received
