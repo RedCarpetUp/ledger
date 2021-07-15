@@ -154,7 +154,7 @@ def add_max_amount_event(
 
 def _adjust_bill(
     session: Session,
-    bill: LoanData,
+    bill: BaseBill,
     amount_to_adjust_in_this_bill: Decimal,
     event_id: int,
     debit_acc_str: str,
@@ -182,11 +182,12 @@ def _adjust_bill(
         to_acc=debit_acc_str,
         from_acc=f"{bill.id}/bill/interest_receivable/a",
     )
-    remaining_amount = adjust_for_receivable(
-        remaining_amount,
-        to_acc=debit_acc_str,
-        from_acc=f"{bill.id}/bill/unbilled/a",
-    )
+    if not bill.user_loan.sub_product_type == "tenure_loan":
+        remaining_amount = adjust_for_receivable(
+            remaining_amount,
+            to_acc=debit_acc_str,
+            from_acc=f"{bill.id}/bill/unbilled/a",
+        )
     remaining_amount = adjust_for_receivable(
         remaining_amount,
         to_acc=debit_acc_str,
