@@ -5196,7 +5196,7 @@ def test_refund_fee_payment_to_customer(session: Session) -> None:
         session=session, user_id=user.id, product_type="term_loan_reset"
     )
 
-    create_loan(session=session, user_product=user_product, lender_id=1756833)
+    create_loan(session=session, user_product=user_product, lender_id=62311)
     user_loan = get_user_product(
         session=session,
         user_id=user_product.user_id,

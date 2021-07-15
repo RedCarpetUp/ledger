@@ -136,6 +136,10 @@ def create_bill_fee_entry(
     gross_fee_amount: Decimal,
     include_gst_from_gross_amount: Optional[bool] = False,
 ) -> Fee:
+    charge_gst = False
+    if user_loan.lender_id == 62311:  # Charge gst only if DMI loan.
+        charge_gst = True
+
     f = Fee(
         user_id=user_loan.user_id,
         event_id=event.id,
@@ -144,7 +148,7 @@ def create_bill_fee_entry(
         name=fee_name,
         sgst_rate=Decimal(0),
         cgst_rate=Decimal(0),
-        igst_rate=Decimal(18),
+        igst_rate=Decimal(18 if charge_gst else 0),
     )
     if include_gst_from_gross_amount:
         d = get_gst_split_from_amount(gross_fee_amount, total_gst_rate=Decimal(18))
@@ -168,6 +172,9 @@ def create_loan_fee_entry(
     gross_fee_amount: Decimal,
     include_gst_from_gross_amount: Optional[bool] = False,
 ) -> Fee:
+    charge_gst = False  # Temp way. Ideally should pick this from table with dates populated etc.
+    if user_loan.lender_id == 62311:  # Charge gst only if DMI loan.
+        charge_gst = True
     f = Fee(
         user_id=user_loan.user_id,
         event_id=event.id,
@@ -176,12 +183,12 @@ def create_loan_fee_entry(
         name=fee_name,
         sgst_rate=Decimal(0),
         cgst_rate=Decimal(0),
-        igst_rate=Decimal(18),
+        igst_rate=Decimal(18 if charge_gst else 0),
     )
     if include_gst_from_gross_amount:
-        d = get_gst_split_from_amount(gross_fee_amount, total_gst_rate=Decimal(18))
+        d = get_gst_split_from_amount(gross_fee_amount, total_gst_rate=f.igst_rate)
     else:
-        d = add_gst_split_to_amount(gross_fee_amount, total_gst_rate=Decimal(18))
+        d = add_gst_split_to_amount(gross_fee_amount, total_gst_rate=f.igst_rate)
     f.net_amount = d["net_amount"]
     f.gross_amount = d["gross_amount"]
     session.add(f)

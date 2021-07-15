@@ -319,35 +319,35 @@ def adjust_for_revenue(
     )
     fee.net_amount_paid += gst_split["net_amount"]
 
-    # Settle for cgst
-    create_ledger_entry_from_str(
-        session,
-        event_id=event_id,
-        debit_book_str=debit_str,
-        credit_book_str=f"{fee.user_id}/user/cgst_payable/l",
-        amount=gst_split["cgst"],
-    )
-    fee.cgst_paid += gst_split["cgst"]
+    if gst_split["cgst"]:  # Settle for cgst
+        create_ledger_entry_from_str(
+            session,
+            event_id=event_id,
+            debit_book_str=debit_str,
+            credit_book_str=f"{fee.user_id}/user/cgst_payable/l",
+            amount=gst_split["cgst"],
+        )
+        fee.cgst_paid += gst_split["cgst"]
 
-    # Settle for sgst
-    create_ledger_entry_from_str(
-        session,
-        event_id=event_id,
-        debit_book_str=debit_str,
-        credit_book_str=f"{fee.user_id}/user/sgst_payable/l",
-        amount=gst_split["sgst"],
-    )
-    fee.sgst_paid += gst_split["sgst"]
+    if gst_split["sgst"]:  # Settle for sgst
+        create_ledger_entry_from_str(
+            session,
+            event_id=event_id,
+            debit_book_str=debit_str,
+            credit_book_str=f"{fee.user_id}/user/sgst_payable/l",
+            amount=gst_split["sgst"],
+        )
+        fee.sgst_paid += gst_split["sgst"]
 
-    # Settle for igst
-    create_ledger_entry_from_str(
-        session,
-        event_id=event_id,
-        debit_book_str=debit_str,
-        credit_book_str=f"{fee.user_id}/user/igst_payable/l",
-        amount=gst_split["igst"],
-    )
-    fee.igst_paid += gst_split["igst"]
+    if gst_split["igst"]:  # Settle for igst
+        create_ledger_entry_from_str(
+            session,
+            event_id=event_id,
+            debit_book_str=debit_str,
+            credit_book_str=f"{fee.user_id}/user/igst_payable/l",
+            amount=gst_split["igst"],
+        )
+        fee.igst_paid += gst_split["igst"]
 
     fee.gross_amount_paid += gst_split["gross_amount"]
     if fee.gross_amount == fee.gross_amount_paid:

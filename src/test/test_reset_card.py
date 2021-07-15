@@ -39,6 +39,7 @@ from rush.models import (
     LedgerTriggerEvent,
     Lenders,
     LoanData,
+    PaymentSplit,
     Product,
     User,
 )
@@ -52,7 +53,9 @@ from rush.writeoff_and_recovery import write_off_loan
 
 def create_lenders(session: Session) -> None:
     redux = Lenders(id=1756833, performed_by=123, lender_name="Redux")
+    dmi = Lenders(id=62311, performed_by=123, lender_name="DMI")
     session.add(redux)
+    session.add(dmi)
     session.flush()
 
 
@@ -78,7 +81,7 @@ def create_test_term_loan(session: Session, **kwargs) -> ResetCard:  # type: ign
         session=session,
         user_id=6,
         card_type="term_loan_reset",
-        lender_id=1756833,
+        lender_id=62311,
         interest_free_period_in_days=15,
         tenure=12,
         amount=kwargs.get("amount", Decimal(10000)),
@@ -106,7 +109,7 @@ def test_create_term_loan(session: Session) -> None:
     user_product = create_user_product_mapping(
         session=session, user_id=6, product_type="term_loan_reset"
     )
-    create_loan(session=session, user_product=user_product, lender_id=1756833)
+    create_loan(session=session, user_product=user_product, lender_id=62311)
     user_loan = get_user_product(
         session=session, user_id=user_product.user_id, card_type="term_loan_reset"
     )
@@ -296,6 +299,7 @@ def test_create_term_loan(session: Session) -> None:
         .order_by(Fee.id)
         .all()
     )
+    assert early_closing_fees[0].sgst_paid == Decimal("76.27")
     assert early_closing_fees[0].gross_amount == Decimal("1000")
     assert early_closing_fees[0].fee_status == "PAID"
     assert early_closing_fees[1].gross_amount == Decimal("2000")
@@ -375,7 +379,7 @@ def test_reset_journal_entries(session: Session) -> None:
     user_product = create_user_product_mapping(
         session=session, user_id=6, product_type="term_loan_reset"
     )
-    create_loan(session=session, user_product=user_product, lender_id=1756833)
+    create_loan(session=session, user_product=user_product, lender_id=62311)
     user_loan = get_user_product(
         session=session, user_id=user_product.user_id, card_type="term_loan_reset"
     )
@@ -651,7 +655,7 @@ def test_reset_journal_entries_kv(session: Session) -> None:
     user_product = create_user_product_mapping(
         session=session, user_id=6, product_type="term_loan_reset"
     )
-    create_loan(session=session, user_product=user_product, lender_id=1756833)
+    create_loan(session=session, user_product=user_product, lender_id=62311)
     user_loan = get_user_product(
         session=session, user_id=user_product.user_id, card_type="term_loan_reset"
     )
@@ -1000,7 +1004,7 @@ def test_reset_loan_limit_unlock_success(session: Session) -> None:
     user_product = create_user_product_mapping(
         session=session, user_id=6, product_type="term_loan_reset"
     )
-    create_loan(session=session, user_product=user_product, lender_id=1756833)
+    create_loan(session=session, user_product=user_product, lender_id=62311)
     user_loan = get_user_product(
         session=session, user_id=user_product.user_id, card_type="term_loan_reset"
     )
@@ -1099,6 +1103,7 @@ def test_reset_loan_limit_unlock_error(session: Session) -> None:
     )
     assert isinstance(user_loan, ResetCard) == True
 
+    # For redux loan, entire money will go into revenue and not gst.
     fee = create_loan_fee(
         session=session,
         user_loan=user_loan,
@@ -1160,6 +1165,15 @@ def test_reset_loan_limit_unlock_error(session: Session) -> None:
     # now trying to unlock more than 10000
     with pytest.raises(AssertionError):
         limit_unlock(session=session, loan=loan, amount=Decimal("10001"))
+
+    payment_split_of_fee = (
+        session.query(PaymentSplit).filter(PaymentSplit.payment_request_id == "dummy_reset_fee").all()
+    )
+    assert len(payment_split_of_fee) == 1
+    assert payment_split_of_fee[0].component == "reset_joining_fees"
+    assert payment_split_of_fee[0].amount_settled == Decimal(100)
+    assert fee.gross_amount == Decimal(100)
+    assert fee.net_amount == Decimal(100)
 
 
 def test_reset_loan_early_payment(session: Session) -> None:
