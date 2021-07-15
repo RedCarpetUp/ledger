@@ -124,9 +124,9 @@ def test_reset_joining_fees(session: Session) -> None:
         user_loan=user_loan,
         post_date=parse_date("2019-02-01 00:00:00"),
         gross_amount=Decimal(1000),
-        include_gst_from_gross_amount=False,
+        include_gst_from_gross_amount=False,  # Doesn't matter because gst is not applied on Redux lender.
         fee_name="reset_joining_fees",
     )
 
     assert card_activation_fee.fee_status == "UNPAID"
-    assert card_activation_fee.gross_amount == Decimal(1180)
+    assert card_activation_fee.gross_amount == Decimal(1000)
