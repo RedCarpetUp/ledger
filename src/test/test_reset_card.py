@@ -9,7 +9,6 @@ import pytest
 from dateutil.relativedelta import relativedelta
 from pendulum import parse as parse_date  # type: ignore
 from sqlalchemy.orm import Session
-from sqlalchemy.sql.functions import user
 
 from rush.accrue_financial_charges import (
     accrue_interest_on_all_bills,
@@ -1300,9 +1299,13 @@ def test_reset_loan_schedule(session: Session) -> None:
         .all()
     )
     original_interest_due = bill_emis[0].interest_due
+    original_principal_due = bill_emis[0].principal_due
 
     # changing values manually to check the reset_loan_schedule function
     bill_emis[0].interest_due = 0
+    bill_emis[0].principal_due = 0
 
     reset_loan_schedule(loan_id=user_loan.loan_id, session=session)
     assert bill_emis[0].interest_due == original_interest_due
+    assert bill_emis[0].principal_due == original_principal_due
+
