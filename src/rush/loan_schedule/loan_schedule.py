@@ -376,18 +376,6 @@ def reset_loan_schedule(user_loan: Loan, session: Session) -> None:
             )
         )
 
-    def get_payment_events(user_loan: Loan, session: Session) -> List[LedgerTriggerEvent]:
-        payment_events = (
-            session.query(LedgerTriggerEvent)
-            .filter(
-                LedgerTriggerEvent.loan_id == user_loan.loan_id,
-                LedgerTriggerEvent.name == "payment_received",
-            )
-            .order_by(LedgerTriggerEvent.post_date)
-            .all()
-        )
-        return payment_events
-
     def make_emi_payment_mappings_inactive(user_loan: Loan, session: Session) -> None:
         emis = user_loan.get_loan_schedule()
         emi_ids = [emi.id for emi in emis]
@@ -415,20 +403,26 @@ def reset_loan_schedule(user_loan: Loan, session: Session) -> None:
     group_bills(user_loan)
     make_emi_payment_mappings_inactive(user_loan, session=session)
 
-    payment_events = get_payment_events(user_loan, session=session)
-
-    for payment_event in payment_events:
-        amount_to_slide = (
-            session.query(func.sum(PaymentSplit.amount_settled))
-            .filter(
-                PaymentSplit.payment_request_id == payment_event.extra_details["payment_request_id"],
-                PaymentSplit.component.in_(("principal", "interest", "unbilled")),
-            )
-            .scalar()
+    amount_to_slide_per_event = (
+        session.query(LedgerTriggerEvent.id, func.sum(PaymentSplit.amount_settled))
+        .filter(
+            PaymentSplit.payment_request_id
+            == LedgerTriggerEvent.extra_details["payment_request_id"].astext,
+            PaymentSplit.component.in_(("principal", "interest", "unbilled")),
+            LedgerTriggerEvent.name == "payment_received",
+            LedgerTriggerEvent.loan_id == user_loan.loan_id,
         )
-        #dont slide amount for reset_joining_fees
-        if amount_to_slide is not None:
-            slide_payment_to_emis(user_loan, payment_event, amount_to_slide)
+        .group_by(LedgerTriggerEvent.id)
+        .all()
+    )
+
+    event_ids = [id for id, _ in amount_to_slide_per_event]
+    payment_events = session.query(LedgerTriggerEvent).filter(LedgerTriggerEvent.id.in_(event_ids)).all()
+    event_id_to_object_mapping = {event.id: event for event in payment_events}
+
+    for event_id, amount_to_slide in amount_to_slide_per_event:
+        payment_event = event_id_to_object_mapping[event_id]
+        slide_payment_to_emis(user_loan, payment_event, amount_to_slide)
         if user_loan.can_close_loan(as_of_event_id=payment_event.id):
             close_loan(user_loan, payment_event.post_date)
             break

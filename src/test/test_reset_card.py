@@ -31,6 +31,7 @@ from rush.card.utils import (
 from rush.create_card_swipe import create_card_swipe
 from rush.ledger_utils import get_account_balance_from_str
 from rush.limit_unlock import limit_unlock
+from rush.loan_schedule.extension import extend_schedule
 from rush.loan_schedule.loan_schedule import reset_loan_schedule
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
@@ -1322,3 +1323,14 @@ def test_reset_loan_schedule(session: Session) -> None:
     reset_loan_schedule(user_loan=user_loan, session=session)
     assert bill_emis[0].interest_due == original_interest_due
     assert bill_emis[0].principal_due == original_principal_due
+
+    # changing values manually to check the reset_loan_schedule function
+    bill_emis[0].interest_due = 0
+    bill_emis[0].principal_due = 0
+
+    # function should'nt work when the loan is extended.
+    extend_schedule(user_loan=user_loan, new_tenure=24, from_date=parse_date("2020-08-24"))
+    reset_loan_schedule(user_loan=user_loan, session=session)
+
+    assert bill_emis[0].interest_due == 0
+    assert bill_emis[0].principal_due == 0
