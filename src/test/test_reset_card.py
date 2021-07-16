@@ -1298,7 +1298,7 @@ def test_reset_loan_schedule(session: Session) -> None:
     emis[0].payment_received = Decimal("0")
     emis[0].dpd = -999
 
-    reset_loan_schedule(loan_id=user_loan.loan_id, session=session)
+    reset_loan_schedule(user_loan=user_loan, session=session)
 
     assert emis[0].payment_status == "Paid"
     assert emis[0].payment_received == original_payment_received
@@ -1319,6 +1319,6 @@ def test_reset_loan_schedule(session: Session) -> None:
     bill_emis[0].interest_due = 0
     bill_emis[0].principal_due = 0
 
-    reset_loan_schedule(loan_id=user_loan.loan_id, session=session)
+    reset_loan_schedule(user_loan=user_loan, session=session)
     assert bill_emis[0].interest_due == original_interest_due
     assert bill_emis[0].principal_due == original_principal_due

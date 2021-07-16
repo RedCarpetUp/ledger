@@ -23,7 +23,13 @@
   - rerun `pip install -e "."` if you make changes to models/source code. not needed for testcase changes
 - run `pytest --mypy --black --isort --cov=rush --cov-report=xml --cov-report=term` to run your tests
   - if black formatting tests fail, just run `black .` from your top level directory. Alternatively you can setup black in vscode (I highly recommend setting up all three ***"format on paste/save/type"***)
-  - if isort formatting tests fail, just run `isort .` from your top level directory.
+  - if isort formatting tests fail, just run `isort .` from your top level directory.  
+- to run tests on a particular file, go to pytest.ini file and add the file name to the end  
+  - example:  
+      ```python
+        [pytest]  
+        addopts = -p no:warnings src/test/test_reset_card.py
+      ```
 - all source code is under `src/rush/` . That is where you should make your code
 - docker kill rush_pg
 - psql postgresql://alem_user:password@localhost:5680/alem_db

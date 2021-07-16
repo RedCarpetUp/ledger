@@ -342,53 +342,46 @@ def readjust_future_payment(user_loan: BaseLoan, date_to_check_after: date):
             )
 
 
-def reset_loan_schedule(loan_id: Loan.id, session: Session) -> None:
+def reset_loan_schedule(user_loan: Loan, session: Session) -> None:
     def reset_bill_emis(user_loan: Loan, session: Session) -> None:
-        bill = user_loan.get_latest_bill()
-        bill_emis = (
-            session.query(LoanSchedule)
-            .filter(LoanSchedule.loan_id == user_loan.loan_id, LoanSchedule.bill_id == bill.id)
-            .order_by(LoanSchedule.emi_number)
-            .all()
-        )
-        instalment = bill.get_instalment_amount()
-        opening_principal = bill.table.principal
-        interest_due = round(bill.get_interest_to_charge(), 2)
-        principal_due = round(instalment - interest_due, 2)
-        for bill_emi in bill_emis:
-            bill_emi.interest_due = interest_due
-            bill_emi.principal_due = principal_due
-            bill_emi.total_closing_balance = round(opening_principal, 2)
-            opening_principal -= principal_due
+        bills = user_loan.get_all_bills()
+        for bill in bills:
+            bill_emis = (
+                session.query(LoanSchedule)
+                .filter(LoanSchedule.loan_id == user_loan.loan_id, LoanSchedule.bill_id == bill.id)
+                .order_by(LoanSchedule.emi_number)
+                .all()
+            )
+            instalment = bill.get_instalment_amount()
+            opening_principal = bill.table.principal
+            interest_due = round(bill.get_interest_to_charge(), 2)
+            principal_due = round(instalment - interest_due, 2)
+            for bill_emi in bill_emis:
+                bill_emi.interest_due = interest_due
+                bill_emi.principal_due = principal_due
+                bill_emi.total_closing_balance = round(opening_principal, 2)
+                opening_principal -= principal_due
 
-    def reset_emis(user_loan: Loan, session: Session) -> None:
-        emis = user_loan.get_loan_schedule()
-        for emi in emis:
-            emi.last_payment_date = None
-            emi.payment_received = 0
-            emi.dpd = -999
-            emi.payment_status = "UnPaid"
-            session.add(emi)
-        session.flush()
+    def reset_payment_info(user_loan: Loan, session: Session) -> None:
+        _ = (
+            session.query(LoanSchedule)
+            .filter(LoanSchedule.loan_id == user_loan.id)
+            .update(
+                {
+                    LoanSchedule.last_payment_date.name: None,
+                    LoanSchedule.payment_received.name: Decimal("0"),
+                    LoanSchedule.dpd.name: -999,
+                    LoanSchedule.payment_status.name: "UnPaid",
+                }
+            )
+        )
 
     def get_payment_events(user_loan: Loan, session: Session) -> List[LedgerTriggerEvent]:
-        reset_joining_fee_request_id = (
-            session.query(PaymentRequestsData.payment_request_id)
-            .filter(
-                PaymentRequestsData.row_status == "active",
-                PaymentRequestsData.payment_request_status == "Paid",
-                PaymentRequestsData.type == "reset_joining_fees",
-                PaymentRequestsData.user_id == user_loan.user_id,
-            )
-            .scalar()
-        )
         payment_events = (
             session.query(LedgerTriggerEvent)
             .filter(
                 LedgerTriggerEvent.loan_id == user_loan.loan_id,
                 LedgerTriggerEvent.name == "payment_received",
-                LedgerTriggerEvent.extra_details["payment_request_id"].astext
-                != reset_joining_fee_request_id,
             )
             .order_by(LedgerTriggerEvent.post_date)
             .all()
@@ -404,10 +397,21 @@ def reset_loan_schedule(loan_id: Loan.id, session: Session) -> None:
             .update({PaymentMapping.row_status: "inactive"}, synchronize_session=False)
         )
 
-    user_loan = get_user_loan(session=session, loan_id=loan_id)
+    user_loan = get_user_loan(session=session, loan_id=user_loan.loan_id)
+
+    # returning if the loan is extended, because we don't have context of past tenure.
+    is_loan_extended = (
+        session.query(LedgerTriggerEvent.loan_id)
+        .filter(
+            LedgerTriggerEvent.loan_id == user_loan.loan_id, LedgerTriggerEvent.name == "bill_extended"
+        )
+        .first()
+    )
+    if is_loan_extended:
+        return
 
     reset_bill_emis(user_loan=user_loan, session=session)
-    reset_emis(user_loan=user_loan, session=session)
+    reset_payment_info(user_loan=user_loan, session=session)
     group_bills(user_loan)
     make_emi_payment_mappings_inactive(user_loan, session=session)
 
@@ -422,7 +426,9 @@ def reset_loan_schedule(loan_id: Loan.id, session: Session) -> None:
             )
             .scalar()
         )
-        slide_payment_to_emis(user_loan, payment_event, amount_to_slide)
+        #dont slide amount for reset_joining_fees
+        if amount_to_slide is not None:
+            slide_payment_to_emis(user_loan, payment_event, amount_to_slide)
         if user_loan.can_close_loan(as_of_event_id=payment_event.id):
             close_loan(user_loan, payment_event.post_date)
             break
