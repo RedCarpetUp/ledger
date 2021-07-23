@@ -70,7 +70,7 @@ def payment_received(
         write_off_loan(user_loan=user_loan, payment_request_data=payment_request_data)
         return
 
-    event = LedgerTriggerEvent.new(
+    event = LedgerTriggerEvent.ledger_new(
         session,
         name="payment_received",
         loan_id=user_loan.loan_id,
@@ -779,7 +779,7 @@ def refund_payment_to_customer(
         .one()
     )
 
-    refund_event = LedgerTriggerEvent.new(
+    refund_event = LedgerTriggerEvent.ledger_new(
         session,
         name="payment_refund",
         loan_id=payment_received_lte.loan_id,

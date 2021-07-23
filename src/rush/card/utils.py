@@ -44,7 +44,7 @@ def get_product_id_from_card_type(session: Session, card_type: str) -> int:
 
 
 def create_user_product_mapping(session: Session, user_id: int, product_type: str) -> UserProduct:
-    user_product = UserProduct.new(session, user_id=user_id, product_type=product_type)
+    user_product = UserProduct.ledger_new(session, user_id=user_id, product_type=product_type)
     session.flush()
 
     return user_product
@@ -55,7 +55,7 @@ def create_loan(
     user_product: UserProduct,
     lender_id: Optional[int] = None,
 ) -> Loan:
-    loan = Loan.new(
+    loan = Loan.ledger_new(
         session=session,
         user_id=user_product.user_id,
         user_product_id=user_product.id,

@@ -110,7 +110,7 @@ def reverse_card_swipe(
         .one()
     )
 
-    reversal_event = LedgerTriggerEvent.new(
+    reversal_event = LedgerTriggerEvent.ledger_new(
         session,
         performed_by=user_loan.user_id,
         name="transaction_reversal",

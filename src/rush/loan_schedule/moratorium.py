@@ -13,7 +13,7 @@ from rush.models import (
 
 
 def provide_moratorium(user_loan: BaseLoan, start_date: date, end_date: date):
-    _ = LedgerTriggerEvent.new(
+    _ = LedgerTriggerEvent.ledger_new(
         user_loan.session,
         name="moratorium",
         loan_id=user_loan.loan_id,
@@ -29,7 +29,7 @@ def provide_moratorium(user_loan: BaseLoan, start_date: date, end_date: date):
         .scalar()
     )
 
-    loan_moratorium = LoanMoratorium.new(
+    loan_moratorium = LoanMoratorium.ledger_new(
         user_loan.session,
         loan_id=user_loan.loan_id,
         start_date=start_date,
@@ -70,7 +70,7 @@ def provide_moratorium(user_loan: BaseLoan, start_date: date, end_date: date):
             )
             user_loan.session.add(moratorium_emi)
             user_loan.session.flush()
-            MoratoriumInterest.new(
+            MoratoriumInterest.ledger_new(
                 session=user_loan.session,
                 moratorium_id=loan_moratorium.id,
                 interest=first_emi_before_moratorium.interest_due,
@@ -129,7 +129,7 @@ def add_moratorium_emis(session: Session, user_loan: BaseLoan, bill: BaseBill):
         )
         session.add(moratorium_emi)
         session.flush()
-        MoratoriumInterest.new(
+        MoratoriumInterest.ledger_new(
             session=session,
             moratorium_id=loan_moratorium.id,
             interest=round(interest_due, 2),

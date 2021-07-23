@@ -5123,7 +5123,7 @@ def test_payment_split_for_unknown_fee(session: Session) -> None:
     )
 
     # Creating a new, unknown fee
-    dummy_fee_event = LedgerTriggerEvent.new(
+    dummy_fee_event = LedgerTriggerEvent.ledger_new(
         session=session,
         name="unknown_fee_payment",
         loan_id=user_loan.id,

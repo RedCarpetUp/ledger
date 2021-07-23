@@ -64,7 +64,7 @@ def group_bills(user_loan: BaseLoan):
         if emi_id:  # If emi id is present then we update the record.
             session.query(LoanSchedule).filter_by(id=emi_id).update(cumulative_values_dict)
         else:
-            _ = LoanSchedule.new(
+            _ = LoanSchedule.ledger_new(
                 session, loan_id=user_loan.loan_id, emi_number=emi_number, **cumulative_values_dict
             )
 
@@ -150,7 +150,7 @@ def slide_payment_to_emis(
         if mapping:
             mapping.amount_settled += amount_slid
         else:
-            _ = PaymentMapping.new(
+            _ = PaymentMapping.ledger_new(
                 user_loan.session,
                 payment_request_id=payment_event.extra_details["payment_request_id"],
                 emi_id=emi.id,
@@ -194,7 +194,7 @@ def close_loan(user_loan: BaseLoan, last_payment_date: datetime):
 
     # Create new payment mappings
     for payment_request_id, amount_settled in new_mappings:
-        _ = PaymentMapping.new(
+        _ = PaymentMapping.ledger_new(
             user_loan.session,
             payment_request_id=payment_request_id,
             emi_id=closing_emi_id,
@@ -334,7 +334,7 @@ def readjust_future_payment(user_loan: BaseLoan, date_to_check_after: date):
 
     for payment_request_id, emi_ids in new_mappings.items():
         for emi_id, amount_slid in emi_ids.items():
-            _ = PaymentMapping.new(
+            _ = PaymentMapping.ledger_new(
                 session,
                 payment_request_id=payment_request_id,
                 emi_id=emi_id,

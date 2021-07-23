@@ -470,7 +470,7 @@ class BaseLoan(Loan):
             return False
 
         self.loan_status = "CANCELLED"
-        LedgerTriggerEvent.new(
+        LedgerTriggerEvent.ledger_new(
             self.session,
             name="cancel_loan",
             loan_id=self.loan_id,

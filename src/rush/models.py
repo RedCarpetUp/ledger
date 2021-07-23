@@ -45,7 +45,7 @@ class AuditMixin(Base):
     performed_by = Column(Integer, default=1, nullable=True)
 
     @classmethod
-    def new(cls, session: Session, **kwargs) -> Any:
+    def ledger_new(cls, session: Session, **kwargs) -> Any:
         obj = cls(**kwargs)
         session.add(obj)
         return obj
