@@ -14,9 +14,9 @@ from sqlalchemy.orm import Session
 
 from rush.models import (
     BookAccount,
-    LedgerEntry,
+    LedgerLoanData,
     LedgerTriggerEvent,
-    LoanData,
+    NewLedgerEntry,
     get_or_create,
 )
 
@@ -27,8 +27,8 @@ def create_ledger_entry(
     debit_book_id: int,
     credit_book_id: int,
     amount: Decimal,
-) -> LedgerEntry:
-    entry = LedgerEntry(
+) -> NewLedgerEntry:
+    entry = NewLedgerEntry(
         event_id=event_id,
         debit_account=debit_book_id,
         credit_account=credit_book_id,
@@ -45,7 +45,7 @@ def create_ledger_entry_from_str(
     debit_book_str: str,
     credit_book_str: str,
     amount: Decimal,
-) -> LedgerEntry:
+) -> NewLedgerEntry:
     debit_account = get_book_account_by_string(session, book_string=debit_book_str)
     credit_account = get_book_account_by_string(session, book_string=credit_book_str)
     return create_ledger_entry(session, event_id, debit_account.id, credit_account.id, amount)
@@ -150,7 +150,7 @@ def get_book_account_by_string(session: Session, book_string: str) -> BookAccoun
     return book_account
 
 
-def is_bill_closed(session: Session, bill: LoanData, to_date: Optional[DateTime] = None) -> bool:
+def is_bill_closed(session: Session, bill: LedgerLoanData, to_date: Optional[DateTime] = None) -> bool:
     # Check if max balance is zero. If not, return false.
     _, max_balance = get_account_balance_from_str(
         session, book_string=f"{bill.id}/bill/max/a", to_date=to_date
@@ -161,7 +161,9 @@ def is_bill_closed(session: Session, bill: LoanData, to_date: Optional[DateTime]
 
 
 def reverse_event(session: Session, event_to_reverse: LedgerTriggerEvent, event: LedgerTriggerEvent):
-    ledger_entries = session.query(LedgerEntry).filter(LedgerEntry.event_id == event_to_reverse.id).all()
+    ledger_entries = (
+        session.query(NewLedgerEntry).filter(NewLedgerEntry.event_id == event_to_reverse.id).all()
+    )
     for entry in ledger_entries:
         create_ledger_entry(
             session,

@@ -2,8 +2,8 @@ from rush.card import BaseLoan
 from rush.ledger_utils import create_ledger_entry_from_str
 from rush.models import (
     Fee,
+    LedgerLoanData,
     LedgerTriggerEvent,
-    LoanData,
     PaymentRequestsData,
 )
 
@@ -60,10 +60,10 @@ def recovery_event(user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
 def reverse_all_unpaid_fees(user_loan: BaseLoan, event: LedgerTriggerEvent) -> None:
     session = user_loan.session
     fees = (
-        session.query(Fee, LoanData)
+        session.query(Fee, LedgerLoanData)
         .filter(
-            LoanData.loan_id == user_loan.loan_id,
-            Fee.identifier_id == LoanData.id,
+            LedgerLoanData.loan_id == user_loan.loan_id,
+            Fee.identifier_id == LedgerLoanData.id,
             Fee.identifier == "bill",
             Fee.fee_status == "UNPAID",
         )

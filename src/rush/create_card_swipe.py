@@ -26,8 +26,8 @@ from rush.ledger_events import (
 from rush.ledger_utils import reverse_event
 from rush.models import (
     CardTransaction,
+    LedgerLoanData,
     LedgerTriggerEvent,
-    LoanData,
 )
 
 
@@ -97,7 +97,7 @@ def reverse_card_swipe(
     session: Session, user_loan: BaseLoan, card_transaction: CardTransaction, post_date: datetime
 ) -> Dict:
 
-    bill = session.query(LoanData).filter(LoanData.id == card_transaction.loan_id).one()
+    bill = session.query(LedgerLoanData).filter(LedgerLoanData.id == card_transaction.loan_id).one()
     if bill.is_generated:  # Can't reverse if already generated. # TODO what to do?
         return {"result": "error", "message": "Bill is already generated."}
 

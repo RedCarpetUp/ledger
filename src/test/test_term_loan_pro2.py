@@ -20,9 +20,9 @@ from rush.card.utils import (
 from rush.ledger_utils import get_account_balance_from_str
 from rush.loan_schedule.calculations import get_down_payment
 from rush.models import (
+    LedgerLoanData,
     LedgerTriggerEvent,
     Lenders,
-    LoanData,
     PaymentRequestsData,
     Product,
     User,
@@ -195,7 +195,7 @@ def test_create_term_loan(session: Session) -> None:
     assert user_loan is not None
     assert isinstance(user_loan, TermLoanPro2) == True
 
-    loan_data = session.query(LoanData).filter(LoanData.loan_id == user_loan.loan_id).one()
+    loan_data = session.query(LedgerLoanData).filter(LedgerLoanData.loan_id == user_loan.loan_id).one()
 
     assert loan_data.bill_start_date == parse_date("2020-09-01").date()
     assert loan_data.bill_close_date == parse_date("2021-08-01").date()
@@ -300,7 +300,7 @@ def test_create_term_loan_2(session: Session) -> None:
     assert user_loan is not None
     assert isinstance(user_loan, TermLoanPro2) == True
 
-    loan_data = session.query(LoanData).filter(LoanData.loan_id == user_loan.loan_id).one()
+    loan_data = session.query(LedgerLoanData).filter(LedgerLoanData.loan_id == user_loan.loan_id).one()
 
     assert loan_data.bill_start_date == parse_date("2019-02-01").date()
     assert loan_data.bill_close_date == parse_date("2020-01-01").date()

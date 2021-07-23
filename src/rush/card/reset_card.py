@@ -22,9 +22,9 @@ from rush.ledger_utils import create_ledger_entry_from_str
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
     Fee,
+    LedgerLoanData,
     LedgerTriggerEvent,
     Loan,
-    LoanData,
 )
 
 
@@ -64,7 +64,7 @@ class ResetCard(TermLoan):
             tenure=kwargs["tenure"],
         )
 
-        loan_data = LoanData(
+        loan_data = LedgerLoanData(
             user_id=loan.user_id,
             loan_id=loan.loan_id,
             bill_start_date=bill_start_date,

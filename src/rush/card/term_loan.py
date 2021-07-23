@@ -28,9 +28,9 @@ from rush.ledger_utils import create_ledger_entry_from_str
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
     Fee,
+    LedgerLoanData,
     LedgerTriggerEvent,
     Loan,
-    LoanData,
     LoanSchedule,
     PaymentMapping,
 )
@@ -105,8 +105,8 @@ def is_down_payment_paid(loan: BaseLoan) -> bool:
     ) or 0
 
     loan_data = (
-        session.query(LoanData)
-        .filter(LoanData.loan_id == loan.id, LoanData.user_id == loan.user_id)
+        session.query(LedgerLoanData)
+        .filter(LedgerLoanData.loan_id == loan.id, LedgerLoanData.user_id == loan.user_id)
         .one()
     )
 
@@ -153,7 +153,7 @@ class TermLoan(BaseLoan):
             tenure=kwargs["tenure"],
         )
 
-        loan_data = LoanData(
+        loan_data = LedgerLoanData(
             user_id=loan.user_id,
             loan_id=loan.id,
             bill_start_date=bill_start_date,

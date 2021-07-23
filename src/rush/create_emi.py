@@ -19,10 +19,10 @@ from rush.models import (
     BookAccount,
     EventDpd,
     JournalEntry,
-    LedgerEntry,
+    LedgerLoanData,
     LedgerTriggerEvent,
-    LoanData,
     LoanMoratorium,
+    NewLedgerEntry,
     PaymentRequestsData,
     PaymentSplit,
     UserData,
@@ -69,10 +69,10 @@ def update_event_with_dpd(
         # We need to get the bill because we have to check if min is paid
         bill = user_loan.convert_to_bill_class(
             (
-                session.query(LoanData)
+                session.query(LedgerLoanData)
                 .filter(
-                    LoanData.loan_id == user_loan.loan_id,
-                    LoanData.id == account_id,
+                    LedgerLoanData.loan_id == user_loan.loan_id,
+                    LedgerLoanData.id == account_id,
                 )
                 .first()
             )
@@ -111,11 +111,11 @@ def update_event_with_dpd(
     debit_book_account = aliased(BookAccount)
     credit_book_account = aliased(BookAccount)
     events_list = session.query(
-        LedgerTriggerEvent, LedgerEntry, debit_book_account, credit_book_account
+        LedgerTriggerEvent, NewLedgerEntry, debit_book_account, credit_book_account
     ).filter(
-        LedgerEntry.event_id == LedgerTriggerEvent.id,
-        LedgerEntry.debit_account == debit_book_account.id,
-        LedgerEntry.credit_account == credit_book_account.id,
+        NewLedgerEntry.event_id == LedgerTriggerEvent.id,
+        NewLedgerEntry.debit_account == debit_book_account.id,
+        NewLedgerEntry.credit_account == credit_book_account.id,
     )
     if from_date and to_date:
         events_list = events_list.filter(

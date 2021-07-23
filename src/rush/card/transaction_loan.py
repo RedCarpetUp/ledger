@@ -19,8 +19,8 @@ from rush.card.term_loan import (
 from rush.ledger_utils import create_ledger_entry_from_str
 from rush.models import (
     CardTransaction,
+    LedgerLoanData,
     LedgerTriggerEvent,
-    LoanData,
 )
 
 
@@ -88,7 +88,9 @@ def transaction_to_loan(
         return {"result": "error", "message": "Invalid Transaction ID"}
 
     # Checking if the bill has already been generated for this transaction
-    bill: LoanData = session.query(LoanData).filter(LoanData.id == transaction.loan_id).scalar()
+    bill: LedgerLoanData = (
+        session.query(LedgerLoanData).filter(LedgerLoanData.id == transaction.loan_id).scalar()
+    )
 
     if bill.is_generated:
         return {"result": "error", "message": "Bill for this transaction has already been generated."}
@@ -121,8 +123,8 @@ def transaction_to_loan(
         can_close_early=False,
     )
 
-    transaction_loan_bill: LoanData = (
-        session.query(LoanData).filter(LoanData.loan_id == transaction_loan.id).scalar()
+    transaction_loan_bill: LedgerLoanData = (
+        session.query(LedgerLoanData).filter(LedgerLoanData.loan_id == transaction_loan.id).scalar()
     )
     transaction.loan_id = transaction_loan_bill.id
 
