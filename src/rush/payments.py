@@ -39,7 +39,7 @@ from rush.models import (
     BookAccount,
     CollectionOrders,
     Fee,
-    LedgerEntry,
+    NewLedgerEntry,
     LedgerTriggerEvent,
     Loan,
     PaymentMapping,
@@ -540,10 +540,10 @@ def adjust_for_min_max_accounts(bill: BaseBill, payment_to_adjust_from: Decimal,
 
 def get_payment_split_from_event(session: Session, event: LedgerTriggerEvent):
     split_data = (
-        session.query(BookAccount.book_name, func.sum(LedgerEntry.amount))
+        session.query(BookAccount.book_name, func.sum(NewLedgerEntry.amount))
         .filter(
-            LedgerEntry.event_id == event.id,
-            LedgerEntry.credit_account == BookAccount.id,
+            NewLedgerEntry.event_id == event.id,
+            NewLedgerEntry.credit_account == BookAccount.id,
         )
         .group_by(BookAccount.book_name)
         .all()
@@ -813,8 +813,8 @@ def refund_payment_to_customer(
                     BookAccount.identifier_type == Fee.identifier,
                 ),
             )
-            .join(LedgerEntry, LedgerEntry.credit_account == BookAccount.id)
-            .filter(LedgerEntry.event_id == payment_received_lte.id)
+            .join(NewLedgerEntry, NewLedgerEntry.credit_account == BookAccount.id)
+            .filter(NewLedgerEntry.event_id == payment_received_lte.id)
             .all()
         )
 

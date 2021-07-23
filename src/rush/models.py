@@ -222,7 +222,7 @@ class LedgerTriggerEvent(AuditMixin):
         super().__init__(**kwargs)
 
 
-class LedgerEntry(Base):
+class NewLedgerEntry(Base):
     __tablename__ = "ledger_entry"
     id = Column(Integer, primary_key=True)
     event_id = Column(Integer, ForeignKey(LedgerTriggerEvent.id), nullable=False)
