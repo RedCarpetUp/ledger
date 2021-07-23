@@ -32,7 +32,7 @@ def upgrade() -> None:
         sa.Column("payment_status", sa.String(6), nullable=False),
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
-        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.Column("performed_by", sa.Integer(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["bill_id"], ["loan_data.id"], name="fk_card_emis_bill_id"),
         sa.ForeignKeyConstraint(["loan_id"], ["v3_loans.id"], name="fk_card_emis_loan_id"),
@@ -46,7 +46,7 @@ def upgrade() -> None:
         sa.Column("amount_settled", sa.DECIMAL(), nullable=False),
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
-        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.Column("performed_by", sa.Integer(), nullable=True),
         sa.Column("row_status", sa.String(8), nullable=False, default="active"),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["emi_id"], ["loan_schedule.id"], name="fk_emi_id_mapping"),
@@ -71,7 +71,7 @@ def upgrade() -> None:
         ),  # this will be fixed later, doing this for testing purposes.
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
-        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.Column("performed_by", sa.Integer(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["loan_id"], ["v3_loans.id"], name="fk_payment_split_loan_id"),
     )

@@ -20,7 +20,7 @@ def upgrade() -> None:
     op.create_table(
         "rc_lenders",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.Column("performed_by", sa.Integer(), nullable=True),
         sa.Column("lender_name", sa.String(50), nullable=False),
         sa.Column("row_status", sa.String(50), nullable=False),
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
@@ -34,14 +34,14 @@ def upgrade() -> None:
         sa.Column("product_name", sa.String(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
-        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.Column("performed_by", sa.Integer(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
 
     op.create_table(
         "v3_loans",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.Column("performed_by", sa.Integer(), nullable=True),
         sa.Column("user_id", sa.Integer(), nullable=True),
         sa.Column("amortization_date", sa.Date(), nullable=True),  # TODO: change back to nullable=False
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
@@ -68,7 +68,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
-        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.Column("performed_by", sa.Integer(), nullable=True),
         sa.Column("user_id", sa.Integer(), nullable=False),
         sa.Column("bill_start_date", sa.Date(), nullable=False),
         sa.Column("bill_close_date", sa.Date(), nullable=False),
@@ -94,7 +94,7 @@ def upgrade() -> None:
         sa.Column("description", sa.String(100), nullable=True),
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
-        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.Column("performed_by", sa.Integer(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["loan_id"], ["loan_data.id"], name="fk_card_transaction_loan_id"),
     )
@@ -102,7 +102,7 @@ def upgrade() -> None:
     op.create_table(
         "ledger_trigger_event",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.Column("performed_by", sa.Integer(), nullable=True),
         sa.Column("post_date", sa.TIMESTAMP(), nullable=False),
         sa.Column("amount", sa.DECIMAL(), nullable=True),
         sa.Column("extra_details", sa.JSON(), nullable=False),
@@ -131,7 +131,7 @@ def upgrade() -> None:
     op.create_table(
         "loan_moratorium",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.Column("performed_by", sa.Integer(), nullable=True),
         sa.Column("loan_id", sa.Integer(), nullable=True),
         sa.Column("start_date", sa.Date(), nullable=False),
         sa.Column("end_date", sa.Date(), nullable=False),
@@ -144,7 +144,7 @@ def upgrade() -> None:
     op.create_table(
         "fee",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.Column("performed_by", sa.Integer(), nullable=True),
         sa.Column("loan_id", sa.Integer(), nullable=False),
         sa.Column("event_id", sa.Integer(), nullable=False),
         sa.Column("bill_id", sa.Integer(), nullable=True),
@@ -171,7 +171,7 @@ def upgrade() -> None:
     op.create_table(
         "event_dpd",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.Column("performed_by", sa.Integer(), nullable=True),
         sa.Column("loan_id", sa.Integer(), nullable=False),
         sa.Column("event_id", sa.Integer(), nullable=False),
         sa.Column("credit", sa.DECIMAL(), nullable=True),

@@ -24,7 +24,7 @@ def upgrade() -> None:
         sa.Column("loan_schedule_id", sa.Integer, nullable=False),
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
-        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.Column("performed_by", sa.Integer(), nullable=True),
         sa.ForeignKeyConstraint(
             ["moratorium_id"],
             ["loan_moratorium.id"],

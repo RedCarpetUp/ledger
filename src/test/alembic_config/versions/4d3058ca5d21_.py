@@ -25,7 +25,7 @@ def upgrade() -> None:
         sa.Column("amount_paid", sa.Numeric(), nullable=False, default=0),
         sa.Column("row_status", sa.String(20), nullable=False, default="active"),
         sa.Column("extra_details", sa.JSON(), server_default="{}", nullable=True),
-        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.Column("performed_by", sa.Integer(), nullable=True),
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
