@@ -21,7 +21,7 @@ def upgrade() -> None:
     op.create_table(
         "user_product",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.Column("performed_by", sa.Integer(), nullable=True),
         sa.Column("user_id", sa.Integer(), nullable=False),
         sa.Column("product_type", sa.String(50), nullable=False),
         sa.Column("created_at", sa.TIMESTAMP(), nullable=False),

@@ -19,7 +19,7 @@ def upgrade() -> None:
     op.create_table(
         "v3_users",
         sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False),
-        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.Column("performed_by", sa.Integer(), nullable=True),
         sa.Column("created_at", sa.TIMESTAMP(), autoincrement=False, nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), autoincrement=False, nullable=False),
         sa.Column("v3_user_history_id", sa.INTEGER(), autoincrement=False, nullable=True),
@@ -31,7 +31,7 @@ def upgrade() -> None:
     op.create_table(
         "v3_user_data",
         sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False),
-        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.Column("performed_by", sa.Integer(), nullable=True),
         sa.Column("user_id", sa.INTEGER(), autoincrement=False, nullable=False),
         sa.Column("first_name", sa.VARCHAR(length=255), autoincrement=False, nullable=True),
         sa.Column("last_name", sa.VARCHAR(length=255), autoincrement=False, nullable=True),

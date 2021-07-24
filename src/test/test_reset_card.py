@@ -38,10 +38,10 @@ from rush.models import (
     CollectionOrders,
     Fee,
     JournalEntry,
+    LedgerLoanData,
     LedgerTriggerEvent,
     Lenders,
     Loan,
-    LoanData,
     LoanSchedule,
     PaymentSplit,
     Product,
@@ -179,7 +179,7 @@ def test_create_term_loan(session: Session) -> None:
     assert loan.product_type == "term_loan_reset"
     assert loan.amortization_date == parse_date("2020-08-01").date()
 
-    loan_data = session.query(LoanData).filter(LoanData.loan_id == user_loan.loan_id).one()
+    loan_data = session.query(LedgerLoanData).filter(LedgerLoanData.loan_id == user_loan.loan_id).one()
 
     assert loan_data.bill_start_date == parse_date("2020-08-01").date()
     assert loan_data.bill_close_date == parse_date("2021-07-01").date()

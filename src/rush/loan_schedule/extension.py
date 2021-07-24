@@ -19,7 +19,7 @@ from rush.models import (
 
 
 def extend_bill_schedule(user_loan: BaseLoan, bill: BaseBill, from_date: date, new_tenure: int):
-    event = LedgerTriggerEvent.new(
+    event = LedgerTriggerEvent.ledger_new(
         user_loan.session,
         name="bill_extended",
         loan_id=bill.table.loan_id,

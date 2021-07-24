@@ -27,9 +27,9 @@ from rush.ledger_utils import get_account_balance_from_str
 from rush.min_payment import add_min_to_all_bills
 from rush.models import (
     CardTransaction,
+    LedgerLoanData,
     LedgerTriggerEvent,
     Lenders,
-    LoanData,
     Product,
     User,
 )
@@ -126,7 +126,7 @@ def test_transaction_loan(session: Session) -> None:
     assert unbilled_amount == 1200
 
     transaction_loan_bill = (
-        session.query(LoanData).filter(LoanData.loan_id == transaction_loan.id).scalar()
+        session.query(LedgerLoanData).filter(LedgerLoanData.loan_id == transaction_loan.id).scalar()
     )
 
     _, principal_receivable = get_account_balance_from_str(

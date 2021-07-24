@@ -15,9 +15,9 @@ from rush.ledger_utils import (
 from rush.models import (
     CardTransaction,
     Fee,
+    LedgerLoanData,
     LedgerTriggerEvent,
     Loan,
-    LoanData,
 )
 from rush.recon.dmi_interest_on_portfolio import interest_on_dmi_portfolio
 from rush.utils import get_gst_split_from_amount
@@ -59,8 +59,8 @@ def card_transaction_event(
     amount = Decimal(event.amount)
     swipe_id = event.extra_details["swipe_id"]
     bill = (
-        session.query(LoanData)
-        .filter(LoanData.id == CardTransaction.loan_id, CardTransaction.id == swipe_id)
+        session.query(LedgerLoanData)
+        .filter(LedgerLoanData.id == CardTransaction.loan_id, CardTransaction.id == swipe_id)
         .scalar()
     )
     lender_id = user_loan.lender_id
@@ -154,7 +154,7 @@ def add_max_amount_event(
 
 def _adjust_bill(
     session: Session,
-    bill: LoanData,
+    bill: LedgerLoanData,
     amount_to_adjust_in_this_bill: Decimal,
     event_id: int,
     debit_acc_str: str,

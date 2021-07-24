@@ -68,9 +68,9 @@ from rush.models import (
     EventDpd,
     Fee,
     JournalEntry,
+    LedgerLoanData,
     LedgerTriggerEvent,
     Lenders,
-    LoanData,
     LoanMoratorium,
     LoanSchedule,
     MoratoriumInterest,
@@ -1171,9 +1171,9 @@ def test_is_bill_paid_bill_1(session: Session) -> None:
     _pay_minimum_amount_bill_1(session)
 
     bill = (
-        session.query(LoanData)
-        .filter(LoanData.user_id == user_loan.user_id)
-        .order_by(LoanData.bill_start_date.desc())
+        session.query(LedgerLoanData)
+        .filter(LedgerLoanData.user_id == user_loan.user_id)
+        .order_by(LedgerLoanData.bill_start_date.desc())
         .first()
     )
     # Should be false because min is 130 and payment made is 120
@@ -1248,9 +1248,9 @@ def _generate_bill_2(session: Session) -> None:
     user_loan = get_user_product(session, 99)
     assert user_loan is not None
     previous_bill = (  # get last generated bill.
-        session.query(LoanData)
-        .filter(LoanData.user_id == user.id, LoanData.is_generated.is_(True))
-        .order_by(LoanData.bill_start_date.desc())
+        session.query(LedgerLoanData)
+        .filter(LedgerLoanData.user_id == user.id, LedgerLoanData.is_generated.is_(True))
+        .order_by(LedgerLoanData.bill_start_date.desc())
         .first()
     )
     # Bill shouldn't be closed.
@@ -3969,8 +3969,8 @@ def test_intermediate_bill_generation(session: Session) -> None:
     accrue_interest_on_all_bills(session, bill_2.table.bill_due_date + relativedelta(days=1), user_loan)
 
     assert (
-        session.query(LoanData)
-        .filter(LoanData.loan_id == user_loan.loan_id, LoanData.is_generated.is_(True))
+        session.query(LedgerLoanData)
+        .filter(LedgerLoanData.loan_id == user_loan.loan_id, LedgerLoanData.is_generated.is_(True))
         .count()
     ) == 6
 
@@ -5123,7 +5123,7 @@ def test_payment_split_for_unknown_fee(session: Session) -> None:
     )
 
     # Creating a new, unknown fee
-    dummy_fee_event = LedgerTriggerEvent.new(
+    dummy_fee_event = LedgerTriggerEvent.ledger_new(
         session=session,
         name="unknown_fee_payment",
         loan_id=user_loan.id,
@@ -6064,9 +6064,9 @@ def test_close_loan_in_moratorium(session: Session) -> None:
     assert payment_ledger_event.amount == amount
 
     bill = (
-        session.query(LoanData)
-        .filter(LoanData.user_id == user_loan.user_id)
-        .order_by(LoanData.bill_start_date.desc())
+        session.query(LedgerLoanData)
+        .filter(LedgerLoanData.user_id == user_loan.user_id)
+        .order_by(LedgerLoanData.bill_start_date.desc())
         .first()
     )
 

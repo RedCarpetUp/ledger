@@ -21,9 +21,9 @@ from rush.card import (
 from rush.models import (
     CardTransaction,
     Fee,
+    LedgerLoanData,
     LedgerTriggerEvent,
     Loan,
-    LoanData,
     Product,
     UserCard,
     UserInstrument,
@@ -44,7 +44,7 @@ def get_product_id_from_card_type(session: Session, card_type: str) -> int:
 
 
 def create_user_product_mapping(session: Session, user_id: int, product_type: str) -> UserProduct:
-    user_product = UserProduct.new(session, user_id=user_id, product_type=product_type)
+    user_product = UserProduct.ledger_new(session, user_id=user_id, product_type=product_type)
     session.flush()
 
     return user_product
@@ -55,7 +55,7 @@ def create_loan(
     user_product: UserProduct,
     lender_id: Optional[int] = None,
 ) -> Loan:
-    loan = Loan.new(
+    loan = Loan.ledger_new(
         session=session,
         user_id=user_product.user_id,
         user_product_id=user_product.id,
@@ -205,14 +205,14 @@ def get_daily_spend(
     # from sqlalchemy import and_
     daily_spent = (
         session.query(func.sum(CardTransaction.amount))
-        .join(LoanData, LoanData.id == CardTransaction.loan_id)
+        .join(LedgerLoanData, LedgerLoanData.id == CardTransaction.loan_id)
         .filter(
-            LoanData.loan_id == loan.id,
-            LoanData.user_id == loan.user_id,
+            LedgerLoanData.loan_id == loan.id,
+            LedgerLoanData.user_id == loan.user_id,
             func.date_trunc("day", CardTransaction.txn_time) == date_to_check_against,
             CardTransaction.status == "CONFIRMED",
         )
-        .group_by(LoanData.loan_id)
+        .group_by(LedgerLoanData.loan_id)
         .scalar()
     )
     return daily_spent or 0
@@ -228,14 +228,14 @@ def get_weekly_spend(
 
     weekly_spent = (
         session.query(func.sum(CardTransaction.amount))
-        .join(LoanData, LoanData.id == CardTransaction.loan_id)
+        .join(LedgerLoanData, LedgerLoanData.id == CardTransaction.loan_id)
         .filter(
-            LoanData.loan_id == loan.id,
-            LoanData.user_id == loan.user_id,
+            LedgerLoanData.loan_id == loan.id,
+            LedgerLoanData.user_id == loan.user_id,
             func.date_trunc("day", CardTransaction.txn_time).between(to_date, date_to_check_against),
             CardTransaction.status == "CONFIRMED",
         )
-        .group_by(LoanData.loan_id)
+        .group_by(LedgerLoanData.loan_id)
         .scalar()
     )
     return weekly_spent or 0
@@ -249,14 +249,14 @@ def get_daily_total_transactions(
 
     daily_txns = (
         session.query(func.count(CardTransaction.id))
-        .join(LoanData, LoanData.id == CardTransaction.loan_id)
+        .join(LedgerLoanData, LedgerLoanData.id == CardTransaction.loan_id)
         .filter(
-            LoanData.loan_id == loan.id,
-            LoanData.user_id == loan.user_id,
+            LedgerLoanData.loan_id == loan.id,
+            LedgerLoanData.user_id == loan.user_id,
             func.date_trunc("day", CardTransaction.txn_time) == date_to_check_against,
             CardTransaction.status == "CONFIRMED",
         )
-        .group_by(LoanData.loan_id)
+        .group_by(LedgerLoanData.loan_id)
         .scalar()
     )
     return daily_txns or 0

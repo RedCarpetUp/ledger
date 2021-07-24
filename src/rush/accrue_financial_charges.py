@@ -26,10 +26,10 @@ from rush.ledger_utils import (
 from rush.models import (
     BookAccount,
     Fee,
-    LedgerEntry,
+    LedgerLoanData,
     LedgerTriggerEvent,
-    LoanData,
     LoanSchedule,
+    NewLedgerEntry,
 )
 from rush.utils import (
     add_gst_split_to_amount,
@@ -256,15 +256,15 @@ def reverse_interest_charges(
 
     # I first find what all bills the previous event touched.
     bills_and_ledger_entry = (
-        session.query(LoanData, LedgerEntry)
+        session.query(LedgerLoanData, NewLedgerEntry)
         .distinct()
         .filter(
-            LedgerEntry.debit_account == BookAccount.id,
-            LedgerEntry.event_id == event_to_reverse.id,
+            NewLedgerEntry.debit_account == BookAccount.id,
+            NewLedgerEntry.event_id == event_to_reverse.id,
             BookAccount.identifier_type == "bill",
-            LoanData.id == BookAccount.identifier,
+            LedgerLoanData.id == BookAccount.identifier,
             BookAccount.book_name == "interest_receivable",
-            LoanData.is_generated.is_(True),
+            LedgerLoanData.is_generated.is_(True),
         )
         .all()
     )
@@ -354,10 +354,10 @@ def reverse_incorrect_late_charges(
     session.flush()
 
     fee, bill = (
-        session.query(Fee, LoanData)
+        session.query(Fee, LedgerLoanData)
         .filter(
             Fee.event_id == event_to_reverse.id,
-            LoanData.id == Fee.identifier_id,
+            LedgerLoanData.id == Fee.identifier_id,
             Fee.identifier == "bill",
         )
         .one_or_none()

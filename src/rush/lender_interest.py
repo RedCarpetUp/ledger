@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from rush.models import LoanData
+from rush.models import LedgerLoanData
 from rush.utils import (
     div,
     mul,
@@ -11,8 +11,8 @@ from rush.utils import (
 
 def lender_interest(session: Session, amount: Decimal, loan_id: int) -> Decimal:
     lender_interest_rate = (
-        session.query(LoanData.lender_rate_of_interest_annual)
-        .filter(LoanData.loan_id == loan_id)
+        session.query(LedgerLoanData.lender_rate_of_interest_annual)
+        .filter(LedgerLoanData.loan_id == loan_id)
         .limit(1)
         .scalar()
         or 0

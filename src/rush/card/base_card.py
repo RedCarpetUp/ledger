@@ -26,9 +26,9 @@ from rush.loan_schedule.calculations import (
 )
 from rush.models import (
     CardTransaction,
+    LedgerLoanData,
     LedgerTriggerEvent,
     Loan,
-    LoanData,
     LoanMoratorium,
     LoanSchedule,
 )
@@ -37,13 +37,13 @@ from rush.utils import get_current_ist_time
 
 class BaseBill:
     session: Session = None
-    table: LoanData = None
+    table: LedgerLoanData = None
     id = None
     bill_start_date = None
     user_loan: "BaseLoan"
     round_emi_to = "one"
 
-    def __init__(self, session: Session, user_loan: "BaseLoan", loan_data: LoanData):
+    def __init__(self, session: Session, user_loan: "BaseLoan", loan_data: LedgerLoanData):
         self.session = session
         self.table = loan_data
         self.user_loan = user_loan
@@ -200,7 +200,7 @@ class BaseBill:
 B = TypeVar("B", bound=BaseBill)
 
 
-def _convert_to_bill_class_decorator(function: Callable[["BaseLoan"], LoanData]) -> Callable:
+def _convert_to_bill_class_decorator(function: Callable[["BaseLoan"], LedgerLoanData]) -> Callable:
     def f(self):
         bills = function(self)
         if not bills:
@@ -286,7 +286,7 @@ class BaseLoan(Loan):
 
         limit_assignment_event(session=self.session, loan_id=self.loan_id, event=event, amount=amount)
 
-    def convert_to_bill_class(self, bill: LoanData) -> BaseBill:
+    def convert_to_bill_class(self, bill: LedgerLoanData) -> BaseBill:
         if not bill:
             return None
         return self.bill_class(session=self.session, user_loan=self, loan_data=bill)
@@ -299,7 +299,7 @@ class BaseLoan(Loan):
         lender_id: int,
         is_generated: bool,
     ) -> BaseBill:
-        new_bill = LoanData(
+        new_bill = LedgerLoanData(
             user_id=self.user_id,
             loan_id=self.loan_id,
             bill_start_date=bill_start_date,
@@ -328,12 +328,12 @@ class BaseLoan(Loan):
         only_closed_bills: bool = False,
     ) -> List[BaseBill]:
         all_bills_query = (
-            self.session.query(LoanData)
-            .filter(LoanData.loan_id == self.loan_id)
-            .order_by(LoanData.bill_start_date)
+            self.session.query(LedgerLoanData)
+            .filter(LedgerLoanData.loan_id == self.loan_id)
+            .order_by(LedgerLoanData.bill_start_date)
         )
         if are_generated:
-            all_bills_query = all_bills_query.filter(LoanData.is_generated.is_(True))
+            all_bills_query = all_bills_query.filter(LedgerLoanData.is_generated.is_(True))
         query_result = all_bills_query.all()
         all_bills = [self.convert_to_bill_class(bill) for bill in query_result]
         if only_unpaid_bills:
@@ -344,13 +344,13 @@ class BaseLoan(Loan):
 
     def get_all_bills_post_date(self, post_date: DateTime) -> List[BaseBill]:
         all_bills = (
-            self.session.query(LoanData)
+            self.session.query(LedgerLoanData)
             .filter(
-                LoanData.user_id == self.user_id,
-                LoanData.is_generated.is_(True),
-                LoanData.bill_start_date >= post_date,
+                LedgerLoanData.user_id == self.user_id,
+                LedgerLoanData.is_generated.is_(True),
+                LedgerLoanData.bill_start_date >= post_date,
             )
-            .order_by(LoanData.bill_start_date)
+            .order_by(LedgerLoanData.bill_start_date)
             .all()
         )
         all_bills = [self.convert_to_bill_class(bill) for bill in all_bills]
@@ -358,9 +358,9 @@ class BaseLoan(Loan):
 
     def get_last_unpaid_bill(self) -> BaseBill:
         all_bills = (
-            self.session.query(LoanData)
-            .filter(LoanData.loan_id == self.loan_id)
-            .order_by(LoanData.bill_start_date)
+            self.session.query(LedgerLoanData)
+            .filter(LedgerLoanData.loan_id == self.loan_id)
+            .order_by(LedgerLoanData.bill_start_date)
             .all()
         )
         all_bills = [self.convert_to_bill_class(bill) for bill in all_bills]
@@ -370,31 +370,31 @@ class BaseLoan(Loan):
         return None
 
     @_convert_to_bill_class_decorator
-    def get_latest_generated_bill(self) -> LoanData:
+    def get_latest_generated_bill(self) -> LedgerLoanData:
         latest_bill = (
-            self.session.query(LoanData)
-            .filter(LoanData.loan_id == self.loan_id, LoanData.is_generated.is_(True))
-            .order_by(LoanData.bill_start_date.desc())
+            self.session.query(LedgerLoanData)
+            .filter(LedgerLoanData.loan_id == self.loan_id, LedgerLoanData.is_generated.is_(True))
+            .order_by(LedgerLoanData.bill_start_date.desc())
             .first()
         )
         return latest_bill
 
     @_convert_to_bill_class_decorator
-    def get_latest_bill_to_generate(self) -> LoanData:
+    def get_latest_bill_to_generate(self) -> LedgerLoanData:
         loan_data = (
-            self.session.query(LoanData)
-            .filter(LoanData.loan_id == self.loan_id, LoanData.is_generated.is_(False))
-            .order_by(LoanData.bill_start_date)
+            self.session.query(LedgerLoanData)
+            .filter(LedgerLoanData.loan_id == self.loan_id, LedgerLoanData.is_generated.is_(False))
+            .order_by(LedgerLoanData.bill_start_date)
             .first()
         )
         return loan_data
 
     @_convert_to_bill_class_decorator
-    def get_latest_bill(self) -> LoanData:
+    def get_latest_bill(self) -> LedgerLoanData:
         loan_data = (
-            self.session.query(LoanData)
-            .filter(LoanData.loan_id == self.id)
-            .order_by(LoanData.bill_start_date.desc())
+            self.session.query(LedgerLoanData)
+            .filter(LedgerLoanData.loan_id == self.id)
+            .order_by(LedgerLoanData.bill_start_date.desc())
             .first()
         )
         return loan_data
@@ -470,7 +470,7 @@ class BaseLoan(Loan):
             return False
 
         self.loan_status = "CANCELLED"
-        LedgerTriggerEvent.new(
+        LedgerTriggerEvent.ledger_new(
             self.session,
             name="cancel_loan",
             loan_id=self.loan_id,

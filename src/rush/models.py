@@ -45,7 +45,7 @@ class AuditMixin(Base):
     performed_by = Column(Integer, default=1, nullable=True)
 
     @classmethod
-    def new(cls, session: Session, **kwargs) -> Any:
+    def ledger_new(cls, session: Session, **kwargs) -> Any:
         obj = cls(**kwargs)
         session.add(obj)
         return obj
@@ -222,7 +222,7 @@ class LedgerTriggerEvent(AuditMixin):
         super().__init__(**kwargs)
 
 
-class LedgerEntry(Base):
+class NewLedgerEntry(Base):
     __tablename__ = "ledger_entry"
     id = Column(Integer, primary_key=True)
     event_id = Column(Integer, ForeignKey(LedgerTriggerEvent.id), nullable=False)
@@ -234,7 +234,7 @@ class LedgerEntry(Base):
     created_at = Column(TIMESTAMP, default=get_current_ist_time(), nullable=False)
 
 
-class LoanData(AuditMixin):
+class LedgerLoanData(AuditMixin):
     __tablename__ = "loan_data"
     user_id = Column(Integer, ForeignKey(User.id))
     bill_start_date = Column(Date, nullable=False)
@@ -251,7 +251,7 @@ class LoanData(AuditMixin):
 
 class CardTransaction(AuditMixin):
     __tablename__ = "card_transaction"
-    loan_id = Column(Integer, ForeignKey(LoanData.id), nullable=False)
+    loan_id = Column(Integer, ForeignKey(LedgerLoanData.id), nullable=False)
     txn_time = Column(TIMESTAMP, nullable=False)
     amount: Decimal = Column(Numeric, nullable=False)
     source = Column(String(30), nullable=False)
@@ -273,7 +273,7 @@ class CardTransaction(AuditMixin):
 class LoanSchedule(AuditMixin):
     __tablename__ = "loan_schedule"
     loan_id = Column(Integer, ForeignKey(Loan.id))
-    bill_id = Column(Integer, ForeignKey(LoanData.id), nullable=True)  # hate this. - Raghav
+    bill_id = Column(Integer, ForeignKey(LedgerLoanData.id), nullable=True)  # hate this. - Raghav
     emi_number = Column(Integer, nullable=False)
     due_date = Column(Date, nullable=False)
     principal_due: Decimal = Column(Numeric, nullable=False)
@@ -441,7 +441,7 @@ class Fee(AuditMixin):
 class EventDpd(AuditMixin):
     __tablename__ = "event_dpd"
 
-    bill_id = Column(Integer, ForeignKey(LoanData.id), nullable=False)
+    bill_id = Column(Integer, ForeignKey(LedgerLoanData.id), nullable=False)
     loan_id = Column(Integer, ForeignKey(Loan.id), nullable=False)
     event_id = Column(Integer, ForeignKey(LedgerTriggerEvent.id), nullable=False)
     debit: Decimal = Column(Numeric, nullable=True, default=Decimal(0))

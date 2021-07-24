@@ -31,9 +31,9 @@ from rush.ledger_utils import (
 from rush.loan_schedule.calculations import get_down_payment
 from rush.models import (
     Fee,
+    LedgerLoanData,
     LedgerTriggerEvent,
     Lenders,
-    LoanData,
     PaymentRequestsData,
     Product,
     User,
@@ -219,7 +219,7 @@ def test_create_term_loan(session: Session) -> None:
     assert loan.product_type == "term_loan"
     assert loan.amortization_date == parse_date("2020-08-01").date()
 
-    loan_data = session.query(LoanData).filter(LoanData.loan_id == user_loan.loan_id).one()
+    loan_data = session.query(LedgerLoanData).filter(LedgerLoanData.loan_id == user_loan.loan_id).one()
 
     assert loan_data.bill_start_date == parse_date("2020-08-01").date()
     assert loan_data.bill_close_date == parse_date("2021-07-01").date()
@@ -377,7 +377,7 @@ def test_create_term_loan_2(session: Session) -> None:
     assert loan.product_type == "term_loan"
     assert loan.amortization_date == parse_date("2015-10-09").date()
 
-    loan_data = session.query(LoanData).filter(LoanData.loan_id == user_loan.loan_id).one()
+    loan_data = session.query(LedgerLoanData).filter(LedgerLoanData.loan_id == user_loan.loan_id).one()
 
     assert loan_data.bill_start_date == parse_date("2015-10-09").date()
     assert loan_data.bill_close_date == parse_date("2016-09-09").date()

@@ -68,7 +68,7 @@ def upgrade() -> None:
             server_default=sa.text("'{}'::jsonb"),
             nullable=True,
         ),
-        sa.Column("performed_by", sa.Integer(), nullable=False),
+        sa.Column("performed_by", sa.Integer(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
     op.execute(""" ALTER TABLE journal_entries ALTER COLUMN debit DROP NOT NULL; """)

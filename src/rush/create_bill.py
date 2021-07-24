@@ -120,7 +120,7 @@ def bill_generate(
         child_loan_bill: BaseBill = child_loan.get_all_bills()[0]
         amount = child_loan_bill.get_min_amount_to_add()
         if amount:
-            CardTransaction.new(
+            CardTransaction.ledger_new(
                 session=session,
                 loan_id=bill.id,
                 txn_time=min(child_loan.amortization_date.date(), bill.bill_start_date),

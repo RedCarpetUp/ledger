@@ -27,7 +27,7 @@ def payment_request_data(
     """
     populate v3_payment_requests_data table
     """
-    data = PaymentRequestsData.new(
+    data = PaymentRequestsData.ledger_new(
         session=session,
         type=type,
         payment_request_amount=payment_request_amount,
@@ -69,7 +69,7 @@ def collection_request_data(
     amount_to_pay: Decimal,
     batch_id: int,
 ) -> CollectionOrders:
-    data = CollectionOrders.new(
+    data = CollectionOrders.ledger_new(
         session=session,
         collection_request_id=collection_request_id,
         amount_paid=amount_paid,
