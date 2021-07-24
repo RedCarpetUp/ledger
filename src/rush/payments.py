@@ -411,6 +411,7 @@ def adjust_payment(
                 amount_to_adjust - user_loan.get_remaining_max(event_id=event.id),
             )
             add_early_close_charges(session, user_loan, event.post_date, extra_amount)
+            slide_payment_to_emis(user_loan, event, extra_amount)
 
     split_data = find_split_to_slide_in_loan(session, user_loan, amount_to_adjust)
 
