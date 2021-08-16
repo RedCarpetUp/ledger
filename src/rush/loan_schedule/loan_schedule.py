@@ -385,8 +385,6 @@ def reset_loan_schedule(user_loan: Loan, session: Session) -> None:
             .update({PaymentMapping.row_status: "inactive"}, synchronize_session=False)
         )
 
-    user_loan = get_user_loan(session=session, loan_id=user_loan.loan_id)
-
     # returning if the loan is extended, because we don't have context of past tenure.
     is_loan_extended = (
         session.query(LedgerTriggerEvent.loan_id)
@@ -408,7 +406,7 @@ def reset_loan_schedule(user_loan: Loan, session: Session) -> None:
         .filter(
             PaymentSplit.payment_request_id
             == LedgerTriggerEvent.extra_details["payment_request_id"].astext,
-            PaymentSplit.component.in_(("principal", "interest", "unbilled")),
+            PaymentSplit.component.in_(("principal", "interest", "unbilled", "early_close_fee")),
             LedgerTriggerEvent.name == "payment_received",
             LedgerTriggerEvent.loan_id == user_loan.loan_id,
         )

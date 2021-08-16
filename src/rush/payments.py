@@ -437,6 +437,8 @@ def adjust_payment(
             # The amount to adjust is computed for this bill. It should all settle.
             assert remaining_amount == 0
             slide_payment_to_emis(user_loan, event, data["amount_to_adjust"])
+        if data["type"] == "early_close_fee":
+            slide_payment_to_emis(user_loan, event, data["amount_to_adjust"])
         amount_to_adjust -= data["amount_to_adjust"]
 
     # After doing the sliding we check if the loan can be closed.
