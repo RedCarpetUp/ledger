@@ -411,7 +411,6 @@ def adjust_payment(
                 amount_to_adjust - user_loan.get_remaining_max(event_id=event.id),
             )
             add_early_close_charges(session, user_loan, event.post_date, extra_amount)
-            slide_payment_to_emis(user_loan, event, extra_amount)
 
     split_data = find_split_to_slide_in_loan(session, user_loan, amount_to_adjust)
 
@@ -437,6 +436,8 @@ def adjust_payment(
             )
             # The amount to adjust is computed for this bill. It should all settle.
             assert remaining_amount == 0
+            slide_payment_to_emis(user_loan, event, data["amount_to_adjust"])
+        if data["type"] == "early_close_fee":
             slide_payment_to_emis(user_loan, event, data["amount_to_adjust"])
         amount_to_adjust -= data["amount_to_adjust"]
 
